@@ -1,0 +1,44 @@
+From 659b45d5273a0428b16b7a7f9a743c1820e5d99c Mon Sep 17 00:00:00 2001
+From: Andre McCurdy <armccurdy@gmail.com>
+Date: Tue, 10 Jan 2017 11:15:07 -0800
+Subject: [PATCH] disable log4crc version check
+
+If the log4crc config file contains a version (it's optional, but
+there in the reference file and so gets propogated to project
+specific config files too) then log4c will exit with an error if the
+version in the config file doesn't match the version of log4c being
+used.
+
+This is unhelpful and causes unnecessary problems when updating log4c
+version (the upstream RDK still seems to contain a log4crc file with
+version set to 1.2.3, even though log4c 1.2.4 was released in 2013).
+
+Disable the log4crc version check.
+
+Signed-off-by: Andre McCurdy <armccurdy@gmail.com>
+---
+ src/log4c/rc.c | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/src/log4c/rc.c b/src/log4c/rc.c
+index ef4de9c..4540558 100644
+--- a/src/log4c/rc.c
++++ b/src/log4c/rc.c
+@@ -345,12 +345,14 @@ extern int log4c_rc_load(log4c_rc_t* this, const char* a_filename)
+     }
+     
+     /* Check configuration file revision */
++#if 0
+     if ( (node = sd_domnode_attrs_get(root_node, "version")) != NULL)
+ 	if (strcmp(VERSION, node->value)) {
+ 	    sd_error("version mismatch: %s != %s", VERSION, node->value);
+ 	    sd_domnode_delete(root_node);
+ 	    return -1;
+ 	}
++#endif
+ 	    
+     /* backward compatibility. */
+     if ( (node = sd_domnode_attrs_get(root_node, "cleanup")) != NULL) {
+-- 
+1.9.1
+
