@@ -17,6 +17,7 @@ EXTRA_OECONF += "no-idea"
 EXTRA_OECONF += "no-rc4"
 EXTRA_OECONF += "no-aria"
 EXTRA_OECONF += "no-sm4"
+EXTRA_OECONF += "no-sm2"
 
 do_install_append () {
         # Install a custom version of c_rehash that can handle sysroots properly.
