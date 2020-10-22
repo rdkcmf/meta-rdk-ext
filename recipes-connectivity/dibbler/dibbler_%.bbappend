@@ -8,6 +8,8 @@ RDEPENDS_${PN}-client_append_broadband = " ${@bb.utils.contains('DISTRO_FEATURES
 
 SRC_URI_append_hybrid = " file://client_back_hybrid.conf"
 
+SRC_URI_append_client = " file://client_back_client.conf "
+
 SRC_URI_append_broadband = " file://client-notify.patch \
                              file://dibbler-init.sh \
                              file://prepare_dhcpv6_config.sh \
@@ -29,6 +31,12 @@ do_install_append_hybrid() {
 }
 
 CLIENT_NOTIFY_BSD = "${@bb.utils.contains('DISTRO_FEATURES', 'dunfell', 'git', 'dibbler-1.0.1', d)}"
+
+do_install_append_client() {
+        install -d ${D}${sysconfdir}/dibbler
+        install -m 0644 ${WORKDIR}/client_back_client.conf ${D}${sysconfdir}/dibbler/client_back.conf
+}
+
 do_install_append_broadband() {
     install -d ${D}${base_libdir}/rdk
 
