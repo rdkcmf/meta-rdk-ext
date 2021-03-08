@@ -1,0 +1,12 @@
+Index: git/src/arch-arm-syscalls.c
+===================================================================
+--- git.orig/src/arch-arm-syscalls.c
++++ git/src/arch-arm-syscalls.c
+@@ -82,6 +82,7 @@ const struct arch_syscall_def arm_syscal
+ 	{ "clone", (__SCMP_NR_BASE + 120) },
+ 	{ "clone3", (__SCMP_NR_BASE + 435) },
+ 	{ "close", (__SCMP_NR_BASE +  6) },
++	{ "close_range", (__SCMP_NR_BASE +  436) },
+ 	{ "connect", (__SCMP_NR_BASE + 283) },
+ 	{ "copy_file_range", (__SCMP_NR_BASE + 391) },
+ 	{ "creat", (__SCMP_NR_BASE +  8) },

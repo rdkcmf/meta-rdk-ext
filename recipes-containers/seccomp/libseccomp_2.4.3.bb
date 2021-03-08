@@ -7,9 +7,12 @@ LIC_FILES_CHKSUM = "file://LICENSE;beginline=0;endline=1;md5=8eac08d22113880357c
 SRCREV = "1dde9d94e0848e12da20602ca38032b91d521427"
 
 SRC_URI = "git://github.com/seccomp/libseccomp.git;branch=release-2.4 \
+           file://syscall_close_range.patch \
         "
 
 S = "${WORKDIR}/git"
+
+FILESEXTRAPATHS_prepend := "${THISDIR}/${PN}:"
 
 inherit autotools-brokensep pkgconfig ptest
 
