@@ -1,3 +1,15 @@
+Date: Wed Dec 30 18:06:10 2020 +0000
+
+From: I540fd7153170c6d8cae313eaf0cbabf8acd43644 Wed Dec 30 18:06:10
+
+Subject: DELIA-47925 : syssnmpagent crash with signature libc.so.6 reason SIGABRT
+
+Source: COMCAST
+
+Upstream-Status:N/A
+
+Signed-off-by: Rense Jacob <Rense_Jacob2@comcast.com>
+
 Index: net-snmp-5.8/agent/agent_registry.c
 ===================================================================
 --- net-snmp-5.8.orig/agent/agent_registry.c
