@@ -1,6 +1,3 @@
-# Copyright (C) 2016 Comcast. All rights reserved.
-# Released under the MIT license (see COPYING.MIT for the terms)
-
 DESCRIPTION = "Development files for the Multiple-image Network Graphics library"
 HOMEPAGE = "http://www.libmng.com/"
 LICENSE = "libmng"

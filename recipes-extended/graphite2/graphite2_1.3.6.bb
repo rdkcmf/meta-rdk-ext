@@ -1,6 +1,3 @@
-# Copyright (C) 2016 Comcast. All rights reserved.
-# Released under the MIT license (see COPYING.MIT for the terms)
-
 DESCRIPTION = "Font rendering capabilities for complex non-Roman writing systems"
 HOMEPAGE = "https://github.com/silnrsi/graphite/"
 LICENSE = "LGPLv2.1|GPLv2+|MPL-2.0"
