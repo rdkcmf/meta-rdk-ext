@@ -705,6 +705,25 @@ index 23d877be521a..1744374384e2 100644
  find_package(Cairo 1.10.2 REQUIRED)
  find_package(Fontconfig 2.8.0 REQUIRED)
  find_package(Freetype2 2.4.2 REQUIRED)
+diff --git a/Source/WebCore/accessibility/atk/WebKitAccessibleWrapperAtk.cpp b/Source/WebCore/accessibility/atk/WebKitAccessibleWrapperAtk.cpp
+index 4da6f76b6b70..bd4c0809288c 100644
+--- a/Source/WebCore/accessibility/atk/WebKitAccessibleWrapperAtk.cpp
++++ b/Source/WebCore/accessibility/atk/WebKitAccessibleWrapperAtk.cpp
+@@ -797,7 +797,13 @@ static AtkRole atkRole(AccessibilityObject* coreObject)
+     case AccessibilityRole::UserInterfaceTooltip:
+         return ATK_ROLE_TOOL_TIP;
+     case AccessibilityRole::WebArea:
+-        return ATK_ROLE_DOCUMENT_WEB;
++    {
++        WebCore::Frame *frame = coreObject->frame();
++        if (frame)
++           return frame->WebCore::Frame::isMainFrame() ? ATK_ROLE_DOCUMENT_WEB : ATK_ROLE_DOCUMENT_FRAME;
++        else
++           return ATK_ROLE_DOCUMENT_WEB;
++    }
+     case AccessibilityRole::WebApplication:
+         return ATK_ROLE_EMBEDDED;
+ #if ATK_CHECK_VERSION(2, 11, 3)
 -- 
 2.24.0
 
