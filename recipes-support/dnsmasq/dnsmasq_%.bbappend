@@ -31,6 +31,8 @@ do_install_append_client() {
     install -D -m 0644 ${WORKDIR}/dns.conf ${D}${systemd_unitdir}/system/dnsmasq.service.d/dns.conf
 }
 
+RDEPENDS_${PN} += "busybox"
+
 FILES_${PN}_append = " ${sysconfdir}/resolv.conf \
                        ${sysconfdir}/resolv.dnsmasq \
                        ${base_libdir}/rdk/* \
