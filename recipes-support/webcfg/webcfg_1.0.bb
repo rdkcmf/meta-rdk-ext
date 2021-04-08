@@ -8,6 +8,9 @@ DEPENDS = "cjson trower-base64 msgpack-c cimplog wdmp-c curl nanomsg wrp-c libpa
 
 SRCREV = "120b5ad8759d3d708bdcf94d5dcee91df0dc1cb5"
 SRC_URI = "git://github.com/xmidt-org/webcfg.git"
+
+RDEPENDS_${PN} += "util-linux-uuidgen"
+
 PV = "git+${SRCPV}"
 
 S = "${WORKDIR}/git"
