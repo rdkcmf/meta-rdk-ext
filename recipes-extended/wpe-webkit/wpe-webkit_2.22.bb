@@ -178,6 +178,15 @@ SRC_URI += "file://2.22/0272-Increase-fudge-factor-to-3-frames.patch"
 SRC_URI += "file://2.22/0279-Second-ESPN-App-launch-after-Live-playback-fails.patch"
 SRC_URI += "file://2.22/0281-update-the-sample-durtion-based-on-the-delta-of-last.patch"
 
+SRC_URI += "file://2.22/0001-Backport-Fix-missing-exception-checks-and-handling-i.patch"
+SRC_URI += "file://2.22/0001-Fix-offset-inconsistency-logs.patch"
+SRC_URI += "file://2.22/0003-Backport-DeferGC-calls.patch"
+SRC_URI += "file://2.22/0001-propertyNameEnumerator-must-check-it-can-still-take-.patch"
+SRC_URI += "file://2.22/0002-JSC-Clean-up-DFGPreciseLocalClobberize-to-avoid-dupl.patch"
+SRC_URI += "file://2.22/0003-Add-register-r30-s8-to-Conservative-roots.patch"
+SRC_URI += "file://2.22/0004-Fix-use-after-free-in-GstMappedBuffer-destructor.patch"
+SRC_URI += "file://2.22/0005-Remove-screen-saver-disabler.patch"
+
 # device specific configs
 PACKAGECONFIG[westeros] = "-DUSE_WPEWEBKIT_BACKEND_WESTEROS=ON -DUSE_WPEWEBKIT_PLATFORM_WESTEROS=ON -DUSE_KEY_INPUT_HANDLING_LINUX_INPUT=OFF -DUSE_GSTREAMER_HOLEPUNCH=ON -DUSE_EXTERNAL_HOLEPUNCH=ON -DUSE_WESTEROS_SINK=ON,,westeros"
 PACKAGECONFIG[encryptedmedia] = "-DENABLE_ENCRYPTED_MEDIA=ON,-DENABLE_ENCRYPTED_MEDIA=OFF,"
@@ -200,8 +209,8 @@ PACKAGECONFIG_append = " intl"
 LEAD_SONAME = "libWPEWebKit-0.1.so"
 FILES_${PN}-web-inspector-plugin += " ${libdir}/wpe-webkit-*/libWPEWebInspectorResources.so"
 
-SELECTED_OPTIMIZATION_remove = "-g"
-SELECTED_OPTIMIZATION_append = " -g1 "
+# SELECTED_OPTIMIZATION_remove = "-g"
+# SELECTED_OPTIMIZATION_append = " -g1 "
 
 TUNE_CCARGS_remove = "-fno-omit-frame-pointer -fno-optimize-sibling-calls"
 

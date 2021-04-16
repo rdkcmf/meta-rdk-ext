@@ -144,6 +144,13 @@ SRC_URI += "file://2.22/0279-Second-ESPN-App-launch-after-Live-playback-fails.pa
 SRC_URI += "file://2.22.2/0274-added-SVP-transform-for-clear-and-encrypted-samples.patch"
 SRC_URI += "file://2.22/0281-update-the-sample-durtion-based-on-the-delta-of-last.patch"
 
+SRC_URI += "file://2.22/0001-Backport-Fix-missing-exception-checks-and-handling-i.patch"
+SRC_URI += "file://2.22/0001-Fix-offset-inconsistency-logs.patch"
+SRC_URI += "file://2.22/0003-Backport-DeferGC-calls.patch"
+SRC_URI += "file://2.22/0001-propertyNameEnumerator-must-check-it-can-still-take-.patch"
+SRC_URI += "file://2.22/0002-JSC-Clean-up-DFGPreciseLocalClobberize-to-avoid-dupl.patch"
+SRC_URI += "file://2.22/0003-Add-register-r30-s8-to-Conservative-roots.patch"
+
 # device specific configs
 PACKAGECONFIG[westeros] = "-DUSE_WPEWEBKIT_BACKEND_WESTEROS=ON -DUSE_WPEWEBKIT_PLATFORM_WESTEROS=ON -DUSE_KEY_INPUT_HANDLING_LINUX_INPUT=OFF -DUSE_GSTREAMER_HOLEPUNCH=ON -DUSE_EXTERNAL_HOLEPUNCH=ON -DUSE_WESTEROS_SINK=ON,,westeros"
 PACKAGECONFIG[encryptedmedia] = "-DENABLE_ENCRYPTED_MEDIA=ON,-DENABLE_ENCRYPTED_MEDIA=OFF,"
