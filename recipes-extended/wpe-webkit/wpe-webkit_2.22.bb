@@ -174,6 +174,7 @@ SRC_URI += "file://2.22/0260-Synchronous-media-query-evaluation-could-destroy-cu
 SRC_URI += "file://2.22/0270-REGRESSION-r243197-GStreamer-http-tests-media-cleark.patch"
 SRC_URI += "file://2.22/0271-GStreamer-try-to-detect-and-recover-inconsistent-pla.patch"
 SRC_URI += "file://2.22/0272-Fix-media-playback-looping.patch"
+SRC_URI += "file://2.22/0272-Increase-fudge-factor-to-3-frames.patch"
 
 # device specific configs
 PACKAGECONFIG[westeros] = "-DUSE_WPEWEBKIT_BACKEND_WESTEROS=ON -DUSE_WPEWEBKIT_PLATFORM_WESTEROS=ON -DUSE_KEY_INPUT_HANDLING_LINUX_INPUT=OFF -DUSE_GSTREAMER_HOLEPUNCH=ON -DUSE_EXTERNAL_HOLEPUNCH=ON -DUSE_WESTEROS_SINK=ON,,westeros"

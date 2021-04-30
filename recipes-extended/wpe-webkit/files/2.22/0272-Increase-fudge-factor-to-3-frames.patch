@@ -1,0 +1,29 @@
+From 29e694d1b1de9bdd7fe2d9af951ff73701e39932 Mon Sep 17 00:00:00 2001
+From: Amadeusz Skrzypczak <amadeusz.skrzypczak@redembedded.com>
+Date: Thu, 20 May 2021 09:07:40 +0200
+Subject: [PATCH] Increase fudge factor to 3 frames
+
+---
+ Source/WebCore/Modules/mediasource/SourceBuffer.cpp | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/Source/WebCore/Modules/mediasource/SourceBuffer.cpp b/Source/WebCore/Modules/mediasource/SourceBuffer.cpp
+index 84c7846a..e60e1f1c 100644
+--- a/Source/WebCore/Modules/mediasource/SourceBuffer.cpp
++++ b/Source/WebCore/Modules/mediasource/SourceBuffer.cpp
+@@ -150,10 +150,10 @@ SourceBuffer::~SourceBuffer()
+     m_private->setClient(nullptr);
+ }
+ 
+-// Allow hasCurrentTime() to be off by as much as the length of two 24fps video frames
++// Allow hasCurrentTime() to be off by as much as the length of three 24fps video frames
+ MediaTime& SourceBuffer::currentTimeFudgeFactor() const
+ {
+-    static NeverDestroyed<MediaTime> fudgeFactorVideo(2002, 24000);
++    static NeverDestroyed<MediaTime> fudgeFactorVideo(3003, 24000);
+     static NeverDestroyed<MediaTime> fudgeFactorAudio(299999, 10000000); // "Almost" 0.03 in integer form.
+ 
+     return (hasAudio())?fudgeFactorAudio:fudgeFactorVideo;
+-- 
+2.17.1
+

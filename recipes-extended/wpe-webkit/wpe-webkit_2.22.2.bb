@@ -130,6 +130,7 @@ SRC_URI += "file://2.22/0242-MSE-avoid-unneeded-flushing-of-video-source-buffer.
 SRC_URI += "file://2.22/0243-JSC-Make-ConcurrentJSLock-Lock-even-if-ENABLE_CONCUR.patch"
 SRC_URI += "file://2.22/0271-GStreamer-try-to-detect-and-recover-inconsistent-pla.patch"
 SRC_URI += "file://2.22/0272-Fix-media-playback-looping.patch"
+SRC_URI += "file://2.22/0272-Increase-fudge-factor-to-3-frames.patch"
 
 # device specific configs
 PACKAGECONFIG[westeros] = "-DUSE_WPEWEBKIT_BACKEND_WESTEROS=ON -DUSE_WPEWEBKIT_PLATFORM_WESTEROS=ON -DUSE_KEY_INPUT_HANDLING_LINUX_INPUT=OFF -DUSE_GSTREAMER_HOLEPUNCH=ON -DUSE_EXTERNAL_HOLEPUNCH=ON -DUSE_WESTEROS_SINK=ON,,westeros"
