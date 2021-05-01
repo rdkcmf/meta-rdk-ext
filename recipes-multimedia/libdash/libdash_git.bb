@@ -15,6 +15,7 @@ SRC_URI = "git://github.com/bitmovin/libdash;branch=stable_3_0;protocol=https \
            file://0002-libdash-starttime-uint64.patch \
            file://0003-libdash-presentationTimeOffset-uint64.patch \
            file://0004-Support-of-EventStream.patch \
+           file://0006-RDK-32003-LLD-Support.patch \
           "
 
 S = "${WORKDIR}/git/libdash"
