@@ -95,16 +95,14 @@ Index: dnsmasq-2.83/src/lease.c
      return (items == 0 || items == EOF);
  }
  
-@@ -288,7 +307,8 @@ void lease_update_file(time_t now)
+@@ -288,6 +307,7 @@ void lease_update_file(time_t now)
  
  	  ourprintf(&err, " %s ", daemon->addrbuff);
  	  ourprintf(&err, "%s ", lease->hostname ? lease->hostname : "*");
--	  	  
-+	  ourprintf(&err, "%s ", lease->fingerprint ? lease->fingerprint : "*");
-+ 
++          ourprintf(&err, "%s ", lease->fingerprint ? lease->fingerprint : "*");
+ 	  	  
  	  if (lease->clid && lease->clid_len != 0)
  	    {
- 	      for (i = 0; i < lease->clid_len - 1; i++)
 @@ -563,8 +583,14 @@ void lease_prune(struct dhcp_lease *targ
  	  file_dirty = 1;
  	  if (lease->hostname)
