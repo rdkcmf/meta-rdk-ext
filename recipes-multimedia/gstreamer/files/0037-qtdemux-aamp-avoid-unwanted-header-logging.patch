@@ -1,0 +1,24 @@
+Index: gst-plugins-good-1.10.4/gst/isomp4/qtdemux.c
+===================================================================
+--- gst-plugins-good-1.10.4.orig/gst/isomp4/qtdemux.c
++++ gst-plugins-good-1.10.4/gst/isomp4/qtdemux.c
+@@ -6852,11 +6852,16 @@ gst_qtdemux_process_adapter (GstQTDemux
+                   GST_FOURCC_ARGS (fourcc));
+               break;
+             default:
+-              GST_WARNING_OBJECT (demux,
+-                  "Unknown fourcc while parsing header : %" GST_FOURCC_FORMAT,
+-                  GST_FOURCC_ARGS (fourcc));
++            {
++              if (!demux->aamp_player_enabled)
++              {
++                 GST_WARNING_OBJECT (demux,
++                     "Unknown fourcc while parsing header : %" GST_FOURCC_FORMAT,
++                     GST_FOURCC_ARGS (fourcc));
++              }
+               /* Let's jump that one and go back to initial state */
+               break;
++            }
+           }
+         }
+         gst_adapter_unmap (demux->adapter);
