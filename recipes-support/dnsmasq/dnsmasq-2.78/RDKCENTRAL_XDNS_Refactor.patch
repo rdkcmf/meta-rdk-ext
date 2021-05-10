@@ -1,3 +1,17 @@
+Date: May 07 22:15:49 2019
+
+From: b95ae8e34b10a4ea514e28567fb94a64d94169f4 Jun 03 18:37:35 2019
+
+Subject: creating list properly and sending DNS query to avoid re-transmission.
+
+Source: COMCAST
+
+License: GPL-2.0-or-later
+
+Upstream-Status: Pending
+
+Signed-off-by: Sudheep kolipaka <sudheep_kolipaka@comcast.com>
+
 Index: dnsmasq-2.78/src/arp.c
 ===================================================================
 --- dnsmasq-2.78.orig/src/arp.c
