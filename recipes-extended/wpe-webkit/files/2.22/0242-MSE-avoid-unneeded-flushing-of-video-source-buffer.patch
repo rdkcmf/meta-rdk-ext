@@ -7,19 +7,11 @@ Subject: [PATCH] [MSE] avoid unneeded flushing of video source buffer
  Source/WebCore/Modules/mediasource/SourceBuffer.cpp | 4 +++-
  1 file changed, 3 insertions(+), 1 deletion(-)
 
-diff --git a/Source/WebCore/Modules/mediasource/SourceBuffer.cpp b/Source/WebCore/Modules/mediasource/SourceBuffer.cpp
-index ef37775..7194786 100644
---- a/Source/WebCore/Modules/mediasource/SourceBuffer.cpp
-+++ b/Source/WebCore/Modules/mediasource/SourceBuffer.cpp
-@@ -443,6 +443,7 @@ void SourceBuffer::seekToTime(const MediaTime& time)
- 
-         trackBuffer.needsReenqueueing = true;
-         reenqueueMediaForTime(trackBuffer, trackID, time);
-+        trackBuffer.needsReenqueueing = false;
-     }
- }
- 
-@@ -2147,7 +2148,6 @@ void SourceBuffer::trySignalAllSamplesEnqueued()
+Index: git/Source/WebCore/Modules/mediasource/SourceBuffer.cpp
+===================================================================
+--- git.orig/Source/WebCore/Modules/mediasource/SourceBuffer.cpp
++++ git/Source/WebCore/Modules/mediasource/SourceBuffer.cpp
+@@ -2214,7 +2214,6 @@ void SourceBuffer::trySignalAllSamplesEn
  
  void SourceBuffer::reenqueueMediaForTime(TrackBuffer& trackBuffer, const AtomicString& trackID, const MediaTime& time)
  {
@@ -27,7 +19,7 @@ index ef37775..7194786 100644
      trackBuffer.decodeQueue.clear();
  
      // Find the sample which contains the current presentation time.
-@@ -2190,6 +2190,8 @@ void SourceBuffer::reenqueueMediaForTime(TrackBuffer& trackBuffer, const AtomicS
+@@ -2257,6 +2256,8 @@ void SourceBuffer::reenqueueMediaForTime
          trackBuffer.lastEnqueuedDecodeDuration = MediaTime::invalidTime();
      }
  
@@ -36,6 +28,33 @@ index ef37775..7194786 100644
      // Fill the decode queue with the remaining samples.
      for (auto iter = currentSampleDTSIterator; iter != trackBuffer.samples.decodeOrder().end(); ++iter)
          trackBuffer.decodeQueue.insert(*iter);
--- 
-2.7.4
-
+Index: git/Source/WebCore/platform/graphics/gstreamer/mse/PlaybackPipeline.cpp
+===================================================================
+--- git.orig/Source/WebCore/platform/graphics/gstreamer/mse/PlaybackPipeline.cpp
++++ git/Source/WebCore/platform/graphics/gstreamer/mse/PlaybackPipeline.cpp
+@@ -485,9 +485,9 @@ bool PlaybackPipeline::hasFutureData(con
+     GST_OBJECT_LOCK(m_webKitMediaSrc.get());
+     WebKitMediaSrcPrivate* priv = m_webKitMediaSrc->priv;
+     for (Stream* stream : priv->streams) {
+-        if (lastEnqueuedTime > stream->lastEnqueuedTime)
++        if (stream->lastEnqueuedTime.isValid() && lastEnqueuedTime > stream->lastEnqueuedTime)
+             lastEnqueuedTime = stream->lastEnqueuedTime;
+-        if (firstEnqueuedTime < stream->firstEnqueuedTime)
++        if (stream->firstEnqueuedTime.isValid() && firstEnqueuedTime < stream->firstEnqueuedTime)
+             firstEnqueuedTime = stream->firstEnqueuedTime;
+     }
+     GST_OBJECT_UNLOCK(m_webKitMediaSrc.get());
+Index: git/Source/WebCore/platform/graphics/gstreamer/mse/WebKitMediaSourceGStreamer.cpp
+===================================================================
+--- git.orig/Source/WebCore/platform/graphics/gstreamer/mse/WebKitMediaSourceGStreamer.cpp
++++ git/Source/WebCore/platform/graphics/gstreamer/mse/WebKitMediaSourceGStreamer.cpp
+@@ -888,8 +888,7 @@ void webKitMediaSrcPrepareSeek(WebKitMed
+ 
+     for (Stream* stream : source->priv->streams) {
+         stream->appsrcNeedDataFlag = false;
+-        // Don't allow samples away from the seekTime to be enqueued.
+-        stream->lastEnqueuedTime = time;
++        stream->lastEnqueuedTime = MediaTime::invalidTime();
+     }
+ 
+     // The pending action will be performed in enabledAppsrcSeekData().
