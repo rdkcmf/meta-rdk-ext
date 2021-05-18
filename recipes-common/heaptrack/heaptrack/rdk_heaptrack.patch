@@ -1,0 +1,17 @@
+LICENSE: LGPL-2.1
+From: Rakhil P E <Rakhil_PuthiyaveettilEdachena@comcast.com> 
+Signed-off-by:Rakhil P E <Rakhil_PuthiyaveettilEdachena@comcast.com>
+
+diff --git a/src/track/heaptrack.sh.cmake b/src/track/heaptrack.sh.cmake
+index addd097..80a6af5 100755
+--- a/src/track/heaptrack.sh.cmake
++++ b/src/track/heaptrack.sh.cmake
+@@ -169,7 +169,7 @@ done
+ 
+ # put output into current pwd
+ if [ -z "$output" ]; then
+-    output=$(pwd)/heaptrack.$(basename "$client").$$
++    output=/tmp/heaptrack.$(basename "$client").$$
+ fi
+ 
+ # find preload library and interpreter executable using relative paths
