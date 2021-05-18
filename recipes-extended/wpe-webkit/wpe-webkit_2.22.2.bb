@@ -131,6 +131,7 @@ SRC_URI += "file://2.22/0243-JSC-Make-ConcurrentJSLock-Lock-even-if-ENABLE_CONCU
 SRC_URI += "file://2.22/0271-GStreamer-try-to-detect-and-recover-inconsistent-pla.patch"
 SRC_URI += "file://2.22/0272-Fix-media-playback-looping.patch"
 SRC_URI += "file://2.22/0272-Increase-fudge-factor-to-3-frames.patch"
+SRC_URI += "file://2.22.2/0001-Add-support-to-set-media-type-in-OCDM-CDM.patch"
 
 
 SRC_URI += "file://2.22.2/0275-Fix-use-after-free-in-GstMappedBuffer-destructor.patch"
@@ -138,6 +139,7 @@ SRC_URI += "file://2.22.2/0276-Remove-screen-saver-disabler.patch"
 SRC_URI += "file://2.22.2/0277-Delete-corrupted-localstorage-db.patch"
 SRC_URI += "file://2.22/0278-RWI-works-for-one-app-session-then-fail.patch"
 SRC_URI += "file://2.22/0279-Second-ESPN-App-launch-after-Live-playback-fails.patch"
+SRC_URI += "file://2.22.2/0274-added-SVP-transform-for-clear-and-encrypted-samples.patch"
 
 # device specific configs
 PACKAGECONFIG[westeros] = "-DUSE_WPEWEBKIT_BACKEND_WESTEROS=ON -DUSE_WPEWEBKIT_PLATFORM_WESTEROS=ON -DUSE_KEY_INPUT_HANDLING_LINUX_INPUT=OFF -DUSE_GSTREAMER_HOLEPUNCH=ON -DUSE_EXTERNAL_HOLEPUNCH=ON -DUSE_WESTEROS_SINK=ON,,westeros"

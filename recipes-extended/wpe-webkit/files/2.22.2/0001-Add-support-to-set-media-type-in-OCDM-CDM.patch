@@ -1,0 +1,39 @@
+From 21dccdb05e7d67ff7f648c296bee323e273bf443 Mon Sep 17 00:00:00 2001
+From: lsampa662 <lavanya_sampangi@comcast.com>
+Date: Tue, 18 May 2021 17:31:00 +0000
+Subject: [PATCH] Add support to set media type in OCDM CDM
+
+---
+ .../eme/WebKitOpenCDMDecryptorGStreamer.cpp        | 14 +++++++++++++-
+ 1 file changed, 13 insertions(+), 1 deletion(-)
+
+diff --git a/Source/WebCore/platform/graphics/gstreamer/eme/WebKitOpenCDMDecryptorGStreamer.cpp b/Source/WebCore/platform/graphics/gstreamer/eme/WebKitOpenCDMDecryptorGStreamer.cpp
+index f7c0ef4c7468..b864955b2f6c 100644
+--- a/Source/WebCore/platform/graphics/gstreamer/eme/WebKitOpenCDMDecryptorGStreamer.cpp
++++ b/Source/WebCore/platform/graphics/gstreamer/eme/WebKitOpenCDMDecryptorGStreamer.cpp
+@@ -224,9 +224,21 @@ static bool webKitMediaOpenCDMDecryptorDecrypt(WebKitMediaCommonEncryptionDecryp
+         }
+     }
+ 
++// Let OCDM sessions the current stream type
++   GRefPtr<GstCaps> caps = nullptr;
++   if(priv->m_openCdmSession) {
++       GRefPtr<GstPad> sinkpad = adoptGRef(gst_element_get_static_pad(reinterpret_cast<GstElement*>(self), "sink"));
++       caps = adoptGRef(gst_pad_get_current_caps(sinkpad.get()));
++
++        GstStructure *capstruct = gst_caps_get_structure(caps.get(), 0);
++        const gchar* capsinfo = gst_structure_get_string(capstruct, "original-media-type");
++        GST_DEBUG_OBJECT(self, "CAPS %p - Stream Type = %s", caps, capsinfo);
++   }
++
+     // Decrypt cipher.
+     GST_TRACE_OBJECT(self, "decrypting");
+-    if (int errorCode = opencdm_gstreamer_session_decrypt(priv->m_openCdmSession.get(), buffer, subSamplesBuffer, subSampleCount, ivBuffer, keyIDBuffer, 0)) {
++    if (int errorCode = opencdm_gstreamer_session_decrypt_ex(priv->m_openCdmSession.get(), buffer, subSamplesBuffer, subSampleCount,
++                                                        ivBuffer, keyIDBuffer, 0, caps.get())) {
+         GUniquePtr<gchar> errorMessage (g_strdup_printf("Subsample decryption failed (code=%d)", errorCode));
+         gst_element_post_message(
+             GST_ELEMENT(self),
+-- 
+2.24.0
+
