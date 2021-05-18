@@ -6,12 +6,14 @@ HOMEPAGE = "https://github.com/Comcast/aker"
 LICENSE = "Apache-2.0"
 LIC_FILES_CHKSUM = "file://LICENSE;md5=e3fc50a88d0a364313df4b21ef20c29e"
 
-SRCREV = "c3d8650a0419dbd705d2765fd7d0e14fc7d605e3"
-SRC_URI = "git://github.com/Comcast/aker.git"
+SRCREV = "984d97db35402ed62ede86e30d9d24da23ac701d"
+SRC_URI = "git://github.com/xmidt-org/aker.git;branch=main"
 SRC_URI += "file://aker-01.patch"
 
 PV = "git+${SRCPV}"
 S = "${WORKDIR}/git"
+
+ASNEEDED = ""
 
 DEPENDS = "libparodus wrp-c trower-base64 msgpack-c rdk-logger log4c util-linux"
 
