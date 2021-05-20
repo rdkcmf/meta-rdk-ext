@@ -36,3 +36,6 @@ RPROVIDES_${PN} = "wpe-backend-rdk"
 PACKAGES =+ "${PN}-platform-plugin"
 FILES_${PN}-platform-plugin += "${libdir}/*.so ${bindir}/*"
 INSANE_SKIP_${PN}-platform-plugin = "dev-so"
+
+#We need the default package, even if empty for SDK
+ALLOW_EMPTY_${PN}="1"

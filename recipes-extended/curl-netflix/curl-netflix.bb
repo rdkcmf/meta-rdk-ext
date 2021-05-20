@@ -124,3 +124,5 @@ FILES_lib${BPN}-dev = "${includedir}/netflix \
                       ${libdir}/netflix/pkgconfig"
 
 FILES_lib${BPN}-staticdev = "${libdir}/netflix/lib*.a"
+
+ALLOW_EMPTY_${PN} = "1"
