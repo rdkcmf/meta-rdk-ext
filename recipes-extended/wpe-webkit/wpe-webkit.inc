@@ -145,6 +145,7 @@ RDEPS_EXTRA = " \
     gstreamer1.0-plugins-bad-mpegtsdemux \
     gstreamer1.0-plugins-bad-smoothstreaming \
     gstreamer1.0-plugins-bad-videoparsersbad \
+    gstreamer1.0-plugins-bad-dataurisrc \
 "
 
 # The RDEPS_EXTRA plugins are all required for certain media playback use cases,

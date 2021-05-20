@@ -16,7 +16,7 @@ PACKAGECONFIG ??= " \
     ${@bb.utils.contains('DISTRO_FEATURES', 'wayland', 'wayland', '', d)} \
     ${@bb.utils.contains('DISTRO_FEATURES', 'opengl', 'eglgles', '', d)} \
     ${@bb.utils.contains('DISTRO_FEATURES', 'directfb', 'directfb', '', d)} \
-    orc curl uvch264 neon \
+    orc curl uvch264 neon dataurisrc\
     hls sbc dash bz2 smoothstreaming \
     "
 # dash = Dynamic Adaptive Streaming over HTTP
@@ -44,6 +44,7 @@ PACKAGECONFIG[schroedinger]    = "--enable-schro,--disable-schro,schroedinger"
 PACKAGECONFIG[smoothstreaming] = "--enable-smoothstreaming,--disable-smoothstreaming,libxml2"
 PACKAGECONFIG[bluez]           = "--enable-bluez,--disable-bluez,${BLUEZ}"
 PACKAGECONFIG[rsvg]            = "--enable-rsvg,--disable-rsvg,librsvg"
+PACKAGECONFIG[dataurisrc]      = "--enable-dataurisrc,--disable-dataurisrc"
 
 # these plugins have not been ported to 1.0 (yet):
 #   directdraw vcd apexsink cdaudio dc1394 lv2 linsys musepack mythtv
@@ -114,7 +115,7 @@ ARM_INSTRUCTION_SET = "arm"
 
 EXTRA_OECONF += " \
                 --disable-accurip --disable-adpcmdec --disable-adpcmenc --disable-aiff --disable-asfmux --disable-audiofxbad --disable-audiomixer \
-                --disable-autoconvert --disable-bayer --disable-compositor --disable-dataurisrc --disable-debugutils \
+                --disable-autoconvert --disable-bayer --disable-compositor --disable-debugutils \
                 --disable-dvbsuboverlay --disable-dvdspu --disable-festival --disable-fieldanalysis --disable-freeverb --disable-frei0r --disable-gdp \
                 --disable-geometrictransform --disable-id3tag --disable-inter --disable-interlace --disable-ivtc --disable-jp2kdecimator --disable-jpegformat --disable-librfb \
                 --disable-midi --disable-mpegdemux --disable-mpegpsmux --disable-mpegtsmux --disable-mxf --disable-pcapparse \
