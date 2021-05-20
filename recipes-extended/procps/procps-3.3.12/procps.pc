@@ -1,0 +1,11 @@
+prefix=/usr
+exec_prefix=/usr
+libdir=/lib
+includedir=/usr/include
+
+Name: procps
+Description: procps package config
+Version: 3.3.12
+Requires:
+Libs: -L${libdir} -lprocps
+Cflags: -I${includedir}

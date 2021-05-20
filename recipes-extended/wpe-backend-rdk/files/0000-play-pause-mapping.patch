@@ -1,0 +1,63 @@
+Copyright (C) 2018 Metrological
+All rights reserved.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions
+are met:
+1. Redistributions of source code must retain the above copyright
+   notice, this list of conditions and the following disclaimer.
+2. Redistributions in binary form must reproduce the above copyright
+   notice, this list of conditions and the following disclaimer in the
+   documentation and/or other materials provided with the distribution.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+"AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A
+PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+Date: Apr 15 20:42:17 2017
+
+From: 8cae00f1a0d905b17fa8fcac57955d1c14408d2b Apr 15 20:44:05 2017
+
+Subject: [PATCH] XRE-11188 : Azam's play/pause change as a patch
+
+	correct work of play/pause in vimeo, youtube/tv
+
+Source: PRODUCTENGINE
+
+Upstream-Status: Pending
+
+Signed-off-by: Yaroslav Zlotchenko <yzlotchenko@productengine.com>
+---
+
+diff --git a/Source/ThirdParty/WPE-platform/src/input/XKB/input-libxkbcommon.cpp b/Source/ThirdParty/WPE-platform/src/input/XKB/input-libxkbcommon.cpp
+index 4fe1a69..769b6d9 100644
+--- a/src/input/XKB/input-libxkbcommon.cpp
++++ b/src/input/XKB/input-libxkbcommon.cpp
+@@ -287,8 +287,9 @@ struct wpe_input_key_mapper_interface libxkbcommon_input_key_mapper_interface =
+                 // VK_MENU (12) ALT key
+ 
+             case XKB_KEY_Pause:
+-            case XKB_KEY_XF86AudioPause:
+                 return VK_PAUSE; // (13) PAUSE key
++            case XKB_KEY_XF86AudioPause:
++                return VK_MEDIA_PLAY_PAUSE; // (B3) Windows 2000/XP: Play/Pause Media key
+             case XKB_KEY_Caps_Lock:
+                 return VK_CAPITAL; // (14) CAPS LOCK key
+             case XKB_KEY_Kana_Lock:
+@@ -569,7 +570,7 @@ struct wpe_input_key_mapper_interface libxkbcommon_input_key_mapper_interface =
+                 // VK_EXSEL (F8) ExSel key
+                 // VK_EREOF (F9) Erase EOF key
+             case XKB_KEY_XF86AudioPlay:
+-                return VK_PLAY; // VK_PLAY (FA) Play key
++                return VK_MEDIA_PLAY_PAUSE; // (B3) Windows 2000/XP: Play/Pause Media key
+                 // VK_ZOOM (FB) Zoom key
+                 // VK_NONAME (FC) Reserved for future use
+                 // VK_PA1 (FD) PA1 key

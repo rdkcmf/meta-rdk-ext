@@ -1,0 +1,100 @@
+[ONEM-8486] cgroup hierarchy access for others
+
+cgroup entries have rwx privileges for root only which is ok
+when lxc runs in original setup and uses them. we however do
+drop them so entries mount points need to be modified to
+allow others access.
+
+(mkubiak@libertyglobal.com)
+
+Index: lxc-2.0.6/src/lxc/cgroups/cgfs.c
+===================================================================
+--- lxc-2.0.6.orig/src/lxc/cgroups/cgfs.c
++++ lxc-2.0.6/src/lxc/cgroups/cgfs.c
+@@ -1581,6 +1581,8 @@ static bool cgroupfs_mount_cgroup(void *
+ 			}
+ 		}
+ 
++		chmod_p(abs_path2,0755,strlen(abs_path));
++
+ 		free(abs_path);
+ 		free(abs_path2);
+ 		abs_path = NULL;
+@@ -1593,6 +1595,8 @@ static bool cgroupfs_mount_cgroup(void *
+ 				if (!abs_path)
+ 					goto out_error;
+ 				r = symlink(dirname, abs_path);
++				if(chmod_p(abs_path,0755,strlen(path)))
++					goto out_error;
+ 				if (r < 0)
+ 					WARN("could not create symlink %s -> %s in /sys/fs/cgroup of container", parts[i], dirname);
+ 				free(abs_path);
+Index: lxc-2.0.6/src/lxc/cgroups/cgfsng.c
+===================================================================
+--- lxc-2.0.6.orig/src/lxc/cgroups/cgfsng.c
++++ lxc-2.0.6/src/lxc/cgroups/cgfsng.c
+@@ -1574,6 +1574,7 @@ do_secondstage_mounts_if_needed(int type
+ 				cgpath);
+ 		return -1;
+ 	}
++	chmod(cgpath,0755);
+ 	free(sourcepath);
+ 	INFO("Completed second stage cgroup automounts for %s", cgpath);
+ 	return 0;
+@@ -1638,6 +1639,10 @@ static bool cgfsng_mount(void *hdata, co
+ 			free(controllerpath);
+ 			goto bad;
+ 		}
++		if (chmod_p(path2, 0755, strlen(tmpfspath)) < 0) {
++			free(controllerpath);
++			goto bad;
++		}
+ 
+ 		r = do_secondstage_mounts_if_needed(type, h, controllerpath, path2,
+ 						    d->container_cgroup);
+Index: lxc-2.0.6/src/lxc/utils.c
+===================================================================
+--- lxc-2.0.6.orig/src/lxc/utils.c
++++ lxc-2.0.6/src/lxc/utils.c
+@@ -261,6 +261,29 @@ extern int mkdir_p(const char *dir, mode
+ 	return 0;
+ }
+ 
++extern int chmod_p(const char *dir, mode_t mode, int offset)
++{
++	const char *tmp = dir+offset;
++	const char *orig = dir;
++	char *makeme;
++
++	do {
++		dir = tmp + strspn(tmp, "/");
++		tmp = dir + strcspn(dir, "/");
++		makeme = strndup(orig, dir - orig);
++		if (*makeme) {
++			if (chmod(makeme, mode) && errno != EEXIST) {
++				SYSERROR("failed to chmod directory '%s'", makeme);
++				free(makeme);
++				return -1;
++			}
++		}
++		free(makeme);
++	} while(tmp != dir);
++
++	return 0;
++}
++
+ char *get_rundir()
+ {
+ 	char *rundir;
+Index: lxc-2.0.6/src/lxc/utils.h
+===================================================================
+--- lxc-2.0.6.orig/src/lxc/utils.h
++++ lxc-2.0.6/src/lxc/utils.h
+@@ -39,6 +39,7 @@
+ extern int lxc_rmdir_onedev(char *path, const char *exclude);
+ extern int get_u16(unsigned short *val, const char *arg, int base);
+ extern int mkdir_p(const char *dir, mode_t mode);
++extern int chmod_p(const char *dir, mode_t mode, int offset);
+ extern char *get_rundir(void);
+ 
+ /* Define getline() if missing from the C library */

@@ -1,0 +1,24 @@
+From 8ad76a39e51b1c1039e7dc20b8125cced2961afd Mon Sep 17 00:00:00 2001
+From: Alexandr Gavriliuc <Alexandr_Gavriliuc@comcast.com>
+Date: Tue, 9 Mar 2021 23:37:18 +0000
+Subject: [PATCH] qtdemux: check ss_info
+
+---
+ gst/isomp4/qtdemux.c | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/gst/isomp4/qtdemux.c b/gst/isomp4/qtdemux.c
+index 14e77d0..a66db29 100644
+--- a/gst/isomp4/qtdemux.c
++++ b/gst/isomp4/qtdemux.c
+@@ -3770,6 +3770,7 @@ qtdemux_parse_senc (GstQTDemux * qtdemux, QtDemuxStream * stream, GstByteReader
+   g_return_val_if_fail (br != NULL, FALSE);
+ 
+   ss_info = (QtDemuxCencSampleSetInfo *) stream->protection_scheme_info;
++  g_return_val_if_fail (ss_info != NULL, FALSE);
+ 
+   if (ss_info->crypto_info) {
+     GST_LOG_OBJECT (qtdemux, "unreffing existing crypto_info");
+-- 
+2.24.1
+

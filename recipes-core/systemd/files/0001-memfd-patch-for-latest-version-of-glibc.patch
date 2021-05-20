@@ -1,0 +1,38 @@
+From 06a357774236e27bd65540efa123f712bd193cb4 Mon Sep 17 00:00:00 2001
+From: mselva006c <mani_selvaraj@comcast.com>
+Date: Fri, 5 Mar 2021 20:41:08 +0000
+Subject: [PATCH] memfd patch for latest version of glibc
+
+         Backport a fix that is needed for systemd to build with latest
+         glibc version 2.31
+
+Source: https://patchwork.openembedded.org/patch/149455/
+License: LGPL-2.1-or-later
+Upstream-Status: Backport
+Signed-off-by: mselva006c <mani_selvaraj@comcast.com>
+---
+ src/basic/missing_syscall.h | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/src/basic/missing_syscall.h b/src/basic/missing_syscall.h
+index d502d3b9ca..92d56cc9d2 100644
+--- a/src/basic/missing_syscall.h
++++ b/src/basic/missing_syscall.h
+@@ -57,7 +57,7 @@ static inline int pivot_root(const char *new_root, const char *put_old) {
+ #    endif
+ #  endif
+ 
+-static inline int memfd_create(const char *name, unsigned int flags) {
++static inline int missing_memfd_create(const char *name, unsigned int flags) {
+ #  ifdef __NR_memfd_create
+         return syscall(__NR_memfd_create, name, flags);
+ #  else
+@@ -223,7 +223,7 @@ static inline pid_t raw_getpid(void) {
+ #    endif
+ #  endif
+ 
+-static inline int renameat2(int oldfd, const char *oldname, int newfd, const char *newname, unsigned flags) {
++static inline int missing_renameat2(int oldfd, const char *oldname, int newfd, const char *newname, unsigned flags) {
+ #  ifdef __NR_renameat2
+         return syscall(__NR_renameat2, oldfd, oldname, newfd, newname, flags);
+ #  else

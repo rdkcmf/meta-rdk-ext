@@ -1,0 +1,52 @@
+From ac5a9cfb555859646a8edfdaeaf41bb26b96727b Mon Sep 17 00:00:00 2001
+From: Jesse Crews <jesse_crews@comcast.com>
+Date: Mon, 12 Nov 2018 15:17:11 -0600
+Subject: [PATCH 2/3] Jabber: Add 'post' and 'put' IQ types
+
+This change expands iksemel's Jabber protocol to support extra 'put' and
+'post' info/query types.
+---
+ include/iksemel.h | 2 ++
+ src/jabber.c      | 6 ++++++
+ 2 files changed, 8 insertions(+)
+
+diff --git a/include/iksemel.h b/include/iksemel.h
+index a82c791..996b9b7 100644
+--- a/include/iksemel.h
++++ b/include/iksemel.h
+@@ -320,6 +320,8 @@ enum iksubtype {
+ 	IKS_TYPE_HEADLINE,
+ 
+ 	IKS_TYPE_GET,
++	IKS_TYPE_POST,
++	IKS_TYPE_PUT,
+ 	IKS_TYPE_SET,
+ 	IKS_TYPE_RESULT,
+ 
+diff --git a/src/jabber.c b/src/jabber.c
+index cb90f2d..850267a 100644
+--- a/src/jabber.c
++++ b/src/jabber.c
+@@ -138,6 +138,10 @@ iks_packet (iks *x)
+ 				pak->subtype = IKS_TYPE_GET;
+ 			else if (strcmp (tmp, "set") == 0)
+ 				pak->subtype = IKS_TYPE_SET;
++			else if (strcmp (tmp, "post") == 0)
++				pak->subtype = IKS_TYPE_POST;
++			else if (strcmp (tmp, "put") == 0)
++				pak->subtype = IKS_TYPE_PUT;
+ 			else if (strcmp (tmp, "result") == 0)
+ 				pak->subtype = IKS_TYPE_RESULT;
+ 			else if (strcmp (tmp, "error") == 0)
+@@ -257,6 +261,8 @@ iks_make_iq (enum iksubtype type, const char *xmlns)
+ 	switch (type) {
+ 	case IKS_TYPE_GET: t = "get"; break;
+ 	case IKS_TYPE_SET: t = "set"; break;
++	case IKS_TYPE_POST: t = "post"; break;
++	case IKS_TYPE_PUT: t = "put"; break;
+ 	case IKS_TYPE_RESULT: t = "result"; break;
+ 	case IKS_TYPE_ERROR: t = "error"; break;
+ 	default: break;
+-- 
+2.20.1
+

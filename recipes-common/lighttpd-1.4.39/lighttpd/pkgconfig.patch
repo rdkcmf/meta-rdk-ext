@@ -1,0 +1,70 @@
+Copyright (c) 2004, Jan Kneschke, incremental
+All rights reserved.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
+
+- Redistributions of source code must retain the above copyright notice, this
+list of conditions and the following disclaimer.
+
+- Redistributions in binary form must reproduce the above copyright notice,
+this list of conditions and the following disclaimer in the documentation
+and/or other materials provided with the distribution.
+
+- Neither the name of the 'incremental' nor the names of its contributors may
+be used to endorse or promote products derived from this software without
+specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE
+LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
+THE POSSIBILITY OF SUCH DAMAGE.
+
+Date: Sep 29, 2014 12:50 PM
+
+From: 9cf95fcb3d99a6ba3b9d35fc937eff7cf14b6229 Sep 29, 2014 12:50 PM
+
+Subject: [PATCH] RDKSYSINTSW-1296: Fix building out of tree
+
+        Use pkg-config for pcre dependency instead of -config script.
+
+Source: COMCAST
+
+Upstream-Status: Pending
+
+Signed-off-by: Khem Raj <khem_raj@cable.comcast.com>
+---
+
+Index: lighttpd-1.4.35/configure.ac
+===================================================================
+--- lighttpd-1.4.35.orig/configure.ac	2014-03-06 14:08:00.000000000 +0000
++++ lighttpd-1.4.35/configure.ac	2014-05-13 16:58:30.758471169 +0000
+@@ -309,16 +309,14 @@
+ AC_MSG_RESULT([$WITH_PCRE])
+ 
+ if test "$WITH_PCRE" != "no"; then
+-  AC_PATH_PROG(PCRECONFIG, pcre-config)
+-
+-  if test x"$PCRECONFIG" != x; then
+-    PCRE_LIB=`$PCRECONFIG --libs`
+-    CPPFLAGS="$CPPFLAGS `$PCRECONFIG --cflags`"
++  PKG_CHECK_MODULES(PCREPKG, [libpcre], [
++    PCRE_LIB=${PCREPKG_LIBS}
++    CPPFLAGS="$CPPFLAGS ${PCREPKG_CFLAGS}"
+     AC_DEFINE([HAVE_LIBPCRE], [1], [libpcre])
+     AC_DEFINE([HAVE_PCRE_H], [1], [pcre.h])
+-  else
++  ], [
+      AC_MSG_ERROR([pcre-config not found, install the pcre-devel package or build with --without-pcre])
+-  fi
++  ])
+ fi
+ 
+ AC_SUBST(PCRE_LIB)

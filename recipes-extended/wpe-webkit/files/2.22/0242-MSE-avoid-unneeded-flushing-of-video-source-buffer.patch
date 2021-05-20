@@ -1,0 +1,41 @@
+From c7e8deb9d566e31ec6542e2a362ab1eaf65e443f Mon Sep 17 00:00:00 2001
+From: Ievgen Mutavchi <Ievgen_Mutavchi@comcast.com>
+Date: Thu, 1 Apr 2021 11:57:38 -0400
+Subject: [PATCH] [MSE] avoid unneeded flushing of video source buffer
+
+---
+ Source/WebCore/Modules/mediasource/SourceBuffer.cpp | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/Source/WebCore/Modules/mediasource/SourceBuffer.cpp b/Source/WebCore/Modules/mediasource/SourceBuffer.cpp
+index ef37775..7194786 100644
+--- a/Source/WebCore/Modules/mediasource/SourceBuffer.cpp
++++ b/Source/WebCore/Modules/mediasource/SourceBuffer.cpp
+@@ -443,6 +443,7 @@ void SourceBuffer::seekToTime(const MediaTime& time)
+ 
+         trackBuffer.needsReenqueueing = true;
+         reenqueueMediaForTime(trackBuffer, trackID, time);
++        trackBuffer.needsReenqueueing = false;
+     }
+ }
+ 
+@@ -2147,7 +2148,6 @@ void SourceBuffer::trySignalAllSamplesEnqueued()
+ 
+ void SourceBuffer::reenqueueMediaForTime(TrackBuffer& trackBuffer, const AtomicString& trackID, const MediaTime& time)
+ {
+-    m_private->flush(trackID);
+     trackBuffer.decodeQueue.clear();
+ 
+     // Find the sample which contains the current presentation time.
+@@ -2190,6 +2190,8 @@ void SourceBuffer::reenqueueMediaForTime(TrackBuffer& trackBuffer, const AtomicS
+         trackBuffer.lastEnqueuedDecodeDuration = MediaTime::invalidTime();
+     }
+ 
++    m_private->flush(trackID);
++
+     // Fill the decode queue with the remaining samples.
+     for (auto iter = currentSampleDTSIterator; iter != trackBuffer.samples.decodeOrder().end(); ++iter)
+         trackBuffer.decodeQueue.insert(*iter);
+-- 
+2.7.4
+

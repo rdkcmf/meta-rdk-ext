@@ -1,0 +1,24 @@
+From 819a2aa952557e7869612799a8139779df3c3c29 Mon Sep 17 00:00:00 2001
+From: Balaji Selvam <balaji_selvam@comcast.com>
+Date: Wed, 2 Sep 2020 09:06:03 +0000
+Subject: [PATCH] added #include <linux/sockios.h> to fix a build error
+
+---
+ .../libwebrtc/Source/webrtc/rtc_base/physicalsocketserver.cc     | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/Source/ThirdParty/libwebrtc/Source/webrtc/rtc_base/physicalsocketserver.cc b/Source/ThirdParty/libwebrtc/Source/webrtc/rtc_base/physicalsocketserver.cc
+index 7448a7e0427d..d33a384f4c65 100644
+--- a/Source/ThirdParty/libwebrtc/Source/webrtc/rtc_base/physicalsocketserver.cc
++++ b/Source/ThirdParty/libwebrtc/Source/webrtc/rtc_base/physicalsocketserver.cc
+@@ -67,6 +67,7 @@ typedef void* SockOptArg;
+ #endif  // WEBRTC_POSIX
+ 
+ #if defined(WEBRTC_POSIX) && !defined(WEBRTC_MAC) && !defined(__native_client__)
++#include <linux/sockios.h>
+ 
+ int64_t GetSocketRecvTimestamp(int socket) {
+   struct timeval tv_ioctl;
+-- 
+2.17.1
+

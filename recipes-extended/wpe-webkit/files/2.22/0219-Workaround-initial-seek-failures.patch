@@ -1,0 +1,73 @@
+From 0533df72024fa8c5dbf2d961857317739d17a8a2 Mon Sep 17 00:00:00 2001
+From: Eugene Mutavchi <Ievgen_Mutavchi@comcast.com>
+Date: Tue, 22 Dec 2020 16:30:43 +0000
+Subject: [PATCH 2/2] Workaround initial seek failures
+
+---
+ .../graphics/gstreamer/MediaPlayerPrivateGStreamer.h      | 2 +-
+ .../gstreamer/mse/MediaPlayerPrivateGStreamerMSE.cpp      | 8 ++++++--
+ .../gstreamer/mse/MediaPlayerPrivateGStreamerMSE.h        | 1 +
+ 3 files changed, 8 insertions(+), 3 deletions(-)
+
+diff --git a/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.h b/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.h
+index a27e642cf562..a8c1c76d02f5 100644
+--- a/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.h
++++ b/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.h
+@@ -203,6 +203,7 @@ protected:
+     int m_bufferingPercentage;
+     mutable MediaTime m_cachedPosition;
+     mutable MediaTime m_playbackProgress;
++    mutable std::optional<Seconds> m_lastQueryTime;
+     bool m_canFallBackToLastFinishedSeekPosition;
+     bool m_changingRate;
+     bool m_downloadFinished;
+@@ -276,7 +277,6 @@ private:
+     RefPtr<MediaPlayerGStreamerEncryptedPlayTracker> m_tracker;
+ #endif
+     bool m_preservesPitch;
+-    mutable std::optional<Seconds> m_lastQueryTime;
+     bool m_isLegacyPlaybin;
+ #if GST_CHECK_VERSION(1, 10, 0)
+     GRefPtr<GstStreamCollection> m_streamCollection;
+diff --git a/Source/WebCore/platform/graphics/gstreamer/mse/MediaPlayerPrivateGStreamerMSE.cpp b/Source/WebCore/platform/graphics/gstreamer/mse/MediaPlayerPrivateGStreamerMSE.cpp
+index aca6c6bcbd96..1e8ddb5bae74 100644
+--- a/Source/WebCore/platform/graphics/gstreamer/mse/MediaPlayerPrivateGStreamerMSE.cpp
++++ b/Source/WebCore/platform/graphics/gstreamer/mse/MediaPlayerPrivateGStreamerMSE.cpp
+@@ -452,8 +452,11 @@ bool MediaPlayerPrivateGStreamerMSE::doSeek()
+ 
+     // This will call notifySeekNeedsData() after some time to tell that the pipeline is ready for sample enqueuing.
+     webKitMediaSrcPrepareSeek(WEBKIT_MEDIA_SRC(m_source.get()), seekTime);
+-
+     m_gstSeekCompleted = false;
++    if (!m_didFirstSeek) {
++        m_didFirstSeek = true;
++        g_usleep(10 * 1000);
++    }
+     if (!gst_element_seek(m_pipeline.get(), rate, GST_FORMAT_TIME, seekType, GST_SEEK_TYPE_SET, toGstClockTime(startTime), GST_SEEK_TYPE_SET, toGstClockTime(endTime))) {
+         webKitMediaSrcSetReadyForSamples(WEBKIT_MEDIA_SRC(m_source.get()), true);
+         m_seeking = false;
+@@ -495,7 +498,8 @@ void MediaPlayerPrivateGStreamerMSE::maybeFinishSeek()
+ 
+     webKitMediaSrcSetReadyForSamples(WEBKIT_MEDIA_SRC(m_source.get()), true);
+     m_seeking = false;
+-    m_cachedPosition = MediaTime::invalidTime();
++    m_lastQueryTime = WTF::WallTime::now().secondsSinceEpoch();
++    m_cachedPosition = m_seekTime;
+     // The pipeline can still have a pending state. In this case a position query will fail.
+     // Right now we can use m_seekTime as a fallback.
+     m_canFallBackToLastFinishedSeekPosition = true;
+diff --git a/Source/WebCore/platform/graphics/gstreamer/mse/MediaPlayerPrivateGStreamerMSE.h b/Source/WebCore/platform/graphics/gstreamer/mse/MediaPlayerPrivateGStreamerMSE.h
+index d5e6b8728719..c5ce63577685 100644
+--- a/Source/WebCore/platform/graphics/gstreamer/mse/MediaPlayerPrivateGStreamerMSE.h
++++ b/Source/WebCore/platform/graphics/gstreamer/mse/MediaPlayerPrivateGStreamerMSE.h
+@@ -135,6 +135,7 @@ private:
+     RefPtr<PlaybackPipeline> m_playbackPipeline;
+     bool m_didLogRebufferingOnce { false };
+     URL m_url;
++    bool m_didFirstSeek = false;
+ };
+ 
+ } // namespace WebCore
+-- 
+2.24.0
+

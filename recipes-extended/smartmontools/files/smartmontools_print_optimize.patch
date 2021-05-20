@@ -1,0 +1,100 @@
+Date: May 31 13:27:33 2016
+
+From: 43782961ae12eae1acab419d84a1951eb1478066 Jun 01 19:19:17 2016
+
+Subject: [PATCH] RDK-16207 : Remove banner and irrelevant data from output
+
+	Adding patch to remove banner and irrelevant data from output during execution of smartctl
+	This is to avoid expensive parsing and output formating operations when invoked from snmp agent handler implementation.
+	
+Source: COMCAST 
+
+License: GPL-2.0-or-later
+
+Upstream-Status: Pending
+
+Signed-off-by: skv01 <Shibu_KV@cable.comcast.com>
+---
+
+diff --git a/ataprint.cpp b/ataprint.cpp
+index 9239dca..4b3bc62 100644
+--- a/ataprint.cpp
++++ b/ataprint.cpp
+@@ -2521,7 +2521,7 @@ int ataPrintMain (ata_device * device, const ata_print_options & options)
+ 
+   // Print most drive identity information if requested
+   if (options.drive_info) {
+-    pout("=== START OF INFORMATION SECTION ===\n");
++    /* pout("=== START OF INFORMATION SECTION ===\n"); */
+     print_drive_info(&drive, sizes, rpm, dbentry);
+   }
+ 
+@@ -2884,13 +2884,15 @@ int ataPrintMain (ata_device * device, const ata_print_options & options)
+     pout("\n");
+ 
+   // START OF READ-ONLY OPTIONS APART FROM -V and -i
++  /*
+   if (   options.smart_check_status  || options.smart_general_values
+       || options.smart_vendor_attrib || options.smart_error_log
+       || options.smart_selftest_log  || options.smart_selective_selftest_log
+       || options.smart_ext_error_log || options.smart_ext_selftest_log
+       || options.sct_temp_sts        || options.sct_temp_hist               )
+     pout("=== START OF READ SMART DATA SECTION ===\n");
+-  
++  */
++
+   // Check SMART status
+   if (options.smart_check_status) {
+ 
+diff --git a/scsiprint.cpp b/scsiprint.cpp
+index 5c5b6e0..ddb2ec5 100644
+--- a/scsiprint.cpp
++++ b/scsiprint.cpp
+@@ -1481,7 +1481,7 @@ scsiGetDriveInfo(scsi_device * device, UINT8 * peripheral_type, bool all)
+         scsi_format_id_string(product, (const unsigned char *)&gBuf[16], 16);
+         scsi_format_id_string(revision, (const unsigned char *)&gBuf[32], 4);
+ 
+-        pout("=== START OF INFORMATION SECTION ===\n");
++        /* pout("=== START OF INFORMATION SECTION ===\n"); */
+         pout("Vendor:               %.8s\n", vendor);
+         pout("Product:              %.16s\n", product);
+         if (gBuf[32] >= ' ')
+@@ -1948,12 +1948,14 @@ scsiPrintMain(scsi_device * device, const scsi_print_options & options)
+     pout("\n"); // END OF THE ENABLE/DISABLE SECTION OF THE CODE
+ 
+     // START OF READ-ONLY OPTIONS APART FROM -V and -i
++    /*
+     if (    options.smart_check_status  || options.smart_ss_media_log
+            || options.smart_vendor_attrib || options.smart_error_log
+            || options.smart_selftest_log  || options.smart_vendor_attrib
+            || options.smart_background_log || options.sasphy
+          )
+     pout("=== START OF READ SMART DATA SECTION ===\n");
++    */
+ 
+     if (options.smart_check_status) {
+         scsiGetSupportedLogPages(device);
+diff --git a/utility.cpp b/utility.cpp
+index 7cd81ca..98e92da 100644
+--- a/utility.cpp
++++ b/utility.cpp
+@@ -82,6 +82,10 @@ const char * packet_types[] = {
+ // Make version information string
+ std::string format_version_info(const char * prog_name, bool full /*= false*/)
+ {
++
++  full = false ;
++  std::string info ;
++  /*
+   std::string info = strprintf(
+     "%s "PACKAGE_VERSION" "
+ #ifdef SMARTMONTOOLS_SVN_REV
+@@ -93,6 +97,8 @@ std::string format_version_info(const char * prog_name, bool full /*= false*/)
+     "Copyright (C) 2002-13, Bruce Allen, Christian Franke, www.smartmontools.org\n",
+     prog_name, smi()->get_os_version_str().c_str()
+   );
++  */
++
+   if (!full)
+     return info;
+ 

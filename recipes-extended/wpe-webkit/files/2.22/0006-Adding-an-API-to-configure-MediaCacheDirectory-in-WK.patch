@@ -1,0 +1,50 @@
+From 79f1eb3d909384be6b9b706b8bf5dff3d0d4f5ba Mon Sep 17 00:00:00 2001
+From: mgopalakirshnan <manigandan.gopalakrishnan@lnttechservices.com>
+Source: COMCAST
+License: LICENSE-LGPL-2.1
+Upstream-Status: Pending
+Signed-off-by: mgopalakirshnan <manigandan.gopalakrishnan@lnttechservices.com>
+Date: Fri, 5 Jan 2018 12:12:58 +0000
+Subject: [PATCH] 0030-Adding-an-API-to-configure-MediaCacheDirectory-in-WK
+
+---
+ Source/WebKit/UIProcess/API/C/WKContextConfigurationRef.cpp | 11 +++++++++++
+ Source/WebKit/UIProcess/API/C/WKContextConfigurationRef.h   |  3 +++
+ 2 files changed, 14 insertions(+)
+
+Index: git/Source/WebKit/UIProcess/API/C/WKContextConfigurationRef.cpp
+===================================================================
+--- git.orig/Source/WebKit/UIProcess/API/C/WKContextConfigurationRef.cpp
++++ git/Source/WebKit/UIProcess/API/C/WKContextConfigurationRef.cpp
+@@ -118,6 +118,17 @@ void WKContextConfigurationSetMediaKeysS
+     toImpl(configuration)->setMediaKeysStorageDirectory(toImpl(mediaKeysStorageDirectory)->string());
+ }
+ 
++WKStringRef WKContextConfigurationCopyMediaCacheDirectory(WKContextConfigurationRef configuration)
++{
++    return toCopiedAPI(toImpl(configuration)->mediaCacheDirectory());
++}
++
++void WKContextConfigurationSetMediaCacheDirectory(WKContextConfigurationRef configuration, WKStringRef mediaCacheDirectory)
++{
++    toImpl(configuration)->setMediaCacheDirectory(toImpl(mediaCacheDirectory)->string());
++}
++
++
+ WKStringRef WKContextConfigurationCopyResourceLoadStatisticsDirectory(WKContextConfigurationRef configuration)
+ {
+     return toCopiedAPI(toImpl(configuration)->resourceLoadStatisticsDirectory());
+Index: git/Source/WebKit/UIProcess/API/C/WKContextConfigurationRef.h
+===================================================================
+--- git.orig/Source/WebKit/UIProcess/API/C/WKContextConfigurationRef.h
++++ git/Source/WebKit/UIProcess/API/C/WKContextConfigurationRef.h
+@@ -56,6 +56,9 @@ WK_EXPORT void WKContextConfigurationSet
+ WK_EXPORT WKStringRef WKContextConfigurationCopyMediaKeysStorageDirectory(WKContextConfigurationRef configuration);
+ WK_EXPORT void WKContextConfigurationSetMediaKeysStorageDirectory(WKContextConfigurationRef configuration, WKStringRef mediaKeysStorageDirectory);
+ 
++WK_EXPORT WKStringRef WKContextConfigurationCopyMediaCacheDirectory(WKContextConfigurationRef configuration);
++WK_EXPORT void WKContextConfigurationSetMediaCacheDirectory(WKContextConfigurationRef configuration, WKStringRef mediaCacheDirectory);
++
+ WK_EXPORT WKStringRef WKContextConfigurationCopyResourceLoadStatisticsDirectory(WKContextConfigurationRef configuration);
+ WK_EXPORT void WKContextConfigurationSetResourceLoadStatisticsDirectory(WKContextConfigurationRef configuration, WKStringRef resourceLoadStatisticsDirectory);
+ 

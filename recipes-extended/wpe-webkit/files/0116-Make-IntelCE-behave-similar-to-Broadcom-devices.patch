@@ -1,0 +1,85 @@
+From 97a21cf6bd073cba69d5c1ba91724760df129450 Mon Sep 17 00:00:00 2001
+From: Eugene Mutavchi <Ievgen_Mutavchi@comcast.com>
+Date: Tue, 8 Jan 2019 11:02:33 -0500
+Subject: [PATCH] Make IntelCE behave similar to Broadcom devices
+
+---
+ .../graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp      |  2 +-
+ .../platform/graphics/gstreamer/mse/AppendPipeline.cpp      |  2 +-
+ .../gstreamer/mse/MediaPlayerPrivateGStreamerMSE.cpp        | 13 ++++++++++++-
+ .../platform/graphics/gstreamer/mse/PlaybackPipeline.cpp    |  2 +-
+ 4 files changed, 15 insertions(+), 4 deletions(-)
+
+diff --git a/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp b/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp
+index 721b3e4..240f4dc 100644
+--- a/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp
++++ b/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp
+@@ -2488,7 +2488,7 @@ void MediaPlayerPrivateGStreamer::createGSTPlayBin()
+     if (m_videoSink)
+     {
+ #if PLATFORM(INTEL_CE)
+-        g_object_set(G_OBJECT(m_videoSink.get()), "video-plane", "UPP_C", nullptr);
++        g_object_set(G_OBJECT(m_videoSink.get()), "video-plane", "UPP_C", "scale-mode", 3, nullptr);
+         g_signal_connect_swapped(m_videoSink.get(), "firstframe-callback", G_CALLBACK(onFirstVideoFrameCallback), this);
+ #else
+         g_signal_connect_swapped(m_videoSink.get(), "first-video-frame-callback", G_CALLBACK(onFirstVideoFrameCallback), this);
+diff --git a/Source/WebCore/platform/graphics/gstreamer/mse/AppendPipeline.cpp b/Source/WebCore/platform/graphics/gstreamer/mse/AppendPipeline.cpp
+index 5ac9d7b..b20872e 100644
+--- a/Source/WebCore/platform/graphics/gstreamer/mse/AppendPipeline.cpp
++++ b/Source/WebCore/platform/graphics/gstreamer/mse/AppendPipeline.cpp
+@@ -1085,7 +1085,7 @@ GstFlowReturn AppendPipeline::handleNewAppsinkSample(GstElement* appsink)
+ static GRefPtr<GstElement>
+ createOptionalParserForFormat(GstPad* demuxerSrcPad)
+ {
+-#if PLATFORM(BROADCOM)
++#if PLATFORM(BROADCOM) || PLATFORM(INTEL_CE)
+     return nullptr;
+ #endif
+     GRefPtr<GstCaps> padCaps = adoptGRef(gst_pad_get_current_caps(demuxerSrcPad));
+diff --git a/Source/WebCore/platform/graphics/gstreamer/mse/MediaPlayerPrivateGStreamerMSE.cpp b/Source/WebCore/platform/graphics/gstreamer/mse/MediaPlayerPrivateGStreamerMSE.cpp
+index 53b3d7a..ed609e6 100644
+--- a/Source/WebCore/platform/graphics/gstreamer/mse/MediaPlayerPrivateGStreamerMSE.cpp
++++ b/Source/WebCore/platform/graphics/gstreamer/mse/MediaPlayerPrivateGStreamerMSE.cpp
+@@ -537,6 +537,17 @@ void MediaPlayerPrivateGStreamerMSE::setReadyState(MediaPlayer::ReadyState ready
+         return;
+     }
+ 
++    if (m_eosPending && m_readyState == MediaPlayer::HaveMetadata) {
++        MediaTime position = MediaPlayerPrivateGStreamer::currentMediaTime();
++        if (abs(position - durationMediaTime()) < MediaTime(GST_SECOND, GST_SECOND)) {
++            m_eosPending = false;
++            m_isEndReached = true;
++            m_cachedPosition = m_mediaTimeDuration;
++            m_durationAtEOS = m_mediaTimeDuration;
++            m_player->timeChanged();
++        }
++    }
++
+     if (oldReadyState < MediaPlayer::HaveCurrentData && m_readyState >= MediaPlayer::HaveCurrentData) {
+         GST_DEBUG("[Seek] Reporting load state changed to trigger seek continuation");
+         loadStateChanged();
+@@ -683,7 +694,7 @@ void MediaPlayerPrivateGStreamerMSE::updateStates()
+             ASSERT_NOT_REACHED();
+             break;
+         }
+-#if PLATFORM(BROADCOM)
++#if PLATFORM(BROADCOM) || PLATFORM(INTEL_CE)
+         // this code path needs a proper review in case it can be generalized to all platforms.
+         bool buffering = m_readyState <= MediaPlayer::HaveMetadata && !playbackPipelineHasFutureData();
+ #else
+diff --git a/Source/WebCore/platform/graphics/gstreamer/mse/PlaybackPipeline.cpp b/Source/WebCore/platform/graphics/gstreamer/mse/PlaybackPipeline.cpp
+index 0ab7ed5..88dec10 100644
+--- a/Source/WebCore/platform/graphics/gstreamer/mse/PlaybackPipeline.cpp
++++ b/Source/WebCore/platform/graphics/gstreamer/mse/PlaybackPipeline.cpp
+@@ -181,7 +181,7 @@ void PlaybackPipeline::attachTrack(RefPtr<SourceBufferPrivateGStreamer> sourceBu
+     const char* mediaType = capsMediaType(caps);
+     GST_DEBUG_OBJECT(webKitMediaSrc, "Configured track %s: appsrc=%s, padId=%u, mediaType=%s", trackPrivate->id().string().utf8().data(), GST_ELEMENT_NAME(stream->appsrc), padId, mediaType);
+ 
+-#if !PLATFORM(BROADCOM)
++#if !PLATFORM(BROADCOM) && !PLATFORM(INTEL_CE)
+     GUniquePtr<gchar> parserBinName(g_strdup_printf("streamparser%u", padId));
+ 
+     if (!g_strcmp0(mediaType, "video/x-h264")) {
+-- 
+2.7.4
+

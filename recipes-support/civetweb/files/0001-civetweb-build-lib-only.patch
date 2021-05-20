@@ -1,0 +1,122 @@
+Date: Dec 05 09:22:20 2018
+
+From: 462992bf59541b643d194956ce4c245075a0dbf7 Dec 20 16:01:20 2018
+
+Subject: [PATCH] BLDK-672 : Added recipe for civetweb for fog
+
+	Added recipe for civetweb which is used by fog.
+	Patches to disable building unwanted civetweb targets
+
+Source: COMCAST
+
+License: MIT
+
+Upstream-Status: Pending
+
+Signed-off-by: Akhil Babu <Akhil_Babu2@comcast.com>
+---
+
+Index: git/CMakeLists.txt
+===================================================================
+--- git.orig/CMakeLists.txt
++++ git/CMakeLists.txt
+@@ -447,7 +447,7 @@ endif()
+ add_subdirectory(src)
+ 
+ # Enable the testing of the library/executable
+-include(CTest)
++#include(CTest)
+ if (BUILD_TESTING)
+   # Check unit testing framework Version
+   set(CIVETWEB_CHECK_VERSION 0.11.0 CACHE STRING
+Index: git/src/CMakeLists.txt
+===================================================================
+--- git.orig/src/CMakeLists.txt
++++ git/src/CMakeLists.txt
+@@ -229,45 +229,48 @@ if (CIVETWEB_ENABLE_LUA)
+ endif()
+ 
+ # The web server executable
+-add_executable(c-executable main.c)
+-set_target_properties(c-executable PROPERTIES
+-  OUTPUT_NAME "civetweb"
+-)
+-if (CIVETWEB_INSTALL_EXECUTABLE)
+-  install(
+-    TARGETS c-executable
+-    ARCHIVE DESTINATION lib
+-    LIBRARY DESTINATION lib
+-    RUNTIME DESTINATION bin
+-    COMPONENT server)
+-endif()
+-if (BUILD_SHARED_LIBS)
+-  target_compile_definitions(c-executable PRIVATE CIVETWEB_DLL_IMPORTS)
+-endif()
+-target_include_directories(
+-  c-executable PUBLIC
+-  ${PROJECT_SOURCE_DIR}/include)
+-target_link_libraries(c-executable c-library)
+-if (LIBRT_FOUND)
+-  target_link_libraries(c-executable LIBRT::LIBRT)
+-endif()
++#Disabling web server executable since it's not needed for fog
++if (CIVETWEB_ENABLE_WEB_EXECUTABLE)
++    add_executable(c-executable main.c)
++    set_target_properties(c-executable PROPERTIES
++      OUTPUT_NAME "civetweb"
++    )
++    if (CIVETWEB_INSTALL_EXECUTABLE)
++      install(
++        TARGETS c-executable
++        ARCHIVE DESTINATION lib
++        LIBRARY DESTINATION lib
++        RUNTIME DESTINATION bin
++        COMPONENT server)
++    endif()
++    if (BUILD_SHARED_LIBS)
++      target_compile_definitions(c-executable PRIVATE CIVETWEB_DLL_IMPORTS)
++    endif()
++    target_include_directories(
++      c-executable PUBLIC
++      ${PROJECT_SOURCE_DIR}/include)
++    target_link_libraries(c-executable c-library)
++    if (LIBRT_FOUND)
++      target_link_libraries(c-executable LIBRT::LIBRT)
++    endif()
+ 
+-if (CIVETWEB_ENABLE_LUA)
+-  add_library(lua-library third_party/lfs.c third_party/lsqlite3.c third_party/LuaXML_lib.c third_party/sqlite3.c)
+-  set_target_properties(lua-library PROPERTIES
+-    OUTPUT_NAME "lua-library"
+-    VERSION ${CIVETWEB_VERSION}
+-    SOVERSION ${CIVETWEB_VERSION}
+-  )
+-  target_include_directories(
+-    lua-library PUBLIC
+-    ${PROJECT_SOURCE_DIR}/src/third_party/lua-5.2.4)
+-  install(
+-    TARGETS lua-library
+-    ARCHIVE DESTINATION lib
+-    LIBRARY DESTINATION lib
+-    RUNTIME DESTINATION bin
+-    COMPONENT lua-library)
++    if (CIVETWEB_ENABLE_LUA)
++      add_library(lua-library third_party/lfs.c third_party/lsqlite3.c third_party/LuaXML_lib.c third_party/sqlite3.c)
++      set_target_properties(lua-library PROPERTIES
++        OUTPUT_NAME "lua-library"
++        VERSION ${CIVETWEB_VERSION}
++        SOVERSION ${CIVETWEB_VERSION}
++      )
++      target_include_directories(
++        lua-library PUBLIC
++        ${PROJECT_SOURCE_DIR}/src/third_party/lua-5.2.4)
++      install(
++        TARGETS lua-library
++        ARCHIVE DESTINATION lib
++        LIBRARY DESTINATION lib
++        RUNTIME DESTINATION bin
++        COMPONENT lua-library)
++    endif()
+ endif()
+ 
+ # The C++ API library

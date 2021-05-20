@@ -1,0 +1,53 @@
+From dfa8c3d6960742862421f0b4607dc6cba7e03eaf Mon Sep 17 00:00:00 2001
+From: Eugene Mutavchi <Ievgen_Mutavchi@comcast.com>
+Date: Mon, 18 Mar 2019 09:40:26 -0400
+Subject: [PATCH] XRE key mapping
+
+---
+ src/westeros/WesterosViewbackendInput.cpp | 29 ++++++++++++++++++++++++++++-
+ 1 file changed, 28 insertions(+), 1 deletion(-)
+
+diff --git a/src/westeros/WesterosViewbackendInput.cpp b/src/westeros/WesterosViewbackendInput.cpp
+index 017461c..2515178 100644
+--- a/src/westeros/WesterosViewbackendInput.cpp
++++ b/src/westeros/WesterosViewbackendInput.cpp
+@@ -173,8 +173,35 @@ void WesterosViewbackendInput::handleKeyEvent(void* userData, uint32_t key, uint
+             unicode = xkb_keysym_to_utf32(keysym);
+         }
+ 
++        static bool ctrl_override = 0;
++        if ((keysym == XKB_KEY_Control_L || keysym == XKB_KEY_Control_R)) {
++            if (e->state == WL_KEYBOARD_KEY_STATE_PRESSED)
++                ctrl_override = true;
++            else
++                ctrl_override = false;
++        }
++        uint8_t modifiers = xkb.modifiers;
++        if ((modifiers == wpe_input_keyboard_modifier_control) || (ctrl_override && modifiers == 0))
++        {
++            if (keysym == XKB_KEY_l || keysym == XKB_KEY_L) {
++                keysym = XKB_KEY_BackSpace;
++            }
++            else if (keysym == XKB_KEY_f || keysym == XKB_KEY_F) {
++                keysym = XKB_KEY_XF86AudioForward;
++            }
++            else if (keysym == XKB_KEY_w || keysym == XKB_KEY_W) {
++                keysym = XKB_KEY_XF86AudioRewind;
++            }
++            else if (keysym == XKB_KEY_p || keysym == XKB_KEY_P) {
++                keysym = XKB_KEY_XF86AudioPlay;
++            }
++
++            unicode = xkb_keysym_to_utf32(keysym);
++            modifiers = 0;
++        }
++
+         struct wpe_input_keyboard_event event
+-                { e->time, keysym, unicode, !!e->state, xkb.modifiers };
++                { e->time, keysym, unicode, !!e->state, modifiers };
+         wpe_view_backend_dispatch_keyboard_event(backend_input.m_viewbackend, &event);
+ 
+         g_ptr_array_remove_fast(backend_input.m_keyEventDataArray, data);
+-- 
+2.7.4
+

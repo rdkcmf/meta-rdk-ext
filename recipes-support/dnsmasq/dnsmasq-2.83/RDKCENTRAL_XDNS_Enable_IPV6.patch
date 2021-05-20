@@ -1,0 +1,35 @@
+Index: dnsmasq-2.83/src/config.h
+===================================================================
+--- dnsmasq-2.83.orig/src/config.h
++++ dnsmasq-2.83/src/config.h
+@@ -305,9 +305,29 @@ HAVE_SOCKADDR_SA_LEN
+  
+ #endif
+ 
++/* Decide if we're going to support IPv6 */
++/* We assume that systems which don't have IPv6
++   headers don't have ntop and pton either */
++
++#if defined(INET6_ADDRSTRLEN) && defined(IPV6_V6ONLY)
++#  define HAVE_IPV6
++#  define ADDRSTRLEN INET6_ADDRSTRLEN
++#else
++#  if !defined(INET_ADDRSTRLEN)
++#      define INET_ADDRSTRLEN 16 /* 4*3 + 3 dots + NULL */
++#  endif
++#  undef HAVE_IPV6
++#  define ADDRSTRLEN INET_ADDRSTRLEN
++#endif
++
++
+ /* rules to implement compile-time option dependencies and 
+    the NO_XXX flags */
+ 
++#ifdef NO_IPV6
++#undef HAVE_IPV6
++#endif
++
+ #ifdef NO_TFTP
+ #undef HAVE_TFTP
+ #endif
+

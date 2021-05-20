@@ -1,0 +1,26 @@
+From b249a8ce9690c3cfabdb12fd57114e39776c20ae Mon Sep 17 00:00:00 2001
+From: Siva Sankar Raja <sivasankar_raja@comcast.com>
+Source: COMCAST
+License: LICENSE-LGPL-2.1
+Upstream-Status: Pending
+Signed-off-by: Siva Sankar Raja <sivasankar_raja@comcast.com>
+Date: Mon, 8 Jul 2019 13:34:49 +0000
+Subject: [PATCH] Increase-parser-time-limit
+
+---
+ Source/WebCore/html/parser/HTMLParserScheduler.cpp | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+Index: git/Source/WebCore/html/parser/HTMLParserScheduler.cpp
+===================================================================
+--- git.orig/Source/WebCore/html/parser/HTMLParserScheduler.cpp
++++ git/Source/WebCore/html/parser/HTMLParserScheduler.cpp
+@@ -35,7 +35,7 @@
+ // defaultParserTimeLimit is the seconds the parser will run in one write() call
+ // before yielding. Inline <script> execution can cause it to exceed the limit.
+ // FIXME: We would like this value to be 0.2.
+-static const double defaultParserTimeLimit = 0.500;
++static const double defaultParserTimeLimit = 5.0;
+ 
+ namespace WebCore {
+ 

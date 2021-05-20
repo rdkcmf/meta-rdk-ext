@@ -1,0 +1,32 @@
+From 2de78fba30d278dc3ea4d51b620b97f7643e91b8 Mon Sep 17 00:00:00 2001
+From: Gurdal Oruklu <gurdal_oruklu@comcast.com>
+Date: Fri, 26 Apr 2019 21:56:54 +0000
+Subject: [PATCH] EME enabled Widevine keysystem with environment variable
+Source: COMCAST
+License: GPLV2
+Upstream-Status: None
+
+Signed-off-by: Gurdal Oruklu <gurdal_oruklu@comcast.com>
+---
+ .../platform/graphics/gstreamer/eme/CDMOpenCDM.cpp   | 20 ++++++++++++++++++++
+ 1 file changed, 20 insertions(+)
+
+Index: git/Source/WebCore/platform/graphics/gstreamer/eme/CDMOpenCDM.cpp
+===================================================================
+--- git.orig/Source/WebCore/platform/graphics/gstreamer/eme/CDMOpenCDM.cpp
++++ git/Source/WebCore/platform/graphics/gstreamer/eme/CDMOpenCDM.cpp
+@@ -665,6 +665,14 @@ String CDMInstanceOpenCDM::sessionIdByKe
+             result = sessionId;
+             break;
+         }
++
++        // Hack for Youtube Widevine Content.
++        // we assume existing session has the keyID for the new session.
++        if(m_keySystem == GStreamerEMEUtilities::s_WidevineKeySystem)
++        {
++            result = sessionId;
++            break;
++        }
+     }
+ 
+     if (result.isEmpty())

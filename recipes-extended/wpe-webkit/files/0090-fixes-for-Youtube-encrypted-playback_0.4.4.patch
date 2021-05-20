@@ -1,0 +1,184 @@
+From 841e67184a9ef334bdffdef6c3f12556d8352564 Mon Sep 17 00:00:00 2001
+From: Gurdal Oruklu <gurdal_oruklu@comcast.com>
+Date: Wed, 16 Oct 2019 18:35:24 +0000
+Subject: [PATCH] fixes for Youtube encrypted playback
+Source: COMCAST
+License: GPLV2
+Upstream-Status: none
+
+Signed-off-by: Gurdal Oruklu <gurdal_oruklu@comcast.com>
+---
+ .../graphics/gstreamer/eme/GStreamerEMEUtilities.h |  2 +-
+ .../WebKitCommonEncryptionDecryptorGStreamer.cpp   | 54 ++++++++++++++++------
+ .../eme/WebKitOpenCDMDecryptorGStreamer.cpp        |  7 +--
+ 3 files changed, 44 insertions(+), 19 deletions(-)
+
+Index: git/Source/WebCore/platform/graphics/gstreamer/eme/GStreamerEMEUtilities.h
+===================================================================
+--- git.orig/Source/WebCore/platform/graphics/gstreamer/eme/GStreamerEMEUtilities.h
++++ git/Source/WebCore/platform/graphics/gstreamer/eme/GStreamerEMEUtilities.h
+@@ -36,7 +36,7 @@
+ #endif
+ 
+ // NOTE: YouTube 2018 EME conformance tests expect this to be >=5s.
+-const WTF::Seconds WEBCORE_GSTREAMER_EME_LICENSE_KEY_RESPONSE_TIMEOUT = WTF::Seconds(6);
++const WTF::Seconds WEBCORE_GSTREAMER_EME_LICENSE_KEY_RESPONSE_TIMEOUT = WTF::Seconds(60);
+ 
+ namespace WebCore {
+ 
+Index: git/Source/WebCore/platform/graphics/gstreamer/eme/WebKitCommonEncryptionDecryptorGStreamer.cpp
+===================================================================
+--- git.orig/Source/WebCore/platform/graphics/gstreamer/eme/WebKitCommonEncryptionDecryptorGStreamer.cpp
++++ git/Source/WebCore/platform/graphics/gstreamer/eme/WebKitCommonEncryptionDecryptorGStreamer.cpp
+@@ -38,6 +38,7 @@ using WebCore::CDMInstance;
+ #define WEBKIT_MEDIA_CENC_DECRYPT_GET_PRIVATE(obj) (G_TYPE_INSTANCE_GET_PRIVATE((obj), WEBKIT_TYPE_MEDIA_CENC_DECRYPT, WebKitMediaCommonEncryptionDecryptPrivate))
+ struct _WebKitMediaCommonEncryptionDecryptPrivate {
+     bool m_keyReceived { false };
++    bool m_shouldStop { false };
+     Lock m_mutex;
+     Condition m_condition;
+     RefPtr<CDMInstance> m_cdmInstance;
+@@ -169,16 +170,16 @@ static GstCaps* webkitMediaCommonEncrypt
+ 
+             gst_structure_set(outgoingStructure.get(), "original-media-type", G_TYPE_STRING, gst_structure_get_name(incomingStructure), nullptr);
+ 
+-            WebKitMediaCommonEncryptionDecryptPrivate* priv = self->priv;
+-            LockHolder locker(priv->m_mutex);
+-
+-            if (webkitMediaCommonEncryptionDecryptIsCDMInstanceAvailable(self)) {
+-                gst_structure_set_name(outgoingStructure.get(),
+-                    WebCore::GStreamerEMEUtilities::isUnspecifiedKeySystem(priv->m_cdmInstance->keySystem()) ? "application/x-webm-enc" : "application/x-cenc");
+-                gst_structure_set(outgoingStructure.get(),
+-                    "protection-system", G_TYPE_STRING, WebCore::GStreamerEMEUtilities::keySystemToUuid(priv->m_cdmInstance->keySystem()), nullptr);
++            g_print("WEBM::Incoming original media type is %s\n", gst_structure_get_name(incomingStructure));
++            if (!g_strcmp0(gst_structure_get_name(incomingStructure), "video/x-vp9")
++                || !g_strcmp0(gst_structure_get_name(incomingStructure), "video/webm")
++                || !g_strcmp0(gst_structure_get_name(incomingStructure), "audio/webm")
++                || !g_strcmp0(gst_structure_get_name(incomingStructure), "audio/x-vorbis")
++                || !g_strcmp0(gst_structure_get_name(incomingStructure), "audio/x-opus"))
++                gst_structure_set_name(outgoingStructure.get(), "application/x-webm-enc");
++            else
++                gst_structure_set_name(outgoingStructure.get(), "application/x-cenc");
+ 
+-            }
+         }
+ 
+         bool duplicate = false;
+@@ -211,6 +212,13 @@ static GstFlowReturn webkitMediaCommonEn
+ {
+     WebKitMediaCommonEncryptionDecrypt* self = WEBKIT_MEDIA_CENC_DECRYPT(base);
+     WebKitMediaCommonEncryptionDecryptPrivate* priv = WEBKIT_MEDIA_CENC_DECRYPT_GET_PRIVATE(self);
++    
++    LockHolder locker(priv->m_mutex);
++
++    if (priv->m_isFlushing) {
++        GST_DEBUG_OBJECT(self, "flushing");
++        return GST_FLOW_FLUSHING;
++    }
+ 
+     GstProtectionMeta* protectionMeta = reinterpret_cast<GstProtectionMeta*>(gst_buffer_get_protection_meta(buffer));
+     if (!protectionMeta) {
+@@ -218,7 +226,6 @@ static GstFlowReturn webkitMediaCommonEn
+         return GST_FLOW_OK;
+     }
+ 
+-    LockHolder locker(priv->m_mutex);
+     const GValue* streamEncryptionEventsList = gst_structure_get_value(protectionMeta->info, "stream-encryption-events");
+     if (streamEncryptionEventsList && GST_VALUE_HOLDS_LIST(streamEncryptionEventsList)) {
+         unsigned streamEncryptionEventsListSize = gst_value_list_get_size(streamEncryptionEventsList);
+@@ -258,8 +265,11 @@ static GstFlowReturn webkitMediaCommonEn
+             GST_ERROR_OBJECT(self, "can't process key requests in less than PAUSED state");
+             return GST_FLOW_NOT_SUPPORTED;
+         }
+-        if (!priv->m_condition.waitFor(priv->m_mutex, WEBCORE_GSTREAMER_EME_LICENSE_KEY_RESPONSE_TIMEOUT, [priv] { return priv->m_isFlushing || priv->m_keyReceived; })) {
+-            if (!priv->m_keyReceived) {
++        if (!priv->m_condition.waitFor(priv->m_mutex, WEBCORE_GSTREAMER_EME_LICENSE_KEY_RESPONSE_TIMEOUT, [priv] { return priv->m_isFlushing || priv->m_keyReceived || priv->m_shouldStop;})) {
++            if (priv->m_isFlushing) {
++                GST_DEBUG_OBJECT(self, "flushing");
++                return GST_FLOW_FLUSHING;
++            } else {
+                 GST_ERROR_OBJECT(self, "key not available");
+                 return GST_FLOW_NOT_SUPPORTED;
+             }
+@@ -270,6 +280,16 @@ static GstFlowReturn webkitMediaCommonEn
+             return GST_FLOW_FLUSHING;
+         }
+ 
++        if (priv->m_shouldStop) {
++            GST_DEBUG_OBJECT(self, "stopping");
++            return GST_FLOW_OK;
++        }
++
++        if (!priv->m_keyReceived) {
++            GST_ERROR_OBJECT(self, "key not available");
++            return GST_FLOW_NOT_SUPPORTED;
++        }
++
+         GST_DEBUG_OBJECT(self, "key received, continuing");
+     }
+ 
+@@ -387,11 +407,11 @@ static void webkitMediaCommonEncryptionD
+     ASSERT(priv->m_mutex.isLocked());
+ 
+     bool isCDMInstanceAvailable = webkitMediaCommonEncryptionDecryptIsCDMInstanceAvailable(self);
++    const char* eventKeySystemUUID = nullptr;
+ 
+     WebCore::InitData concatenatedInitDatas;
+     for (auto& event : priv->m_protectionEvents) {
+         GstBuffer* buffer = nullptr;
+-        const char* eventKeySystemUUID = nullptr;
+         gst_event_parse_protection(event.get(), &eventKeySystemUUID, &buffer, nullptr);
+         const char* eventKeySystem = WebCore::GStreamerEMEUtilities::uuidToKeySystem(eventKeySystemUUID);
+ 
+@@ -424,7 +444,10 @@ static void webkitMediaCommonEncryptionD
+             GST_DEBUG_OBJECT(self, "init data of size %u", mappedBuffer.size());
+             GST_TRACE_OBJECT(self, "init data MD5 %s", WebCore::GStreamerEMEUtilities::initDataMD5(initData).utf8().data());
+             GST_MEMDUMP_OBJECT(self, "init data", mappedBuffer.data(), mappedBuffer.size());
+-            priv->m_initDatas.set(eventKeySystem, initData);
++            if (isCDMInstanceAvailable)
++                priv->m_initDatas.set(priv->m_cdmInstance->keySystem(), initData);
++            else
++                priv->m_initDatas.set(eventKeySystem, initData);
+             GST_MEMDUMP_OBJECT(self, "key ID", reinterpret_cast<const uint8_t*>(kid->data()), kid->size());
+             priv->m_keyIds.set(initData, kid.copyRef());
+ 
+@@ -464,7 +487,7 @@ static void webkitMediaCommonEncryptionD
+         GST_DEBUG_OBJECT(self, "reporting concatenated init datas of size %u", concatenatedInitDatas.sizeInBytes());
+         GST_TRACE_OBJECT(self, "init data MD5 %s", WebCore::GStreamerEMEUtilities::initDataMD5(concatenatedInitDatas).utf8().data());
+         GST_MEMDUMP_OBJECT(self, "init data", reinterpret_cast<const uint8_t*>(concatenatedInitDatas.characters8()), concatenatedInitDatas.sizeInBytes());
+-        gst_element_post_message(GST_ELEMENT(self), gst_message_new_element(GST_OBJECT(self), gst_structure_new("drm-initialization-data-encountered", "init-data", GST_TYPE_BUFFER, buffer.get(), nullptr)));
++        gst_element_post_message(GST_ELEMENT(self), gst_message_new_element(GST_OBJECT(self), gst_structure_new("drm-initialization-data-encountered", "init-data", GST_TYPE_BUFFER, buffer.get(), "key-system-uuid", G_TYPE_STRING, eventKeySystemUUID, nullptr)));
+     }
+ }
+ 
+@@ -546,6 +569,7 @@ static GstStateChangeReturn webKitMediaC
+     case GST_STATE_CHANGE_PAUSED_TO_READY:
+         GST_DEBUG_OBJECT(self, "PAUSED->READY");
+         priv->m_isFlushing = false;
++        priv->m_shouldStop = true;
+         priv->m_condition.notifyOne();
+         break;
+     default:
+Index: git/Source/WebCore/platform/graphics/gstreamer/eme/WebKitOpenCDMDecryptorGStreamer.cpp
+===================================================================
+--- git.orig/Source/WebCore/platform/graphics/gstreamer/eme/WebKitOpenCDMDecryptorGStreamer.cpp
++++ git/Source/WebCore/platform/graphics/gstreamer/eme/WebKitOpenCDMDecryptorGStreamer.cpp
+@@ -47,7 +47,7 @@ static bool webKitMediaOpenCDMDecryptorH
+ static bool webKitMediaOpenCDMDecryptorAttemptToDecryptWithLocalInstance(WebKitMediaCommonEncryptionDecrypt* self, const WebCore::SharedBuffer&);
+ 
+ static const char* cencEncryptionMediaTypes[] = { "video/mp4", "audio/mp4", "video/x-h264", "audio/mpeg", "video/x-h265", nullptr };
+-static const char* webmEncryptionMediaTypes[] = { "video/webm", "audio/webm", "video/x-vp9", nullptr };
++static const char* webmEncryptionMediaTypes[] = { "video/webm", "audio/webm", "video/x-vp9", "audio/x-opus", nullptr };
+ 
+ static GstStaticPadTemplate srcTemplate = GST_STATIC_PAD_TEMPLATE("src",
+     GST_PAD_SRC,
+@@ -60,7 +60,8 @@ static GstStaticPadTemplate srcTemplate
+         "audio/mpeg; "
+         "video/x-h264; "
+         "video/x-h265; "
+-        "video/x-vp9; "));
++        "video/x-vp9; "
++        "audio/x-opus; "));
+ 
+ GST_DEBUG_CATEGORY(webkit_media_opencdm_decrypt_debug_category);
+ #define GST_CAT_DEFAULT webkit_media_opencdm_decrypt_debug_category

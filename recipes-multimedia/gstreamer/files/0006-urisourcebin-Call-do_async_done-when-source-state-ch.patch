@@ -1,0 +1,34 @@
+From 7e94d2824f169e632a72e59c9f1f0c0eb73a6812 Mon Sep 17 00:00:00 2001
+From: Thibault Saunier <thibault.saunier@osg.samsung.com>
+Date: Wed, 14 Jun 2017 17:04:18 -0400
+Subject: [PATCH] urisourcebin: Call do_async_done when source state change
+ returns NO_PREROLL
+
+Otherwise for RTSP streams for example, the pipeline will never go to
+PLAYING as it will be missing an ASYNC_DONE message.
+
+https://bugzilla.gnome.org/show_bug.cgi?id=780099
+---
+ gst/playback/gsturisourcebin.c | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/gst/playback/gsturisourcebin.c b/gst/playback/gsturisourcebin.c
+index 39c4caeae..03da4a986 100644
+--- a/gst/playback/gsturisourcebin.c
++++ b/gst/playback/gsturisourcebin.c
+@@ -2943,8 +2943,11 @@ gst_uri_source_bin_change_state (GstElement * element,
+         ret = gst_element_set_state (urisrc->source, GST_STATE_PAUSED);
+       if (ret == GST_STATE_CHANGE_FAILURE)
+         goto setup_failed;
++
+       if (ret == GST_STATE_CHANGE_SUCCESS)
+         ret = GST_STATE_CHANGE_ASYNC;
++      else if (ret == GST_STATE_CHANGE_NO_PREROLL)
++        do_async_done (urisrc);
+ 
+       break;
+     case GST_STATE_CHANGE_PAUSED_TO_READY:
+-- 
+2.14.2
+
+

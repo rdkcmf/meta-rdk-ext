@@ -1,0 +1,36 @@
+Date: May 09 15:44:17 2017
+
+From: c21aa0e8cc1abb2858bb2e67c229469b8b706ff9 May 25 01:55:49 2017
+
+Subject: [PATCH] XRE-11331: handle ssl read errors similar to libcurl
+
+	Fix false positive read errors
+
+Source: COMCAST
+
+License: LGPL-2.1-or-later
+
+Upstream-Status: Pending
+
+Signed-off-by: Eugene Mutavchi <Ievgen_Mutavchi@comcast.com>
+---
+
+Index: glib-openssl-2.50.2/tls/openssl/gtlsconnection-openssl.c
+===================================================================
+--- glib-openssl-2.50.2.orig/tls/openssl/gtlsconnection-openssl.c
++++ glib-openssl-2.50.2/tls/openssl/gtlsconnection-openssl.c
+@@ -134,6 +134,14 @@ end_openssl_io (GTlsConnectionOpenssl  *
+   err = ERR_get_error ();
+   reason = ERR_GET_REASON (err);
+ 
++  /* Handle zero return from SSL_read() similar to curl, for details see:
++     https://github.com/curl/curl/commit/8a7a277c086199b37c07a8e01165168037866f3e */
++  if (direction == G_IO_IN && err_code == SSL_ERROR_SYSCALL && ret == 0 && err == 0 && !my_error)
++  {
++      g_warning("Ignoring zero return from SSL_read");
++      return G_TLS_CONNECTION_BASE_OK;
++  }
++
+   if (tls->handshaking && !tls->ever_handshaked)
+     {
+       if (reason == SSL_R_BAD_PACKET_LENGTH ||

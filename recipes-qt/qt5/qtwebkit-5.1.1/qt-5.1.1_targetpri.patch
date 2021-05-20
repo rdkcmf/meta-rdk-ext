@@ -1,0 +1,47 @@
+Date: Dec 05 23:07:54 2013
+
+From: eb5c952a06a2a3c210d27dd494a9cd6e44a4de5a Dec 12 15:26:52 2013
+
+Subject: [PATCH] qtwebkit: add patches for RMF
+
+	including:
+	- updated to clearRect call only.
+	- Updated to do clearRec and setVideoRectangle with the proper coordinates.
+
+Source: COMCAST
+
+Upstream-Status: Pending
+
+Signed-off-by: Balaji Punnuru <balaji_punnuru@cable.comcast.com>
+---
+
+Index: qtwebkit-opensource-src-5.1.1/Source/WebCore/Target.pri
+===================================================================
+--- qtwebkit-opensource-src-5.1.1.orig/Source/WebCore/Target.pri
++++ qtwebkit-opensource-src-5.1.1/Source/WebCore/Target.pri
+@@ -3285,7 +3285,14 @@ enable?(VIDEO) {
+             platform/graphics/gstreamer/WebKitWebSourceGStreamer.cpp \
+             platform/graphics/gstreamer/PlatformVideoWindowQt.cpp \
+             platform/graphics/gstreamer/ImageGStreamerQt.cpp
++#COMCAST MODIFICATION BEGIN [DLNA]
++      contains(DEFINES, ENABLE_DLNA_VIDEO_PLAYER) {
++        HEADERS += platform/graphics/dlna/MediaPlayerPrivateDLNA.h
++	SOURCES += platform/graphics/dlna/MediaPlayerPrivateDLNA.cpp
+ 
++	INCLUDEPATH += $$SOURCE_DIR/platform/graphics/dlna
++	}
++#COMCAST MODIFICATION END [DLNA]
+     } else:use?(QT_MULTIMEDIA) {
+         HEADERS += \
+             platform/graphics/qt/MediaPlayerPrivateQt.h
+@@ -3293,6 +3300,10 @@ enable?(VIDEO) {
+         SOURCES += \
+             platform/graphics/qt/MediaPlayerPrivateQt.cpp
+     }
++#COMCAST MODIFICATION BEGIN [AVE]
++    HEADERS += platform/graphics/qt/MediaPlayerPrivateExternalVideo.h
++    SOURCES += platform/graphics/qt/MediaPlayerPrivateExternalVideo.cpp
++#COMCAST MODIFICATION END [AVE]
+ }
+ 
+ enable?(WEB_AUDIO) {

@@ -1,0 +1,17 @@
+[Unit]
+Description=DNS forwarder and DHCP server
+After=network-online.target securemount.service
+Requires=network-online.target 
+
+[Service]
+Type=forking
+PIDFile=/run/dnsmasq.pid
+ExecStartPre=-/bin/mkdir -p /var/lib/misc
+ExecStart=/bin/sh -c /lib/rdk/dnsmasqLauncher.sh
+ExecReload=/bin/kill -HUP $(/bin/cat /run/dnsmasq.pid)
+TimeoutStartSec=5s
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
+

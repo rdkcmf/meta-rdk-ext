@@ -1,0 +1,1257 @@
+Copyright (C) 1991, 1999 Free Software Foundation, Inc.
+
+This library is free software; you can redistribute it and/or
+modify it under the terms of the GNU Lesser General Public
+License as published by the Free Software Foundation; either
+version 2.1 of the License, or (at your option) any later version.
+
+This library is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+Lesser General Public License for more details.
+
+You should have received a copy of the GNU Lesser General Public
+License along with this library; if not, write to the Free Software
+Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
+
+Date: Wed, 2 Oct 2019 14:14:26
+
+From: a18529263a34d80f320098b762d71d6f30683c36 Mon Sep 17 00:00:00 2001
+
+Subject: [PATCH] RDK-24647: backport happy eyeballs v0
+
+	This is parital backport of happy-eyeballs implemented in GLib's GIO in
+	https://gitlab.gnome.org/GNOME/glib/issues/1555
+
+	It should be just enough to enable parallel connection via async
+	API. With 250 ms as default timeout for starting next parallel attempt.
+
+	libsoup's change interleaves IPv4/IPv6 addresses, so we try both
+	family addresses in parallel.
+
+Source: GITLAB
+
+Upstream-Status: Pending
+
+Signed-off-by: Eugene Mutavchi <Ievgen_Mutavchi@comcast.com>
+
+---
+ gio/gsocketclient.c                      | 276 +++++++++++++++++++++++++-----
+ gio/tests/Makefile.am                    |   7 +
+ gio/tests/gdbus-example-unix-fd-client.c |   3 +
+ gio/tests/gsocketclient-slow.c           | 184 ++++++++++++++++++++
+ gio/tests/slow-connect-preload.c         |  44 +++++
+ glib/Makefile.am                         |   1 +
+ glib/grefcount.c                         | 285 +++++++++++++++++++++++++++++++
+ glib/grefcount.h                         | 128 ++++++++++++++
+ 8 files changed, 886 insertions(+), 42 deletions(-)
+ create mode 100644 gio/tests/gsocketclient-slow.c
+ create mode 100644 gio/tests/slow-connect-preload.c
+ create mode 100644 glib/grefcount.c
+ create mode 100644 glib/grefcount.h
+
+diff --git a/gio/gsocketclient.c b/gio/gsocketclient.c
+index 34488c4..9d6b0ac 100644
+--- a/gio/gsocketclient.c
++++ b/gio/gsocketclient.c
+@@ -2,6 +2,7 @@
+  *
+  * Copyright © 2008, 2009 codethink
+  * Copyright © 2009 Red Hat, Inc
++ * Copyright © 2018 Igalia S.L.
+  *
+  * This library is free software; you can redistribute it and/or
+  * modify it under the terms of the GNU Lesser General Public
+@@ -49,6 +50,15 @@
+ #include <gio/ginetaddress.h>
+ #include "glibintl.h"
+ 
++/* Hack to make grefcount code work in this glib version */
++#define __GLIB_H_INSIDE__
++#include <glib/grefcount.h>
++#undef __GLIB_H_INSIDE__
++
++/* As recommended by RFC 8305 this is the time it waits
++ * on a connection before starting another concurrent attempt.
++ */
++#define HAPPY_EYEBALLS_CONNECTION_ATTEMPT_TIMEOUT_MS 250
+ 
+ /**
+  * SECTION:gsocketclient
+@@ -183,6 +193,8 @@ clarify_connect_error (GError             *error,
+ 	name = g_network_service_get_domain (G_NETWORK_SERVICE (connectable));
+       else if (G_IS_INET_SOCKET_ADDRESS (connectable))
+ 	name = tmp_name = g_inet_address_to_string (g_inet_socket_address_get_address (G_INET_SOCKET_ADDRESS (connectable)));
++      else if (G_IS_SOCKET_CONNECTABLE (address))
++	name = tmp_name = g_socket_connectable_to_string (G_SOCKET_CONNECTABLE (address));
+       else
+ 	name = tmp_name = g_socket_connectable_to_string (connectable);
+ 
+@@ -1107,7 +1119,7 @@ g_socket_client_connect (GSocketClient       *client,
+ 	  else
+ 	    {
+ 	      g_set_error (&last_error, G_IO_ERROR, G_IO_ERROR_NOT_SUPPORTED,
+-			   _("Proxy protocol “%s” is not supported."),
++			   _("Proxy protocol '%s' is not supported."),
+ 			   protocol);
+ 	      g_object_unref (connection);
+ 	      connection = NULL;
+@@ -1322,34 +1334,91 @@ g_socket_client_connect_to_uri (GSocketClient  *client,
+ 
+ typedef struct
+ {
+-  GTask *task;
++  GTask *task; /* unowned */
+   GSocketClient *client;
+ 
+   GSocketConnectable *connectable;
+   GSocketAddressEnumerator *enumerator;
+   GProxyAddress *proxy_addr;
+-  GSocketAddress *current_addr;
+-  GSocket *current_socket;
++  GSocket *socket;
+   GIOStream *connection;
+ 
++  GSList *connection_attempts;
+   GError *last_error;
++
++  gboolean completed;
+ } GSocketClientAsyncConnectData;
+ 
++static void connection_attempt_unref (gpointer attempt);
++
+ static void
+ g_socket_client_async_connect_data_free (GSocketClientAsyncConnectData *data)
+ {
++  data->task = NULL;
+   g_clear_object (&data->connectable);
+   g_clear_object (&data->enumerator);
+   g_clear_object (&data->proxy_addr);
+-  g_clear_object (&data->current_addr);
+-  g_clear_object (&data->current_socket);
++  g_clear_object (&data->socket);
+   g_clear_object (&data->connection);
++  g_slist_free_full (data->connection_attempts, connection_attempt_unref);
+ 
+   g_clear_error (&data->last_error);
+ 
+   g_slice_free (GSocketClientAsyncConnectData, data);
+ }
+ 
++typedef struct
++{
++  GSocketAddress *address;
++  GSocket *socket;
++  GIOStream *connection;
++  GSocketClientAsyncConnectData *data; /* unowned */
++  GSource *timeout_source;
++  GCancellable *cancellable;
++  grefcount ref;
++} ConnectionAttempt;
++
++static ConnectionAttempt *
++connection_attempt_new (void)
++{
++  ConnectionAttempt *attempt = g_new0 (ConnectionAttempt, 1);
++  g_ref_count_init (&attempt->ref);
++  return attempt;
++}
++
++static ConnectionAttempt *
++connection_attempt_ref (ConnectionAttempt *attempt)
++{
++  g_ref_count_inc (&attempt->ref);
++  return attempt;
++}
++
++static void
++connection_attempt_unref (gpointer pointer)
++{
++  ConnectionAttempt *attempt = pointer;
++  if (g_ref_count_dec (&attempt->ref))
++    {
++      g_clear_object (&attempt->address);
++      g_clear_object (&attempt->socket);
++      g_clear_object (&attempt->connection);
++      g_clear_object (&attempt->cancellable);
++      if (attempt->timeout_source)
++        {
++          g_source_destroy (attempt->timeout_source);
++          g_source_unref (attempt->timeout_source);
++        }
++      g_free (attempt);
++    }
++}
++
++static void
++connection_attempt_remove (ConnectionAttempt *attempt)
++{
++  attempt->data->connection_attempts = g_slist_remove (attempt->data->connection_attempts, attempt);
++  connection_attempt_unref (attempt);
++}
++
+ static void
+ g_socket_client_async_connect_complete (GSocketClientAsyncConnectData *data)
+ {
+@@ -1359,15 +1428,29 @@ g_socket_client_async_connect_complete (GSocketClientAsyncConnectData *data)
+     {
+       GSocketConnection *wrapper_connection;
+ 
+-      wrapper_connection = g_tcp_wrapper_connection_new (data->connection,
+-							 data->current_socket);
++      wrapper_connection = g_tcp_wrapper_connection_new (data->connection, data->socket);
+       g_object_unref (data->connection);
+       data->connection = (GIOStream *)wrapper_connection;
+     }
+ 
+-  g_socket_client_emit_event (data->client, G_SOCKET_CLIENT_COMPLETE, data->connectable, data->connection);
+-  g_task_return_pointer (data->task, data->connection, g_object_unref);
+-  data->connection = NULL;
++  if (!data->completed)
++    {
++      GError *error = NULL;
++
++      if (g_cancellable_set_error_if_cancelled (g_task_get_cancellable (data->task), &error))
++        {
++          g_socket_client_emit_event (data->client, G_SOCKET_CLIENT_COMPLETE, data->connectable, NULL);
++          g_task_return_error (data->task, g_steal_pointer (&error));
++        }
++      else
++        {
++          g_socket_client_emit_event (data->client, G_SOCKET_CLIENT_COMPLETE, data->connectable, data->connection);
++          g_task_return_pointer (data->task, g_steal_pointer (&data->connection), g_object_unref);
++        }
++
++      data->completed = TRUE;
++    }
++
+   g_object_unref (data->task);
+ }
+ 
+@@ -1386,14 +1469,19 @@ set_last_error (GSocketClientAsyncConnectData *data,
+ }
+ 
+ static void
+-enumerator_next_async (GSocketClientAsyncConnectData *data)
++enumerator_next_async (GSocketClientAsyncConnectData *data,
++                       gboolean                       add_task_ref)
+ {
+   /* We need to cleanup the state */
+-  g_clear_object (&data->current_socket);
+-  g_clear_object (&data->current_addr);
++  g_clear_object (&data->socket);
+   g_clear_object (&data->proxy_addr);
+   g_clear_object (&data->connection);
+ 
++  /* Each enumeration takes a ref. This arg just avoids repeated unrefs when
++     an enumeration starts another enumeration */
++  if (add_task_ref)
++    g_object_ref (data->task);
++
+   g_socket_client_emit_event (data->client, G_SOCKET_CLIENT_RESOLVING, data->connectable, NULL);
+   g_socket_address_enumerator_next_async (data->enumerator,
+ 					  g_task_get_cancellable (data->task),
+@@ -1421,7 +1509,7 @@ g_socket_client_tls_handshake_callback (GObject      *object,
+   else
+     {
+       g_object_unref (object);
+-      enumerator_next_async (data);
++      enumerator_next_async (data, FALSE);
+     }
+ }
+ 
+@@ -1452,7 +1540,7 @@ g_socket_client_tls_handshake (GSocketClientAsyncConnectData *data)
+     }
+   else
+     {
+-      enumerator_next_async (data);
++      enumerator_next_async (data, FALSE);
+     }
+ }
+ 
+@@ -1473,48 +1561,98 @@ g_socket_client_proxy_connect_callback (GObject      *object,
+     }
+   else
+     {
+-      enumerator_next_async (data);
++      enumerator_next_async (data, FALSE);
+       return;
+     }
+ 
+   g_socket_client_tls_handshake (data);
+ }
+ 
++static gboolean
++task_completed_or_cancelled (GSocketClientAsyncConnectData *data)
++{
++  GTask *task = data->task;
++  GCancellable *cancellable = g_task_get_cancellable (task);
++  GError *error = NULL;
++
++  if (data->completed)
++    return TRUE;
++  else if (g_cancellable_set_error_if_cancelled (cancellable, &error))
++    {
++      g_socket_client_emit_event (data->client, G_SOCKET_CLIENT_COMPLETE, data->connectable, NULL);
++      g_task_return_error (task, g_steal_pointer (&error));
++      data->completed = TRUE;
++      return TRUE;
++    }
++  else
++    return FALSE;
++}
++
+ static void
+ g_socket_client_connected_callback (GObject      *source,
+ 				    GAsyncResult *result,
+ 				    gpointer      user_data)
+ {
+-  GSocketClientAsyncConnectData *data = user_data;
++  ConnectionAttempt *attempt = user_data;
++  GSocketClientAsyncConnectData *data = attempt->data;
++  GSList *l;
+   GError *error = NULL;
+   GProxy *proxy;
+   const gchar *protocol;
+ 
+-  if (g_task_return_error_if_cancelled (data->task))
++  if (task_completed_or_cancelled (data) || g_cancellable_is_cancelled (attempt->cancellable))
+     {
+       g_object_unref (data->task);
++      connection_attempt_unref (attempt);
+       return;
+     }
+ 
++  if (attempt->timeout_source)
++    {
++      g_source_destroy (attempt->timeout_source);
++      g_clear_pointer (&attempt->timeout_source, g_source_unref);
++    }
++
+   if (!g_socket_connection_connect_finish (G_SOCKET_CONNECTION (source),
+ 					   result, &error))
+     {
+-      clarify_connect_error (error, data->connectable,
+-			     data->current_addr);
+-      set_last_error (data, error);
+-
+-      g_warning("%s. Trying next ip.",error->message);
++      if (!g_cancellable_is_cancelled (attempt->cancellable))
++        {
++          clarify_connect_error (error, data->connectable, attempt->address);
++          g_warning("%s.",error->message);
++          set_last_error (data, error);
++          connection_attempt_remove (attempt);
++          enumerator_next_async (data, FALSE);
++          connection_attempt_unref (attempt);
++        }
++      else
++        {
++          g_clear_error (&error);
++          g_object_unref (data->task);
++          connection_attempt_unref (attempt);
++        }
+ 
+-      /* try next one */
+-      enumerator_next_async (data);
+       return;
+     }
+ 
++  data->socket = g_steal_pointer (&attempt->socket);
++  data->connection = g_steal_pointer (&attempt->connection);
++
++  for (l = data->connection_attempts; l; l = g_slist_next (l))
++    {
++      ConnectionAttempt *attempt_entry = l->data;
++      g_cancellable_cancel (attempt_entry->cancellable);
++      connection_attempt_unref (attempt_entry);
++    }
++  g_slist_free (data->connection_attempts);
++  data->connection_attempts = NULL;
++  connection_attempt_unref (attempt);
++
+   g_socket_connection_set_cached_remote_address ((GSocketConnection*)data->connection, NULL);
+   g_socket_client_emit_event (data->client, G_SOCKET_CLIENT_CONNECTED, data->connectable, data->connection);
+ 
+   /* wrong, but backward compatible */
+-  g_socket_set_blocking (data->current_socket, TRUE);
++  g_socket_set_blocking (data->socket, TRUE);
+ 
+   if (!data->proxy_addr)
+     {
+@@ -1536,7 +1674,7 @@ g_socket_client_connected_callback (GObject      *source,
+           G_IO_ERROR, G_IO_ERROR_NOT_SUPPORTED,
+           _("Proxying over a non-TCP connection is not supported."));
+ 
+-      enumerator_next_async (data);
++      enumerator_next_async (data, FALSE);
+     }
+   else if (g_hash_table_contains (data->client->priv->app_proxies, protocol))
+     {
+@@ -1560,13 +1698,33 @@ g_socket_client_connected_callback (GObject      *source,
+       g_clear_error (&data->last_error);
+ 
+       g_set_error (&data->last_error, G_IO_ERROR, G_IO_ERROR_NOT_SUPPORTED,
+-          _("Proxy protocol “%s” is not supported."),
++          _("Proxy protocol '%s' is not supported."),
+           protocol);
+ 
+-      enumerator_next_async (data);
++      enumerator_next_async (data, FALSE);
+     }
+ }
+ 
++static gboolean
++on_connection_attempt_timeout (gpointer data)
++{
++  ConnectionAttempt *attempt = data;
++
++  enumerator_next_async (attempt->data, TRUE);
++
++  g_clear_pointer (&attempt->timeout_source, g_source_unref);
++  return G_SOURCE_REMOVE;
++}
++
++static void
++on_connection_cancelled (GCancellable *cancellable,
++                         gpointer      data)
++{
++  GCancellable *attempt_cancellable = data;
++
++  g_cancellable_cancel (attempt_cancellable);
++}
++
+ static void
+ g_socket_client_enumerator_callback (GObject      *object,
+ 				     GAsyncResult *result,
+@@ -1575,9 +1733,10 @@ g_socket_client_enumerator_callback (GObject      *object,
+   GSocketClientAsyncConnectData *data = user_data;
+   GSocketAddress *address = NULL;
+   GSocket *socket;
++  ConnectionAttempt *attempt;
+   GError *error = NULL;
+ 
+-  if (g_task_return_error_if_cancelled (data->task))
++  if (task_completed_or_cancelled (data))
+     {
+       g_object_unref (data->task);
+       return;
+@@ -1587,7 +1746,14 @@ g_socket_client_enumerator_callback (GObject      *object,
+ 						     result, &error);
+   if (address == NULL)
+     {
++      if (data->connection_attempts)
++        {
++          g_object_unref (data->task);
++          return;
++        }
++
+       g_socket_client_emit_event (data->client, G_SOCKET_CLIENT_COMPLETE, data->connectable, NULL);
++      data->completed = TRUE;
+       if (!error)
+ 	{
+ 	  if (data->last_error)
+@@ -1619,20 +1785,32 @@ g_socket_client_enumerator_callback (GObject      *object,
+   if (socket == NULL)
+     {
+       g_object_unref (address);
+-      enumerator_next_async (data);
++      enumerator_next_async (data, FALSE);
+       return;
+     }
+ 
+-  data->current_socket = socket;
+-  data->current_addr = address;
+-  data->connection = (GIOStream *) g_socket_connection_factory_create_connection (socket);
+-
+-  g_socket_connection_set_cached_remote_address ((GSocketConnection*)data->connection, address);
+-  g_socket_client_emit_event (data->client, G_SOCKET_CLIENT_CONNECTING, data->connectable, data->connection);
+-  g_socket_connection_connect_async (G_SOCKET_CONNECTION (data->connection),
++  attempt = connection_attempt_new ();
++  attempt->data = data;
++  attempt->socket = socket;
++  attempt->address = address;
++  attempt->cancellable = g_cancellable_new ();
++  attempt->connection = (GIOStream *)g_socket_connection_factory_create_connection (socket);
++  attempt->timeout_source = g_timeout_source_new (HAPPY_EYEBALLS_CONNECTION_ATTEMPT_TIMEOUT_MS);
++  g_source_set_callback (attempt->timeout_source, on_connection_attempt_timeout, attempt, NULL);
++  g_source_attach (attempt->timeout_source, g_main_context_get_thread_default ());
++  data->connection_attempts = g_slist_append (data->connection_attempts, attempt);
++
++  if (g_task_get_cancellable (data->task))
++    g_cancellable_connect (g_task_get_cancellable (data->task), G_CALLBACK (on_connection_cancelled),
++                           g_object_ref (attempt->cancellable), g_object_unref);
++
++  g_socket_connection_set_cached_remote_address ((GSocketConnection *)attempt->connection, address);
++  g_socket_client_emit_event (data->client, G_SOCKET_CLIENT_CONNECTING, data->connectable, attempt->connection);
++
++  g_socket_connection_connect_async (G_SOCKET_CONNECTION (attempt->connection),
+ 				     address,
+-				     g_task_get_cancellable (data->task),
+-				     g_socket_client_connected_callback, data);
++				     attempt->cancellable,
++				     g_socket_client_connected_callback, connection_attempt_ref (attempt));
+ }
+ 
+ /**
+@@ -1680,11 +1858,25 @@ g_socket_client_connect_async (GSocketClient       *client,
+   else
+     data->enumerator = g_socket_connectable_enumerate (connectable);
+ 
++  /* The flow and ownership here isn't quite obvious:
++    - The task starts an async attempt to connect.
++      - Each attempt holds a single ref on task.
++      - Each attempt may create new attempts by timing out (not a failure) so
++        there are multiple attempts happening in parallel.
++      - Upon failure an attempt will start a new attempt that steals its ref
++        until there are no more attempts left and it drops its ref.
++      - Upon success it will cancel all other attempts and continue on
++        to the rest of the connection (tls, proxies, etc) which do not
++        happen in parallel and at the very end drop its ref.
++      - Upon cancellation an attempt drops its ref.
++   */
++
+   data->task = g_task_new (client, cancellable, callback, user_data);
++  g_task_set_check_cancellable (data->task, FALSE); /* We handle this manually */
+   g_task_set_source_tag (data->task, g_socket_client_connect_async);
+   g_task_set_task_data (data->task, data, (GDestroyNotify)g_socket_client_async_connect_data_free);
+ 
+-  enumerator_next_async (data);
++  enumerator_next_async (data, FALSE);
+ }
+ 
+ /**
+diff --git a/gio/tests/Makefile.am b/gio/tests/Makefile.am
+index 14cd928..803565c 100644
+--- a/gio/tests/Makefile.am
++++ b/gio/tests/Makefile.am
+@@ -66,6 +66,7 @@ test_programs = \
+ 	volumemonitor				\
+ 	glistmodel				\
+ 	testfilemonitor				\
++	gsocketclient-slow \
+ 	$(NULL)
+ 
+ uninstalled_test_programs = \
+@@ -553,6 +554,11 @@ libresourceplugin_la_SOURCES = resourceplugin.c plugin_resources.c
+ libresourceplugin_la_LDFLAGS = -avoid-version -module -export-dynamic $(no_undefined)
+ libresourceplugin_la_LIBADD = $(LDADD)
+ 
++test_ltlibraries += libslowconnectpreload.la
++libslowconnectpreload_la_SOURCES = slow-connect-preload.c
++libslowconnectpreload_la_LDFLAGS = -avoid-version -module -export-dynamic $(no_undefined)
++libslowconnectpreload_la_LIBADD = $(LDADD)
++
+ test_data += test.gresource
+ 
+ # libtool contains a bug whereby the created .la file doesn't contain the correct dlname='' in the case that
+@@ -564,6 +570,7 @@ test_data += test.gresource
+ # See http://lists.gnu.org/archive/html/bug-libtool/2013-05/msg00009.html
+ if !ENABLE_INSTALLED_TESTS
+ libresourceplugin_la_LDFLAGS += -rpath /
++libslowconnectpreload_la_LDFLAGS += -rpath /
+ endif
+ 
+ glib_compile_resources=$(top_builddir)/gio/glib-compile-resources
+diff --git a/gio/tests/gdbus-example-unix-fd-client.c b/gio/tests/gdbus-example-unix-fd-client.c
+index cf1330f..f3b6079 100644
+--- a/gio/tests/gdbus-example-unix-fd-client.c
++++ b/gio/tests/gdbus-example-unix-fd-client.c
+@@ -54,6 +54,8 @@ get_server_stdout (GDBusConnection  *connection,
+   return fd;
+ }
+ 
++#pragma GCC diagnostic push
++#pragma GCC diagnostic ignored "-Wformat-y2k"
+ static void
+ on_name_appeared (GDBusConnection *connection,
+                   const gchar     *name,
+@@ -98,6 +100,7 @@ on_name_appeared (GDBusConnection *connection,
+       exit (0);
+     }
+ }
++#pragma GCC diagnostic pop
+ 
+ static void
+ on_name_vanished (GDBusConnection *connection,
+diff --git a/gio/tests/gsocketclient-slow.c b/gio/tests/gsocketclient-slow.c
+new file mode 100644
+index 0000000..4143bc3
+--- /dev/null
++++ b/gio/tests/gsocketclient-slow.c
+@@ -0,0 +1,184 @@
++/* GIO - GLib Input, Output and Streaming Library
++ *
++ * Copyright (C) 2018 Igalia S.L.
++ *
++ * This library is free software; you can redistribute it and/or
++ * modify it under the terms of the GNU Lesser General Public
++ * License as published by the Free Software Foundation; either
++ * version 2.1 of the License, or (at your option) any later version.
++ *
++ * This library is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++ * Lesser General Public License for more details.
++ *
++ * You should have received a copy of the GNU Lesser General
++ * Public License along with this library; if not, see <http://www.gnu.org/licenses/>.
++ */
++
++#include <gio/gio.h>
++
++static void
++on_connected (GObject      *source_object,
++              GAsyncResult *result,
++              gpointer      user_data)
++{
++  GSocketConnection *conn;
++  GError *error = NULL;
++
++  conn = g_socket_client_connect_to_uri_finish (G_SOCKET_CLIENT (source_object), result, &error);
++  g_assert_no_error (error);
++
++  g_object_unref (conn);
++  g_main_loop_quit (user_data);
++}
++
++static void
++test_happy_eyeballs (void)
++{
++  GSocketClient *client;
++  GSocketService *service;
++  GError *error = NULL;
++  guint16 port;
++  GMainLoop *loop;
++
++  loop = g_main_loop_new (NULL, FALSE);
++
++  service = g_socket_service_new ();
++  port = g_socket_listener_add_any_inet_port (G_SOCKET_LISTENER (service), NULL, &error);
++  g_assert_no_error (error);
++  g_socket_service_start (service);
++
++  /* All of the magic here actually happens in slow-connect-preload.c
++   * which as you would guess is preloaded. So this is just making a
++   * normal connection that happens to take 600ms each time. This will
++   * trigger the logic to make multiple parallel connections.
++   */
++  client = g_socket_client_new ();
++  g_socket_client_connect_to_host_async (client, "localhost", port, NULL, on_connected, loop);
++  g_main_loop_run (loop);
++
++  g_main_loop_unref (loop);
++  g_object_unref (service);
++  g_object_unref (client);
++}
++
++static void
++on_connected_cancelled (GObject      *source_object,
++                        GAsyncResult *result,
++                        gpointer      user_data)
++{
++  GSocketConnection *conn;
++  GError *error = NULL;
++
++  conn = g_socket_client_connect_to_uri_finish (G_SOCKET_CLIENT (source_object), result, &error);
++  g_assert_error (error, G_IO_ERROR, G_IO_ERROR_CANCELLED);
++  g_assert_null (conn);
++
++  g_error_free (error);
++  g_main_loop_quit (user_data);
++}
++
++static int
++on_timer (GCancellable *cancel)
++{
++  g_cancellable_cancel (cancel);
++  return G_SOURCE_REMOVE;
++}
++
++static void
++on_event (GSocketClient      *client,
++          GSocketClientEvent  event,
++          GSocketConnectable *connectable,
++          GIOStream          *connection,
++          gboolean           *got_completed_event)
++{
++  if (event == G_SOCKET_CLIENT_COMPLETE)
++    {
++      *got_completed_event = TRUE;
++      g_assert_null (connection);
++    }
++}
++
++static void
++test_happy_eyeballs_cancel_delayed (void)
++{
++  GSocketClient *client;
++  GSocketService *service;
++  GError *error = NULL;
++  guint16 port;
++  GMainLoop *loop;
++  GCancellable *cancel;
++  gboolean got_completed_event = FALSE;
++
++  /* This just tests that cancellation works as expected, still emits the completed signal,
++   * and never returns a connection */
++
++  loop = g_main_loop_new (NULL, FALSE);
++
++  service = g_socket_service_new ();
++  port = g_socket_listener_add_any_inet_port (G_SOCKET_LISTENER (service), NULL, &error);
++  g_assert_no_error (error);
++  g_socket_service_start (service);
++
++  client = g_socket_client_new ();
++  cancel = g_cancellable_new ();
++  g_socket_client_connect_to_host_async (client, "localhost", port, cancel, on_connected_cancelled, loop);
++  g_timeout_add (1, (GSourceFunc) on_timer, cancel);
++  g_signal_connect (client, "event", G_CALLBACK (on_event), &got_completed_event);
++  g_main_loop_run (loop);
++
++  g_assert_true (got_completed_event);
++  g_main_loop_unref (loop);
++  g_object_unref (service);
++  g_object_unref (client);
++  g_object_unref (cancel);
++}
++
++static void
++test_happy_eyeballs_cancel_instant (void)
++{
++  GSocketClient *client;
++  GSocketService *service;
++  GError *error = NULL;
++  guint16 port;
++  GMainLoop *loop;
++  GCancellable *cancel;
++  gboolean got_completed_event = FALSE;
++
++  /* This tests the same things as above, test_happy_eyeballs_cancel_delayed(), but
++   * with different timing since it sends an already cancelled cancellable */
++
++  loop = g_main_loop_new (NULL, FALSE);
++
++  service = g_socket_service_new ();
++  port = g_socket_listener_add_any_inet_port (G_SOCKET_LISTENER (service), NULL, &error);
++  g_assert_no_error (error);
++  g_socket_service_start (service);
++
++  client = g_socket_client_new ();
++  cancel = g_cancellable_new ();
++  g_cancellable_cancel (cancel);
++  g_socket_client_connect_to_host_async (client, "localhost", port, cancel, on_connected_cancelled, loop);
++  g_signal_connect (client, "event", G_CALLBACK (on_event), &got_completed_event);
++  g_main_loop_run (loop);
++
++  g_assert_true (got_completed_event);
++  g_main_loop_unref (loop);
++  g_object_unref (service);
++  g_object_unref (client);
++  g_object_unref (cancel);
++}
++
++int
++main (int argc, char *argv[])
++{
++  g_test_init (&argc, &argv, NULL);
++
++  g_test_add_func ("/socket-client/happy-eyeballs/slow", test_happy_eyeballs);
++  g_test_add_func ("/socket-client/happy-eyeballs/cancellation/instant", test_happy_eyeballs_cancel_instant);
++  g_test_add_func ("/socket-client/happy-eyeballs/cancellation/delayed", test_happy_eyeballs_cancel_delayed);
++
++
++  return g_test_run ();
++}
+\ No newline at end of file
+diff --git a/gio/tests/slow-connect-preload.c b/gio/tests/slow-connect-preload.c
+new file mode 100644
+index 0000000..75e72b0
+--- /dev/null
++++ b/gio/tests/slow-connect-preload.c
+@@ -0,0 +1,44 @@
++/* GIO - GLib Input, Output and Streaming Library
++ *
++ * Copyright (C) 2018 Igalia S.L.
++ *
++ * This library is free software; you can redistribute it and/or
++ * modify it under the terms of the GNU Lesser General Public
++ * License as published by the Free Software Foundation; either
++ * version 2.1 of the License, or (at your option) any later version.
++ *
++ * This library is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++ * Lesser General Public License for more details.
++ *
++ * You should have received a copy of the GNU Lesser General
++ * Public License along with this library; if not, see <http://www.gnu.org/licenses/>.
++ */
++
++#include <unistd.h>
++#include <sys/types.h>
++#include <sys/socket.h>
++#include <stdio.h>
++#define __USE_GNU 1
++#include <dlfcn.h>
++
++/* This is used in gsocketclient-slow.c used to test
++ * and get coverage on how GSocketClient reacts to
++ * slow connections.
++ */
++int
++connect (int                    sockfd,
++         const struct sockaddr *addr,
++         socklen_t              addrlen)
++{
++  static int (*real_connect)(int, const struct sockaddr *, socklen_t);
++
++  if (real_connect == NULL)
++    real_connect = dlsym (RTLD_NEXT, "connect");
++
++  /* This is long enough for multiple connection attempts to be done
++   * in parallel given that their timeout is 250ms */
++  usleep (600 * 1000);
++  return real_connect (sockfd, addr, addrlen);
++}
+diff --git a/glib/Makefile.am b/glib/Makefile.am
+index 8da549c..a608b18 100644
+--- a/glib/Makefile.am
++++ b/glib/Makefile.am
+@@ -153,6 +153,7 @@ libglib_2_0_la_SOURCES = 	\
+ 	gquark.c		\
+ 	gqueue.c		\
+ 	grand.c			\
++	grefcount.c			\
+ 	gregex.c		\
+ 	gscanner.c		\
+ 	gscripttable.h		\
+diff --git a/glib/grefcount.c b/glib/grefcount.c
+new file mode 100644
+index 0000000..7cb12fc
+--- /dev/null
++++ b/glib/grefcount.c
+@@ -0,0 +1,285 @@
++/* grefcount.c: Reference counting
++ *
++ * Copyright 2018  Emmanuele Bassi
++ *
++ * This library is free software; you can redistribute it and/or
++ * modify it under the terms of the GNU Lesser General Public
++ * License as published by the Free Software Foundation; either
++ * version 2.1 of the License, or (at your option) any later version.
++ *
++ * This library is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++ * Lesser General Public License for more details.
++ *
++ * You should have received a copy of the GNU Lesser General Public
++ * License along with this library; if not, see <http://www.gnu.org/licenses/>.
++ */
++
++/**
++ * SECTION:refcount
++ * @Title: Reference counting
++ * @Short_description: Reference counting types and functions
++ *
++ * Reference counting is a garbage collection mechanism that is based on
++ * assigning a counter to a data type, or any memory area; the counter is
++ * increased whenever a new reference to that data type is acquired, and
++ * decreased whenever the reference is released. Once the last reference
++ * is released, the resources associated to that data type are freed.
++ *
++ * GLib uses reference counting in many of its data types, and provides
++ * the #grefcount and #gatomicrefcount types to implement safe and atomic
++ * reference counting semantics in new data types.
++ *
++ * It is important to note that #grefcount and #gatomicrefcount should be
++ * considered completely opaque types; you should always use the provided
++ * API to increase and decrease the counters, and you should never check
++ * their content directly, or compare their content with other values.
++ *
++ * Since: 2.58
++ */
++
++#include "config.h"
++
++#include "grefcount.h"
++
++#include "gatomic.h"
++#include "gmessages.h"
++
++/**
++ * grefcount:
++ *
++ * A type for implementing non-atomic reference count semantics.
++ *
++ * Use g_ref_count_init() to initialize it; g_ref_count_inc() to
++ * increase the counter, and g_ref_count_dec() to decrease it.
++ *
++ * It is safe to use #grefcount only if you're expecting to operate
++ * on the reference counter from a single thread. It is entirely up
++ * to you to ensure that all reference count changes happen in the
++ * same thread.
++ *
++ * See also: #gatomicrefcount
++ *
++ * Since: 2.58
++ */
++
++/**
++ * gatomicrefcount:
++ *
++ * A type for implementing atomic reference count semantics.
++ *
++ * Use g_atomic_ref_count_init() to initialize it; g_atomic_ref_count_inc()
++ * to increase the counter, and g_atomic_ref_count_dec() to decrease it.
++ *
++ * It is safe to use #gatomicrefcount if you're expecting to operate on the
++ * reference counter from multiple threads.
++ *
++ * See also: #grefcount
++ *
++ * Since: 2.58
++ */
++
++/**
++ * g_ref_count_init:
++ * @rc: the address of a reference count variable
++ *
++ * Initializes a reference count variable.
++ *
++ * Since: 2.58
++ */
++void
++(g_ref_count_init) (grefcount *rc)
++{
++  g_return_if_fail (rc != NULL);
++
++  /* Non-atomic refcounting is implemented using the negative range
++   * of signed integers:
++   *
++   * G_MININT                 Z¯< 0 > Z⁺                G_MAXINT
++   * |----------------------------|----------------------------|
++   *
++   * Acquiring a reference moves us towards MININT, and releasing a
++   * reference moves us towards 0.
++   */
++  *rc = -1;
++}
++
++/**
++ * g_ref_count_inc:
++ * @rc: the address of a reference count variable
++ *
++ * Increases the reference count.
++ *
++ * Since: 2.58
++ */
++void
++(g_ref_count_inc) (grefcount *rc)
++{
++  grefcount rrc;
++
++  g_return_if_fail (rc != NULL);
++
++  rrc = *rc;
++
++  g_return_if_fail (rrc < 0);
++
++  /* Check for saturation */
++  if (rrc == G_MININT)
++    {
++      g_critical ("Reference count %p has reached saturation", rc);
++      return;
++    }
++
++  rrc -= 1;
++
++  *rc = rrc;
++}
++
++/**
++ * g_ref_count_dec:
++ * @rc: the address of a reference count variable
++ *
++ * Decreases the reference count.
++ *
++ * Returns: %TRUE if the reference count reached 0, and %FALSE otherwise
++ *
++ * Since: 2.58
++ */
++gboolean
++(g_ref_count_dec) (grefcount *rc)
++{
++  grefcount rrc;
++
++  g_return_val_if_fail (rc != NULL, FALSE);
++
++  rrc = *rc;
++
++  g_return_val_if_fail (rrc < 0, FALSE);
++
++  rrc += 1;
++  if (rrc == 0)
++    return TRUE;
++
++  *rc = rrc;
++
++  return FALSE;
++}
++
++/**
++ * g_ref_count_compare:
++ * @rc: the address of a reference count variable
++ * @val: the value to compare
++ *
++ * Compares the current value of @rc with @val.
++ *
++ * Returns: %TRUE if the reference count is the same
++ *   as the given value
++ *
++ * Since: 2.58
++ */
++gboolean
++(g_ref_count_compare) (grefcount *rc,
++                       gint       val)
++{
++  grefcount rrc;
++
++  g_return_val_if_fail (rc != NULL, FALSE);
++  g_return_val_if_fail (val >= 0, FALSE);
++
++  rrc = *rc;
++
++  if (val == G_MAXINT)
++    return rrc == G_MININT;
++
++  return rrc == -val;
++}
++
++/**
++ * g_atomic_ref_count_init:
++ * @arc: the address of an atomic reference count variable
++ *
++ * Initializes a reference count variable.
++ *
++ * Since: 2.58
++ */
++void
++(g_atomic_ref_count_init) (gatomicrefcount *arc)
++{
++  g_return_if_fail (arc != NULL);
++
++  /* Atomic refcounting is implemented using the positive range
++   * of signed integers:
++   *
++   * G_MININT                 Z¯< 0 > Z⁺                G_MAXINT
++   * |----------------------------|----------------------------|
++   *
++   * Acquiring a reference moves us towards MAXINT, and releasing a
++   * reference moves us towards 0.
++   */
++  *arc = 1;
++}
++
++/**
++ * g_atomic_ref_count_inc:
++ * @arc: the address of an atomic reference count variable
++ *
++ * Atomically increases the reference count.
++ *
++ * Since: 2.58
++ */
++void
++(g_atomic_ref_count_inc) (gatomicrefcount *arc)
++{
++  g_return_if_fail (arc != NULL);
++  g_return_if_fail (g_atomic_int_get (arc) > 0);
++
++  if (g_atomic_int_get (arc) == G_MAXINT)
++    {
++      g_critical ("Reference count has reached saturation");
++      return;
++    }
++
++  g_atomic_int_inc (arc);
++}
++
++/**
++ * g_atomic_ref_count_dec:
++ * @arc: the address of an atomic reference count variable
++ *
++ * Atomically decreases the reference count.
++ *
++ * Returns: %TRUE if the reference count reached 0, and %FALSE otherwise
++ *
++ * Since: 2.58
++ */
++gboolean
++(g_atomic_ref_count_dec) (gatomicrefcount *arc)
++{
++  g_return_val_if_fail (arc != NULL, FALSE);
++  g_return_val_if_fail (g_atomic_int_get (arc) > 0, FALSE);
++
++  return g_atomic_int_dec_and_test (arc);
++}
++
++/**
++ * g_atomic_ref_count_compare:
++ * @arc: the address of an atomic reference count variable
++ * @val: the value to compare
++ *
++ * Atomically compares the current value of @arc with @val.
++ *
++ * Returns: %TRUE if the reference count is the same
++ *   as the given value
++ *
++ * Since: 2.58
++ */
++gboolean
++(g_atomic_ref_count_compare) (gatomicrefcount *arc,
++                              gint             val)
++{
++  g_return_val_if_fail (arc != NULL, FALSE);
++  g_return_val_if_fail (val >= 0, FALSE);
++
++  return g_atomic_int_get (arc) == val;
++}
+diff --git a/glib/grefcount.h b/glib/grefcount.h
+new file mode 100644
+index 0000000..338ae81
+--- /dev/null
++++ b/glib/grefcount.h
+@@ -0,0 +1,128 @@
++/* grefcount.h: Reference counting
++ *
++ * Copyright 2018  Emmanuele Bassi
++ *
++ * This library is free software; you can redistribute it and/or
++ * modify it under the terms of the GNU Lesser General Public
++ * License as published by the Free Software Foundation; either
++ * version 2.1 of the License, or (at your option) any later version.
++ *
++ * This library is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++ * Lesser General Public License for more details.
++ *
++ * You should have received a copy of the GNU Lesser General Public
++ * License along with this library; if not, see <http://www.gnu.org/licenses/>.
++ */
++
++#ifndef __GREFCOUNT_H__
++#define __GREFCOUNT_H__
++
++#if !defined (__GLIB_H_INSIDE__) && !defined (GLIB_COMPILATION)
++#error "Only <glib.h> can be included directly."
++#endif
++
++#include <glib/gatomic.h>
++#include <glib/gtypes.h>
++
++G_BEGIN_DECLS
++
++/* Hack to make grefcount code work in this glib version */
++#define GLIB_AVAILABLE_IN_2_60 _GLIB_EXTERN
++typedef gint            grefcount;
++typedef volatile gint   gatomicrefcount;
++
++GLIB_AVAILABLE_IN_2_60
++void            g_ref_count_init                (grefcount       *rc);
++GLIB_AVAILABLE_IN_2_60
++void            g_ref_count_inc                 (grefcount       *rc);
++GLIB_AVAILABLE_IN_2_60
++gboolean        g_ref_count_dec                 (grefcount       *rc);
++GLIB_AVAILABLE_IN_2_60
++gboolean        g_ref_count_compare             (grefcount       *rc,
++                                                 gint             val);
++
++GLIB_AVAILABLE_IN_2_60
++void            g_atomic_ref_count_init         (gatomicrefcount *arc);
++GLIB_AVAILABLE_IN_2_60
++void            g_atomic_ref_count_inc          (gatomicrefcount *arc);
++GLIB_AVAILABLE_IN_2_60
++gboolean        g_atomic_ref_count_dec          (gatomicrefcount *arc);
++GLIB_AVAILABLE_IN_2_60
++gboolean        g_atomic_ref_count_compare      (gatomicrefcount *arc,
++                                                 gint             val);
++
++/* On GCC we can use __extension__ to inline the API without using
++ * ancillary functions; we only do this when disabling checks, as
++ * it disables warnings when saturating the reference counters
++ */
++#if defined(__GNUC__) && defined(G_DISABLE_CHECKS)
++
++# define g_ref_count_init(rc) \
++  (G_GNUC_EXTENSION ({ \
++    G_STATIC_ASSERT (sizeof *(rc) == sizeof (grefcount)); \
++    (void) (0 ? *(rc) ^ *(rc) : 1); \
++    *(rc) = -1; \
++  }))
++
++# define g_ref_count_inc(rc) \
++  (G_GNUC_EXTENSION ({ \
++    G_STATIC_ASSERT (sizeof *(rc) == sizeof (grefcount)); \
++    (void) (0 ? *(rc) ^ *(rc) : 1); \
++    if (*(rc) == G_MININT) ; else { \
++      *(rc) -= 1; \
++    } \
++  }))
++
++# define g_ref_count_dec(rc) \
++  (G_GNUC_EXTENSION ({ \
++    G_STATIC_ASSERT (sizeof *(rc) == sizeof (grefcount)); \
++    grefcount __rc = *(rc); \
++    __rc += 1; \
++    if (__rc == 0) ; else { \
++      *(rc) = __rc; \
++    } \
++    (gboolean) (__rc == 0); \
++  }))
++
++# define g_ref_count_compare(rc,val) \
++  (G_GNUC_EXTENSION ({ \
++    G_STATIC_ASSERT (sizeof *(rc) == sizeof (grefcount)); \
++    (void) (0 ? *(rc) ^ (val) : 1); \
++    (gboolean) (*(rc) == -(val)); \
++  }))
++
++# define g_atomic_ref_count_init(rc) \
++  (G_GNUC_EXTENSION ({ \
++    G_STATIC_ASSERT (sizeof *(rc) == sizeof (gatomicrefcount)); \
++    (void) (0 ? *(rc) ^ *(rc) : 1); \
++    *(rc) = 1; \
++  }))
++
++# define g_atomic_ref_count_inc(rc) \
++  (G_GNUC_EXTENSION ({ \
++    G_STATIC_ASSERT (sizeof *(rc) == sizeof (gatomicrefcount)); \
++    (void) (0 ? *(rc) ^ *(rc) : 1); \
++    (void) (g_atomic_int_get (rc) == G_MAXINT ? 0 : g_atomic_int_inc ((rc))); \
++  }))
++
++# define g_atomic_ref_count_dec(rc) \
++  (G_GNUC_EXTENSION ({ \
++    G_STATIC_ASSERT (sizeof *(rc) == sizeof (gatomicrefcount)); \
++    (void) (0 ? *(rc) ^ *(rc) : 1); \
++    g_atomic_int_dec_and_test ((rc)); \
++  }))
++
++# define g_atomic_ref_count_compare(rc,val) \
++  (G_GNUC_EXTENSION ({ \
++    G_STATIC_ASSERT (sizeof *(rc) == sizeof (gatomicrefcount)); \
++    (void) (0 ? *(rc) ^ (val) : 1); \
++    (gboolean) (g_atomic_int_get (rc) == (val)); \
++  }))
++
++#endif /* __GNUC__ && G_DISABLE_CHECKS */
++
++G_END_DECLS
++
++#endif /* __GREFCOUNT_H__ */
+-- 
+2.7.4
+

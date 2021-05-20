@@ -1,0 +1,48 @@
+Date: Nov 12, 2014 2:13 AM
+
+From: b74e22dc341b0b64ec5772955a06f30068cf11da Nov 15, 2014 5:23 AM
+
+Subject: [PATCH] RDKSYSINTSW-1315: Use common distro for both RDK and RDK-B
+
+	A client for automaticly updating your dynamic hostname parameters.
+	
+Source: GITHUB 
+
+License: GPL-2.0-or-later
+
+Upstream-Status: Submitted [ http://cgit.openembedded.org/meta-openembedded/commit/meta-networking/recipes-connectivity/ez-ipupdate/files/cache_file.c.patch?h=sumo&id=cf51ee759339dba2364aa570665d725f11d0b8a7 ] 
+
+Signed-off-by: Khem Raj <raj.khem@gmail.com>
+Signed-off-by: Joe MacDonald <joe_macdonald@mentor.com>
+---
+
+--- ez-ipupdate-3.0.11b7/cache_file.c.orig	2014-07-02 14:01:07.126029412 -0600
++++ ez-ipupdate-3.0.11b7/cache_file.c	2014-07-02 14:08:27.422026332 -0600
+@@ -43,11 +43,11 @@
+ #include <cache_file.h>
+ 
+ #if HAVE_STRERROR
+-extern int errno;
++#  include <errno.h>
+ #  define error_string strerror(errno)
+ #elif HAVE_SYS_ERRLIST
+ extern const char *const sys_errlist[];
+-extern int errno;
++#  include <errno.h>
+ #  define error_string (sys_errlist[errno])
+ #else
+ #  define error_string "error message not found"
+@@ -63,11 +63,11 @@
+ #  define dprintf(x)
+ #endif
+ #if HAVE_STRERROR
+-extern int errno;
++#  include <errno.h>
+ #  define error_string strerror(errno)
+ #elif HAVE_SYS_ERRLIST
+ extern const char *const sys_errlist[];
+-extern int errno;
++#  include <errno.h>
+ #  define error_string (sys_errlist[errno])
+ #else
+ #  define error_string "error message not found"

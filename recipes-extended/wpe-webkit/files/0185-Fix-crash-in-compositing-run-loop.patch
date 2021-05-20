@@ -1,0 +1,190 @@
+From: 9ef487df2313d4a55fc241742f962a3c1497ce33 Mon Sep 17 00:00:00 2001
+Date: Thu, 2 Apr 2020 14:00:03 -0400
+Subject: [PATCH] Fix crash in compositing run loop
+Source: COMCAST
+License: GPLV2
+Upstream-Status: None
+Signed-off-by: Eugene Mutavchi <Ievgen_Mutavchi@comcast.com>
+
+
+---
+ .../threadedcompositor/CompositingRunLoop.cpp      | 33 ++++++++++++++++------
+ .../threadedcompositor/CompositingRunLoop.h        |  1 +
+ .../threadedcompositor/ThreadedCompositor.cpp      | 10 +++++--
+ .../threadedcompositor/ThreadedCompositor.h        |  6 ++++
+ 4 files changed, 38 insertions(+), 12 deletions(-)
+
+diff --git a/Source/WebKit/Shared/CoordinatedGraphics/threadedcompositor/CompositingRunLoop.cpp b/Source/WebKit/Shared/CoordinatedGraphics/threadedcompositor/CompositingRunLoop.cpp
+index 4b119c1..f5f3618 100644
+--- a/Source/WebKit/Shared/CoordinatedGraphics/threadedcompositor/CompositingRunLoop.cpp
++++ b/Source/WebKit/Shared/CoordinatedGraphics/threadedcompositor/CompositingRunLoop.cpp
+@@ -50,19 +50,20 @@ public:
+         return workQueuePool;
+     }
+ 
+-    void dispatch(void* context, Function<void ()>&& function)
++    void dispatch(uint32_t context, Function<void ()>&& function)
+     {
+         ASSERT(RunLoop::isMain());
+         getOrCreateWorkQueueForContext(context).dispatch(WTFMove(function));
+     }
+ 
+-    RunLoop& runLoop(void* context)
++    RunLoop& runLoop(uint32_t context)
+     {
+         return getOrCreateWorkQueueForContext(context).runLoop();
+     }
+ 
+-    void invalidate(void* context)
++    void invalidate(uint32_t context)
+     {
++        LockHolder locker(m_lock);
+         auto workQueue = m_workQueueMap.take(context);
+         ASSERT(workQueue);
+         if (m_workQueueMap.isEmpty()) {
+@@ -79,8 +80,9 @@ private:
+         m_threadCountLimit = 1;
+     }
+ 
+-    WorkQueue& getOrCreateWorkQueueForContext(void* context)
++    WorkQueue& getOrCreateWorkQueueForContext(uint32_t context)
+     {
++        LockHolder locker(m_lock);
+         auto addResult = m_workQueueMap.add(context, nullptr);
+         if (addResult.isNewEntry) {
+             // FIXME: This is OK for now, and it works for a single-thread limit. But for configurations where more (but not unlimited)
+@@ -99,14 +101,27 @@ private:
+         return *addResult.iterator->value;
+     }
+ 
+-    HashMap<void*, RefPtr<WorkQueue>> m_workQueueMap;
++    HashMap<uint32_t, RefPtr<WorkQueue>> m_workQueueMap;
+     RefPtr<WorkQueue> m_sharedWorkQueue;
+     unsigned m_threadCount { 0 };
+     unsigned m_threadCountLimit;
++    Lock m_lock;
+ };
+ 
++static uint32_t generateNextId()
++{
++    static Atomic<uint32_t> s_id;
++    for (;;) {
++        unsigned currentId = s_id.load();
++        unsigned newId = currentId + 1;
++        if (s_id.compareExchangeWeak(currentId, newId))
++            return newId;
++    }
++}
++
+ CompositingRunLoop::CompositingRunLoop(Function<void ()>&& updateFunction)
+-    : m_updateTimer(WorkQueuePool::singleton().runLoop(this), this, &CompositingRunLoop::updateTimerFired)
++    : m_contextId(generateNextId())
++    , m_updateTimer(WorkQueuePool::singleton().runLoop(m_contextId), this, &CompositingRunLoop::updateTimerFired)
+     , m_updateFunction(WTFMove(updateFunction))
+ {
+ #if USE(GLIB_EVENT_LOOP)
+@@ -121,20 +136,20 @@ CompositingRunLoop::~CompositingRunLoop()
+     // Make sure the WorkQueue is deleted after the CompositingRunLoop, because m_updateTimer has a reference
+     // of the WorkQueue run loop. Passing this is not a problem because the pointer will only be used as a
+     // HashMap key by WorkQueuePool.
+-    RunLoop::main().dispatch([context = this] { WorkQueuePool::singleton().invalidate(context); });
++    RunLoop::main().dispatch([contextId = m_contextId] { WorkQueuePool::singleton().invalidate(contextId); });
+ }
+ 
+ void CompositingRunLoop::performTask(Function<void ()>&& function)
+ {
+     ASSERT(RunLoop::isMain());
+-    WorkQueuePool::singleton().dispatch(this, WTFMove(function));
++    WorkQueuePool::singleton().dispatch(m_contextId, WTFMove(function));
+ }
+ 
+ void CompositingRunLoop::performTaskSync(Function<void ()>&& function)
+ {
+     ASSERT(RunLoop::isMain());
+     LockHolder locker(m_dispatchSyncConditionMutex);
+-    WorkQueuePool::singleton().dispatch(this, [this, function = WTFMove(function)] {
++    WorkQueuePool::singleton().dispatch(m_contextId, [this, function = WTFMove(function)] {
+         function();
+         LockHolder locker(m_dispatchSyncConditionMutex);
+         m_dispatchSyncCondition.notifyOne();
+diff --git a/Source/WebKit/Shared/CoordinatedGraphics/threadedcompositor/CompositingRunLoop.h b/Source/WebKit/Shared/CoordinatedGraphics/threadedcompositor/CompositingRunLoop.h
+index fb3e8b6..1f18c9f 100644
+--- a/Source/WebKit/Shared/CoordinatedGraphics/threadedcompositor/CompositingRunLoop.h
++++ b/Source/WebKit/Shared/CoordinatedGraphics/threadedcompositor/CompositingRunLoop.h
+@@ -72,6 +72,7 @@ private:
+     void updateTimerFired();
+     void startUpdateTimer();
+ 
++    uint32_t m_contextId { 0 };
+     RunLoop::Timer<CompositingRunLoop> m_updateTimer;
+     Function<void ()> m_updateFunction;
+     Lock m_dispatchSyncConditionMutex;
+diff --git a/Source/WebKit/Shared/CoordinatedGraphics/threadedcompositor/ThreadedCompositor.cpp b/Source/WebKit/Shared/CoordinatedGraphics/threadedcompositor/ThreadedCompositor.cpp
+index 58ef172..64f7d1f 100644
+--- a/Source/WebKit/Shared/CoordinatedGraphics/threadedcompositor/ThreadedCompositor.cpp
++++ b/Source/WebKit/Shared/CoordinatedGraphics/threadedcompositor/ThreadedCompositor.cpp
+@@ -109,6 +109,7 @@ void ThreadedCompositor::createGLContext()
+ 
+ void ThreadedCompositor::invalidate()
+ {
++    m_isValid = false;
+     m_scene->detach();
+     m_compositingRunLoop->stopUpdates();
+ #if USE(REQUEST_ANIMATION_FRAME_DISPLAY_MONITOR)
+@@ -182,7 +183,9 @@ void ThreadedCompositor::setIsVisible(bool v)
+ void ThreadedCompositor::renderNextFrame()
+ {
+     ASSERT(RunLoop::isMain());
+-    m_client.renderNextFrame();
++    ASSERT(m_isValid);
++    if (m_isValid)
++        m_client.renderNextFrame();
+ }
+ 
+ void ThreadedCompositor::commitScrollOffset(uint32_t layerID, const IntSize& offset)
+@@ -221,8 +224,9 @@ void ThreadedCompositor::renderNonCompositedWebGL()
+         states = WTFMove(m_attributes.states);
+     }
+ 
+-    RunLoop::main().dispatch([protectedThis = makeRef(*this)] {
+-        protectedThis->renderNextFrame();
++    RunLoop::main().dispatch([weakThis = createWeakPtr()] {
++        if (weakThis)
++            weakThis->renderNextFrame();
+     });
+ 
+     // m_client.didRenderFrame();
+diff --git a/Source/WebKit/Shared/CoordinatedGraphics/threadedcompositor/ThreadedCompositor.h b/Source/WebKit/Shared/CoordinatedGraphics/threadedcompositor/ThreadedCompositor.h
+index fa1e0ac..5aa1625 100644
+--- a/Source/WebKit/Shared/CoordinatedGraphics/threadedcompositor/ThreadedCompositor.h
++++ b/Source/WebKit/Shared/CoordinatedGraphics/threadedcompositor/ThreadedCompositor.h
+@@ -37,6 +37,7 @@
+ #include <wtf/FastMalloc.h>
+ #include <wtf/Noncopyable.h>
+ #include <wtf/ThreadSafeRefCounted.h>
++#include <wtf/WeakPtr.h>
+ 
+ #if USE(REQUEST_ANIMATION_FRAME_DISPLAY_MONITOR)
+ #include <WebCore/DisplayRefreshMonitor.h>
+@@ -92,6 +93,8 @@ public:
+ 
+     void setIsVisible(bool v);
+ 
++    WeakPtr<ThreadedCompositor> createWeakPtr() { return m_weakPtrFactory.createWeakPtr(*this); }
++
+ private:
+     ThreadedCompositor(Client&, WebPage&, const WebCore::IntSize&, float scaleFactor, ShouldDoFrameSync, WebCore::TextureMapper::PaintFlags);
+ 
+@@ -138,6 +141,9 @@ private:
+ #if USE(REQUEST_ANIMATION_FRAME_DISPLAY_MONITOR)
+     Ref<ThreadedDisplayRefreshMonitor> m_displayRefreshMonitor;
+ #endif
++
++    bool m_isValid { true };
++    WeakPtrFactory<ThreadedCompositor> m_weakPtrFactory;
+ };
+ 
+ } // namespace WebKit
+-- 
+2.7.4
+

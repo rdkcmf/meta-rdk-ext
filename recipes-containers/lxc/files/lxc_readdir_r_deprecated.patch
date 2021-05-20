@@ -1,0 +1,272 @@
+lxc: linux Container library
+
+Authors:
+Daniel Lezcano <daniel.lezcano@free.fr>
+
+This library is free software; you can redistribute it and/or
+modify it under the terms of the GNU Lesser General Public
+License as published by the Free Software Foundation; either
+version 2.1 of the License, or (at your option) any later version.
+
+This library is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+Lesser General Public License for more details.
+
+ou should have received a copy of the GNU Lesser General Public
+License along with this library; if not, write to the Free Software
+Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
+
+Date: Jan 25 14:17:41 2018
+
+From: 6e44910fe12976c64b0df445d17213a81788c09a Feb 20 05:38:47 2018
+
+Subject: [PATCH] RDK-20793: 'readdir_r' is deprecated
+
+	replaced readdir_r with readdir in source code.
+        Since readdir_r is depricated in gcc6.x. Refer to link
+        https://womble.decadent.org.uk/readdir_r-advisory.html
+        lxc_%.bbappend is divided into version specific bbappend file.
+
+Source: COMCAST
+
+Upstream-Status: Pending
+
+Signed-off-by: bchaitanya <Billa_Chaithanya@comcast.com>
+---
+
+Index: lxc-1.1.2/src/lxc/bdev.c
+===================================================================
+--- lxc-1.1.2.orig/src/lxc/bdev.c
++++ lxc-1.1.2/src/lxc/bdev.c
+@@ -1867,7 +1867,7 @@ static int loop_detect(const char *path)
+ 
+ static int find_free_loopdev(int *retfd, char *namep)
+ {
+-	struct dirent dirent, *direntp;
++	struct dirent *direntp;
+ 	struct loop_info64 lo;
+ 	DIR *dir;
+ 	int fd = -1;
+@@ -1877,7 +1877,7 @@ static int find_free_loopdev(int *retfd,
+ 		SYSERROR("Error opening /dev");
+ 		return -1;
+ 	}
+-	while (!readdir_r(dir, &dirent, &direntp)) {
++	while ((direntp = readdir(dir)) != NULL) {
+ 
+ 		if (!direntp)
+ 			break;
+Index: lxc-1.1.2/src/lxc/cgfs.c
+===================================================================
+--- lxc-1.1.2.orig/src/lxc/cgfs.c
++++ lxc-1.1.2/src/lxc/cgfs.c
+@@ -155,7 +155,7 @@ static struct cgroup_ops cgfs_ops;
+ 
+ static int cgroup_rmdir(char *dirname)
+ {
+-	struct dirent dirent, *direntp;
++	struct dirent *direntp;
+ 	int saved_errno = 0;
+ 	DIR *dir;
+ 	int ret, failed=0;
+@@ -167,7 +167,7 @@ static int cgroup_rmdir(char *dirname)
+ 		return -1;
+ 	}
+ 
+-	while (!readdir_r(dir, &dirent, &direntp)) {
++	while ((direntp = readdir(dir)) != NULL) {
+ 		struct stat mystat;
+ 		int rc;
+ 
+@@ -1996,7 +1996,7 @@ static int cgroup_recursive_task_count(c
+ 		return 0;
+ 	}
+ 
+-	while (readdir_r(d, dent_buf, &dent) == 0 && dent) {
++	while ((dent= readdir(d))!= NULL) {
+ 		const char *parts[3] = {
+ 			cgroup_path,
+ 			dent->d_name,
+Index: lxc-1.1.2/src/lxc/conf.c
+===================================================================
+--- lxc-1.1.2.orig/src/lxc/conf.c
++++ lxc-1.1.2/src/lxc/conf.c
+@@ -590,7 +590,7 @@ out:
+ static int mount_rootfs_file(const char *rootfs, const char *target,
+ 				             const char *options)
+ {
+-	struct dirent dirent, *direntp;
++	struct dirent *direntp;
+ 	struct loop_info64 loinfo;
+ 	int ret = -1, fd = -1, rc;
+ 	DIR *dir;
+@@ -602,7 +602,7 @@ static int mount_rootfs_file(const char
+ 		return -1;
+ 	}
+ 
+-	while (!readdir_r(dir, &dirent, &direntp)) {
++	while ((direntp = readdir(dir)) != NULL) {
+ 
+ 		if (!direntp)
+ 			break;
+Index: lxc-1.1.2/src/lxc/confile.c
+===================================================================
+--- lxc-1.1.2.orig/src/lxc/confile.c
++++ lxc-1.1.2/src/lxc/confile.c
+@@ -1703,7 +1703,7 @@ int append_unexp_config_line(const char
+ 
+ static int do_includedir(const char *dirp, struct lxc_conf *lxc_conf)
+ {
+-	struct dirent dirent, *direntp;
++	struct dirent *direntp;
+ 	DIR *dir;
+ 	char path[MAXPATHLEN];
+ 	int ret = -1, len;
+@@ -1714,7 +1714,7 @@ static int do_includedir(const char *dir
+ 		return -1;
+ 	}
+ 
+-	while (!readdir_r(dir, &dirent, &direntp)) {
++	while ((direntp = readdir(dir)) != NULL) {
+ 		const char *fnam;
+ 		if (!direntp)
+ 			break;
+Index: lxc-1.1.2/src/lxc/lxccontainer.c
+===================================================================
+--- lxc-1.1.2.orig/src/lxc/lxccontainer.c
++++ lxc-1.1.2/src/lxc/lxccontainer.c
+@@ -591,7 +591,7 @@ WRAP_API_1(bool, wait_on_daemonized_star
+ 
+ static bool am_single_threaded(void)
+ {
+-	struct dirent dirent, *direntp;
++	struct dirent *direntp;
+ 	DIR *dir;
+ 	int count=0;
+ 
+@@ -601,7 +601,7 @@ static bool am_single_threaded(void)
+ 		return false;
+ 	}
+ 
+-	while (!readdir_r(dir, &dirent, &direntp)) {
++	while ((direntp = readdir(dir)) != NULL) {
+ 		if (!direntp)
+ 			break;
+ 
+@@ -2097,7 +2097,7 @@ out:
+ static bool has_snapshots(struct lxc_container *c)
+ {
+ 	char path[MAXPATHLEN];
+-	struct dirent dirent, *direntp;
++	struct dirent *direntp;
+ 	int count=0;
+ 	DIR *dir;
+ 
+@@ -2106,7 +2106,7 @@ static bool has_snapshots(struct lxc_con
+ 	dir = opendir(path);
+ 	if (!dir)
+ 		return false;
+-	while (!readdir_r(dir, &dirent, &direntp)) {
++	while ((direntp = readdir(dir)) != NULL) {
+ 		if (!direntp)
+ 			break;
+ 
+@@ -3235,7 +3235,7 @@ static int do_lxcapi_snapshot_list(struc
+ {
+ 	char snappath[MAXPATHLEN], path2[MAXPATHLEN];
+ 	int count = 0, ret;
+-	struct dirent dirent, *direntp;
++	struct dirent *direntp;
+ 	struct lxc_snapshot *snaps =NULL, *nsnaps;
+ 	DIR *dir;
+ 
+@@ -3252,7 +3252,7 @@ static int do_lxcapi_snapshot_list(struc
+ 		return 0;
+ 	}
+ 
+-	while (!readdir_r(dir, &dirent, &direntp)) {
++	while ((direntp = readdir(dir)) != NULL) {
+ 		if (!direntp)
+ 			break;
+ 
+@@ -3398,7 +3398,7 @@ err:
+ static bool remove_all_snapshots(const char *path)
+ {
+ 	DIR *dir;
+-	struct dirent dirent, *direntp;
++	struct dirent *direntp;
+ 	bool bret = true;
+ 
+ 	dir = opendir(path);
+@@ -3406,7 +3406,7 @@ static bool remove_all_snapshots(const c
+ 		SYSERROR("opendir on snapshot path %s", path);
+ 		return false;
+ 	}
+-	while (!readdir_r(dir, &dirent, &direntp)) {
++	while ((direntp = readdir(dir)) != NULL) {
+ 		if (!direntp)
+ 			break;
+ 		if (!strcmp(direntp->d_name, "."))
+@@ -4493,7 +4493,7 @@ int list_defined_containers(const char *
+ {
+ 	DIR *dir;
+ 	int i, cfound = 0, nfound = 0;
+-	struct dirent dirent, *direntp;
++	struct dirent *direntp;
+ 	struct lxc_container *c;
+ 
+ 	if (!lxcpath)
+@@ -4510,7 +4510,7 @@ int list_defined_containers(const char *
+ 	if (names)
+ 		*names = NULL;
+ 
+-	while (!readdir_r(dir, &dirent, &direntp)) {
++	while ((direntp = readdir(dir)) != NULL) {
+ 		if (!direntp)
+ 			break;
+ 		if (!strcmp(direntp->d_name, "."))
+Index: lxc-1.1.2/src/lxc/start.c
+===================================================================
+--- lxc-1.1.2.orig/src/lxc/start.c
++++ lxc-1.1.2/src/lxc/start.c
+@@ -181,7 +181,7 @@ static int match_fd(int fd)
+  */
+ int lxc_check_inherited(struct lxc_conf *conf, bool closeall, int fd_to_ignore)
+ {
+-	struct dirent dirent, *direntp;
++	struct dirent *direntp;
+ 	int fd, fddir;
+ 	DIR *dir;
+ 
+@@ -197,7 +197,7 @@ restart:
+ 
+ 	fddir = dirfd(dir);
+ 
+-	while (!readdir_r(dir, &dirent, &direntp)) {
++	while ((direntp = readdir(dir)) != NULL) {
+ 		if (!direntp)
+ 			break;
+ 
+Index: lxc-1.1.2/src/lxc/utils.c
+===================================================================
+--- lxc-1.1.2.orig/src/lxc/utils.c
++++ lxc-1.1.2/src/lxc/utils.c
+@@ -72,7 +72,7 @@ lxc_log_define(lxc_utils, lxc);
+ static int _recursive_rmdir(char *dirname, dev_t pdev,
+ 			    const char *exclude, int level, bool onedev)
+ {
+-	struct dirent dirent, *direntp;
++	struct dirent *direntp;
+ 	DIR *dir;
+ 	int ret, failed=0;
+ 	char pathname[MAXPATHLEN];
+@@ -84,7 +84,7 @@ static int _recursive_rmdir(char *dirnam
+ 		return -1;
+ 	}
+ 
+-	while (!readdir_r(dir, &dirent, &direntp)) {
++	while ((direntp = readdir(dir)) != NULL) {
+ 		struct stat mystat;
+ 		int rc;
+ 

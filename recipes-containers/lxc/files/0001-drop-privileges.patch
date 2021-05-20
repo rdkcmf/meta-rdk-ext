@@ -1,0 +1,288 @@
+From 62cee676c1183c70b000c49e3491bfdd9db61670 Mon Sep 17 00:00:00 2001
+From: adam-bienkunski-red <adam.bienkunski@redembedded.com>
+Date: Thu, 15 Dec 2016 13:35:12 +0100
+Subject: [PATCH] ONEM-1412 Modify lxc.init to spawn process with non-root
+ uid/gid
+
+
+diff --git a/src/lxc/execute.c b/src/lxc/execute.c
+index cfc81a7..d5f78b1 100644
+--- a/src/lxc/execute.c
++++ b/src/lxc/execute.c
+@@ -26,12 +26,14 @@
+ #include <errno.h>
+ #include <unistd.h>
+ #include <stdlib.h>
+-
++#include <stdio.h>
+ #include "conf.h"
+ #include "log.h"
+ #include "start.h"
+ #include "utils.h"
+ 
++#define MAX_ID_SIZE 32
++
+ lxc_log_define(lxc_execute, lxc_start);
+ 
+ struct execute_args {
+@@ -46,6 +48,9 @@ static int execute_start(struct lxc_handler *handler, void* data)
+ 	char **argv;
+ 	int argc = 0, argc_add;
+ 	char *initpath;
++	char gid[MAX_ID_SIZE] = {0};
++	char uid[MAX_ID_SIZE] = {0};
++
+ 
+ 	while (my_args->argv[argc++]);
+ 
+@@ -58,6 +63,14 @@ static int execute_start(struct lxc_handler *handler, void* data)
+ 			argc_add += 2;
+ 	}
+ 
++	/* Check if the init_gid and init_uid are set and in the same time
++	 * we do not use the id_map functionaity, which set separate user namespace */
++	if(handler->conf->init_gid && handler->conf->init_uid && handler->conf->id_map.elem == NULL)
++	{
++		/*Increase argc_add to add uid and gid arguments*/
++		argc_add += 4;
++	}
++
+ 	argv = malloc((argc + argc_add) * sizeof(*argv));
+ 	if (!argv)
+ 		goto out1;
+@@ -76,19 +89,35 @@ static int execute_start(struct lxc_handler *handler, void* data)
+ 		argv[i++] = "--lxcpath";
+ 		argv[i++] = (char *)handler->lxcpath;
+ 
++
+ 		if (lxc_log_has_valid_level()) {
+ 			argv[i++] = "--logpriority";
+ 			argv[i++] = (char *)
+ 				lxc_log_priority_to_string(lxc_log_get_level());
+ 		}
+ 	}
++	/* Check if we do not use the id_map functionaity, which set separate user namespace */
++	if(handler->conf->id_map.elem == NULL)
++	{
++		/* Check if the init_gid and init_uid are set */
++		if(handler->conf->init_gid && handler->conf->init_uid)
++		{
++			argv[i++] = "--gid";
++			snprintf(gid, MAX_ID_SIZE, "%d", handler->conf->init_gid);
++			argv[i++] =(char *)gid;
++
++			argv[i++] = "--uid";
++			snprintf(uid, MAX_ID_SIZE, "%d", handler->conf->init_uid);
++			argv[i++] =(char *)uid;
++		}
++	}
++
+ 	argv[i++] = "--";
+ 	for (j = 0; j < argc; j++)
+ 		argv[i++] = my_args->argv[j];
+ 	argv[i++] = NULL;
+ 
+ 	NOTICE("exec'ing '%s'", my_args->argv[0]);
+-
+ 	execvp(argv[0], argv);
+ 	SYSERROR("failed to exec %s", argv[0]);
+ 	free(initpath);
+diff --git a/src/lxc/tools/lxc_init.c b/src/lxc/tools/lxc_init.c
+index 5dd29af..948f135 100644
+--- a/src/lxc/tools/lxc_init.c
++++ b/src/lxc/tools/lxc_init.c
+@@ -21,6 +21,8 @@
+  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
+  */
+ 
++#define _GNU_SOURCE
++
+ #include <stdio.h>
+ #include <unistd.h>
+ #include <stdlib.h>
+@@ -32,6 +34,8 @@
+ #include <sys/wait.h>
+ #define _GNU_SOURCE
+ #include <getopt.h>
++#include <grp.h>
++#include <pwd.h>
+ 
+ #include "log.h"
+ #include "caps.h"
+@@ -47,6 +51,8 @@ static const struct option options[] = {
+ 	{ "logpriority", required_argument, NULL, 'l' },
+ 	{ "quiet",       no_argument,       NULL, 'q' },
+ 	{ "lxcpath",     required_argument, NULL, 'P' },
++	{ "gid",         required_argument, NULL, 'g' },
++	{ "uid",         required_argument, NULL, 'u' },
+ 	{ 0, 0, 0, 0 },
+ };
+ 
+@@ -65,6 +71,8 @@ static void usage(void) {
+ 		"  -l, --logpriority=LEVEL  Set log priority to LEVEL\n"
+ 		"  -q, --quiet              Don't produce any output\n"
+ 		"  -P, --lxcpath=PATH       Use specified container path\n"
++		"  -g, --gid=GID            Execute COMMAND with GID inside the container\n"
++		"  -u  --uid=UID            Execute COMMAND with UID inside the container\n"
+ 		"  -?, --help               Give this help list\n"
+ 		"\n"
+ 		"Mandatory or optional arguments to long options are also mandatory or optional\n"
+@@ -74,6 +82,122 @@ static void usage(void) {
+ 		"      and does not need to be run by hand\n\n");
+ }
+ 
++/*
++ * drop_root_privileges(int new_gid, int new_uid)
++ * 	new_gid - new group id for process
++ * 	new_uid - new user id for process
++ *
++ * 		RQ_S-NASC3-LNXENV-SE-1490
++ * Changing user or group of a process shall only be
++ * done by a call to setresuid() and setresgid() and
++ * shall always be confirmed by a call to getresuid()
++ * and getresgid(). A safe behavior in case of failure
++ * must be implemented.
++*/
++static void drop_root_privileges(int new_gid, int new_uid)
++{
++	uid_t real, eff, saved;
++	uid_t uid = (uid_t)new_uid;
++	gid_t gid = (gid_t)new_gid;
++	gid_t *groups, *effgroups;
++	int ngroups=20, neffgroups=20, nmatchedgroups;
++	int i,j;
++	struct passwd *pw;
++
++	groups = malloc(ngroups * sizeof (gid_t));
++	effgroups = malloc(neffgroups * sizeof (gid_t));
++
++	pw = getpwuid(uid);
++	if (pw == NULL)
++	{
++		SYSERROR("NO PASSWD ENTRY AVAILABLE for %d",uid);
++		exit(EXIT_FAILURE);
++	}
++
++	if (getgrouplist(pw->pw_name, pw->pw_gid, groups, &ngroups) == -1)
++	{
++		SYSERROR("getgrouplist() returned -1; ngroups = %d\n", ngroups);
++		exit(EXIT_FAILURE);
++	}
++
++	if (setgroups(ngroups, groups) != 0)
++	{
++		SYSERROR("Failed setting all user groups");
++		exit(EXIT_FAILURE);
++	}
++
++	if (setresgid(gid, gid, gid) != 0)
++	{
++		SYSERROR("Failed changing GID to %d",gid);
++		exit(EXIT_FAILURE);
++	}
++
++	if (setresuid(uid, uid, uid) != 0)
++	{
++		SYSERROR("Failed changing UID to %d",uid);
++		exit(EXIT_FAILURE);
++	}
++
++	if (getresuid(&real, &eff, &saved) != 0)
++	{
++		SYSERROR("Failed reading UID");
++		exit(EXIT_FAILURE);
++	}
++
++	if (real != uid || eff != uid || saved != uid)
++	{
++		SYSERROR("UID sanity check failed");
++		exit(EXIT_FAILURE);
++	}
++
++	if (getresgid(&real, &eff, &saved) != 0)
++	{
++		SYSERROR("Failed reading GID");
++		exit(EXIT_FAILURE);
++	}
++
++	if (real != gid || eff != gid || saved != gid)
++	{
++		SYSERROR("GID sanity check failed");
++		exit(EXIT_FAILURE);
++	}
++
++	neffgroups = getgroups(neffgroups, effgroups);
++	if (neffgroups == -1)
++	{
++		SYSERROR("getgroups() returned -1;\n");
++		exit(EXIT_FAILURE);
++	}
++	else if (neffgroups != ngroups)
++	{
++		SYSERROR("User groups sanity check failed: mismatch in number of groups. Expected %d but got %d groups.\n", ngroups, neffgroups);
++		exit(EXIT_FAILURE);
++	}
++
++	nmatchedgroups = 0;
++	for(i=0;i<neffgroups;i++)
++	{
++		for(j=0;j<ngroups;j++)
++		{
++			if (effgroups[i] == groups[j])
++			{
++				nmatchedgroups++;
++				break;
++			}
++		}
++	}
++	if (neffgroups != nmatchedgroups)
++	{
++		SYSERROR("User groups sanity check failed: mismatch in groups. Only %d groups matched of %d\n", nmatchedgroups, neffgroups);
++		exit(EXIT_FAILURE);
++	}
++
++	free(groups);
++	free(effgroups);
++
++	NOTICE("Dropped root privileges. Now running as UID %u GID %u\n", uid, gid);
++}
++
+ int main(int argc, char *argv[])
+ {
+ 	pid_t pid;
+@@ -83,8 +207,10 @@ int main(int argc, char *argv[])
+ 	int i, have_status = 0, shutdown = 0;
+ 	int opt;
+ 	char *lxcpath = NULL, *name = NULL, *logpriority = NULL;
++	int gid = 0;
++	int uid = 0;
+ 
+-	while ((opt = getopt_long(argc, argv, "n:l:qP:", options, NULL)) != -1) {
++	while ((opt = getopt_long(argc, argv, "n:l:qP:u:g:", options, NULL)) != -1) {
+ 		switch(opt) {
+ 		case 'n':
+ 			name = optarg;
+@@ -98,6 +224,12 @@ int main(int argc, char *argv[])
+ 		case 'P':
+ 			lxcpath = optarg;
+ 			break;
++		case 'g':
++			gid = atoi(optarg);
++			break;
++		case 'u':
++			uid = atoi(optarg);
++			break;
+ 		default: /* '?' */
+ 			usage();
+ 			exit(EXIT_FAILURE);
+@@ -165,6 +297,10 @@ int main(int argc, char *argv[])
+ 
+ 	lxc_setup_fs();
+ 
++	if (uid > 0 && gid > 0 )
++	{
++		drop_root_privileges(gid, uid);
++	}
+ 	pid = fork();
+ 
+ 	if (pid < 0)

@@ -1,0 +1,24 @@
+From e8eed51974895e4a29b95316ba9a4955fb1cf29a Mon Sep 17 00:00:00 2001
+From: mgopalakirshnan <manigandan.gopalakrishnan@lnttechservices.com>
+Date: Fri, 5 Jan 2018 10:45:40 +0000
+Subject: [PATCH] 0005-comcast-enable-wpelauncher
+
+---
+ Tools/CMakeLists.txt | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/Tools/CMakeLists.txt b/Tools/CMakeLists.txt
+index 6a8277f1704..4a2952abffa 100644
+--- a/Tools/CMakeLists.txt
++++ b/Tools/CMakeLists.txt
+@@ -24,6 +24,7 @@ elseif ("${PORT}" STREQUAL "JSCOnly")
+         add_subdirectory(TestWebKitAPI)
+     endif ()
+ elseif ("${PORT}" STREQUAL "WPE")
++    add_subdirectory(wpe/examples/launcher)
+     if (DEVELOPER_MODE)
+         add_subdirectory(ImageDiff)
+         add_subdirectory(WebKitTestRunner)
+-- 
+2.14.2
+

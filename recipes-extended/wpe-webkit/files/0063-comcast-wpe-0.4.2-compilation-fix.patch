@@ -1,0 +1,71 @@
+From 543c0f7372ca5a3170433ac0ad66ab372b58ea97 Mon Sep 17 00:00:00 2001
+From: mgopalakirshnan <manigandan.gopalakrishnan@lnttechservices.com>
+Date: Tue, 11 Sep 2018 12:12:31 +0000
+Subject: [PATCH] comcast 0.4.1 configuration and compilation fix
+
+Signed-off-by: mgopalakirshnan <manigandan.gopalakrishnan@lnttechservices.com>
+---
+ Source/WebKit/UIProcess/API/glib/WebKitAutomationSession.cpp       | 4 ++++
+ Source/WebKit/UIProcess/API/glib/WebKitAutomationSessionPrivate.h  | 2 ++
+ Source/WebKit/UIProcess/Automation/wpe/WebAutomationSessionWPE.cpp | 1 +
+ 3 files changed, 7 insertions(+), 0 deletion(-)
+
+diff --git a/Source/WebKit/UIProcess/API/glib/WebKitAutomationSession.cpp b/Source/WebKit/UIProcess/API/glib/WebKitAutomationSession.cpp
+index 7eb95e9298f..298339ee532 100644
+--- a/Source/WebKit/UIProcess/API/glib/WebKitAutomationSession.cpp
++++ b/Source/WebKit/UIProcess/API/glib/WebKitAutomationSession.cpp
+@@ -84,7 +84,9 @@ private:
+ 
+     void didDisconnectFromRemote(WebAutomationSession&) override
+     {
++#if ENABLE(REMOTE_INSPECTOR)
+         webkitWebContextWillCloseAutomationSession(m_session->priv->webContext);
++#endif
+     }
+ 
+     void requestNewPageWithOptions(WebAutomationSession&, API::AutomationSessionBrowsingContextOptions, CompletionHandler<void(WebPageProxy*)>&& completionHandler) override
+@@ -288,6 +290,7 @@ static void webkit_automation_session_class_init(WebKitAutomationSessionClass* s
+         G_TYPE_NONE);
+ }
+ 
++#if ENABLE(REMOTE_INSPECTOR)
+ WebKitAutomationSession* webkitAutomationSessionCreate(WebKitWebContext* webContext, const char* sessionID, const Inspector::RemoteInspector::Client::SessionCapabilities& capabilities)
+ {
+     auto* session = WEBKIT_AUTOMATION_SESSION(g_object_new(WEBKIT_TYPE_AUTOMATION_SESSION, "id", sessionID, nullptr));
+@@ -301,6 +304,7 @@ WebKitAutomationSession* webkitAutomationSessionCreate(WebKitWebContext* webCont
+     }
+     return session;
+ }
++#endif
+ 
+ WebAutomationSession& webkitAutomationSessionGetSession(WebKitAutomationSession* session)
+ {
+diff --git a/Source/WebKit/UIProcess/API/glib/WebKitAutomationSessionPrivate.h b/Source/WebKit/UIProcess/API/glib/WebKitAutomationSessionPrivate.h
+index b48cf704b5f..449ab61577f 100644
+--- a/Source/WebKit/UIProcess/API/glib/WebKitAutomationSessionPrivate.h
++++ b/Source/WebKit/UIProcess/API/glib/WebKitAutomationSessionPrivate.h
+@@ -24,7 +24,9 @@
+ #include "WebKitWebContext.h"
+ #include <JavaScriptCore/RemoteInspector.h>
+ 
++#if ENABLE(REMOTE_INSPECTOR)
+ WebKitAutomationSession* webkitAutomationSessionCreate(WebKitWebContext*, const char* sessionID, const Inspector::RemoteInspector::Client::SessionCapabilities&);
++#endif
+ WebKit::WebAutomationSession& webkitAutomationSessionGetSession(WebKitAutomationSession*);
+ String webkitAutomationSessionGetBrowserName(WebKitAutomationSession*);
+ String webkitAutomationSessionGetBrowserVersion(WebKitAutomationSession*);
+diff --git a/Source/WebKit/UIProcess/Automation/wpe/WebAutomationSessionWPE.cpp b/Source/WebKit/UIProcess/Automation/wpe/WebAutomationSessionWPE.cpp
+index f54c21ed6c3..9dab6c0b496 100644
+--- a/Source/WebKit/UIProcess/Automation/wpe/WebAutomationSessionWPE.cpp
++++ b/Source/WebKit/UIProcess/Automation/wpe/WebAutomationSessionWPE.cpp
+@@ -28,6 +28,7 @@
+
+ #include "WebAutomationSessionMacros.h"
+ #include "WebPageProxy.h"
++#include <wpe/wpe.h>
+
+ namespace WebKit {
+ using namespace WebCore;
+-- 
+2.16.2
+

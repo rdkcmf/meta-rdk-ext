@@ -1,0 +1,18 @@
+Fix for ncat build racing against internal liblua build, liblua is a dependency for ncat if its included
+
+Upstream-Status: Pending
+Signed-off-by: Khem Raj <raj.khem@gmail.com>
+
+Index: nmap-6.47/Makefile.in
+===================================================================
+--- nmap-6.47.orig/Makefile.in
++++ nmap-6.47/Makefile.in
+@@ -143,7 +143,7 @@ netutil_build: libnetutil/Makefile
+ 	@echo Compiling libnetutil;
+ 	cd libnetutil && $(MAKE)
+ 
+-ncat_build: $(NCATDIR)/Makefile nbase_build nsock_build $(NCATDIR)/ncat.h @PCAP_BUILD@
++ncat_build: $(NCATDIR)/Makefile nbase_build nsock_build $(NCATDIR)/ncat.h @PCAP_BUILD@ @LUA_BUILD@
+ 	cd $(NCATDIR) && $(MAKE)
+ 
+ lua_build: $(LIBLUADIR)/Makefile

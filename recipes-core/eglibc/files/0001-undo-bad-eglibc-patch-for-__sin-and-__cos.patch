@@ -1,0 +1,68 @@
+From e581ce0c215ee4b184eea1929f6f3ed26c5483e6 Mon Sep 17 00:00:00 2001
+From: Hua-Hsing LEE <hua-hsing.lee@st.com>
+Date: Wed, 25 Mar 2015 15:34:51 +0800
+Subject: [PATCH] undo bad eglibc patch for __sin and __cos detected from glibc
+ patch 07de72c18523d5ee7cdc98e824e72c5242b6eeb9 in poky.git (dizzy branch,
+ from Saul Wold)
+
+---
+ sysdeps/ieee754/dbl-64/s_sin.c | 16 ++++++++++------
+ 1 file changed, 10 insertions(+), 6 deletions(-)
+
+diff --git a/sysdeps/ieee754/dbl-64/s_sin.c b/sysdeps/ieee754/dbl-64/s_sin.c
+index 6105e9f..50109b8 100644
+--- a/sysdeps/ieee754/dbl-64/s_sin.c
++++ b/sysdeps/ieee754/dbl-64/s_sin.c
+@@ -447,19 +447,21 @@ __sin (double x)
+ 	    }
+ 	  else
+ 	    {
++	      double t;
+ 	      if (a > 0)
+ 		{
+ 		  m = 1;
++		  t = a;
+ 		  db = da;
+ 		}
+ 	      else
+ 		{
+ 		  m = 0;
+-		  a = -a;
++		  t = -a;
+ 		  db = -da;
+ 		}
+-	      u.x = big + a;
+-	      y = a - (u.x - big);
++	      u.x = big + t;
++	      y = t - (u.x - big);
+ 	      res = do_sin (u, y, db, &cor);
+ 	      cor = (cor > 0) ? 1.035 * cor + eps : 1.035 * cor - eps;
+ 	      retval = ((res == res + cor) ? ((m) ? res : -res)
+@@ -671,19 +673,21 @@ __cos (double x)
+ 	    }
+ 	  else
+ 	    {
++	      double t;
+ 	      if (a > 0)
+ 		{
+ 		  m = 1;
++		  t = a;
+ 		  db = da;
+ 		}
+ 	      else
+ 		{
+ 		  m = 0;
+-		  a = -a;
++		  t = -a;
+ 		  db = -da;
+ 		}
+-	      u.x = big + a;
+-	      y = a - (u.x - big);
++	      u.x = big + t;
++	      y = t - (u.x - big);
+ 	      res = do_sin (u, y, db, &cor);
+ 	      cor = (cor > 0) ? 1.035 * cor + eps : 1.035 * cor - eps;
+ 	      retval = ((res == res + cor) ? ((m) ? res : -res)
+-- 
+2.2.2
+

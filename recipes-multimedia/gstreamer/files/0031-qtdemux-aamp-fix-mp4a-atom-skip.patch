@@ -1,0 +1,28 @@
+Date: Dec 26, 2019 13:14:39 +0000
+From: f81e3282b53049364d8b6f148dc30c78e3a9c325 Mon Sep 17 00:00:00 2001
+Subject: [PATCH] DELIA-39611: fMP4 HLS streams using Widevine/PlayReady not
+ playable
+
+     While playing a fragmented MP4 asset with clear and encrypted discontinuous
+     fragments, AAMP push init header with pssh data first for initializing decryptor plugins.
+     During this, mp4a atom is skipped because stream->protected is not reset in AAMP use-case
+Source: COMCAST
+License: LGPL-2.1-or-later
+Upstream-Status: Pending
+Signed-off-by: Vinish K B <Vinish_KorasseryBalakrishnan@comcast.com>
+Index: gst-plugins-good-1.10.4/gst/isomp4/qtdemux.c
+===================================================================
+--- gst-plugins-good-1.10.4.orig/gst/isomp4/qtdemux.c
++++ gst-plugins-good-1.10.4/gst/isomp4/qtdemux.c
+@@ -11193,6 +11193,11 @@ qtdemux_parse_trak (GstQTDemux * qtdemux
+     else
+       mp4a = qtdemux_tree_get_child_by_type (stsd, FOURCC_mp4a);
+ 
++    /* There is a chance that stream->protected was wrongly assumed due to aamp_player_enabled flag set. */
++    if (qtdemux->aamp_player_enabled && mp4a == NULL && fourcc == FOURCC_mp4a) {
++      mp4a = qtdemux_tree_get_child_by_type (stsd, FOURCC_mp4a);
++    }
++
+     wave = NULL;
+     esds = NULL;
+     if (mp4a) {

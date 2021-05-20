@@ -1,0 +1,57 @@
+From dd0d9b8e45e30643f8732e0a2f498417d52200cc Mon Sep 17 00:00:00 2001
+From: Eugene Mutavchi <Ievgen_Mutavchi@comcast.com>
+Date: Mon, 1 Feb 2021 16:51:24 +0000
+Subject: [PATCH] Fix ASAN build
+
+---
+ .../graphics/texmap/TextureMapperPlatformLayerBuffer.h      | 2 ++
+ Source/cmake/OptionsWPE.cmake                               | 6 ++++--
+ Source/cmake/WebKitCompilerFlags.cmake                      | 2 +-
+ 3 files changed, 7 insertions(+), 3 deletions(-)
+
+diff --git a/Source/WebCore/platform/graphics/texmap/TextureMapperPlatformLayerBuffer.h b/Source/WebCore/platform/graphics/texmap/TextureMapperPlatformLayerBuffer.h
+index 7694edf66210..c5360cf044c4 100644
+--- a/Source/WebCore/platform/graphics/texmap/TextureMapperPlatformLayerBuffer.h
++++ b/Source/WebCore/platform/graphics/texmap/TextureMapperPlatformLayerBuffer.h
+@@ -67,6 +67,8 @@ public:
+ 
+     class HolePunchClient {
+     public:
++        HolePunchClient() = default;
++        virtual ~HolePunchClient() = default;
+         virtual void setVideoRectangle(const IntRect&) = 0;
+     };
+ 
+diff --git a/Source/cmake/OptionsWPE.cmake b/Source/cmake/OptionsWPE.cmake
+index 5627745f0caa..914f67ce3aeb 100644
+--- a/Source/cmake/OptionsWPE.cmake
++++ b/Source/cmake/OptionsWPE.cmake
+@@ -240,8 +240,10 @@ if (COMPILER_IS_GCC_OR_CLANG AND UNIX AND NOT APPLE)
+     set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE}${CMAKE_COMPILER_SIZE_OPT_FLAGS} -ffunction-sections -fdata-sections")
+     set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE}${CMAKE_COMPILER_SIZE_OPT_FLAGS} -ffunction-sections -fdata-sections -fno-rtti")
+     set(CMAKE_SHARED_LINKER_FLAGS_RELEASE "${CMAKE_SHARED_LINKER_FLAGS_RELEASE} -Wl,--gc-sections")
+-    set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} -fno-stack-protector")
+-    set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -fno-stack-protector")
++    if (NOT ENABLE_ADDRESS_SANITIZER)
++        set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} -fno-stack-protector")
++        set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -fno-stack-protector")
++    endif()
+ endif ()
+ 
+ include(GStreamerChecks)
+diff --git a/Source/cmake/WebKitCompilerFlags.cmake b/Source/cmake/WebKitCompilerFlags.cmake
+index 72dc5c967792..78f7bde4c2d3 100644
+--- a/Source/cmake/WebKitCompilerFlags.cmake
++++ b/Source/cmake/WebKitCompilerFlags.cmake
+@@ -169,7 +169,7 @@ if (COMPILER_IS_GCC_OR_CLANG)
+     option(ENABLE_ADDRESS_SANITIZER "Enable address sanitizer" OFF)
+     if (ENABLE_ADDRESS_SANITIZER)
+         WEBKIT_PREPEND_GLOBAL_COMPILER_FLAGS(-fno-omit-frame-pointer
+-                                             -fno-optimize-sibling-calls)
++                                             -fno-optimize-sibling-calls -fstack-protector -pthread)
+         set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fsanitize=address")
+         set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=address")
+         set(CMAKE_EXE_LINKER_FLAGS "-lpthread ${CMAKE_EXE_LINKER_FLAGS} -fsanitize=address")
+-- 
+2.17.1
+

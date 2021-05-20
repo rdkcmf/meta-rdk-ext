@@ -1,0 +1,19 @@
+Source: RDK Management
+License: BSD-3
+Upstream-Status: Pending
+Signed-off-by: savidha_elumalai@comcast.com
+
+From: SAVIDHA E <e.savidha@ltts.com>
+Date: Thu, 31 Mar 2020 11:16:32 +0000
+Subject: [PATCH] common
+
+--- git/CMakeLists.txt	2020-03-30 08:35:03.431549117 +0000
++++ git1/CMakeLists.txt	2020-03-30 08:37:02.762467718 +0000
+@@ -1,5 +1,7 @@
+ cmake_minimum_required(VERSION 2.8.8)
+ 
++set(THREADS_PTHREAD_ARG "2" CACHE STRING "Forcibly set by CMakeLists.txt." FORCE)
++
+ if (CMAKE_VERSION VERSION_LESS "3.1")
+   add_definitions(-std=c++11)
+ else()

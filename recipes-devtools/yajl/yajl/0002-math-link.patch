@@ -1,0 +1,78 @@
+[PATCH] fix json_reformat linking on uClibc
+
+json_reformat calls yajl_gen_* functions, which internally use isnan() /
+isinf(). On Glibc, these are provided by libc, but on uClibc you need to
+link with -lm (like the spec says), so ensure we do so.
+
+Signed-off-by: Peter Korsgaard <jacmet@sunsite.dk>
+---
+ reformatter/CMakeLists.txt |    2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+Index: git/reformatter/CMakeLists.txt
+===================================================================
+--- git.orig/reformatter/CMakeLists.txt
++++ git/reformatter/CMakeLists.txt
+@@ -26,7 +26,7 @@ LINK_DIRECTORIES(${CMAKE_CURRENT_BINARY_
+ 
+ ADD_EXECUTABLE(json_reformat ${SRCS})
+ 
+-TARGET_LINK_LIBRARIES(json_reformat yajl_s)
++TARGET_LINK_LIBRARIES(json_reformat yajl_s m)
+ 
+ # In some environments, we must explicitly link libm (like qnx,
+ # thanks @shahbag)
+Index: git/perf/CMakeLists.txt
+===================================================================
+--- git.orig/perf/CMakeLists.txt
++++ git/perf/CMakeLists.txt
+@@ -20,4 +20,4 @@ LINK_DIRECTORIES(${CMAKE_CURRENT_BINARY_
+ 
+ ADD_EXECUTABLE(perftest ${SRCS})
+ 
+-TARGET_LINK_LIBRARIES(perftest yajl_s)
++TARGET_LINK_LIBRARIES(perftest yajl_s m)
+Index: git/example/CMakeLists.txt
+===================================================================
+--- git.orig/example/CMakeLists.txt
++++ git/example/CMakeLists.txt
+@@ -20,4 +20,4 @@ LINK_DIRECTORIES(${CMAKE_CURRENT_BINARY_
+ 
+ ADD_EXECUTABLE(parse_config ${SRCS})
+ 
+-TARGET_LINK_LIBRARIES(parse_config yajl_s)
++TARGET_LINK_LIBRARIES(parse_config yajl_s m)
+Index: git/test/api/CMakeLists.txt
+===================================================================
+--- git.orig/test/api/CMakeLists.txt
++++ git/test/api/CMakeLists.txt
+@@ -21,5 +21,5 @@ LINK_DIRECTORIES(${CMAKE_CURRENT_BINARY_
+ FOREACH (test ${TESTS})
+   GET_FILENAME_COMPONENT(testProg ${test} NAME_WE)
+   ADD_EXECUTABLE(${testProg} ${test})
+-  TARGET_LINK_LIBRARIES(${testProg} yajl)
++  TARGET_LINK_LIBRARIES(${testProg} yajl m)
+ ENDFOREACH()
+Index: git/test/parsing/CMakeLists.txt
+===================================================================
+--- git.orig/test/parsing/CMakeLists.txt
++++ git/test/parsing/CMakeLists.txt
+@@ -20,4 +20,4 @@ LINK_DIRECTORIES(${CMAKE_CURRENT_BINARY_
+ 
+ ADD_EXECUTABLE(yajl_test ${SRCS})
+ 
+-TARGET_LINK_LIBRARIES(yajl_test yajl_s)
++TARGET_LINK_LIBRARIES(yajl_test yajl_s m)
+Index: git/verify/CMakeLists.txt
+===================================================================
+--- git.orig/verify/CMakeLists.txt
++++ git/verify/CMakeLists.txt
+@@ -26,7 +26,7 @@ LINK_DIRECTORIES(${CMAKE_CURRENT_BINARY_
+ 
+ ADD_EXECUTABLE(json_verify ${SRCS})
+ 
+-TARGET_LINK_LIBRARIES(json_verify yajl_s)
++TARGET_LINK_LIBRARIES(json_verify yajl_s m)
+ 
+ # copy in the binary
+ GET_TARGET_PROPERTY(binPath json_verify LOCATION)

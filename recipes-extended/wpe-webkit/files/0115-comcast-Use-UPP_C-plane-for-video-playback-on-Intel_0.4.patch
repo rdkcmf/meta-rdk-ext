@@ -1,0 +1,31 @@
+From 2a09f6ca5cfcd596bdfbaf1e2e99180e44dfa86e Mon Sep 17 00:00:00 2001
+From: Eugene Mutavchi <Ievgen_Mutavchi@comcast.com>
+Date: Wed, 7 Mar 2018 15:29:08 -0500
+Subject: [PATCH] Use UPP_C plane for video playback on Intel
+
+---
+ .../platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp        | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp b/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp
+index 8c307bf..f78a2eb 100644
+--- a/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp
++++ b/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp
+@@ -2334,11 +2334,14 @@ void MediaPlayerPrivateGStreamer::createGSTPlayBin()
+ #endif
+ 
+     if (m_videoSink)
++    {
+ #if PLATFORM(INTEL_CE)
++        g_object_set(G_OBJECT(m_videoSink.get()), "video-plane", "UPP_C", nullptr);
+         g_signal_connect_swapped(m_videoSink.get(), "firstframe-callback", G_CALLBACK(onFirstVideoFrameCallback), this);
+ #else
+         g_signal_connect_swapped(m_videoSink.get(), "first-video-frame-callback", G_CALLBACK(onFirstVideoFrameCallback), this);
+ #endif // PLATFORM(INTEL_CE)
++    }
+ #endif
+ 
+ #if PLATFORM(QCOM_DB)
+-- 
+2.7.4
+

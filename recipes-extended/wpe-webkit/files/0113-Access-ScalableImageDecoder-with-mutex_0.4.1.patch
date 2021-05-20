@@ -1,0 +1,96 @@
+Date: Fri, 21 Dec 2018 11:02:58 +0000
+
+From: 17538bc90153eb755486879f78fb03ffe3c327ba Mon Sep 17 00:00:00 2001
+
+Subject: [PATCH] Access ScalableImageDecoder with mutex
+
+	Access ScalableImageDecoder with mutex
+
+Source: COMCAST
+
+License: BSD-2-Clause
+
+Upstream-Status: Pending
+
+Signed-off-by: gopal003c <Manigandan_Gopalakirshnan@cable.comcast.com>
+
+---
+ .../WebCore/platform/image-decoders/ScalableImageDecoder.cpp | 5 +++++
+ .../WebCore/platform/image-decoders/ScalableImageDecoder.h   | 3 +++
+ 2 files changed, 8 insertions(+)
+
+diff --git a/Source/WebCore/platform/image-decoders/ScalableImageDecoder.cpp b/Source/WebCore/platform/image-decoders/ScalableImageDecoder.cpp
+index d7d35aad867..bf1b1b0be73 100644
+--- a/Source/WebCore/platform/image-decoders/ScalableImageDecoder.cpp
++++ b/Source/WebCore/platform/image-decoders/ScalableImageDecoder.cpp
+@@ -172,6 +172,7 @@ template <MatchType type> int getScaledValue(const Vector<int>& scaledValues, in
+ 
+ bool ScalableImageDecoder::frameIsCompleteAtIndex(size_t index) const
+ {
++    LockHolder lockHolder(m_mutex);
+     if (index >= m_frameBufferCache.size())
+         return false;
+ 
+@@ -180,6 +181,7 @@ bool ScalableImageDecoder::frameIsCompleteAtIndex(size_t index) const
+ 
+ bool ScalableImageDecoder::frameHasAlphaAtIndex(size_t index) const
+ {
++    LockHolder lockHolder(m_mutex);
+     if (m_frameBufferCache.size() <= index)
+         return true;
+     if (m_frameBufferCache[index].isComplete())
+@@ -189,6 +191,7 @@ bool ScalableImageDecoder::frameHasAlphaAtIndex(size_t index) const
+ 
+ unsigned ScalableImageDecoder::frameBytesAtIndex(size_t index, SubsamplingLevel) const
+ {
++    LockHolder lockHolder(m_mutex);
+     if (m_frameBufferCache.size() <= index)
+         return 0;
+     // FIXME: Use the dimension of the requested frame.
+@@ -197,6 +200,7 @@ unsigned ScalableImageDecoder::frameBytesAtIndex(size_t index, SubsamplingLevel)
+ 
+ Seconds ScalableImageDecoder::frameDurationAtIndex(size_t index) const
+ {
++    LockHolder lockHolder(m_mutex);
+     if (index >= m_frameBufferCache.size())
+         return 0_s;
+ 
+@@ -219,6 +223,7 @@ Seconds ScalableImageDecoder::frameDurationAtIndex(size_t index) const
+ 
+ NativeImagePtr ScalableImageDecoder::createFrameImageAtIndex(size_t index, SubsamplingLevel, const DecodingOptions&)
+ {
++    LockHolder lockHolder(m_mutex);
+     // Zero-height images can cause problems for some ports. If we have an empty image dimension, just bail.
+     if (size().isEmpty())
+         return nullptr;
+diff --git a/Source/WebCore/platform/image-decoders/ScalableImageDecoder.h b/Source/WebCore/platform/image-decoders/ScalableImageDecoder.h
+index 240f5c70142..7545262018d 100644
+--- a/Source/WebCore/platform/image-decoders/ScalableImageDecoder.h
++++ b/Source/WebCore/platform/image-decoders/ScalableImageDecoder.h
+@@ -33,6 +33,7 @@
+ #include "IntRect.h"
+ #include "SharedBuffer.h"
+ #include <wtf/Assertions.h>
++#include <wtf/Lock.h>
+ #include <wtf/RefPtr.h>
+ #include <wtf/Vector.h>
+ #include <wtf/text/WTFString.h>
+@@ -69,6 +70,7 @@ public:
+ 
+     void setData(SharedBuffer& data, bool allDataReceived) override
+     {
++        LockHolder lockHolder(m_mutex);
+         if (m_encodedDataStatus == EncodedDataStatus::Error)
+             return;
+ 
+@@ -202,6 +204,7 @@ protected:
+ 
+     RefPtr<SharedBuffer> m_data; // The encoded data.
+     Vector<ImageFrame, 1> m_frameBufferCache;
++    mutable Lock m_mutex;
+     bool m_scaled { false };
+     Vector<int> m_scaledColumns;
+     Vector<int> m_scaledRows;
+-- 
+2.19.0
+

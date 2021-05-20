@@ -1,0 +1,26 @@
+From a92d6526d1de15c10b8bac98d8d905b100145b23 Mon Sep 17 00:00:00 2001
+From: Siva Sankar Raja <sivasankar_raja@comcast.com>
+Source: COMCAST
+License: LICENSE-LGPL-2.1
+Upstream-Status: Pending
+Signed-off-by: Siva Sankar Raja <sivasankar_raja@comcast.com>
+Date: Fri, 5 Jul 2019 11:38:10 +0000
+Subject: [PATCH] Fix use-after-free error
+
+---
+ Source/WebKit/UIProcess/API/C/WKNavigationResponseRef.cpp | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+Index: git/Source/WebKit/UIProcess/API/C/WKNavigationResponseRef.cpp
+===================================================================
+--- git.orig/Source/WebKit/UIProcess/API/C/WKNavigationResponseRef.cpp
++++ git/Source/WebKit/UIProcess/API/C/WKNavigationResponseRef.cpp
+@@ -43,7 +43,7 @@ bool WKNavigationResponseCanShowMIMEType
+ 
+ WKURLResponseRef WKNavigationResponseGetURLResponse(WKNavigationResponseRef response)
+ {
+-    return toAPI(toImpl(response)->response());
++    return toAPI(&API::URLResponse::create(toImpl(response)->response()).leakRef());
+ }
+ 
+ bool WKNavigationResponseIsMainFrame(WKNavigationResponseRef response)

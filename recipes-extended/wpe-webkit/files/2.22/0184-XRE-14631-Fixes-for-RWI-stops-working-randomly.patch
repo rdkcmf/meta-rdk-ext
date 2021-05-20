@@ -1,0 +1,38 @@
+Date: Feb 21, 2020 11:10 AM
+From: 9da22be85fb50a1c49d61f17dea4d27fee1721da Feb 21, 2020 11:10 AM
+Subject: [PATCH] XRE-14631: Fixes for RWI stops working randomly
+Source: COMCAST
+License: GPLV2
+Upstream-Status: Pending
+Signed-off-by: Balaji Selvam <Balaji_Selvam@Comcast.Com>
+
+Reason for change: RWI stops working randomly.
+After box reboots works fine.
+Test Procedure: ensure the RWI working without any random stops.
+
+---
+ .../UIProcess/InspectorServer/WebInspectorServer.cpp       | 7 +++----
+ 1 file changed, 3 insertions(+), 4 deletions(-)
+
+diff --git a/Source/WebKit/UIProcess/InspectorServer/WebInspectorServer.cpp b/Source/WebKit/UIProcess/InspectorServer/WebInspectorServer.cpp
+index 76605dff72a..8e498eeac5f 100644
+--- a/Source/WebKit/UIProcess/InspectorServer/WebInspectorServer.cpp
++++ b/Source/WebKit/UIProcess/InspectorServer/WebInspectorServer.cpp
+@@ -262,11 +262,10 @@ void WebInspectorServer::didEstablishWebSocketConnection(WebSocketServerConnecti
+     unsigned pageId = pageIdFromRequestPath(path);
+     ASSERT(pageId);
+ 
+-    // Ignore connections to a page that already have a remote inspector connected.
++    // Shuntdowning old connections and continue to add new remote inspector connected.
+     if (m_connectionMap.contains(pageId)) {
+-        LOG_ERROR("A remote inspector connection already exist for page ID %d. Ignoring.", pageId);
+-        connection->shutdownNow();
+-        return;
++        LOG_ERROR("Shutdowning old remote inspector connection and continue to add new connection for page ID %d.", pageId);
++        m_connectionMap.get(pageId)->shutdownNow();
+     }
+ 
+     // Ignore connections to the localhost page
+-- 
+2.24.0
+

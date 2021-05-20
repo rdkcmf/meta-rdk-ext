@@ -1,0 +1,5 @@
+FILESEXTRAPATHS_prepend := "${THISDIR}/${PN}:${THISDIR}/files:"
+
+SRC_URI_append = "\
+                  file://0001-selinux-update-netlink-socket-classes.patch \
+                 "

@@ -1,0 +1,10 @@
+prefix=/usr
+exec_prefix=${prefix}
+libdir=${exec_prefix}/lib
+includedir=${prefix}/include
+
+Name: TinyXml2
+Description: simple, small, C++ XML parser
+Version: 3.0.0
+Libs: -L${libdir} -ltinyxml2
+Cflags: -I${includedir}

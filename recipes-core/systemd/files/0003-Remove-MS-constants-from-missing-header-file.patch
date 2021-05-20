@@ -1,0 +1,51 @@
+From b752a0c1725c68838c9945ebb24fd5807115969d Mon Sep 17 00:00:00 2001
+From: mselva006c <mani_selvaraj@comcast.com>
+Date: Fri, 5 Mar 2021 21:38:06 +0000
+Subject: [PATCH] Remove MS constants from missing header file
+
+         Remove MS_* constants from src/basic/missing.h since these
+         variables are already defined in linux/fs.h
+
+Source: COMCAST
+License: LGPL-2.1-or-later
+Upstream-Status: Inappropriate 
+Signed-off-by: mselva006c <mani_selvaraj@comcast.com>
+---
+ src/basic/missing.h | 20 --------------------
+ 1 file changed, 20 deletions(-)
+
+diff --git a/src/basic/missing.h b/src/basic/missing.h
+index e0c875c684..be23b4515f 100644
+--- a/src/basic/missing.h
++++ b/src/basic/missing.h
+@@ -455,30 +455,10 @@ struct btrfs_ioctl_quota_ctl_args {
+ #define MQUEUE_MAGIC 0x19800202
+ #endif
+ 
+-#ifndef MS_MOVE
+-#define MS_MOVE 8192
+-#endif
+-
+-#ifndef MS_PRIVATE
+-#define MS_PRIVATE  (1 << 18)
+-#endif
+-
+ #ifndef SCM_SECURITY
+ #define SCM_SECURITY 0x03
+ #endif
+ 
+-#ifndef MS_STRICTATIME
+-#define MS_STRICTATIME (1<<24)
+-#endif
+-
+-#ifndef MS_REC
+-#define MS_REC 16384
+-#endif
+-
+-#ifndef MS_SHARED
+-#define MS_SHARED (1<<20)
+-#endif
+-
+ #ifndef PR_SET_NO_NEW_PRIVS
+ #define PR_SET_NO_NEW_PRIVS 38
+ #endif

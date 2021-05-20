@@ -1,0 +1,34 @@
+Date: Aug 6, 2019 11:05 PM 
+From: 1a6de385a24a3d41c39b08340a73518182aee049 Aug 6, 2019 11:05 PM
+Subject: [PATCH] libsoup: print IP on failed TLS
+
+knowing a domain name we failed to connect to over https is not enough, printing IPs would help find servers
+that have improper SSL certificate installation.
+
+Source: COMCAST
+Upstream-Status: Pending
+Signed-off-by: Igor Borovkov (igor_borovkov@comcast.com)
+---
+diff --git a/libsoup/soup-socket.c b/libsoup/soup-socket.c
+index 5363dc7..e168013 100644
+--- a/libsoup/soup-socket.c
++++ b/libsoup/soup-socket.c
+@@ -1349,6 +1349,18 @@ soup_socket_peer_certificate_changed (GObject *conn, GParamSpec *pspec,
+ 
+ 	priv->tls_errors = g_tls_connection_get_peer_certificate_errors (G_TLS_CONNECTION (priv->conn));
+ 
++	if (priv->tls_errors) {
++		GSocketAddress *address = g_socket_get_remote_address(priv->gsock, NULL);
++		if (G_IS_INET_SOCKET_ADDRESS (address)) {
++			char *tmp_name = NULL;
++			tmp_name = g_inet_address_to_string (g_inet_socket_address_get_address (G_INET_SOCKET_ADDRESS (address)));
++			fprintf(stderr, "libsoup: tls error: could not connect to %s [GTlsCertificateFlags enum value: %d]\n", tmp_name, (int) priv->tls_errors);
++			g_free (tmp_name);
++		}
++		if (address)
++			g_object_unref(address);
++	}
++
+ 	g_object_notify (sock, "tls-certificate");
+ 	g_object_notify (sock, "tls-errors");
+ }

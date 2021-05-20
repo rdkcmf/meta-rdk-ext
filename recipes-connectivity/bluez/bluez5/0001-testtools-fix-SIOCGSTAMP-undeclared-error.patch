@@ -1,0 +1,56 @@
+From 7bf084d9874843b587a078045f117967095ab347 Mon Sep 17 00:00:00 2001
+From: Moorthy Baskar <moorthy.bs@ltts.com>
+Date: Mon, 9 Nov 2020 11:21:09 +0000
+Subject: [PATCH] testtools - fix: 'SIOCGSTAMP' undeclared error
+
+- below errors fixed for linux
+
+| ../bluez5/tools/rctest.c: error: 'SIOCGSTAMP' undeclared
+|     if (ioctl(sk, SIOCGSTAMP, &tv) < 0) {
+|                   ^~~~~~~~~~
+| ../bluez/tools/l2test.c: error: 'SIOCGSTAMP' undeclared
+|     if (ioctl(sk, SIOCGSTAMP, &tv) < 0) {
+|                   ^~~~~~~~~~
+
+Source: RDK-Community
+License: GPLv2+ & LGPLv2.1+
+Upstream-Status: pending
+GitHub pull request: https://github.com/bluez/bluez/pull/50
+
+Signed-off-by: Moorthy Baskar <moorthy.bs@ltts.com>
+---
+ tools/l2test.c | 3 +++
+ tools/rctest.c | 3 +++
+ 2 files changed, 6 insertions(+)
+
+diff --git a/tools/l2test.c b/tools/l2test.c
+index 6e07f7b84..50fe59e30 100644
+--- a/tools/l2test.c
++++ b/tools/l2test.c
+@@ -29,6 +29,9 @@
+ #include <poll.h>
+ #include <sys/ioctl.h>
+ #include <sys/socket.h>
++#if defined(__linux__)
++#include <linux/sockios.h>
++#endif
+ 
+ #include "lib/bluetooth.h"
+ #include "lib/hci.h"
+diff --git a/tools/rctest.c b/tools/rctest.c
+index 494359a88..46c80558c 100644
+--- a/tools/rctest.c
++++ b/tools/rctest.c
+@@ -27,6 +27,9 @@
+ #include <sys/ioctl.h>
+ #include <sys/socket.h>
+ #include <sys/stat.h>
++#if defined(__linux__)
++#include <linux/sockios.h>
++#endif
+ 
+ #include "lib/bluetooth.h"
+ #include "lib/hci.h"
+-- 
+2.17.1
+

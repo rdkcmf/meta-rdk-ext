@@ -1,0 +1,14 @@
+[Unit]
+Description=Samhain IDS Precheck
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=forking
+EnvironmentFile=/etc/device.properties
+ExecStart=/bin/sh -c '/lib/rdk/samhain_starter.sh &'
+ExecReload=/bin/kill -HUP $MAINPID
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

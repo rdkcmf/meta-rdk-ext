@@ -1,0 +1,41 @@
+From 9e0fb2de360ad2f2d27ced9941baf2350da059f1 Mon Sep 17 00:00:00 2001
+Date: Wed, 10 Dec 2014 23:12:43 -0800
+Subject: [PATCH] src/Makefile.am: Dont check if we are cross compiling
+
+This is to make sure that we regenerate the needed .c files
+in OE, we have cross compiled lemon so we can do it
+
+Signed-off-by: Khem Raj <raj.khem@gmail.com>
+---
+ src/Makefile.am | 8 --------
+ 1 file changed, 8 deletions(-)
+
+diff --git a/src/Makefile.am b/src/Makefile.am
+index eb50e37..c1e3d64 100644
+--- a/src/Makefile.am
++++ b/src/Makefile.am
+@@ -13,13 +13,6 @@ lemon_SOURCES=lemon.c
+ #simple_fcgi_SOURCES=simple-fcgi.c
+ #simple_fcgi_LDADD=-lfcgi
+ 
+-if CROSS_COMPILING
+-configparser.c configparser.h:
+-mod_ssi_exprparser.c mod_ssi_exprparser.h:
+-http_req_parser.c http_req_parser.h:
+-http_req_range_parser.c http_req_range_parser.h:
+-mod_ssi_exprparser.c mod_ssi_exprparser.h:
+-else
+ configparser.c configparser.h: $(srcdir)/configparser.y $(srcdir)/lempar.c |  $(LEMON)
+ 	rm -f configparser.h
+ 	$(LEMON) -q $(srcdir)/configparser.y $(srcdir)/lempar.c
+@@ -39,7 +32,6 @@ http_req_range_parser.c http_req_range_parser.h: $(srcdir)/http_req_range_parser
+ mod_ssi_exprparser.c mod_ssi_exprparser.h: $(srcdir)/mod_ssi_exprparser.y $(srcdir)/lempar.c |  $(LEMON)
+ 	rm -f mod_ssi_exprparser.h
+ 	$(LEMON) -q $(srcdir)/mod_ssi_exprparser.y $(srcdir)/lempar.c
+-endif
+ 
+ BUILT_SOURCES = configparser.c configparser.h \
+       http_resp_parser.c http_resp_parser.h \
+-- 
+1.9.1
+

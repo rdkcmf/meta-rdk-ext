@@ -1,0 +1,23 @@
+From 8a126db0f590a91666d314aa1bcff4b1db8704fa Mon Sep 17 00:00:00 2001
+From: Eugene Mutavchi <Ievgen_Mutavchi@comcast.com>
+Date: Fri, 4 Sep 2020 15:27:15 +0000
+Subject: [PATCH] [decodebin3] continue parsebin autoplug if requested by
+ decodebin caps
+
+---
+ gst/playback/gstdecodebin3.c | 17 ++++++++++++++++-
+ 1 file changed, 16 insertions(+), 1 deletion(-)
+
+Index: gst-plugins-base-1.10.4/gst/playback/gstdecodebin3.c
+===================================================================
+--- gst-plugins-base-1.10.4.orig/gst/playback/gstdecodebin3.c
++++ gst-plugins-base-1.10.4/gst/playback/gstdecodebin3.c
+@@ -686,7 +686,7 @@ parsebin_autoplug_continue_cb (GstElemen
+ 
+   /* If it matches our target caps, expose it */
+   if (gst_caps_can_intersect (caps, dbin->caps))
+-    return FALSE;
++    return !gst_caps_is_subset(caps, dbin->caps);
+ 
+   return TRUE;
+ }

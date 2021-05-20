@@ -1,0 +1,22 @@
+From f6a12b140d00dbc82592f0bce7f6972c569152f2 Mon Sep 17 00:00:00 2001
+From: jkuria217 <Josekutty_Kuriakose@cable.comcast.com>
+Date: Tue, 4 Feb 2020 21:40:52 +0000
+Subject: [PATCH]  Changes for adding find.pl in search path
+
+---
+ util/perlpath.pl | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/util/perlpath.pl b/util/perlpath.pl
+index a1f236b..d96ab2a 100755
+--- a/util/perlpath.pl
++++ b/util/perlpath.pl
+@@ -4,6 +4,8 @@
+ # line in all scripts that rely on perl.
+ #
+
++#add find.pl in path
++BEGIN { unshift @INC, "."; }
+ require "find.pl";
+
+ $#ARGV == 0 || print STDERR "usage: perlpath newpath  (eg /usr/bin)\n";

@@ -1,0 +1,10 @@
+[Unit]
+Description=Samhain IDS Path
+OnFailure=path-fail-notifier@%n.service
+
+[Path]
+PathExists=/tmp/samhain-enabled
+Unit=samhain.service
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,62 @@
+Date: Mon Sep 03 20:22:07 2018
+
+From: 9fe88b06fe3f172f0ba4efbe968c30fa09a2d04f Fri Sep 07 09:43:12 2018
+
+Subject: [PATCH] DELIA-20477: Unknown fourcc while parsing header : skip
+
+	Handling "skip" fourcc as done in gst-plugins-good-1.13.1
+
+Source: COMCAST
+
+License: LGPL-2.1-or-later
+
+Upstream-Status: Pending
+
+Signed-off-by: mgopalakirshnan <Manigandan.Gopalakrishnan@lnttechservices.com>
+---
+
+diff -Naur gst-plugins-good-1.10.4.orig/gst/isomp4/fourcc.h gst-plugins-good-1.10.4/gst/isomp4/fourcc.h
+--- gst-plugins-good-1.10.4.orig/gst/isomp4/fourcc.h	2018-09-03 14:03:54.739829115 +0000
++++ gst-plugins-good-1.10.4/gst/isomp4/fourcc.h	2018-09-03 14:19:26.465783378 +0000
+@@ -192,6 +192,7 @@
+ #define FOURCC_sbtl     GST_MAKE_FOURCC('s','b','t','l')
+ #define FOURCC_sdp_     GST_MAKE_FOURCC('s','d','p',' ')
+ #define FOURCC_sidx     GST_MAKE_FOURCC('s','i','d','x')
++#define FOURCC_skip     GST_MAKE_FOURCC('s','k','i','p')
+ #define FOURCC_smhd     GST_MAKE_FOURCC('s','m','h','d')
+ #define FOURCC_soaa     GST_MAKE_FOURCC('s','o','a','a')
+ #define FOURCC_soal     GST_MAKE_FOURCC('s','o','a','l')
+diff -Naur gst-plugins-good-1.10.4.orig/gst/isomp4/qtdemux.c gst-plugins-good-1.10.4/gst/isomp4/qtdemux.c
+--- gst-plugins-good-1.10.4.orig/gst/isomp4/qtdemux.c	2018-09-03 14:03:54.739829115 +0000
++++ gst-plugins-good-1.10.4/gst/isomp4/qtdemux.c	2018-09-03 14:18:38.966091134 +0000
+@@ -4353,6 +4353,7 @@
+       break;
+     case FOURCC_mdat:
+     case FOURCC_free:
++    case FOURCC_skip:
+     case FOURCC_wide:
+     case FOURCC_PICT:
+     case FOURCC_pnot:
+@@ -6749,6 +6750,11 @@
+         } else if (fourcc == FOURCC_sidx) {
+           GST_DEBUG_OBJECT (demux, "Parsing [sidx]");
+           qtdemux_parse_sidx (demux, data, demux->neededbytes);
++        } else if (fourcc == FOURCC_skip) {
++          /* [skip] is padding atom */
++          GST_DEBUG_OBJECT (demux,
++              "Skipping fourcc while parsing header : %" GST_FOURCC_FORMAT,
++              GST_FOURCC_ARGS (fourcc));
+         } else {
+           GST_WARNING_OBJECT (demux,
+               "Unknown fourcc while parsing header : %" GST_FOURCC_FORMAT,
+diff -Naur gst-plugins-good-1.10.4.orig/gst/isomp4/qtdemux_types.c gst-plugins-good-1.10.4/gst/isomp4/qtdemux_types.c
+--- gst-plugins-good-1.10.4.orig/gst/isomp4/qtdemux_types.c	2018-09-03 14:03:54.735829141 +0000
++++ gst-plugins-good-1.10.4/gst/isomp4/qtdemux_types.c	2018-09-03 14:22:10.424722744 +0000
+@@ -141,6 +141,7 @@
+   {FOURCC_____, "----", QT_FLAG_CONTAINER,},
+   {FOURCC_data, "data", 0, qtdemux_dump_unknown},
+   {FOURCC_free, "free", 0,},
++  {FOURCC_skip, "skip", 0,},
+   {FOURCC_SVQ3, "SVQ3", 0,},
+   {FOURCC_rmra, "rmra", QT_FLAG_CONTAINER,},
+   {FOURCC_rmda, "rmda", QT_FLAG_CONTAINER,},

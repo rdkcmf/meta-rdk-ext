@@ -1,0 +1,52 @@
+From 22c72a2910ad63d2ab374004ed6a9e5f1709bc54 Mon Sep 17 00:00:00 2001
+From: Eugene Mutavchi <Ievgen_Mutavchi@comcast.com>
+Date: Tue, 2 Oct 2018 09:49:23 -0400
+Subject: [PATCH] Clear protected flag on switching tracks (encrypted -> clear)
+
+---
+ gst/isomp4/qtdemux.c | 1 +
+ 1 file changed, 1 insertion(+)
+
+Index: gst-plugins-good-1.10.4/gst/isomp4/qtdemux.c
+===================================================================
+--- gst-plugins-good-1.10.4.orig/gst/isomp4/qtdemux.c
++++ gst-plugins-good-1.10.4/gst/isomp4/qtdemux.c
+@@ -646,6 +646,7 @@ gst_qtdemux_init (GstQTDemux * qtdemux)
+
+   qtdemux->aamp_base_pts = GST_CLOCK_TIME_NONE;
+   qtdemux->aamp_override_enabled = FALSE;
++  qtdemux->aamp_player_enabled = FALSE;
+   qtdemux->aamp_rate = 1.0;
+ }
+
+@@ -2310,7 +2311,8 @@ gst_qtdemux_handle_sink_event (GstPad *
+             demux->aamp_base_pts = GST_CLOCK_TIME_NONE;
+             demux->aamp_rate = g_value_get_float(gst_structure_get_value(structure, "rate"));
+             demux->aamp_override_enabled = g_value_get_boolean(gst_structure_get_value(structure, "enable"));
+-            g_print("%s:%d - aamp_override - enabled = %d, rate  %f \n", __FUNCTION__, __LINE__, demux->aamp_override_enabled, demux->aamp_rate);
++            demux->aamp_player_enabled = g_value_get_boolean(gst_structure_get_value(structure, "aampplayer"));
++            g_print("%s:%d - aamp_override - enabled = %d, player = %d, rate  %f \n", __FUNCTION__, __LINE__, demux->aamp_override_enabled,demux->aamp_player_enabled, demux->aamp_rate);
+             if (demux->aamp_override_enabled)
+             {
+               const GValue * basePTSVal = gst_structure_get_value(structure, "basePTS");
+@@ -9736,6 +9738,8 @@ qtdemux_parse_trak (GstQTDemux * qtdemux
+     gst_qtdemux_stream_flush_segments_data (qtdemux, stream);
+     gst_qtdemux_stream_flush_samples_data (qtdemux, stream);
+     gst_qtdemux_stream_flush_crypto_info (qtdemux, stream);
++    if(!qtdemux->aamp_player_enabled)
++    	stream->protected = FALSE;
+   }
+   /* need defaults for fragments */
+   qtdemux_parse_trex (qtdemux, stream, &dummy, &dummy, &dummy);
+Index: gst-plugins-good-1.10.4/gst/isomp4/qtdemux.h
+===================================================================
+--- gst-plugins-good-1.10.4.orig/gst/isomp4/qtdemux.h
++++ gst-plugins-good-1.10.4/gst/isomp4/qtdemux.h
+@@ -237,6 +237,7 @@ struct _GstQTDemux {
+   GstClockTime aamp_base_pts;
+   gdouble aamp_rate;
+   gboolean aamp_override_enabled;
++  gboolean aamp_player_enabled;
+ };
+
+ struct _GstQTDemuxClass {

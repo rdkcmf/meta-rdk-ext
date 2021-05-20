@@ -1,0 +1,39 @@
+Date: Dec 7, 2015 12:24 PM
+
+From: a43ec06a9f9db3c3952fe6c2cfa1acbfc267bdde Dec 7, 2015 12:36 PM
+
+Subject: [PATCH] RDKB-3168: uclibc: Backport from latest OE master
+
+        Try to fix clone() related getpid bugs and posix_spawn.
+
+Source: OPENEMBEDDED
+
+License: LGPL-2.1-or-later
+
+Upstream-Status: Downloaded [ https://www.openembedded.org/pipermail/openembedded-core/2015-August/227297.html ]
+
+Signed-off-by: Khem Raj <raj.khem at gmail.com>
+---
+
+Index: git/libc/stdlib/malloc-standard/malloc.h
+===================================================================
+--- git.orig/libc/stdlib/malloc-standard/malloc.h
++++ git/libc/stdlib/malloc-standard/malloc.h
+@@ -244,7 +244,7 @@ __UCLIBC_MUTEX_EXTERN(__malloc_lock)
+ #define M_TRIM_THRESHOLD       -1
+ 
+ #ifndef DEFAULT_TRIM_THRESHOLD
+-#define DEFAULT_TRIM_THRESHOLD (256 * 1024)
++#define DEFAULT_TRIM_THRESHOLD (128 * 1024)
+ #endif
+ 
+ /*
+@@ -322,7 +322,7 @@ __UCLIBC_MUTEX_EXTERN(__malloc_lock)
+ #define M_MMAP_THRESHOLD      -3
+ 
+ #ifndef DEFAULT_MMAP_THRESHOLD
+-#define DEFAULT_MMAP_THRESHOLD (256 * 1024)
++#define DEFAULT_MMAP_THRESHOLD (128 * 1024)
+ #endif
+ 
+ /*

@@ -1,0 +1,27 @@
+Date: Oct 07 00:13:46 2016
+
+From: 3c313aa92e779cfbdbaa38e105e1ce7ea805490d Oct 07 12:44:46 2016
+
+Subject: [PATCH] XONE-18580,RDKINCDT-5831 : Jenkins failure in westeros
+
+	Remove generic header file installation
+
+Source: COMCAST
+
+Upstream-Status: Pending
+
+Signed-off-by: Vargheese Baby <vargheesebaby@tataelxsi.com>
+---
+
+Index: wayland-1.6.0/Makefile.am
+===================================================================
+--- wayland-1.6.0.orig/Makefile.am
++++ wayland-1.6.0/Makefile.am
+@@ -22,7 +22,6 @@ include_HEADERS =				\
+ 	src/wayland-util.h			\
+ 	src/wayland-server.h			\
+ 	src/wayland-client.h			\
+-	src/wayland-egl.h			\
+ 	src/wayland-version.h
+ 
+ nodist_include_HEADERS =			\

@@ -1,0 +1,94 @@
+Copyright 2014 Thorsten Lorenz.
+All rights reserved.
+
+Permission is hereby granted, free of charge, to any person
+obtaining a copy of this software and associated documentation
+files (the "Software"), to deal in the Software without
+restriction, including without limitation the rights to use,
+copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the
+Software is furnished to do so, subject to the following
+conditions:
+
+The above copyright notice and this permission notice shall be
+included in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
+OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
+HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+OTHER DEALINGS IN THE SOFTWARE.
+
+Date: May 08 15:12:32 2017
+
+From: 15370ab3dbcc4129a73565e895060c07198a8d69 May 08 19:14:27 2017
+
+Subject: [PATCH] XRE-11335 : print blocked processes stats in "top"
+	
+	enchancing debug experience
+
+Source: COMCAST
+
+Upstream-Status: Pending
+
+Signed-off-by: Igor Borovkov <igor_borovkov@cable.comcast.com>
+---
+
+Index: procps-3.2.8/top.c
+===================================================================
+--- procps-3.2.8.orig/top.c
++++ procps-3.2.8/top.c
+@@ -167,6 +167,7 @@ static unsigned  Frame_maxtask;
+                                         // ie. current 'size' of proc table
+ static unsigned  Frame_running,         // state categories for this frame
+                  Frame_sleepin,
++                 Frame_blocked,
+                  Frame_stopped,
+                  Frame_zombied;
+ static float     Frame_tscale;          // so we can '*' vs. '/' WHEN 'pcpu'
+@@ -1043,7 +1044,7 @@ static void prochlp (proc_t *this)
+       // if in Solaris mode, adjust our scaling for all cpus
+       Frame_tscale = 100.0f / ((float)Hertz * (float)et * (Rc.mode_irixps ? 1 : Cpu_tot));
+       maxt_sav = Frame_maxtask;
+-      Frame_maxtask = Frame_running = Frame_sleepin = Frame_stopped = Frame_zombied = 0;
++      Frame_maxtask = Frame_running = Frame_sleepin = Frame_stopped = Frame_zombied = Frame_blocked = 0;
+ 
+       // reuse memory each time around
+       hist_tmp = hist_sav;
+@@ -1059,8 +1060,11 @@ static void prochlp (proc_t *this)
+          Frame_running++;
+          break;
+       case 'S':
++         Frame_sleepin++;
++         break;
+       case 'D':
+          Frame_sleepin++;
++         Frame_blocked++; //not part of max tasks
+          break;
+       case 'T':
+          Frame_stopped++;
+@@ -3018,7 +3022,7 @@ static proc_t **summary_show (void)
+          0,
+          fmtmk(
+             STATES_line1,
+-            Frame_maxtask, Frame_running, Frame_sleepin, Frame_stopped, Frame_zombied
++            Frame_maxtask, Frame_running, Frame_sleepin, Frame_stopped, Frame_zombied, Frame_blocked
+          )
+       );
+       Msg_row += 1;
+Index: procps-3.2.8/top.h
+===================================================================
+--- procps-3.2.8.orig/top.h
++++ procps-3.2.8/top.h
+@@ -382,7 +382,7 @@ typedef struct WIN_t {
+ #define LOADAV_line  "%s -%s\n"
+ #define LOADAV_line_alt  "%s\06 -%s\n"
+ #define STATES_line1  "Tasks:\03" \
+-   " %3u \02total,\03 %3u \02running,\03 %3u \02sleeping,\03 %3u \02stopped,\03 %3u \02zombie\03\n"
++   " %3u \02total,\03 %3u \02running,\03 %3u \02sleeping,\03 %3u \02stopped,\03 %3u \02zombie, \03 %3u \02blocked\03\n"
+ #define STATES_line2x4  "%s\03" \
+    " %#5.1f%% \02user,\03 %#5.1f%% \02system,\03 %#5.1f%% \02nice,\03 %#5.1f%% \02idle\03\n"
+ #define STATES_line2x5  "%s\03" \

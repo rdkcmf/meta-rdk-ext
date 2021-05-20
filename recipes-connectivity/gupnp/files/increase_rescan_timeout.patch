@@ -1,0 +1,31 @@
+Date: Feb 12 14:06:23 2019
+
+From: ff224e4a37e3a95d64679e03a0e6612276d03098 Apr 29 15:06:54 2019
+
+Subject: [PATCH] DELIA-31053 : Increase discovery timeout to mask network issues
+
+	Increase discovery timeout in gssdp to mask network issues
+
+Source: COMCAST
+
+License: LGPL-2.0-or-later
+
+Upstream-Status: Pending
+
+Signed-off-by: tsilveria <Thomson_Silvera@cable.comcast.com>
+---
+
+--- gssdp-0.14.10/libgssdp/gssdp-resource-browser.c 2019-02-12 04:55:08.921132287 +0000
++++ gssdp-0.14.10-latest/libgssdp/gssdp-resource-browser.c  2019-02-12 05:04:42.218708224 +0000
+@@ -41,9 +41,9 @@
+ #include "gssdp-protocol.h"
+ #include "gssdp-marshal.h"
+
+-#define RESCAN_TIMEOUT 5 /* 5 seconds */
++#define RESCAN_TIMEOUT 8 /* 8 seconds */
+ #define MAX_DISCOVERY_MESSAGES 3
+-#define DISCOVERY_FREQUENCY    500 /* 500 ms */
++#define DISCOVERY_FREQUENCY    5000 /* 5000 ms */
+
+ G_DEFINE_TYPE (GSSDPResourceBrowser,
+                gssdp_resource_browser,

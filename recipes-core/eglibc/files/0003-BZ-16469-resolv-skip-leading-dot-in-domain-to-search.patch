@@ -1,0 +1,65 @@
+Date: Sat, 27 Sep 2014 07:23:39 -0300
+
+From: b59d114bd1e0571fba85b3cbcc61d4f4b42f5d1b Mon Sep 17 00:00:00 2001
+
+Subject: [PATCH 3/3] BZ#16469: resolv: skip leading dot in domain to search
+
+	This should only happen if the domain to search is the root,
+	represented as "." rather than by an empty string.  Skipping it here
+	prevents libc_res_nquerydomain from duplicating the trailing dot,
+	which would cause the domain name compression to fail.
+
+	for  ChangeLog
+
+		[BZ #16469]
+		* resolv/res_query.c (__libc_res_nsearch): Skip leading dot in
+		search domain names.
+
+Source: GIT
+
+License: LGPL-2.1-or-later
+
+Upstream-Status: Submitted [ https://git.powerel.org/powerel7/base/raw/commit/b59d114bd1e0571fba85b3cbcc61d4f4b42f5d1b ]
+
+Signed-off-by: Alexandre Oliva <aoliva@redhat.com>
+
+---
+ ChangeLog          |  6 ++++++
+ resolv/res_query.c | 17 ++++++++++++++---
+ 2 files changed, 20 insertions(+), 3 deletions(-)
+
+diff --git a/resolv/res_query.c b/resolv/res_query.c
+index 33eeeb7..4a9b3b3 100644
+--- a/resolv/res_query.c
++++ b/resolv/res_query.c
+@@ -413,13 +413,24 @@ __libc_res_nsearch(res_state statp,
+ 		for (domain = (const char * const *)statp->dnsrch;
+ 		     *domain && !done;
+ 		     domain++) {
++			const char *dname = domain[0];
+ 			searched = 1;
+ 
+-			if (domain[0][0] == '\0' ||
+-			    (domain[0][0] == '.' && domain[0][1] == '\0'))
++			/* __libc_res_nquerydoman concatenates name
++			   with dname with a "." in between.  If we
++			   pass it in dname the "." we got from the
++			   configured default search path, we'll end
++			   up with "name..", which won't resolve.
++			   OTOH, passing it "" will result in "name.",
++			   which has the intended effect for both
++			   possible representations of the root
++			   domain.  */
++			if (dname[0] == '.')
++				dname++;
++			if (dname[0] == '\0')
+ 				root_on_list++;
+ 
+-			ret = __libc_res_nquerydomain(statp, name, *domain,
++			ret = __libc_res_nquerydomain(statp, name, dname,
+ 						      class, type,
+ 						      answer, anslen, answerp,
+ 						      answerp2, nanswerp2,
+-- 
+2.1.4
+

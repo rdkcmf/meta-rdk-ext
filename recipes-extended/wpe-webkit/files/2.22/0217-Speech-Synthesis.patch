@@ -1,0 +1,1170 @@
+From 44d5f0c53a18a2f5270dfe05211b16c09666583c Mon Sep 17 00:00:00 2001
+From: "Vivek.A" <Vivek_Arumugam@comcast.com>
+Date: Thu, 19 Nov 2020 14:30:29 +0000
+Subject: [PATCH 3/3] Speech Synthesis
+
+Change-Id: I9d36b4888cf77c234094fc57b9a369adc335b921
+---
+ Source/WebCore/CMakeLists.txt                 |   3 +
+ .../Modules/speech/SpeechSynthesis.cpp        |  72 ++-
+ .../WebCore/Modules/speech/SpeechSynthesis.h  |   7 +-
+ .../speech/SpeechSynthesisErrorEvent.cpp      |  50 ++
+ .../speech/SpeechSynthesisErrorEvent.h        |  62 +++
+ .../speech/SpeechSynthesisErrorEvent.idl      |  46 ++
+ .../Modules/speech/SpeechSynthesisEvent.h     |   3 +-
+ .../speech/SpeechSynthesisUtterance.cpp       |  30 ++
+ .../Modules/speech/SpeechSynthesisUtterance.h |   3 +
+ Source/WebCore/Sources.txt                    |   3 +
+ Source/WebCore/dom/EventNames.in              |   1 +
+ Source/WebCore/platform/Logging.h             |   1 +
+ .../platform/PlatformSpeechSynthesizer.h      |  27 +-
+ .../mock/PlatformSpeechSynthesizerMock.cpp    |   2 +-
+ .../PlatformSpeechSynthesizerTTSClient.cpp    | 431 ++++++++++++++++++
+ .../PlatformSpeechSynthesizerTTSClient.h      |  95 ++++
+ Source/cmake/OptionsWPE.cmake                 |   1 +
+ 17 files changed, 817 insertions(+), 20 deletions(-)
+ create mode 100644 Source/WebCore/Modules/speech/SpeechSynthesisErrorEvent.cpp
+ create mode 100644 Source/WebCore/Modules/speech/SpeechSynthesisErrorEvent.h
+ create mode 100644 Source/WebCore/Modules/speech/SpeechSynthesisErrorEvent.idl
+ create mode 100644 Source/WebCore/platform/ttsclient/PlatformSpeechSynthesizerTTSClient.cpp
+ create mode 100644 Source/WebCore/platform/ttsclient/PlatformSpeechSynthesizerTTSClient.h
+
+diff --git a/Source/WebCore/CMakeLists.txt b/Source/WebCore/CMakeLists.txt
+index 7d659403e92f..0a791bf0a233 100644
+--- a/Source/WebCore/CMakeLists.txt
++++ b/Source/WebCore/CMakeLists.txt
+@@ -115,6 +115,7 @@ set(WebCore_INCLUDE_DIRECTORIES
+     "${WEBCORE_DIR}/platform/graphics/transforms"
+     "${WEBCORE_DIR}/platform/mediastream"
+     "${WEBCORE_DIR}/platform/mediastream/libwebrtc"
++    "${WEBCORE_DIR}/platform/ttsclient"
+     "${WEBCORE_DIR}/platform/mock"
+     "${WEBCORE_DIR}/platform/mock/mediasource"
+     "${WEBCORE_DIR}/platform/network"
+@@ -379,6 +380,7 @@ set(WebCore_NON_SVG_IDL_FILES
+     Modules/speech/DOMWindowSpeechSynthesis.idl
+     Modules/speech/SpeechSynthesis.idl
+     Modules/speech/SpeechSynthesisEvent.idl
++    Modules/speech/SpeechSynthesisErrorEvent.idl
+     Modules/speech/SpeechSynthesisUtterance.idl
+     Modules/speech/SpeechSynthesisVoice.idl
+ 
+@@ -1122,6 +1124,7 @@ set(WebCore_LIBRARIES
+     ${ZLIB_LIBRARIES}
+     PAL${DEBUG_SUFFIX}
+     rdkat
++    TTSClient
+ )
+ 
+ if (ENABLE_LEGACY_ENCRYPTED_MEDIA)
+diff --git a/Source/WebCore/Modules/speech/SpeechSynthesis.cpp b/Source/WebCore/Modules/speech/SpeechSynthesis.cpp
+index 20d345eefc52..7db63f2514c0 100644
+--- a/Source/WebCore/Modules/speech/SpeechSynthesis.cpp
++++ b/Source/WebCore/Modules/speech/SpeechSynthesis.cpp
+@@ -31,9 +31,10 @@
+ #include "EventNames.h"
+ #include "PlatformSpeechSynthesisVoice.h"
+ #include "PlatformSpeechSynthesizer.h"
+-#include "SpeechSynthesisEvent.h"
++#include "SpeechSynthesisErrorEvent.h"
+ #include "SpeechSynthesisUtterance.h"
+ #include "UserGestureIndicator.h"
++#include "Logging.h"
+ #include <wtf/NeverDestroyed.h>
+ 
+ namespace WebCore {
+@@ -72,7 +73,7 @@ const Vector<Ref<SpeechSynthesisVoice>>& SpeechSynthesis::getVoices()
+         return m_voiceList;
+ 
+     if (!m_platformSpeechSynthesizer)
+-        m_platformSpeechSynthesizer = std::make_unique<PlatformSpeechSynthesizer>(this);
++        m_platformSpeechSynthesizer = PlatformSpeechSynthesizer::create(this);
+ 
+     // If the voiceList is empty, that's the cue to get the voices from the platform again.
+     for (auto& voice : m_platformSpeechSynthesizer->voiceList())
+@@ -109,12 +110,12 @@ void SpeechSynthesis::startSpeakingImmediately(SpeechSynthesisUtterance& utteran
+ 
+     // Zero lengthed strings should immediately notify that the event is complete.
+     if (utterance.text().isEmpty()) {
+-        handleSpeakingCompleted(utterance, false);
++        handleSpeakingCompleted(utterance, SpeechErrorNone);
+         return;
+     }
+ 
+     if (!m_platformSpeechSynthesizer)
+-        m_platformSpeechSynthesizer = std::make_unique<PlatformSpeechSynthesizer>(this);
++        m_platformSpeechSynthesizer = PlatformSpeechSynthesizer::create(this);
+     m_platformSpeechSynthesizer->speak(utterance.platformUtterance());
+ }
+ 
+@@ -140,11 +141,19 @@ void SpeechSynthesis::cancel()
+     // Remove all the items from the utterance queue.
+     // Hold on to the current utterance so the platform synthesizer can have a chance to clean up.
+     RefPtr<SpeechSynthesisUtterance> current = m_currentSpeechUtterance;
+-    m_utteranceQueue.clear();
++    Deque<Ref<SpeechSynthesisUtterance>> utteranceQueue = WTFMove(m_utteranceQueue);
+     if (m_platformSpeechSynthesizer)
+         m_platformSpeechSynthesizer->cancel();
+     current = nullptr;
+ 
++    // Trigger canceled events for queued utterances
++    while(utteranceQueue.size() > 0) {
++        Ref<SpeechSynthesisUtterance> utterance = utteranceQueue.takeFirst();
++        if(m_currentSpeechUtterance != utterance.ptr())
++            fireErrorEvent(utterance, SpeechErrorCanceled);
++    }
++    utteranceQueue.clear();
++
+     // The platform should have called back immediately and cleared the current utterance.
+     ASSERT(!m_currentSpeechUtterance);
+ }
+@@ -161,19 +170,46 @@ void SpeechSynthesis::resume()
+         m_platformSpeechSynthesizer->resume();
+ }
+ 
++SpeechSynthesisErrorEvent::Code toSpeechSynthesisErrorEventCode(SpeechError error) {
++    switch(error) {
++        case SpeechErrorCanceled:               return SpeechSynthesisErrorEvent::Code::Canceled;
++        case SpeechErrorInterrupted:            return SpeechSynthesisErrorEvent::Code::Interrupted;
++        case SpeechErrorAudioBusy:              return SpeechSynthesisErrorEvent::Code::AudioBusy;
++        case SpeechErrorAudioHardware:          return SpeechSynthesisErrorEvent::Code::AudioHardware;
++        case SpeechErrorNetwork:                return SpeechSynthesisErrorEvent::Code::Network;
++        case SpeechErrorSynthesisUnavailable:   return SpeechSynthesisErrorEvent::Code::SynthesisUnavailable;
++        case SpeechErrorSynthesisFailed:        return SpeechSynthesisErrorEvent::Code::SynthesisFailed;
++        case SpeechErrorLanguageUnavailable:    return SpeechSynthesisErrorEvent::Code::LanguageUnavailable;
++        case SpeechErrorVoiceUnavailable:       return SpeechSynthesisErrorEvent::Code::VoiceUnavailable;
++        case SpeechErrorTextTooLong:            return SpeechSynthesisErrorEvent::Code::TextTooLong;
++        case SpeechErrorInvalidArgument:        return SpeechSynthesisErrorEvent::Code::InvalidArgument;
++        case SpeechErrorNotAllowed:             return SpeechSynthesisErrorEvent::Code::NotAllowed;
++        default: return SpeechSynthesisErrorEvent::Code::Interrupted;
++    }
++}
++
+ void SpeechSynthesis::fireEvent(const AtomicString& type, SpeechSynthesisUtterance& utterance, unsigned long charIndex, const String& name)
+ {
+     utterance.dispatchEvent(SpeechSynthesisEvent::create(type, charIndex, (MonotonicTime::now() - utterance.startTime()).seconds(), name));
+ }
+ 
+-void SpeechSynthesis::handleSpeakingCompleted(SpeechSynthesisUtterance& utterance, bool errorOccurred)
++void SpeechSynthesis::fireErrorEvent(SpeechSynthesisUtterance& utterance, SpeechError error)
++{
++    utterance.dispatchEvent(SpeechSynthesisErrorEvent::create(toSpeechSynthesisErrorEventCode(error)));
++}
++
++void SpeechSynthesis::handleSpeakingCompleted(SpeechSynthesisUtterance& utterance, SpeechError error)
+ {
+     ASSERT(m_currentSpeechUtterance);
+     Ref<SpeechSynthesisUtterance> protect(utterance);
+ 
+-    m_currentSpeechUtterance = nullptr;
++    if(m_currentSpeechUtterance == &utterance)
++        m_currentSpeechUtterance = nullptr;
+ 
+-    fireEvent(errorOccurred ? eventNames().errorEvent : eventNames().endEvent, utterance, 0, String());
++    if(error == SpeechErrorNone)
++        fireEvent(eventNames().endEvent, utterance, 0, String());
++    else
++        fireErrorEvent(utterance, error);
+ 
+     if (m_utteranceQueue.size()) {
+         Ref<SpeechSynthesisUtterance> firstUtterance = m_utteranceQueue.takeFirst();
+@@ -204,6 +240,20 @@ void SpeechSynthesis::boundaryEventOccurred(PlatformSpeechSynthesisUtterance& ut
+     }
+ }
+ 
++double SpeechSynthesis::getPageMediaVolume()
++{
++    if(m_currentSpeechUtterance)
++        return m_currentSpeechUtterance->getPageMediaVolume();
++
++    return 0.0;
++}
++
++void SpeechSynthesis::setPageMediaVolume(double volume)
++{
++    if(m_currentSpeechUtterance)
++        m_currentSpeechUtterance->setPageMediaVolume(volume);
++}
++
+ void SpeechSynthesis::didStartSpeaking(PlatformSpeechSynthesisUtterance& utterance)
+ {
+     if (utterance.client())
+@@ -227,13 +277,13 @@ void SpeechSynthesis::didResumeSpeaking(PlatformSpeechSynthesisUtterance& uttera
+ void SpeechSynthesis::didFinishSpeaking(PlatformSpeechSynthesisUtterance& utterance)
+ {
+     if (utterance.client())
+-        handleSpeakingCompleted(static_cast<SpeechSynthesisUtterance&>(*utterance.client()), false);
++        handleSpeakingCompleted(static_cast<SpeechSynthesisUtterance&>(*utterance.client()), SpeechErrorNone);
+ }
+ 
+-void SpeechSynthesis::speakingErrorOccurred(PlatformSpeechSynthesisUtterance& utterance)
++void SpeechSynthesis::speakingErrorOccurred(PlatformSpeechSynthesisUtterance& utterance, SpeechError error)
+ {
+     if (utterance.client())
+-        handleSpeakingCompleted(static_cast<SpeechSynthesisUtterance&>(*utterance.client()), true);
++        handleSpeakingCompleted(static_cast<SpeechSynthesisUtterance&>(*utterance.client()), error);
+ }
+ 
+ } // namespace WebCore
+diff --git a/Source/WebCore/Modules/speech/SpeechSynthesis.h b/Source/WebCore/Modules/speech/SpeechSynthesis.h
+index af7ca2ef9665..d79cf4b309ea 100644
+--- a/Source/WebCore/Modules/speech/SpeechSynthesis.h
++++ b/Source/WebCore/Modules/speech/SpeechSynthesis.h
+@@ -66,12 +66,15 @@ private:
+     void didPauseSpeaking(PlatformSpeechSynthesisUtterance&) override;
+     void didResumeSpeaking(PlatformSpeechSynthesisUtterance&) override;
+     void didFinishSpeaking(PlatformSpeechSynthesisUtterance&) override;
+-    void speakingErrorOccurred(PlatformSpeechSynthesisUtterance&) override;
++    void speakingErrorOccurred(PlatformSpeechSynthesisUtterance&, SpeechError) override;
+     void boundaryEventOccurred(PlatformSpeechSynthesisUtterance&, SpeechBoundary, unsigned charIndex) override;
++    virtual double getPageMediaVolume() override;
++    virtual void setPageMediaVolume(double volume) override;
+ 
+     void startSpeakingImmediately(SpeechSynthesisUtterance&);
+-    void handleSpeakingCompleted(SpeechSynthesisUtterance&, bool errorOccurred);
++    void handleSpeakingCompleted(SpeechSynthesisUtterance&, SpeechError);
+     void fireEvent(const AtomicString& type, SpeechSynthesisUtterance&, unsigned long charIndex, const String& name);
++    void fireErrorEvent(SpeechSynthesisUtterance&, SpeechError);
+ 
+ #if PLATFORM(IOS)
+     // Restrictions to change default behaviors.
+diff --git a/Source/WebCore/Modules/speech/SpeechSynthesisErrorEvent.cpp b/Source/WebCore/Modules/speech/SpeechSynthesisErrorEvent.cpp
+new file mode 100644
+index 000000000000..212196e9493e
+--- /dev/null
++++ b/Source/WebCore/Modules/speech/SpeechSynthesisErrorEvent.cpp
+@@ -0,0 +1,50 @@
++/* Copyright (C) 2019 RDK Management.  All rights reserved.
++*
++* Redistribution and use in source and binary forms, with or without
++* modification, are permitted provided that the following conditions
++* are met:
++* 1. Redistributions of source code must retain the above copyright
++*    notice, this list of conditions and the following disclaimer.
++* 2. Redistributions in binary form must reproduce the above copyright
++*    notice, this list of conditions and the following disclaimer in the
++*    documentation and/or other materials provided with the distribution.
++*
++* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS ``AS IS''
++* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
++* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
++* PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT HOLDERS. OR
++* CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
++* EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
++* PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
++* PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY
++* OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
++* (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
++* OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE. 
++*/
++
++#include "config.h"
++#include "SpeechSynthesisErrorEvent.h"
++
++#if ENABLE(SPEECH_SYNTHESIS)
++
++#include "EventNames.h"
++
++namespace WebCore {
++
++Ref<SpeechSynthesisErrorEvent> SpeechSynthesisErrorEvent::create(Code error)
++{
++    return adoptRef(*new SpeechSynthesisErrorEvent(error));
++}
++
++SpeechSynthesisErrorEvent::SpeechSynthesisErrorEvent(Code error)
++    : SpeechSynthesisEvent(eventNames().errorEvent, 0, 0.0, String()), m_error(error)
++{
++}
++
++SpeechSynthesisErrorEvent::Code SpeechSynthesisErrorEvent::error() const {
++    return m_error;
++}
++
++} // namespace WebCore
++
++#endif // ENABLE(SPEECH_SYNTHESIS)
+diff --git a/Source/WebCore/Modules/speech/SpeechSynthesisErrorEvent.h b/Source/WebCore/Modules/speech/SpeechSynthesisErrorEvent.h
+new file mode 100644
+index 000000000000..90ed0f14220d
+--- /dev/null
++++ b/Source/WebCore/Modules/speech/SpeechSynthesisErrorEvent.h
+@@ -0,0 +1,62 @@
++/* Copyright (C) 2019 RDK Management.  All rights reserved.
++*
++* Redistribution and use in source and binary forms, with or without
++* modification, are permitted provided that the following conditions
++* are met:
++* 1. Redistributions of source code must retain the above copyright
++*    notice, this list of conditions and the following disclaimer.
++* 2. Redistributions in binary form must reproduce the above copyright
++*    notice, this list of conditions and the following disclaimer in the
++*    documentation and/or other materials provided with the distribution.
++*
++* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS ``AS IS''
++* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
++* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
++* PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT HOLDERS. OR
++* CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
++* EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
++* PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
++* PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY
++* OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
++* (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
++* OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE. 
++*/
++
++#pragma once
++
++#if ENABLE(SPEECH_SYNTHESIS)
++
++#include "SpeechSynthesisEvent.h"
++
++namespace WebCore {
++
++class SpeechSynthesisErrorEvent : public SpeechSynthesisEvent {
++public:
++    enum class Code {
++        Canceled,
++        Interrupted,
++        AudioBusy,
++        AudioHardware,
++        Network,
++        SynthesisUnavailable,
++        SynthesisFailed,
++        LanguageUnavailable,
++        VoiceUnavailable,
++        TextTooLong,
++        InvalidArgument,
++        NotAllowed
++    };
++
++    static Ref<SpeechSynthesisErrorEvent> create(const Code error);
++    virtual EventInterface eventInterface() const { return SpeechSynthesisErrorEventInterfaceType; }
++    Code error() const;
++
++private:
++    SpeechSynthesisErrorEvent(const Code error);
++
++    Code m_error;
++};
++
++} // namespace WebCore
++
++#endif // ENABLE(SPEECH_SYNTHESIS)
+diff --git a/Source/WebCore/Modules/speech/SpeechSynthesisErrorEvent.idl b/Source/WebCore/Modules/speech/SpeechSynthesisErrorEvent.idl
+new file mode 100644
+index 000000000000..1df9f72a8443
+--- /dev/null
++++ b/Source/WebCore/Modules/speech/SpeechSynthesisErrorEvent.idl
+@@ -0,0 +1,46 @@
++/* Copyright (C) 2019 RDK Management.  All rights reserved.
++*
++* Redistribution and use in source and binary forms, with or without
++* modification, are permitted provided that the following conditions
++* are met:
++* 1. Redistributions of source code must retain the above copyright
++*    notice, this list of conditions and the following disclaimer.
++* 2. Redistributions in binary form must reproduce the above copyright
++*    notice, this list of conditions and the following disclaimer in the
++*    documentation and/or other materials provided with the distribution.
++*
++* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS ``AS IS''
++* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
++* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
++* PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT HOLDERS. OR
++* CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
++* EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
++* PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
++* PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY
++* OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
++* (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
++* OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE. 
++*/
++// https://w3c.github.io/speech-api/#enumdef-speechsynthesiserrorcode
++[
++    Conditional=SPEECH_SYNTHESIS,
++] enum SpeechSynthesisErrorCode {
++    "canceled",
++    "interrupted",
++    "audio-busy",
++    "audio-hardware",
++    "network",
++    "synthesis-unavailable",
++    "synthesis-failed",
++    "language-unavailable",
++    "voice-unavailable",
++    "text-too-long",
++    "invalid-argument",
++    "not-allowed"
++};
++
++[
++    Conditional=SPEECH_SYNTHESIS
++] interface SpeechSynthesisErrorEvent : SpeechSynthesisEvent {
++    readonly attribute SpeechSynthesisErrorCode  error;
++};
+diff --git a/Source/WebCore/Modules/speech/SpeechSynthesisEvent.h b/Source/WebCore/Modules/speech/SpeechSynthesisEvent.h
+index 6e7204b2bd07..9bba45793e85 100644
+--- a/Source/WebCore/Modules/speech/SpeechSynthesisEvent.h
++++ b/Source/WebCore/Modules/speech/SpeechSynthesisEvent.h
+@@ -41,9 +41,10 @@ public:
+ 
+     virtual EventInterface eventInterface() const { return SpeechSynthesisEventInterfaceType; }
+ 
+-private:
++protected:
+     SpeechSynthesisEvent(const AtomicString& type, unsigned charIndex, float elapsedTime, const String& name);
+ 
++private:
+     unsigned long m_charIndex;
+     float m_elapsedTime;
+     String m_name;
+diff --git a/Source/WebCore/Modules/speech/SpeechSynthesisUtterance.cpp b/Source/WebCore/Modules/speech/SpeechSynthesisUtterance.cpp
+index 6746f4ef4af3..06bc6fb2a009 100644
+--- a/Source/WebCore/Modules/speech/SpeechSynthesisUtterance.cpp
++++ b/Source/WebCore/Modules/speech/SpeechSynthesisUtterance.cpp
+@@ -25,6 +25,10 @@
+ 
+ #include "config.h"
+ #include "SpeechSynthesisUtterance.h"
++#include "ScriptExecutionContext.h"
++#include "Document.h"
++#include "Page.h"
++#include "Logging.h"
+ 
+ #if ENABLE(SPEECH_SYNTHESIS)
+ 
+@@ -65,6 +69,32 @@ void SpeechSynthesisUtterance::setVoice(SpeechSynthesisVoice* voice)
+         m_platformUtterance->setVoice(voice->platformVoice());
+ }
+ 
++double SpeechSynthesisUtterance::getPageMediaVolume()
++{
++    ScriptExecutionContext *context = scriptExecutionContext();
++    if (is<Document>(context)) {
++        if (auto* page = downcast<Document>(context)->page()) {
++            return page->mediaVolume();
++        }
++    } else {
++        LOG(SpeechSynthesis, "SpeechSynthesisUtterance::getPageMediaVolume: Invalid Context");
++    }
++
++    return 0.0;
++}
++
++void SpeechSynthesisUtterance::setPageMediaVolume(double volume)
++{
++    ScriptExecutionContext *context = scriptExecutionContext();
++    if (is<Document>(context)) {
++        if (auto* page = downcast<Document>(context)->page()) {
++            page->setMediaVolume(volume);
++        }
++    } else {
++        LOG(SpeechSynthesis, "SpeechSynthesisUtterance::setPageMediaVolume: Invalid Context");
++    }
++}
++
+ } // namespace WebCore
+ 
+ #endif // ENABLE(SPEECH_SYNTHESIS)
+diff --git a/Source/WebCore/Modules/speech/SpeechSynthesisUtterance.h b/Source/WebCore/Modules/speech/SpeechSynthesisUtterance.h
+index 8c24f77d379c..36d77f96a4f5 100644
+--- a/Source/WebCore/Modules/speech/SpeechSynthesisUtterance.h
++++ b/Source/WebCore/Modules/speech/SpeechSynthesisUtterance.h
+@@ -62,6 +62,9 @@ public:
+     MonotonicTime startTime() const { return m_platformUtterance->startTime(); }
+     void setStartTime(MonotonicTime startTime) { m_platformUtterance->setStartTime(startTime); }
+ 
++    double getPageMediaVolume();
++    void setPageMediaVolume(double volume);
++
+     using RefCounted::ref;
+     using RefCounted::deref;
+ 
+diff --git a/Source/WebCore/Sources.txt b/Source/WebCore/Sources.txt
+index 9a342a66ee92..71bfb0c37c4b 100644
+--- a/Source/WebCore/Sources.txt
++++ b/Source/WebCore/Sources.txt
+@@ -201,6 +201,7 @@ Modules/paymentrequest/PaymentResponse.cpp
+ Modules/speech/DOMWindowSpeechSynthesis.cpp
+ Modules/speech/SpeechSynthesis.cpp
+ Modules/speech/SpeechSynthesisEvent.cpp
++Modules/speech/SpeechSynthesisErrorEvent.cpp
+ Modules/speech/SpeechSynthesisUtterance.cpp
+ Modules/speech/SpeechSynthesisVoice.cpp
+ 
+@@ -1511,6 +1512,7 @@ platform/NotImplemented.cpp
+ platform/Pasteboard.cpp
+ platform/PasteboardWriterData.cpp
+ platform/PlatformSpeechSynthesisUtterance.cpp
++platform/ttsclient/PlatformSpeechSynthesizerTTSClient.cpp
+ platform/PlatformSpeechSynthesisVoice.cpp
+ platform/PlatformSpeechSynthesizer.cpp
+ platform/PlatformStrategies.cpp
+@@ -3087,6 +3089,7 @@ JSSourceBufferList.cpp
+ JSSpectreGadget.cpp
+ JSSpeechSynthesis.cpp
+ JSSpeechSynthesisEvent.cpp
++JSSpeechSynthesisErrorEvent.cpp
+ JSSpeechSynthesisUtterance.cpp
+ JSSpeechSynthesisVoice.cpp
+ JSStaticRange.cpp
+diff --git a/Source/WebCore/dom/EventNames.in b/Source/WebCore/dom/EventNames.in
+index 7157c916339f..197280b86659 100644
+--- a/Source/WebCore/dom/EventNames.in
++++ b/Source/WebCore/dom/EventNames.in
+@@ -57,6 +57,7 @@ RTCDTMFToneChangeEvent conditional=WEB_RTC_DTMF
+ RTCPeerConnectionIceEvent conditional=WEB_RTC
+ RTCTrackEvent conditional=WEB_RTC
+ SpeechSynthesisEvent conditional=SPEECH_SYNTHESIS
++SpeechSynthesisErrorEvent conditional=SPEECH_SYNTHESIS
+ WebGLContextEvent conditional=WEBGL
+ StorageEvent
+ SVGEvents interfaceName=Event
+diff --git a/Source/WebCore/platform/Logging.h b/Source/WebCore/platform/Logging.h
+index 038e5df56da1..076aa6fae845 100644
+--- a/Source/WebCore/platform/Logging.h
++++ b/Source/WebCore/platform/Logging.h
+@@ -103,6 +103,7 @@ namespace WebCore {
+     M(WebGPU) \
+     M(WebRTC) \
+     M(WheelEventTestTriggers) \
++    M(SpeechSynthesis) \
+ 
+ #undef DECLARE_LOG_CHANNEL
+ #define DECLARE_LOG_CHANNEL(name) \
+diff --git a/Source/WebCore/platform/PlatformSpeechSynthesizer.h b/Source/WebCore/platform/PlatformSpeechSynthesizer.h
+index 90dfe9c7e256..7355ca57cdb8 100644
+--- a/Source/WebCore/platform/PlatformSpeechSynthesizer.h
++++ b/Source/WebCore/platform/PlatformSpeechSynthesizer.h
+@@ -43,6 +43,22 @@ enum SpeechBoundary {
+     SpeechSentenceBoundary
+ };
+ 
++enum SpeechError {
++    SpeechErrorNone,
++    SpeechErrorCanceled,
++    SpeechErrorInterrupted,
++    SpeechErrorAudioBusy,
++    SpeechErrorAudioHardware,
++    SpeechErrorNetwork,
++    SpeechErrorSynthesisUnavailable,
++    SpeechErrorSynthesisFailed,
++    SpeechErrorLanguageUnavailable,
++    SpeechErrorVoiceUnavailable,
++    SpeechErrorTextTooLong,
++    SpeechErrorInvalidArgument,
++    SpeechErrorNotAllowed
++};
++
+ class PlatformSpeechSynthesisUtterance;
+ 
+ class PlatformSpeechSynthesizerClient {
+@@ -51,22 +67,25 @@ public:
+     virtual void didFinishSpeaking(PlatformSpeechSynthesisUtterance&) = 0;
+     virtual void didPauseSpeaking(PlatformSpeechSynthesisUtterance&) = 0;
+     virtual void didResumeSpeaking(PlatformSpeechSynthesisUtterance&) = 0;
+-    virtual void speakingErrorOccurred(PlatformSpeechSynthesisUtterance&) = 0;
++    virtual void speakingErrorOccurred(PlatformSpeechSynthesisUtterance&, SpeechError) = 0;
+     virtual void boundaryEventOccurred(PlatformSpeechSynthesisUtterance&, SpeechBoundary, unsigned charIndex) = 0;
+     virtual void voicesDidChange() = 0;
++    virtual double getPageMediaVolume() = 0;
++    virtual void setPageMediaVolume(double volume) = 0;
+ protected:
+     virtual ~PlatformSpeechSynthesizerClient() = default;
+ };
+ 
+ class WEBCORE_EXPORT PlatformSpeechSynthesizer {
+ public:
++    WEBCORE_EXPORT static std::unique_ptr<PlatformSpeechSynthesizer> create(PlatformSpeechSynthesizerClient*);
+     WEBCORE_EXPORT explicit PlatformSpeechSynthesizer(PlatformSpeechSynthesizerClient*);
+ 
+     // FIXME: We have multiple virtual functions just so we can support a mock for testing.
+     // Seems wasteful. Would be nice to find a better way.
+     WEBCORE_EXPORT virtual ~PlatformSpeechSynthesizer();
+ 
+-    const Vector<RefPtr<PlatformSpeechSynthesisVoice>>& voiceList() const;
++    virtual const Vector<RefPtr<PlatformSpeechSynthesisVoice>>& voiceList() const;
+     virtual void speak(RefPtr<PlatformSpeechSynthesisUtterance>&&);
+     virtual void pause();
+     virtual void resume();
+@@ -75,11 +94,9 @@ public:
+     PlatformSpeechSynthesizerClient* client() const { return m_speechSynthesizerClient; }
+ 
+ protected:
+-    Vector<RefPtr<PlatformSpeechSynthesisVoice>> m_voiceList;
+-
+-private:
+     virtual void initializeVoiceList();
+ 
++    Vector<RefPtr<PlatformSpeechSynthesisVoice>> m_voiceList;
+     bool m_voiceListIsInitialized { false };
+     PlatformSpeechSynthesizerClient* m_speechSynthesizerClient;
+ 
+diff --git a/Source/WebCore/platform/mock/PlatformSpeechSynthesizerMock.cpp b/Source/WebCore/platform/mock/PlatformSpeechSynthesizerMock.cpp
+index 4001b96df642..df50c592b356 100644
+--- a/Source/WebCore/platform/mock/PlatformSpeechSynthesizerMock.cpp
++++ b/Source/WebCore/platform/mock/PlatformSpeechSynthesizerMock.cpp
+@@ -75,7 +75,7 @@ void PlatformSpeechSynthesizerMock::cancel()
+         return;
+ 
+     m_speakingFinishedTimer.stop();
+-    client()->speakingErrorOccurred(*m_utterance);
++    client()->speakingErrorOccurred(*m_utterance, SpeechErrorCanceled);
+     m_utterance = nullptr;
+ }
+ 
+diff --git a/Source/WebCore/platform/ttsclient/PlatformSpeechSynthesizerTTSClient.cpp b/Source/WebCore/platform/ttsclient/PlatformSpeechSynthesizerTTSClient.cpp
+new file mode 100644
+index 000000000000..cc59aeefa35b
+--- /dev/null
++++ b/Source/WebCore/platform/ttsclient/PlatformSpeechSynthesizerTTSClient.cpp
+@@ -0,0 +1,431 @@
++/* Copyright (C) 2019 RDK Management.  All rights reserved.
++*
++* Redistribution and use in source and binary forms, with or without
++* modification, are permitted provided that the following conditions
++* are met:
++* 1. Redistributions of source code must retain the above copyright
++*    notice, this list of conditions and the following disclaimer.
++* 2. Redistributions in binary form must reproduce the above copyright
++*    notice, this list of conditions and the following disclaimer in the
++*    documentation and/or other materials provided with the distribution.
++*
++* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS ``AS IS''
++* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
++* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
++* PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT HOLDERS. OR
++* CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
++* EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
++* PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
++* PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY
++* OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
++* (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
++* OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE. 
++*/
++
++#include "config.h"
++#include "PlatformSpeechSynthesizerTTSClient.h"
++#include "PlatformSpeechSynthesisUtterance.h"
++#include "Logging.h"
++#include "Page.h"
++
++#include <sys/types.h>
++#include <unistd.h>
++
++#if ENABLE(SPEECH_SYNTHESIS)
++
++#define MAX_ALLOWED_TEXT_LENGTH 1024
++
++#define CHECK_TTS_SESSION(utterance) do {\
++    if(!m_ttsConnected) {\
++        LOG(SpeechSynthesis, "PlatformSpeechSynthesizerTTSClient::%s, Speech Synthesis: Connection with TTS is not established", __FUNCTION__);\
++        notifyClient(utterance, SpeechErrorSynthesisUnavailable);\
++        return;\
++        }\
++    if(!m_ttsClient || !m_ttsSessionId) {\
++        notifyClient(utterance, SpeechErrorNotAllowed);\
++        return;\
++    }} while(0)
++
++namespace WebCore {
++
++// PlatformSpeechSynthesizer
++WEBCORE_EXPORT std::unique_ptr<PlatformSpeechSynthesizer> PlatformSpeechSynthesizer::create(PlatformSpeechSynthesizerClient *client)
++{
++    return std::make_unique<PlatformSpeechSynthesizerTTSClient>(client);
++}
++
++WEBCORE_EXPORT PlatformSpeechSynthesizer::PlatformSpeechSynthesizer(PlatformSpeechSynthesizerClient* client) : m_speechSynthesizerClient(client) {}
++WEBCORE_EXPORT PlatformSpeechSynthesizer::~PlatformSpeechSynthesizer() {}
++
++void PlatformSpeechSynthesizer::speak(RefPtr<PlatformSpeechSynthesisUtterance>&&) {}
++void PlatformSpeechSynthesizer::pause() {}
++void PlatformSpeechSynthesizer::resume() {}
++void PlatformSpeechSynthesizer::cancel() {}
++void PlatformSpeechSynthesizer::initializeVoiceList() {}
++
++// PlatformSpeechSynthesizerTTSClient
++double PlatformSpeechSynthesizerTTSClient::m_TTSVolume = 0.0;
++double PlatformSpeechSynthesizerTTSClient::m_TTSRate = 0.0;
++
++PlatformSpeechSynthesizerTTSClient::PlatformSpeechSynthesizerTTSClient(PlatformSpeechSynthesizerClient* client)
++    : PlatformSpeechSynthesizer(client), m_shouldCacheUtterance(true), m_ttsSessionId(0), m_ttsEnabled(false), m_ttsConnected(false)
++{
++    m_ttsClient = TTS::TTSClient::create(this);
++
++    auto ttsConnectionTO = 10_s;
++    RunLoop::main().dispatchAfter(ttsConnectionTO, [weakThis = m_weakPtrFactory.createWeakPtr(*this)] () {
++        if (!weakThis) {
++            LOG(SpeechSynthesis, "PlatformSpeechSynthesizerTTSClient::%s, invalid this pointer", __FUNCTION__);
++            return;
++        }
++
++        weakThis->m_shouldCacheUtterance = false;
++        if(weakThis->m_firstUtterance.get()) {
++            if(weakThis->m_ttsSessionId == 0)
++                weakThis->notifyClient(weakThis->m_firstUtterance, SpeechErrorSynthesisUnavailable);
++            LOG(SpeechSynthesis, "PlatformSpeechSynthesizerTTSClient::%s, clearing cached utterace=%p", __FUNCTION__, weakThis->m_firstUtterance.get());
++            weakThis->m_firstUtterance = nullptr;
++        }
++    });
++}
++
++PlatformSpeechSynthesizerTTSClient::~PlatformSpeechSynthesizerTTSClient()
++{
++    if(m_ttsClient) {
++        m_ttsSessionId = 0;
++        m_ttsEnabled = 0;
++        delete m_ttsClient;
++    }
++}
++
++void PlatformSpeechSynthesizerTTSClient::initializeVoiceList()
++{
++    if(m_ttsClient) {
++        const char *v = NULL;
++        TTS::Configuration config;
++        std::vector<std::string> voices;
++
++        TTS::TTS_Error err = m_ttsClient->getTTSConfiguration(config);
++        m_ttsClient->listVoices(config.language, voices);
++        for(unsigned int i = 0; i < voices.size(); i++) {
++            v = voices[i].c_str();
++            m_voiceList.append(PlatformSpeechSynthesisVoice::create(
++                        String(v), String(v), String((err == TTS::TTS_OK) ? config.language.c_str() : "en-US"), true, true));
++        }
++
++        m_TTSVolume = config.volume;
++        m_TTSRate = config.rate;
++
++        onVoiceChanged("");
++    }
++}
++
++const Vector<RefPtr<PlatformSpeechSynthesisVoice>>& PlatformSpeechSynthesizerTTSClient::voiceList() const
++{
++    if(!m_voiceListIsInitialized)
++        const_cast<PlatformSpeechSynthesizerTTSClient*>(this)->initializeVoiceList();
++    const_cast<PlatformSpeechSynthesizerTTSClient*>(this)->m_voiceListIsInitialized = !m_voiceList.isEmpty();
++    return m_voiceList;
++}
++
++void PlatformSpeechSynthesizerTTSClient::setPageMediaVolume(float volume)
++{
++    double readVolume = client()->getPageMediaVolume();
++    LOG(SpeechSynthesis, "PlatformSpeechSynthesizerTTSClient::%s, read MediaVolume : %lf, volume to be set : %lf", __FUNCTION__, readVolume, volume);
++    if(volume == readVolume)
++        return;
++
++    LOG(SpeechSynthesis, "PlatformSpeechSynthesizerTTSClient::%s, set MediaVolume to : %lf", __FUNCTION__, volume);
++    client()->setPageMediaVolume(volume);
++}
++
++void PlatformSpeechSynthesizerTTSClient::speak(RefPtr<PlatformSpeechSynthesisUtterance>&& u)
++{
++    RefPtr<PlatformSpeechSynthesisUtterance> utterance = WTFMove(u);
++    LOG(SpeechSynthesis, "PlatformSpeechSynthesizerTTSClient::%s, utterance=%p, progressing=%d", __FUNCTION__, utterance.get(), m_utterancesInProgress.size());
++
++    if(m_shouldCacheUtterance) {
++        if(m_firstUtterance.get())
++            notifyClient(m_firstUtterance, SpeechErrorSynthesisUnavailable);
++        m_firstUtterance = utterance;
++        LOG(SpeechSynthesis, "PlatformSpeechSynthesizerTTSClient::%s, cached utterance=%p", __FUNCTION__, m_firstUtterance.get());
++        return;
++    }
++
++    CHECK_TTS_SESSION(utterance);
++
++    if(utterance->text().isEmpty() || utterance->text().length() < 1) {
++        notifyClient(utterance, SpeechErrorInvalidArgument);
++        return;
++    } else if(utterance->text().length() > MAX_ALLOWED_TEXT_LENGTH) {
++        notifyClient(utterance, SpeechErrorTextTooLong);
++        return;
++    }
++
++    TTS::Configuration config;
++    config.volume = utterance->volume() * 100;
++    config.rate = (utterance->rate() <= 1.0 ? 50.0 : (utterance->rate() <= 5.0 ? 75.0 : 100.0));
++
++    if((int)m_TTSVolume != (int)config.volume || (int)m_TTSRate != (int)config.rate) {
++        if(m_ttsClient->setTTSConfiguration(config) != TTS::TTS_OK) {
++            notifyClient(utterance, SpeechErrorSynthesisFailed);
++            return;
++        }
++        m_TTSVolume = config.volume;
++        m_TTSRate = config.rate;
++    }
++
++    TTS::SpeechData sdata;
++    sdata.text = utterance->text().utf8().data();
++    sdata.id = (uint32_t)utterance.get();
++    TTS::TTS_Error err = m_ttsClient->speak(m_ttsSessionId, sdata);
++    if(err != TTS::TTS_OK) {
++        if(err == TTS::TTS_RESOURCE_BUSY || err == TTS::TTS_SESSION_NOT_ACTIVE)
++            notifyClient(utterance, SpeechErrorAudioBusy);
++        else
++            notifyClient(utterance, SpeechErrorSynthesisFailed);
++    } else {
++        m_utterancesInProgress.append(utterance);
++        m_currentUtterance = utterance;
++        if(utterance == m_firstUtterance)
++            m_firstUtterance = nullptr;
++    }
++}
++
++void PlatformSpeechSynthesizerTTSClient::cancel()
++{
++    LOG(SpeechSynthesis, "PlatformSpeechSynthesizerTTSClient::%s, utterance=%p, progressing=%d", __FUNCTION__, m_currentUtterance.get(), m_utterancesInProgress.size());
++
++    if(m_shouldCacheUtterance && m_firstUtterance.get()) {
++        notifyClient(m_firstUtterance, SpeechErrorCanceled);
++        m_firstUtterance = nullptr;
++    }
++
++    CHECK_TTS_SESSION(m_currentUtterance);
++
++    if(m_currentUtterance.get() && m_ttsClient->isSpeaking(m_ttsSessionId)) {
++        m_ttsClient->abort(m_ttsSessionId);
++        speakingFinished((uint32_t)m_currentUtterance.get(), SpeechErrorInterrupted);
++    }
++}
++
++void PlatformSpeechSynthesizerTTSClient::pause()
++{
++    LOG(SpeechSynthesis, "PlatformSpeechSynthesizerTTSClient::%s, utterance=%p, progressing=%d", __FUNCTION__, m_currentUtterance.get(), m_utterancesInProgress.size());
++    CHECK_TTS_SESSION(m_currentUtterance);
++
++    if(m_currentUtterance.get() && m_ttsClient && m_ttsClient->isSpeaking(m_ttsSessionId)) {
++        m_ttsClient->pause(m_ttsSessionId, (uint32_t)m_currentUtterance.get());
++    }
++}
++
++void PlatformSpeechSynthesizerTTSClient::resume()
++{
++    LOG(SpeechSynthesis, "PlatformSpeechSynthesizerTTSClient::%s, utterance=%p, progressing=%d", __FUNCTION__, m_currentUtterance.get(), m_utterancesInProgress.size());
++    CHECK_TTS_SESSION(m_currentUtterance);
++
++    if(m_currentUtterance.get() && m_ttsClient && m_ttsClient->isSpeaking(m_ttsSessionId)) {
++        m_ttsClient->resume(m_ttsSessionId, (uint32_t)m_currentUtterance.get());
++    }
++}
++
++// TTSConnectionCallback
++void PlatformSpeechSynthesizerTTSClient::onTTSServerConnected()
++{
++    LOG(SpeechSynthesis, "PlatformSpeechSynthesizerTTSClient::%s, Speech Synthesis: Connection with TTS is established", __FUNCTION__);
++
++    RunLoop::main().dispatch([weakThis = m_weakPtrFactory.createWeakPtr(*this)] () {
++        if (!weakThis) {
++            LOG(SpeechSynthesis, "PlatformSpeechSynthesizerTTSClient::%s, invalid this pointer", __FUNCTION__);
++            return;
++        }
++        weakThis->m_ttsConnected = true;
++        weakThis->m_shouldCacheUtterance = false;
++
++        if(weakThis->m_ttsClient) {
++            if(weakThis->m_ttsSessionId == 0) {
++                weakThis->m_ttsSessionId = weakThis->m_ttsClient->createSession((uint32_t)getpid(), "WPE", weakThis.get());
++                weakThis->m_ttsClient->requestExtendedEvents(weakThis->m_ttsSessionId, 0xFFFF);
++            }
++            weakThis->onVoiceChanged("");
++
++            if(weakThis->m_firstUtterance.get()) {
++                LOG(SpeechSynthesis, "PlatformSpeechSynthesizerTTSClient::%s, starting cached utterace=%p", __FUNCTION__, weakThis->m_firstUtterance.get());
++                weakThis->speak(weakThis->m_firstUtterance.get());
++            }
++        }
++    });
++}
++
++void PlatformSpeechSynthesizerTTSClient::onTTSServerClosed()
++{
++    LOG(SpeechSynthesis, "PlatformSpeechSynthesizerTTSClient::%s, Speech Synthesis: Connection with TTS is closed", __FUNCTION__);
++    m_ttsConnected = false;
++    m_ttsSessionId = 0;
++
++    if(m_currentUtterance.get())
++        speakingFinished((uint32_t)m_currentUtterance.get(), SpeechErrorInterrupted);
++}
++
++void PlatformSpeechSynthesizerTTSClient::onTTSStateChanged(bool enabled)
++{
++    m_ttsEnabled = enabled;
++}
++
++void PlatformSpeechSynthesizerTTSClient::onVoiceChanged(std::string)
++{
++    RunLoop::main().dispatch([weakThis = m_weakPtrFactory.createWeakPtr(*this)] () {
++        if (!weakThis) {
++            LOG(SpeechSynthesis, "PlatformSpeechSynthesizerTTSClient::%s, invalid this pointer", __FUNCTION__);
++            return;
++        }
++
++        weakThis->client()->voicesDidChange();
++    });
++}
++
++// TTSSessionCallback
++void PlatformSpeechSynthesizerTTSClient::onTTSSessionCreated(uint32_t, uint32_t) {}
++void PlatformSpeechSynthesizerTTSClient::onResourceAcquired(uint32_t, uint32_t) {}
++void PlatformSpeechSynthesizerTTSClient::onResourceReleased(uint32_t, uint32_t) {}
++
++void PlatformSpeechSynthesizerTTSClient::onWillSpeak(uint32_t, uint32_t, TTS::SpeechData &speechData)
++{
++    LOG(SpeechSynthesis, "PlatformSpeechSynthesizerTTSClient::%s, speechId=%u(%p), progressing=%d", __FUNCTION__, speechData.id, (void*)speechData.id, m_utterancesInProgress.size());
++    RunLoop::main().dispatch([weakThis = m_weakPtrFactory.createWeakPtr(*this)] () {
++        if (!weakThis) {
++            LOG(SpeechSynthesis, "PlatformSpeechSynthesizerTTSClient::%s, invalid this pointer", __FUNCTION__);
++            return;
++        }
++
++        weakThis->setPageMediaVolume(0.25);
++    });
++}
++
++void PlatformSpeechSynthesizerTTSClient::onSpeechStart(uint32_t, uint32_t, TTS::SpeechData &speechData)
++{
++    LOG(SpeechSynthesis, "PlatformSpeechSynthesizerTTSClient::%s, speechId=%u(%p), progressing=%d", __FUNCTION__, speechData.id, (void*)speechData.id, m_utterancesInProgress.size());
++    RunLoop::main().dispatch([weakThis = m_weakPtrFactory.createWeakPtr(*this), speechId = speechData.id] () {
++        if (!weakThis) {
++            LOG(SpeechSynthesis, "PlatformSpeechSynthesizerTTSClient::%s, invalid this pointer", __FUNCTION__);
++            return;
++        }
++
++        size_t index = weakThis->m_utterancesInProgress.find((PlatformSpeechSynthesisUtterance*)speechId);
++        if(index != WTF::notFound) {
++            weakThis->client()->didStartSpeaking(*weakThis->m_utterancesInProgress.at(index));
++        }
++    });
++}
++
++void PlatformSpeechSynthesizerTTSClient::onSpeechPause(uint32_t, uint32_t, uint32_t speechId)
++{
++    LOG(SpeechSynthesis, "PlatformSpeechSynthesizerTTSClient::%s, speechId=%u(%p), progressing=%d", __FUNCTION__, speechId, (void*)speechId, m_utterancesInProgress.size());
++    RunLoop::main().dispatch([weakThis = m_weakPtrFactory.createWeakPtr(*this), speechId] () {
++        if (!weakThis) {
++            LOG(SpeechSynthesis, "PlatformSpeechSynthesizerTTSClient::%s, invalid this pointer", __FUNCTION__);
++            return;
++        }
++        weakThis->setPageMediaVolume(1);
++
++        size_t index = weakThis->m_utterancesInProgress.find((PlatformSpeechSynthesisUtterance*)speechId);
++        if(index != WTF::notFound) {
++            weakThis->client()->didPauseSpeaking(*weakThis->m_utterancesInProgress.at(index));
++        }
++    });
++}
++
++void PlatformSpeechSynthesizerTTSClient::onSpeechResume(uint32_t, uint32_t, uint32_t speechId)
++{
++    LOG(SpeechSynthesis, "PlatformSpeechSynthesizerTTSClient::%s, speechId=%u(%p), progressing=%d", __FUNCTION__, speechId, (void*)speechId, m_utterancesInProgress.size());
++    RunLoop::main().dispatch([weakThis = m_weakPtrFactory.createWeakPtr(*this), speechId] () {
++        if (!weakThis) {
++            LOG(SpeechSynthesis, "PlatformSpeechSynthesizerTTSClient::%s, invalid this pointer", __FUNCTION__);
++            return;
++        }
++        weakThis->setPageMediaVolume(0.25);
++
++        size_t index = weakThis->m_utterancesInProgress.find((PlatformSpeechSynthesisUtterance*)speechId);
++        if(index != WTF::notFound) {
++            weakThis->client()->didResumeSpeaking(*weakThis->m_utterancesInProgress.at(index));
++        }
++    });
++}
++
++void PlatformSpeechSynthesizerTTSClient::onSpeechCancelled(uint32_t, uint32_t, uint32_t speechId)
++{
++    speakingFinished(speechId, SpeechErrorCanceled);
++}
++
++void PlatformSpeechSynthesizerTTSClient::onSpeechInterrupted(uint32_t, uint32_t, uint32_t speechId)
++{
++    speakingFinished(speechId, SpeechErrorInterrupted);
++}
++
++void PlatformSpeechSynthesizerTTSClient::onNetworkError(uint32_t, uint32_t, uint32_t speechId)
++{
++    speakingFinished(speechId, SpeechErrorNetwork);
++}
++
++void PlatformSpeechSynthesizerTTSClient::onPlaybackError(uint32_t, uint32_t, uint32_t speechId)
++{
++    speakingFinished(speechId, SpeechErrorSynthesisFailed);
++}
++
++void PlatformSpeechSynthesizerTTSClient::onSpeechComplete(uint32_t, uint32_t, TTS::SpeechData &speechData)
++{
++    speakingFinished(speechData.id, SpeechErrorNone);
++}
++
++void PlatformSpeechSynthesizerTTSClient::speakingFinished(uint32_t speechId, SpeechError error)
++{
++    LOG(SpeechSynthesis, "PlatformSpeechSynthesizerTTSClient::%s, Error=%d, speechId=%u(%p), progressing=%d", __FUNCTION__, error, speechId, (void*)speechId, m_utterancesInProgress.size());
++    auto speakingFinishedInternal = [weakThis = m_weakPtrFactory.createWeakPtr(*this), speechId, error] () {
++        if (!weakThis) {
++            LOG(SpeechSynthesis, "PlatformSpeechSynthesizerTTSClient::%s, invalid this pointer", __FUNCTION__);
++            return;
++        }
++
++        size_t index = weakThis->m_utterancesInProgress.find((PlatformSpeechSynthesisUtterance*)speechId);
++        if(index != WTF::notFound) {
++            weakThis->notifyClient(weakThis->m_utterancesInProgress.at(index), error);
++            weakThis->m_utterancesInProgress.remove(index);
++        } else if(!weakThis->m_currentUtterance) {
++            LOG(SpeechSynthesis, "PlatformSpeechSynthesizerTTSClient::%s, Resetting media volume", __FUNCTION__);
++            weakThis->setPageMediaVolume(1);
++        }
++    };
++
++    if(RunLoop::isMain()) {
++        LOG(SpeechSynthesis, "PlatformSpeechSynthesizerTTSClient::%s, Main Loop cancellation", __FUNCTION__);
++        speakingFinishedInternal();
++    } else {
++        LOG(SpeechSynthesis, "PlatformSpeechSynthesizerTTSClient::%s, Dispatching on Main Loop", __FUNCTION__);
++        RunLoop::main().dispatch(WTFMove(speakingFinishedInternal));
++    }
++}
++
++void PlatformSpeechSynthesizerTTSClient::notifyClient(RefPtr<PlatformSpeechSynthesisUtterance> utterance, SpeechError error)
++{
++    LOG(SpeechSynthesis, "PlatformSpeechSynthesizerTTSClient::%s, Error=%d, currentUtterance=%p, utterance=%p, progressing=%d, lastoccurance=%d",
++            __FUNCTION__, error, m_currentUtterance.get(), utterance.get(), m_utterancesInProgress.size(), (m_currentUtterance == utterance));
++    if(!utterance) {
++        LOG_ERROR("not firing event as no utterance is attached");
++        return;
++    }
++
++    if(m_currentUtterance == utterance)
++        m_currentUtterance = nullptr;
++
++    if(!m_currentUtterance)
++        setPageMediaVolume(1);
++
++    if(error == SpeechErrorNone)
++        client()->didFinishSpeaking(*utterance);
++    else
++        client()->speakingErrorOccurred(*utterance, error);
++}
++
++} // namespace WebCore
++
++#endif // ENABLE(SPEECH_SYNTHESIS)
+diff --git a/Source/WebCore/platform/ttsclient/PlatformSpeechSynthesizerTTSClient.h b/Source/WebCore/platform/ttsclient/PlatformSpeechSynthesizerTTSClient.h
+new file mode 100644
+index 000000000000..7f1864ecb40e
+--- /dev/null
++++ b/Source/WebCore/platform/ttsclient/PlatformSpeechSynthesizerTTSClient.h
+@@ -0,0 +1,95 @@
++/* Copyright (C) 2019 RDK Management.  All rights reserved.
++*
++* Redistribution and use in source and binary forms, with or without
++* modification, are permitted provided that the following conditions
++* are met:
++* 1. Redistributions of source code must retain the above copyright
++*    notice, this list of conditions and the following disclaimer.
++* 2. Redistributions in binary form must reproduce the above copyright
++*    notice, this list of conditions and the following disclaimer in the
++*    documentation and/or other materials provided with the distribution.
++*
++* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS ``AS IS''
++* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
++* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
++* PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT HOLDERS. OR
++* CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
++* EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
++* PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
++* PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY
++* OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
++* (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
++* OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE. 
++*/
++
++#ifndef PlatformSpeechSynthesizerTTSClient_h
++#define PlatformSpeechSynthesizerTTSClient_h
++
++#if ENABLE(SPEECH_SYNTHESIS)
++
++#include "PlatformSpeechSynthesizer.h"
++#include "TTSClient.h"
++#include <wtf/WeakPtr.h>
++#include <wtf/Forward.h>
++
++namespace WebCore {
++
++class PlatformSpeechSynthesizerTTSClient : public PlatformSpeechSynthesizer, public TTS::TTSConnectionCallback, public TTS::TTSSessionCallback {
++public:
++    explicit PlatformSpeechSynthesizerTTSClient(PlatformSpeechSynthesizerClient*);
++    void setPageMediaVolume(float volume);
++
++    virtual ~PlatformSpeechSynthesizerTTSClient();
++    virtual const Vector<RefPtr<PlatformSpeechSynthesisVoice>>& voiceList() const;
++    virtual void initializeVoiceList();
++    virtual void speak(RefPtr<PlatformSpeechSynthesisUtterance>&&);
++    virtual void pause();
++    virtual void resume();
++    virtual void cancel();
++
++    // TTSConnectionCallback
++    virtual void onTTSServerConnected() override;
++    virtual void onTTSServerClosed() override;
++    virtual void onTTSStateChanged(bool enabled) override;
++    virtual void onVoiceChanged(std::string voice) override;
++
++    // TTSSessionCallback
++    virtual void onTTSSessionCreated(uint32_t appId, uint32_t sessionId) override;
++    virtual void onResourceAcquired(uint32_t appId, uint32_t sessionId) override;
++    virtual void onResourceReleased(uint32_t appId, uint32_t sessionId) override;
++    virtual void onWillSpeak(uint32_t appId, uint32_t sessionId, TTS::SpeechData &data) override;
++    virtual void onSpeechStart(uint32_t appId, uint32_t sessionId, TTS::SpeechData &data) override;
++    virtual void onSpeechPause(uint32_t appId, uint32_t sessionId, uint32_t speechId) override;
++    virtual void onSpeechResume(uint32_t appId, uint32_t sessionId, uint32_t speechId) override;
++    virtual void onSpeechCancelled(uint32_t appId, uint32_t sessionId, uint32_t speechId) override;
++    virtual void onSpeechInterrupted(uint32_t appId, uint32_t sessionId, uint32_t speechId) override;
++    virtual void onNetworkError(uint32_t appId, uint32_t sessionId, uint32_t speechId) override;
++    virtual void onPlaybackError(uint32_t appId, uint32_t sessionId, uint32_t speechId) override;
++    virtual void onSpeechComplete(uint32_t appId, uint32_t sessionId, TTS::SpeechData &data) override;
++
++private:
++    void speakingFinished(uint32_t speechId, SpeechError error);
++    void notifyClient(RefPtr<PlatformSpeechSynthesisUtterance>, SpeechError error);
++
++    RefPtr<PlatformSpeechSynthesisUtterance> m_firstUtterance;
++    RefPtr<PlatformSpeechSynthesisUtterance> m_currentUtterance;
++    Vector<RefPtr<PlatformSpeechSynthesisUtterance>, 3> m_utterancesInProgress;
++    WeakPtrFactory<PlatformSpeechSynthesizerTTSClient> m_weakPtrFactory;
++    bool m_shouldCacheUtterance;
++
++    // TTS
++    TTS::TTSClient *m_ttsClient;
++    uint32_t m_ttsSessionId;
++    uint32_t m_appId;
++    bool m_ttsEnabled;
++    bool m_ttsConnected;
++
++    static double m_TTSVolume;
++    static double m_TTSRate;
++};
++
++} // namespace WebCore
++
++#endif // ENABLE(SPEECH_SYNTHESIS)
++
++#endif // PlatformSpeechSynthesizer_h
+diff --git a/Source/cmake/OptionsWPE.cmake b/Source/cmake/OptionsWPE.cmake
+index 1744374384e2..5627745f0caa 100644
+--- a/Source/cmake/OptionsWPE.cmake
++++ b/Source/cmake/OptionsWPE.cmake
+@@ -48,6 +48,7 @@ WEBKIT_OPTION_DEFAULT_PORT_VALUE(ENABLE_MEDIA_STREAM PRIVATE ${ENABLE_EXPERIMENT
+ WEBKIT_OPTION_DEFAULT_PORT_VALUE(ENABLE_WEB_RTC PRIVATE ${ENABLE_EXPERIMENTAL_FEATURES})
+ WEBKIT_OPTION_DEFAULT_PORT_VALUE(ENABLE_MEMORY_SAMPLER PUBLIC ON)
+ WEBKIT_OPTION_DEFAULT_PORT_VALUE(ENABLE_ACCESSIBILITY PUBLIC ON)
++WEBKIT_OPTION_DEFAULT_PORT_VALUE(ENABLE_SPEECH_SYNTHESIS PUBLIC ON)
+ 
+ # Public options specific to the WPE port. Do not add any options here unless
+ # there is a strong reason we should support changing the value of the option,
+-- 
+2.24.0
+

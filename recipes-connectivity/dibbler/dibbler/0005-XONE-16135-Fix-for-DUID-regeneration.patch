@@ -1,0 +1,31 @@
+From 0d08e44f4799d70f5e2e83d06e0d02bc48b72a38 Mon Sep 17 00:00:00 2001
+From: skv01 <shibukv@tataelxsi.co.in>
+Date: Wed, 10 Dec 2014 19:36:27 -0500
+Subject: [PATCH 5/9] XONE-16135 : Fix for DUID regeneration Reason for change:
+ Fix for DUID regeneration in cases where DUID is not cached Test Procedure:
+ 1] Configure boxes in ESTB IPv6 2] Clear the client.duid file from persistent
+ area and reboot the box 3] Ensure box comes up with Ipv6 ESTB IP Risks: None.
+ Applicable only for eSTB IPv6 mode Signed-off-by: skv01
+ <shibukv@tataelxsi.co.in>
+
+Change-Id: I20ae2265be29b11a6dbe600746ee80ae92f277a0
+---
+ CfgMgr/CfgMgr.cpp | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/CfgMgr/CfgMgr.cpp b/CfgMgr/CfgMgr.cpp
+index 2ccba3d..de1c86e 100644
+--- a/CfgMgr/CfgMgr.cpp
++++ b/CfgMgr/CfgMgr.cpp
+@@ -223,7 +223,7 @@ bool TCfgMgr::setDUID(const std::string& filename, TIfaceMgr & ifaceMgr) {
+             return false;
+         }
+     }
+-    while( (!found) && (ifaceMgr.getIfaceByName(interfaceName)) )
++    while( (!found) && (realIface = ifaceMgr.getIfaceByName(interfaceName)) )
+     {
+         realIface->firstLLAddress();
+         char buf[64];
+-- 
+2.3.1
+

@@ -1,0 +1,88 @@
+Copyright (c) 2005, Google Inc.
+All rights reserved.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are
+met:
+
+    * Redistributions of source code must retain the above copyright
+notice, this list of conditions and the following disclaimer.
+    * Redistributions in binary form must reproduce the above
+copyright notice, this list of conditions and the following disclaimer
+in the documentation and/or other materials provided with the
+distribution.
+    * Neither the name of Google Inc. nor the names of its
+contributors may be used to endorse or promote products derived from
+this software without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+"AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+Date: May 10 19:59:54 2018
+
+From: 071e7f04649d797db5fa9a20f9a864e62333afd1 May 14 13:40:26 2018
+
+Subject: [PATCH] RDKSYSINTSW-3564 : Patch gperftools to keep track of range-based allocs
+
+	For memory intensive applications reduce amount of
+	allocations to keep track of to allow an app to properly start up.
+
+Source: COMCAST
+
+Upstream-Status: Pending
+
+Signed-off-by: Sergei Danilchuk <sergei_danilchuk@cable.comcast.com>
+---
+
+
+diff --git a/src/heap-profiler.cc b/src/heap-profiler.cc
+index 33a25ac..dd1fce6 100755
+--- a/src/heap-profiler.cc
++++ b/src/heap-profiler.cc
+@@ -91,6 +91,13 @@ using STL_NAMESPACE::sort;
+ // The thread-safety of the profiler depends on these being immutable
+ // after main starts, so don't change them.
+ //----------------------------------------------------------------------
++DEFINE_int64(heap_profile_min_trace_allocation,
++             EnvToInt64("HEAP_PROFILE_MIN_ALLOC", 0),
++             "The size of minimum allocation to trace.");
++
++DEFINE_int64(heap_profile_max_trace_allocation,
++             EnvToInt64("HEAP_PROFILE_MAX_ALLOC", LLONG_MAX),
++             "The size of maximum allocation to trace.");
+ 
+ DEFINE_int64(heap_profile_allocation_interval,
+              EnvToInt64("HEAP_PROFILE_ALLOCATION_INTERVAL", 1 << 30 /*1GB*/),
+@@ -316,13 +323,16 @@ static void MaybeDumpProfileLocked() {
+ 
+ // Record an allocation in the profile.
+ static void RecordAlloc(const void* ptr, size_t bytes, int skip_count) {
+-  // Take the stack trace outside the critical section.
+-  void* stack[HeapProfileTable::kMaxStackDepth];
+-  int depth = HeapProfileTable::GetCallerStackTrace(skip_count + 1, stack);
+-  SpinLockHolder l(&heap_lock);
+-  if (is_on) {
+-    heap_profile->RecordAlloc(ptr, bytes, depth, stack);
+-    MaybeDumpProfileLocked();
++  if (bytes >= FLAGS_heap_profile_min_trace_allocation && bytes <= FLAGS_heap_profile_max_trace_allocation)
++  {
++    // Take the stack trace outside the critical section.
++    void* stack[HeapProfileTable::kMaxStackDepth];
++    int depth = HeapProfileTable::GetCallerStackTrace(skip_count + 1, stack);
++    SpinLockHolder l(&heap_lock);
++    if (is_on) {
++      heap_profile->RecordAlloc(ptr, bytes, depth, stack);
++      MaybeDumpProfileLocked();
++    }
+   }
+ }
+ 

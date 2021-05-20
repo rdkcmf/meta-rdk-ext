@@ -1,0 +1,90 @@
+From 0c039f12de140e50eed73739ecf02824e3562997 Mon Sep 17 00:00:00 2001
+From: Ievgen Mutavchi <Ievgen_Mutavchi@comcast.com>
+Date: Mon, 30 Sep 2019 10:16:32 -0400
+Subject: [PATCH] Fix crash on dynamic change from NonCompositedWebGL
+
+---
+ .../graphics/texmap/TextureMapperGC3DPlatformLayer.cpp         |  7 +++++++
+ .../graphics/texmap/coordinated/CoordinatedGraphicsLayer.cpp   | 10 ++++++++++
+ .../WebPage/CoordinatedGraphics/CoordinatedLayerTreeHost.cpp   |  3 +--
+ 3 files changed, 18 insertions(+), 2 deletions(-)
+
+diff --git a/Source/WebCore/platform/graphics/texmap/TextureMapperGC3DPlatformLayer.cpp b/Source/WebCore/platform/graphics/texmap/TextureMapperGC3DPlatformLayer.cpp
+index c2973a2..ca57c53 100644
+--- a/Source/WebCore/platform/graphics/texmap/TextureMapperGC3DPlatformLayer.cpp
++++ b/Source/WebCore/platform/graphics/texmap/TextureMapperGC3DPlatformLayer.cpp
+@@ -32,6 +32,7 @@
+ namespace WebCore {
+ 
+ static std::unique_ptr<GLContext> s_windowContext;
++static int s_windowContextRefCount = 0;
+ 
+ TextureMapperGC3DPlatformLayer::TextureMapperGC3DPlatformLayer(GraphicsContext3D& context, GraphicsContext3D::RenderStyle renderStyle, HostWindow* hostWindow)
+     : m_context(context)
+@@ -44,6 +45,7 @@ TextureMapperGC3DPlatformLayer::TextureMapperGC3DPlatformLayer(GraphicsContext3D
+     case GraphicsContext3D::RenderDirectlyToHostWindow:
+         if (!s_windowContext)
+             s_windowContext = GLContext::createContextForWindow(reinterpret_cast<GLNativeWindowType>(hostWindow->nativeWindowID()), &PlatformDisplay::sharedDisplayForCompositing());
++        s_windowContextRefCount++;
+         break;
+     }
+ 
+@@ -58,6 +60,11 @@ TextureMapperGC3DPlatformLayer::~TextureMapperGC3DPlatformLayer()
+     if (client())
+         client()->platformLayerWillBeDestroyed();
+ #endif
++
++    if (m_renderStyle == GraphicsContext3D::RenderDirectlyToHostWindow && (s_windowContextRefCount - 1) == 0) {
++        s_windowContextRefCount = 0;
++        s_windowContext.reset();
++    }
+ }
+ 
+ GLContext* TextureMapperGC3DPlatformLayer::glContext()
+diff --git a/Source/WebCore/platform/graphics/texmap/coordinated/CoordinatedGraphicsLayer.cpp b/Source/WebCore/platform/graphics/texmap/coordinated/CoordinatedGraphicsLayer.cpp
+index ae4275f..06108ab 100644
+--- a/Source/WebCore/platform/graphics/texmap/coordinated/CoordinatedGraphicsLayer.cpp
++++ b/Source/WebCore/platform/graphics/texmap/coordinated/CoordinatedGraphicsLayer.cpp
+@@ -795,6 +795,11 @@ void CoordinatedGraphicsLayer::flushCompositingStateForThisLayerOnly()
+ 
+ void CoordinatedGraphicsLayer::syncPendingStateChangesIncludingSubLayers()
+ {
++    if (!m_coordinator) {
++        LOG_ERROR("No coordinator");
++        return;
++    }
++
+     if (m_layerState.hasPendingChanges()) {
+         m_coordinator->syncLayerState(m_id, m_layerState);
+         resetLayerState();
+@@ -955,6 +960,11 @@ void CoordinatedGraphicsLayer::removeTile(uint32_t tileID)
+ 
+ void CoordinatedGraphicsLayer::updateContentBuffersIncludingSubLayers()
+ {
++    if (!m_coordinator) {
++        LOG_ERROR("No coordinator");
++        return;
++    }
++
+     if (CoordinatedGraphicsLayer* mask = downcast<CoordinatedGraphicsLayer>(maskLayer()))
+         mask->updateContentBuffers();
+ 
+diff --git a/Source/WebKit/WebProcess/WebPage/CoordinatedGraphics/CoordinatedLayerTreeHost.cpp b/Source/WebKit/WebProcess/WebPage/CoordinatedGraphics/CoordinatedLayerTreeHost.cpp
+index 7658188..f538f9b 100644
+--- a/Source/WebKit/WebProcess/WebPage/CoordinatedGraphics/CoordinatedLayerTreeHost.cpp
++++ b/Source/WebKit/WebProcess/WebPage/CoordinatedGraphics/CoordinatedLayerTreeHost.cpp
+@@ -100,10 +100,9 @@ void CoordinatedLayerTreeHost::setRootCompositingLayer(GraphicsLayer* graphicsLa
+ 
+ void CoordinatedLayerTreeHost::invalidate()
+ {
+-    cancelPendingLayerFlush();
+-
+     m_coordinator.invalidate();
+     LayerTreeHost::invalidate();
++    cancelPendingLayerFlush();
+ }
+ 
+ void CoordinatedLayerTreeHost::forceRepaint()
+-- 
+2.7.4
+

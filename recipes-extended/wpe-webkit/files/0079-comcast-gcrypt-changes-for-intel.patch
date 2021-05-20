@@ -1,0 +1,26 @@
+From 0a8b2fda5d6f822576ad621b3a2ee7f7f09406fc Mon Sep 17 00:00:00 2001
+From: aansari <AzamAyub_Ansari@cable.comcast.com>
+Date: Tue, 14 Aug 2018 11:19:55 -0400
+Subject: [PATCH] 0079 comcast gcrypt changes for intel
+
+---
+ Source/WebCore/PAL/pal/crypto/gcrypt/Initialization.h | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/Source/WebCore/PAL/pal/crypto/gcrypt/Initialization.h b/Source/WebCore/PAL/pal/crypto/gcrypt/Initialization.h
+index ef9a09d..12b1b5a 100644
+--- a/Source/WebCore/PAL/pal/crypto/gcrypt/Initialization.h
++++ b/Source/WebCore/PAL/pal/crypto/gcrypt/Initialization.h
+@@ -38,7 +38,9 @@ static inline void initialize()
+     gcry_check_version(nullptr);
+ 
+     // Pre-allocate 16kB of secure memory and finish the initialization.
++#if !PLATFORM(INTEL_CE)
+     gcry_control(GCRYCTL_INIT_SECMEM, 16384, nullptr);
++#endif
+     gcry_control(GCRYCTL_INITIALIZATION_FINISHED, nullptr);
+ }
+ 
+-- 
+1.9.1
+

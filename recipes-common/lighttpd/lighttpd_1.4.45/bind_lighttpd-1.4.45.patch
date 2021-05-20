@@ -1,0 +1,137 @@
+Copyright (c) 2004, Jan Kneschke, incremental
+All rights reserved.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
+
+- Redistributions of source code must retain the above copyright notice, this
+list of conditions and the following disclaimer.
+
+- Redistributions in binary form must reproduce the above copyright notice,
+this list of conditions and the following disclaimer in the documentation
+and/or other materials provided with the distribution.
+
+- Neither the name of the 'incremental' nor the names of its contributors may
+be used to endorse or promote products derived from this software without
+specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE
+LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
+THE POSSIBILITY OF SUCH DAMAGE.
+
+Date: Sep 21, 2017 6:14 AM
+
+From: 5aaa7f08ac560aa789a06cd745d5ab9e71fd743a Oct 19, 2017 3:08 AM
+
+Subject: [PATCH] RDKB-12395 : lighttpd 1.4.45 adding SO_BINDTODEVICE and mod_csrf
+
+	adding patch for SO_BINDTOEVICE and csrf.
+	
+Source: COMCAST
+
+Upstream-Status: Pending 
+
+Signed-off-by: gkrishnansubramanian <Gopi_KrishnanSubramanian@comcast.com>
+---
+
+Index: lighttpd-1.4.45/src/network.c
+===================================================================
+--- lighttpd-1.4.45.orig/src/network.c
++++ lighttpd-1.4.45/src/network.c
+@@ -1,3 +1,4 @@
++
+ #include "first.h"
+ 
+ #include "network.h"
+@@ -282,6 +283,9 @@ static int network_server_init(server *s
+ 			hints.ai_protocol = IPPROTO_TCP;
+ 
+ 			if (0 != (r = getaddrinfo(host, NULL, &hints, &res))) {
++#ifdef SO_BINDTODEVICE
++                srv_socket->addr.ipv6.sin6_addr = in6addr_any;
++#else			
+ 				hints.ai_family = AF_INET;
+ 				if (
+ 				  #ifdef EAI_ADDRFAMILY
+@@ -302,11 +306,13 @@ static int network_server_init(server *s
+ 						gai_strerror(r), "'", host, "'");
+ 
+ 				goto error_free_socket;
++#endif				
+ 			}
+-
++#ifndef SO_BINDTODEVICE
+ 			memcpy(&(srv_socket->addr), res->ai_addr, res->ai_addrlen);
+ 
+ 			freeaddrinfo(res);
++#endif
+ 		}
+ 		srv_socket->addr.ipv6.sin6_port = htons(port);
+ 		addr_len = sizeof(struct sockaddr_in6);
+@@ -318,6 +324,9 @@ static int network_server_init(server *s
+ 		if (host == NULL) {
+ 			srv_socket->addr.ipv4.sin_addr.s_addr = htonl(INADDR_ANY);
+ 		} else {
++#ifdef SO_BINDTODEVICE
++            srv_socket->addr.ipv4.sin_addr.s_addr = htonl(INADDR_ANY);
++#else		
+ 			struct hostent *he;
+ 			if (NULL == (he = gethostbyname(host))) {
+ 				log_error_write(srv, __FILE__, __LINE__,
+@@ -337,6 +346,7 @@ static int network_server_init(server *s
+ 			}
+ 
+ 			memcpy(&(srv_socket->addr.ipv4.sin_addr.s_addr), he->h_addr_list[0], he->h_length);
++#endif			
+ 		}
+ 		srv_socket->addr.ipv4.sin_port = htons(port);
+ 		addr_len = sizeof(struct sockaddr_in);
+@@ -424,11 +434,13 @@ static int network_server_init(server *s
+ 		if (AF_INET6 == srv_socket->addr.plain.sa_family
+ 		    && host != NULL) {
+ 			if (s->set_v6only) {
++#ifndef SO_BINDTODEVICE
+ 				val = 1;
+ 				if (-1 == setsockopt(srv_socket->fd, IPPROTO_IPV6, IPV6_V6ONLY, &val, sizeof(val))) {
+ 					log_error_write(srv, __FILE__, __LINE__, "ss", "socketsockopt(IPV6_V6ONLY) failed:", strerror(errno));
+ 					goto error_free_socket;
+ 				}
++#endif
+ 			} else {
+ 				log_error_write(srv, __FILE__, __LINE__, "s", "warning: server.set-v6only will be removed soon, update your config to have different sockets for ipv4 and ipv6");
+ 			}
+@@ -440,6 +452,18 @@ static int network_server_init(server *s
+ 	srv->cur_fds = srv_socket->fd;
+ 
+ 	val = 1;
++#ifdef SO_BINDTODEVICE
++        /* host might be an interface name, so try to bind to it */
++        if (host && (srv_socket->addr.plain.sa_family == AF_INET
++#ifdef HAVE_IPV6
++                     || srv_socket->addr.plain.sa_family == AF_INET6)) {
++#else
++                   )) {
++#endif
++                 if (!setsockopt(srv_socket->fd, SOL_SOCKET, SO_BINDTODEVICE, host, strlen(host)))
++                        host = NULL;
++       }
++#endif
+ 	if (setsockopt(srv_socket->fd, SOL_SOCKET, SO_REUSEADDR, &val, sizeof(val)) < 0) {
+ 		log_error_write(srv, __FILE__, __LINE__, "ss", "socketsockopt(SO_REUSEADDR) failed:", strerror(errno));
+ 		goto error_free_socket;
+@@ -453,6 +477,7 @@ static int network_server_init(server *s
+ 		}
+ 	}
+ 
++
+ 	if (0 != bind(srv_socket->fd, (struct sockaddr *) &(srv_socket->addr), addr_len)) {
+ 		switch(srv_socket->addr.plain.sa_family) {
+ 		case AF_UNIX:

@@ -1,0 +1,93 @@
+Date: Mar 27 17:43:12 2019
+
+From: 351d4715d0556e43c49d13678f2e0c656ec3bf5c Mar 27 17:43:12 2019
+
+Subject: [PATCH] XRE-13799: Tracking playback of encrypted contents in WebApps
+
+	Log playback status of encrypted contents
+
+Source: COMCAST
+
+License: BSD-2-Clause
+
+Upstream-Status: Pending
+
+Signed-off-by:  Vivek.A <Vivek_Arumugam@Comcast.Com>
+---
+
+diff --git a/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp b/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp
+index c95f3106b98..01a69f45d35 100644
+--- a/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp
++++ b/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp
+@@ -81,6 +81,10 @@
+ GST_DEBUG_CATEGORY_EXTERN(webkit_media_player_debug);
+ #define GST_CAT_DEFAULT webkit_media_player_debug
+ 
++#if ENABLE(ENCRYPTED_MEDIA)
++#include "CDMInstance.h"
++#endif
++
+ using namespace std;
+ 
+ namespace WebCore {
+@@ -196,6 +200,14 @@ MediaPlayerPrivateGStreamer::~MediaPlayerPrivateGStreamer()
+ {
+     GST_DEBUG("Disposing player");
+ 
++#if ENABLE(ENCRYPTED_MEDIA)
++        if(m_cdmInstance && !m_lastReportedUrl.isEmpty()) {
++            fprintf(stderr, "Stopped playing Encrypted Content, url=%s, keySystem=%s\n",
++                    m_lastReportedUrl.string().utf8().data(), m_cdmInstance->keySystem().utf8().data());
++            m_lastReportedUrl = URL();
++        }
++#endif
++
+ #if ENABLE(VIDEO_TRACK)
+     for (size_t i = 0; i < m_audioTracks.size(); ++i)
+         m_audioTracks[i]->disconnect();
+@@ -1146,6 +1158,14 @@ void MediaPlayerPrivateGStreamer::handleMessage(GstMessage* message)
+         didEnd();
+         fprintf(stderr, "HTML5 video: End of Stream [%s]\n",m_url.string().utf8().data());
+         m_reportedPlaybackEOS = true;
++
++#if ENABLE(ENCRYPTED_MEDIA)
++        if(m_cdmInstance && !m_lastReportedUrl.isEmpty()) {
++            fprintf(stderr, "Completed playing Encrypted Content, url=%s, keySystem=%s\n",
++                    m_lastReportedUrl.string().utf8().data(), m_cdmInstance->keySystem().utf8().data());
++            m_lastReportedUrl = URL();
++        }
++#endif
+         break;
+     case GST_MESSAGE_ASYNC_DONE:
+         if (!messageSourceIsPlaybin || m_delayingLoad)
+@@ -1187,6 +1207,16 @@ void MediaPlayerPrivateGStreamer::handleMessage(GstMessage* message)
+         CString dotFileName = String::format("webkit-video.%s_%s", gst_element_state_get_name(currentState), gst_element_state_get_name(newState)).utf8();
+         GST_DEBUG_BIN_TO_DOT_FILE_WITH_TS(GST_BIN(m_pipeline.get()), GST_DEBUG_GRAPH_SHOW_ALL, dotFileName.data());
+         GST_INFO("Playbin changed %s --> %s", gst_element_state_get_name(currentState), gst_element_state_get_name(newState));
++
++#if ENABLE(ENCRYPTED_MEDIA)
++        if(newState == GST_STATE_PLAYING) {
++            if(m_cdmInstance && !m_url.isEmpty() && m_url != m_lastReportedUrl) {
++                fprintf(stderr, "Started playing Encrypted Content, url=%s, keySystem=%s\n",
++                        m_url.string().utf8().data(), m_cdmInstance->keySystem().utf8().data());
++                m_lastReportedUrl = m_url;
++            }
++        }
++#endif
+         break;
+     }
+     case GST_MESSAGE_BUFFERING:
+diff --git a/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.h b/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.h
+index 69fb80f7bc2..dac4f9e42ec 100644
+--- a/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.h
++++ b/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.h
+@@ -255,6 +255,9 @@ private:
+     RunLoop::Timer<MediaPlayerPrivateGStreamer> m_readyTimerHandler;
+     mutable unsigned long long m_totalBytes;
+     URL m_url;
++#if ENABLE(ENCRYPTED_MEDIA)
++    URL m_lastReportedUrl;
++#endif
+     bool m_preservesPitch;
+     mutable double m_lastQuery;
+ #if ENABLE(WEB_AUDIO)

@@ -1,0 +1,66 @@
+Date: Apr 23 21:39:30 2020 
+From: f27d97f53bdfe5ad3566ef8880c22ee7a7c378bb 
+Subject: DELIA-42416 : RDKV UPnP - Vulnerable to UPnP CallStranger (CVSS 7.3) check the validity of the callback ip addr send as part of subscription request
+Source: COMCAST
+License: LGPL-2.0-or-later
+Upstream-Status: Pending
+
+Signed-off-by: Thomson Silvera <thomson_silvera@comcast.com>
+
+---
+diff -rupN gupnp-0.20.10-org/libgupnp/gupnp-service.c gupnp-0.20.10/libgupnp/gupnp-service.c
+--- gupnp-0.20.10-org/libgupnp/gupnp-service.c	2020-04-27 17:58:00.967436006 +0000
++++ gupnp-0.20.10/libgupnp/gupnp-service.c	2020-04-27 18:01:15.059507292 +0000
+@@ -40,6 +40,23 @@
+ #include "gena-protocol.h"
+ #include "xml-util.h"
+ #include "gvalue-util.h"
++#include <arpa/inet.h>
++//#define IN_IS_ADDR_LINKLOCAL(a) (((a) & htonl(0xffff0000)) == htonl (0xa9fe0000))
++//10.0.0.0 - 10.255.255.255
++//172.16.0.0 - 172.31.255.255
++//192.168.0.0 - 192.168.255.255
++//169.254.0.0 - 169.254.255.255
++//127.0.0.0 - 127.255.255.255
++//192.175.48.0/24
++//240.0.0.0/4
++#define IN_IS_ADDR_PRIVATE(a)  (    \
++        (((a) & htonl(0xff000000)) == htonl (0x0A000000)) || \
++        (((a) & htonl(0xfff00000)) == htonl (0xAC100000)) || \
++        (((a) & htonl(0xffff0000)) == htonl (0xC0A80000)) || \
++        (((a) & htonl(0xffff0000)) == htonl (0xA9FE0000)) || \
++        (((a) & htonl(0xffff0000)) == htonl (0x7F000000)))
++//        (((a) & htonl(0xffffff00)) == htonl (0xC0AF3000)) || (((a) & htonl(0xf0000000)) == htonl (0xF0000000))
++
+ 
+ #ifdef G_OS_WIN32
+ #include <rpc.h>
+@@ -1189,8 +1206,9 @@ subscribe (GUPnPService *service,
+ {
+         SubscriptionData *data;
+         char *start, *end, *uri;
+-       char ipAddr[24];
+-       int res = 0;
++        char ipAddr[20]={0};
++        struct sockaddr_in sa;
++        int res = 0;
+         data = g_slice_new0 (SubscriptionData);
+ 
+         /* Parse callback list */
+@@ -1219,7 +1237,15 @@ subscribe (GUPnPService *service,
+ 
+                 return;
+         }
+-       sscanf((char *)data->callbacks->data, "http://%99[^:]", ipAddr);
++        sscanf((char *)data->callbacks->data, "http://%19[^:,';/]", ipAddr);
++        if (!((ipAddr[0] != '\0') && (inet_pton(AF_INET,ipAddr, &(sa.sin_addr))) && (IN_IS_ADDR_PRIVATE(sa.sin_addr.s_addr))))
++        {
++                g_message("CallStranger : Invalid ip %s in xupnp subscription data callback",ipAddr);
++                soup_message_set_status (msg, SOUP_STATUS_PRECONDITION_FAILED);
++
++                g_slice_free (SubscriptionData, data);
++                return;
++        }
+         /* Add service and SID */
+         data->service = service;
+         data->sid     = generate_sid ();

@@ -1,0 +1,1 @@
+RDEPENDS_packagegroup-cpc-mediaserver_remove_dunfell = " ${@bb.utils.contains('DISTRO_FEATURES','rdm','bind-dl',' ',d)}"

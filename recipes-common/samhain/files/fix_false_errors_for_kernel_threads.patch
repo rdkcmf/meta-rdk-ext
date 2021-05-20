@@ -1,0 +1,93 @@
+Copyright (C) 1989, 1991 Free Software Foundation, Inc.
+
+This program is free software; you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation; either version 2 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program; if not, write to the Free Software
+Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+
+Date: Jun 16, 2017 6:01 PM
+
+From: be8b3d877420cb932819a9dab69888416eb30162 Dec 9, 2017 12:12 AM
+
+Subject: [PATCH] RDKB-3293, RDKB-14901 : Added checks for kernal threads and ignore process check monitoring
+
+	Issue : Samhain walks down the proc pid tables and tries to identify the processname
+        Kernel threads will have a broken link in proc table from user space.
+        There will be no corresponding application binary for kernel threads in the user space.
+        With this behavior Samhain was checking for string '<(null)>' against process whitelist
+        Removed time and host entry from samhain logging.
+
+Source: COMCAST
+
+Upstream-Status: Pending
+
+Signed-off-by: gkrishnansubramanian <Gopi_KrishnanSubramanian@comcast.com>
+---
+
+
+diff --git a/src/sh_cat.c b/src/sh_cat.c
+index 7cf6d95..0d4afe5 100644
+--- a/src/sh_cat.c
++++ b/src/sh_cat.c
+@@ -395,10 +395,10 @@ cat_entry msg_cat[] = {
+   { MSG_EXIT_NORMAL, SH_ERR_FATAL,   START, N_("msg=<EXIT>, program=<%s>, status=<%s>")},
+   { MSG_START_KEY_MAIL,   SH_ERR_FATAL, LOGKEY,   N_("msg=<LOGKEY>, program=<%s>, hash=<%s>\r\n-----BEGIN LOGKEY-----\r\n%s%s")},
+   { MSG_START_KEY,   SH_ERR_FATAL,   LOGKEY,   N_("msg=<LOGKEY>, program=<%s>, hash=<%s>")},
+-  { MSG_START_0H,    SH_ERR_FATAL,   START, N_("msg=<START>, program=<%s>, userid=<%ld>")},
+-  { MSG_START_1H,    SH_ERR_FATAL,   START, N_("msg=<START>, program=<%s>, userid=<%ld>, path=<%s>, hash=<%s>")},
+-  { MSG_START_2H,    SH_ERR_FATAL,   START, N_("msg=<START>, program=<%s>, userid=<%ld>, path=<%s>, hash=<%s>, path=<%s>, hash=<%s>")},
+-  { MSG_START_GH,    SH_ERR_FATAL,   START, N_("msg=<START>, program=<%s>, userid=<%ld>, path=<%s>, key_uid=<%s>, key_id=<%s>")},
++  { MSG_START_0H,    SH_ERR_INFO,   START, N_("msg=<START>, program=<%s>, userid=<%ld>")},
++  { MSG_START_1H,    SH_ERR_INFO,   START, N_("msg=<START>, program=<%s>, userid=<%ld>, path=<%s>, hash=<%s>")},
++  { MSG_START_2H,    SH_ERR_INFO,   START, N_("msg=<START>, program=<%s>, userid=<%ld>, path=<%s>, hash=<%s>, path=<%s>, hash=<%s>")},
++  { MSG_START_GH,    SH_ERR_INFO,   START, N_("msg=<START>, program=<%s>, userid=<%ld>, path=<%s>, key_uid=<%s>, key_id=<%s>")},
+   { MSG_START_GH2,   SH_ERR_FATAL,   START, N_("msg=<EXIT>, program=<%s>, userid=<%ld>, path=<%s>, key_uid=<%s>, key_id=<%s>, path=<%s>, key_uid=<%s>, key_id=<%s>")},
+   { MSG_SUSPEND,     SH_ERR_STAMP,   START, N_("msg=<SUSPEND> program=<%s>")},
+ 
+diff --git a/src/sh_processcheck.c b/src/sh_processcheck.c
+index 2b61f8d..eede54c 100644
+--- a/src/sh_processcheck.c
++++ b/src/sh_processcheck.c
+@@ -197,6 +197,9 @@ static const short SH_PR_PS_ANY   = 0x2000;
+ static const short SH_PR_ALL      = 0x4000;
+ static const short SH_PR_ANY      = 0x8000;
+ 
++static const char* KERNEL_THREAD_MESSAGE = "Kernel Thread"; 
++static const size_t KERNEL_MESSAGE_LEN = 14;
++
+ /* /proc: 
+  *        linux:     /proc/pid/exe
+  *        freebsd:   /proc/pid/file
+@@ -239,6 +242,10 @@ static char * get_user_and_path (pid_t pid, char * user, size_t usrlen)
+ 
+   buf = SH_ALLOC(PATH_MAX);
+   len = readlink(path, buf, PATH_MAX);   /* flawfinder: ignore */
++  /* Ignore process name checks for kernel threads */
++  if ( (-1 == len) && (ENOENT == errno) ) {
++      return KERNEL_THREAD_MESSAGE ;
++  }
+   len = (len >= PATH_MAX) ? (PATH_MAX-1) : len;
+ 
+   if (len > 0)
+@@ -455,6 +462,12 @@ static int is_in_whitelist (const char *str, unsigned long num)
+           SH_MUTEX_LOCK(mutex_thread_nolog);
+           aout = get_user_and_path ((pid_t) i, user, sizeof(user));
+           SH_MUTEX_UNLOCK(mutex_thread_nolog);
++          /* Ignore process name checks for kernel threads */
++          if ( aout ) {
++              if( 0 == strncmp(aout, KERNEL_THREAD_MESSAGE, KERNEL_MESSAGE_LEN) ) {
++                  return S_TRUE;
++              }
++          }
+ 
+           tmp = sh_util_safe_name (str);
+          

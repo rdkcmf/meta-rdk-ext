@@ -1,0 +1,30 @@
+Date: Jun 21 02:20:04 2018
+
+From: 766b94bc3ec485ad9742dfe5beffd96bcceac697 Jun 21 02:22:09 2018
+
+Subject: [PATCH] DELIA-28490 : Commenting out "No entries" logs from journalctl
+
+	Logfiles are getting flooded with "-- No entries --" log
+
+Source: COMCAST
+
+License: LGPL-2.1-or-later
+
+Upstream-Status: Pending
+
+Signed-off-by: gtheres <Geethu_TheresK2@comcast.com>
+---
+
+diff --git a/src/journal/journalctl.c b/src/journal/journalctl.c
+index f67c55678..2aaa88e9f 100644
+--- a/src/journal/journalctl.c
++++ b/src/journal/journalctl.c
+@@ -2459,7 +2459,7 @@ int main(int argc, char *argv[]) {
+                         need_seek = true;
+                 else {
+                         if (!arg_quiet)
+-                                printf("-- No entries --\n");
++                                //printf("-- No entries --\n");
+                         goto finish;
+                 }
+         }

@@ -1,0 +1,163 @@
+From d187dcd8310b1e849f70127e559fd567882c3144 Mon Sep 17 00:00:00 2001
+From: Donia Abraham <Donia_Abraham@comcast.com>
+Date: Thu, 1 Mar 2018 09:28:30 +0000
+Subject: [PATCH] 
+ comcast-Add-an-option-to-stop-start-memory-pressure-handler_0.4
+
+---
+ Source/WTF/wtf/MemoryPressureHandler.cpp               |  1 +
+ Source/WTF/wtf/MemoryPressureHandler.h                 |  5 ++---
+ Source/WTF/wtf/linux/MemoryPressureHandlerLinux.cpp    | 18 +++++++++++++++---
+ .../WebProcess/InjectedBundle/API/c/WKBundle.cpp       | 11 +++++++++++
+ .../WebKit/WebProcess/InjectedBundle/API/c/WKBundle.h  |  3 +++
+ 5 files changed, 32 insertions(+), 6 deletions(-)
+
+diff --git a/Source/WTF/wtf/MemoryPressureHandler.cpp b/Source/WTF/wtf/MemoryPressureHandler.cpp
+index 0e1d1a60fe0..637cf15bae6 100644
+--- a/Source/WTF/wtf/MemoryPressureHandler.cpp
++++ b/Source/WTF/wtf/MemoryPressureHandler.cpp
+@@ -54,6 +54,7 @@ MemoryPressureHandler::MemoryPressureHandler()
+     : m_windowsMeasurementTimer(RunLoop::main(), this, &MemoryPressureHandler::windowsMeasurementTimerFired)
+ #endif
+ {
++    m_installed = false;
+ }
+ 
+ void MemoryPressureHandler::setShouldUsePeriodicMemoryMonitor(bool use)
+diff --git a/Source/WTF/wtf/MemoryPressureHandler.h b/Source/WTF/wtf/MemoryPressureHandler.h
+index 89052f09c81..154a2d3e53d 100644
+--- a/Source/WTF/wtf/MemoryPressureHandler.h
++++ b/Source/WTF/wtf/MemoryPressureHandler.h
+@@ -66,6 +66,7 @@ public:
+     WTF_EXPORT_PRIVATE static MemoryPressureHandler& singleton();
+ 
+     WTF_EXPORT_PRIVATE void install();
++    WTF_EXPORT_PRIVATE void uninstall();
+ 
+     WTF_EXPORT_PRIVATE void setShouldUsePeriodicMemoryMonitor(bool);
+ 
+@@ -154,8 +155,6 @@ private:
+     size_t thresholdForMemoryKill();
+     void memoryPressureStatusChanged();
+ 
+-    void uninstall();
+-
+     void holdOff(unsigned);
+ 
+     MemoryPressureHandler();
+@@ -194,7 +193,7 @@ private:
+ 
+     unsigned m_pageCount { 0 };
+ 
+-    bool m_installed { false };
++    std::atomic<bool> m_installed;
+     LowMemoryHandler m_lowMemoryHandler;
+ 
+     std::atomic<bool> m_underMemoryPressure;
+diff --git a/Source/WTF/wtf/linux/MemoryPressureHandlerLinux.cpp b/Source/WTF/wtf/linux/MemoryPressureHandlerLinux.cpp
+index 5920290e584..a6edda10ba1 100644
+--- a/Source/WTF/wtf/linux/MemoryPressureHandlerLinux.cpp
++++ b/Source/WTF/wtf/linux/MemoryPressureHandlerLinux.cpp
+@@ -286,6 +286,9 @@ void MemoryPressureHandler::pollMemoryPressure()
+     bool critical;
+     String processName(getProcessName());
+     do {
++        if (!MemoryPressureHandler::singleton().m_installed)
++            return;
++
+         if (s_pollMaximumProcessMemoryCriticalLimit) {
+             size_t vmRSS = readToken(s_processStatus, "VmRSS:", KB);
+ 
+@@ -310,6 +313,9 @@ void MemoryPressureHandler::pollMemoryPressure()
+ 
+         sleep(s_pollTimeSec);
+     } while (true);
++    if (!MemoryPressureHandler::singleton().m_installed)
++        return;
++
+ 
+     if (ReliefLogger::loggingEnabled())
+         LOG(MemoryPressure, "Polled memory pressure (%s)", critical ? "critical" : "non-critical");
+@@ -387,6 +393,7 @@ void MemoryPressureHandler::install()
+     if (!tryEnsureEventFD())
+         return;
+ 
++    m_installed = true;
+     m_eventFDPoller = std::make_unique<EventFDPoller>(m_eventFD.value(), [this] {
+         // FIXME: Current memcg does not provide any way for users to know how serious the memory pressure is.
+         // So we assume all notifications from memcg are critical for now. If memcg had better inferfaces
+@@ -406,13 +413,10 @@ void MemoryPressureHandler::install()
+         LOG(MemoryPressure, "System is no longer under memory pressure.");
+ 
+     setUnderMemoryPressure(false);
+-    m_installed = true;
+ }
+ 
+ void MemoryPressureHandler::uninstall()
+ {
+-    if (!m_installed)
+-        return;
+ 
+     m_holdOffTimer.stop();
+     m_eventFDPoller = nullptr;
+@@ -450,6 +454,14 @@ static size_t processMemoryUsage()
+ 
+ void MemoryPressureHandler::respondToMemoryPressure(Critical critical, Synchronous synchronous)
+ {
++    if (!m_installed)
++    {
++        if (ReliefLogger::loggingEnabled())
++            LOG(MemoryPressure, "MemoryPressureHandler is stopped, ignoring pressure notification");
++        setUnderMemoryPressure(false);
++        return;
++    }
++
+     uninstall();
+ 
+     double startTime = monotonicallyIncreasingTime();
+diff --git a/Source/WebKit/WebProcess/InjectedBundle/API/c/WKBundle.cpp b/Source/WebKit/WebProcess/InjectedBundle/API/c/WKBundle.cpp
+index 34bce003383..961b3fcf7f7 100644
+--- a/Source/WebKit/WebProcess/InjectedBundle/API/c/WKBundle.cpp
++++ b/Source/WebKit/WebProcess/InjectedBundle/API/c/WKBundle.cpp
+@@ -40,6 +40,7 @@
+ #include "WebPageGroupProxy.h"
+ #include <WebCore/DatabaseTracker.h>
+ #include <WebCore/ResourceLoadObserver.h>
++#include <wtf/MemoryPressureHandler.h>
+ 
+ using namespace WebCore;
+ using namespace WebKit;
+@@ -212,6 +213,16 @@ void WKBundleReportException(JSContextRef context, JSValueRef exception)
+     InjectedBundle::reportException(context, exception);
+ }
+ 
++void WKBundleMemoryPressureHandlerStop()
++{
++    MemoryPressureHandler::singleton().uninstall();
++}
++
++void WKBundleMemoryPressureHandlerStart()
++{
++    MemoryPressureHandler::singleton().install();
++}
++
+ void WKBundleClearAllDatabases(WKBundleRef)
+ {
+     DatabaseTracker::singleton().deleteAllDatabasesImmediately();
+diff --git a/Source/WebKit/WebProcess/InjectedBundle/API/c/WKBundle.h b/Source/WebKit/WebProcess/InjectedBundle/API/c/WKBundle.h
+index aec5dc154e3..3f050fdbc2a 100644
+--- a/Source/WebKit/WebProcess/InjectedBundle/API/c/WKBundle.h
++++ b/Source/WebKit/WebProcess/InjectedBundle/API/c/WKBundle.h
+@@ -80,6 +80,9 @@ WK_EXPORT WKConnectionRef WKBundleGetApplicationConnection(WKBundleRef bundle);
+ 
+ WK_EXPORT void WKBundleReportException(JSContextRef, JSValueRef exception);
+ 
++WK_EXPORT void WKBundleMemoryPressureHandlerStop();
++WK_EXPORT void WKBundleMemoryPressureHandlerStart();
++
+ #ifdef __cplusplus
+ }
+ #endif
+-- 
+2.14.2
+

@@ -1,0 +1,414 @@
+Copyright (C) 1989, 1991 Free Software Foundation, Inc.
+
+This program is free software; you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation; either version 2 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program; if not, write to the Free Software
+Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+
+Date: Aug 17 06:18:09 2016
+
+From: a0eda98dcae0b90b2baac2cb0688e212404303d7 Aug 19 09:35:59 2016
+
+Subject: [PATCH] RDK-16596 : Added samhainrc containing generic processes
+
+        Added generic samhainrc.
+
+Source: COMCAST
+
+Upstream-Status: Pending
+
+Signed-off-by: gtheres <Geethu_TheresK@comcast.com>
+---
+
+diff --git a/include/sh_cat.h b/include/sh_cat.h
+index 1c475e7..8302243 100644
+--- a/include/sh_cat.h
++++ b/include/sh_cat.h
+@@ -141,6 +141,9 @@ enum {
+  MSG_PCK_HIDDEN, 
+  MSG_PCK_FAKE,   
+  MSG_PCK_MISS,   
++ MSG_PCK_NEW,   
++ MSG_PCK_DUP,
++ MSG_PCK_WL_DUP,
+ #endif
+ 
+ #ifdef SH_USE_PORTCHECK
+@@ -155,6 +158,7 @@ enum {
+  MSG_MNT_MEMLIST,
+  MSG_MNT_MNTMISS,
+  MSG_MNT_OPTMISS,
++ MSG_MNT_NEWMOUNT,
+ #endif
+ 
+ #ifdef SH_USE_USERFILES
+diff --git a/src/sh_cat.c b/src/sh_cat.c
+index ba07910..7cf6d95 100644
+--- a/src/sh_cat.c
++++ b/src/sh_cat.c
+@@ -134,6 +134,9 @@ cat_entry msg_cat[] = {
+   { MSG_PCK_HIDDEN,  SH_ERR_SEVERE,  EVENT, N_("msg=\"POLICY [Process] Hidden pid: %ld tests: %s\"")},
+   { MSG_PCK_FAKE,    SH_ERR_SEVERE,  EVENT, N_("msg=\"POLICY [Process] Fake pid: %ld tests: %s\"")},
+   { MSG_PCK_MISS,    SH_ERR_SEVERE,  EVENT, N_("msg=\"POLICY [Process] Missing: %s\"")},
++  { MSG_PCK_NEW,     SH_ERR_SEVERE,  EVENT, N_("msg=\"POLICY [Process] New Process: %s\"")},
++  { MSG_PCK_DUP,     SH_ERR_SEVERE,  EVENT, N_("msg=\"POLICY [Process] Found Duplicate Process for: %s Path=%s\"")},
++  { MSG_PCK_WL_DUP,   SH_ERR_SEVERE,  EVENT, N_("msg=\"POLICY [Process] Found Duplicate Process for whitelist: %s Path=%s\"")},
+ #endif
+ 
+ #ifdef SH_USE_PORTCHECK
+@@ -148,6 +151,7 @@ cat_entry msg_cat[] = {
+   { MSG_MNT_MEMLIST, SH_ERR_ERR,     RUN,   N_("msg=\"Cannot read mount list from memory\"")},
+   { MSG_MNT_MNTMISS, SH_ERR_WARN,    EVENT, N_("msg=\"POLICY [Mounts] Mount missing\" path=\"%s\"")},
+   { MSG_MNT_OPTMISS, SH_ERR_WARN,    EVENT, N_("msg=\"POLICY [Mounts] Mount option missing\" path=\"%s\" option=\"%s\"")},
++  { MSG_MNT_NEWMOUNT,SH_ERR_WARN,    EVENT, N_("msg=\"POLICY [Mounts] New device Mounted\" path=\"%s\"")},
+ #endif
+ 
+ #ifdef SH_USE_USERFILES
+@@ -475,6 +479,10 @@ cat_entry msg_cat[] = {
+   { MSG_PCK_HIDDEN,  SH_ERR_SEVERE,  EVENT, N_("msg=<POLICY [Process] Hidden pid: %ld tests: %s>")},
+   { MSG_PCK_FAKE,    SH_ERR_SEVERE,  EVENT, N_("msg=<POLICY [Process] Fake pid: %ld tests: %s>")},
+   { MSG_PCK_MISS,    SH_ERR_SEVERE,  EVENT, N_("msg=<POLICY [Process] Missing: %s>")},
++  { MSG_PCK_NEW,     SH_ERR_SEVERE,  EVENT, N_("msg=<POLICY [Process] New Process for pid: %ld process=<%s> userid=<%s>")},
++  { MSG_PCK_DUP,     SH_ERR_SEVERE,  EVENT, N_("msg=<POLICY [Process] Found Duplicate Process for: %s Path=%s>")},
++  { MSG_PCK_WL_DUP,  SH_ERR_SEVERE,  EVENT, N_("msg=<POLICY [Process] Found Duplicate Process for whitelist: %s Path=%s>")},
++
+ #endif
+ 
+ #ifdef SH_USE_PORTCHECK
+@@ -489,6 +497,7 @@ cat_entry msg_cat[] = {
+   { MSG_MNT_MEMLIST, SH_ERR_ERR,     RUN,   N_("msg=<Cannot read mount list from memory>")},
+   { MSG_MNT_MNTMISS, SH_ERR_WARN,    EVENT, N_("msg=<POLICY [Mounts] Mount missing>, path=<%s>")},
+   { MSG_MNT_OPTMISS, SH_ERR_WARN,    EVENT, N_("msg=<POLICY [Mounts] Mount option missing>, path=<%s>, option=<%s>")},
++  { MSG_MNT_NEWMOUNT,SH_ERR_WARN,    EVENT, N_("msg=\"POLICY [Mounts] New device Mounted\" path=\"%s\"")},
+ #endif
+ 
+ #ifdef SH_USE_USERFILES
+diff --git a/src/sh_mounts.c b/src/sh_mounts.c
+index 3878e9c..9fb2172 100644
+--- a/src/sh_mounts.c
++++ b/src/sh_mounts.c
+@@ -204,9 +204,9 @@ int sh_mounts_timer (time_t tcurrent)
+ int sh_mounts_check ()
+ {
+   struct sh_mounts_mnt *memlist;
+-  struct sh_mounts_mnt *cfgmnt, *mnt;
++  struct sh_mounts_mnt *cfgmnt, *mnt,*cfgmnt1,*mnt1;
+   struct sh_mounts_opt *cfgopt, *opt;
+-
++int iFlag=0;
+   SL_ENTER(_("sh_mounts_check"));
+     
+   /* Log the check run. For each message type you want, you need to define it
+@@ -223,6 +223,36 @@ int sh_mounts_check ()
+ 
+   /* For each mount we are configured to check, run through the list of mounted
+    * filesystems and compare the pathnames */
++
++#if 1    
++if(NULL!=mountlist)
++{
++    for (cfgmnt1 = memlist; cfgmnt1 != NULL; cfgmnt1 = cfgmnt1->next)
++    {    
++        for (cfgmnt = mountlist; cfgmnt != NULL; cfgmnt = cfgmnt->next)
++        {    
++           if (0 == strcmp(cfgmnt->path,cfgmnt1->path ))// && (0==strcmp(mnt->opts, cfgopt->opt)))
++           {
++              iFlag=1;
++              break;
++           }
++                                
++        }
++        if(iFlag==1)
++        {   
++            iFlag=0;
++            continue;            
++        }
++        else
++        {
++            sh_error_handle(ShMountsSevOpt, FIL__, __LINE__, 0, MSG_MNT_NEWMOUNT,
++                                      cfgmnt1->path);
++        }
++    }
++}	
++#endif    
++#if 1
++
+   for (cfgmnt = mountlist; cfgmnt != NULL; cfgmnt = cfgmnt->next) {
+     mnt = sh_mounts_mnt_member(memlist, cfgmnt->path);
+ 
+@@ -242,7 +272,8 @@ int sh_mounts_check ()
+                       cfgmnt->path);
+     }
+   }
+-
++#endif
++  
+   /* Make sure to clean up after ourselves */
+   sh_mounts_mnt_free(memlist);
+ 
+diff --git a/src/sh_processcheck.c b/src/sh_processcheck.c
+index 6d7a69f..df77d52 100644
+--- a/src/sh_processcheck.c
++++ b/src/sh_processcheck.c
+@@ -112,6 +112,7 @@ static int sh_prochk_set_psarg   (const char *str);
+ static int sh_prochk_set_interval(const char *str);
+ static int sh_prochk_set_severity(const char *str);
+ static int sh_prochk_set_openvz  (const char *str);
++static int sh_prochk_whitelist   (const char *str);
+ 
+ sh_rconf sh_prochk_table[] = {
+     {
+@@ -151,6 +152,10 @@ sh_rconf sh_prochk_table[] = {
+         sh_prochk_set_openvz,
+     },
+     {
++        N_("processcheckwhitelist"),
++        sh_prochk_whitelist,
++    },
++    {
+         NULL,
+         NULL
+     }
+@@ -272,6 +277,11 @@ static struct watchlist * list_missing  = NULL;
+ static struct watchlist * list_fake     = NULL;
+ static struct watchlist * list_hidden   = NULL;
+ 
++//Added by vinoth
++static struct watchlist * process_whitelist = NULL;
++static struct watchlist * whitelist_missing  = NULL;
++
++static int iWhite_List_Count=-1;
+ /* recursively remove all list entries
+  */
+ static void kill_list (struct watchlist * head)
+@@ -405,6 +415,75 @@ static int is_in_watchlist (const char *str, unsigned long num)
+   return S_FALSE;
+ } 
+ 
++static int is_in_whitelist (const char *str, unsigned long num)
++{
++  struct watchlist * list = process_whitelist;
++  struct watchlist * list1 = process_whitelist;
++  char *tmp;
++    
++  volatile size_t i = num;
++  char   user[16];
++  char * aout;
++  char * safe;
++
++  int count = 0;
++  while (list)
++    {
++#ifdef HAVE_REGEX_H
++      if (0 == regexec(&(list->preg), str, 0, NULL, 0))
++        {
++          list->seen = S_TRUE;
++          list->pid  = num;
++          return S_TRUE;
++        }
++#else
++      if (strstr(str, list->str))
++        {
++          list->seen = S_TRUE;
++          list->pid  = num;
++          return S_TRUE;
++        }
++#endif
++      list = list->next;
++      count++;
++    }
++
++#if 1
++      if(count >= iWhite_List_Count)
++      {
++          //Add logic for new process
++          SH_MUTEX_LOCK(mutex_thread_nolog);
++          aout = get_user_and_path ((pid_t) i, user, sizeof(user));
++          SH_MUTEX_UNLOCK(mutex_thread_nolog);
++
++          tmp = sh_util_safe_name (str);
++         
++          SH_MUTEX_LOCK(mutex_thread_nolog);
++          safe = sh_util_safe_name (aout);
++          SH_MUTEX_UNLOCK(mutex_thread_nolog);
++          // Check if parent process is in the whitelist
++          while (list1)
++          {
++              if (strstr(safe, list1->str))
++              {
++                  SH_FREE(tmp);
++                  return S_TRUE;
++              }
++              list1 = list1->next;
++          }
++          SH_MUTEX_LOCK(mutex_thread_nolog);
++          sh_error_handle(sh_prochk_severity, FIL__, __LINE__, 0,
++                              MSG_PCK_NEW,
++                              i, safe, user);
++          SH_MUTEX_UNLOCK(mutex_thread_nolog);
++
++          SH_FREE(tmp);
++      }
++#endif
++  return S_FALSE;
++} 
++
++
+ /* These variables are not used anywhere. They only exist
+  * to assign &userold, &user to them, which keeps gcc from
+  * putting them into a register, and avoids the 'clobbered
+@@ -470,6 +549,45 @@ static void check_watchlist (short * res)
+   sh_dummy_watchlist = NULL;
+   return;
+ }
++void * sh_dummy_413_whitelist = NULL;
++
++static void check_whitelist ()
++{
++  //printf("check_whitelist === \n");
++  struct watchlist * list = process_whitelist;
++  char * tmp;
++  size_t indx;
++
++  /* Take the address to keep gcc from putting them into registers. 
++   * Avoids the 'clobbered by longjmp' warning. 
++   */
++  sh_dummy_413_whitelist = (void*) &list;
++
++  while (list) //List contains the config file white list values--- addded by vinoth
++    {
++      if (list->seen == S_FALSE)
++	{
++	  /* avoid repetition of messages
++	   */
++	  if (S_FALSE == is_in_list(&whitelist_missing, list->str, 0))
++	    {
++	      SH_MUTEX_LOCK(mutex_thread_nolog);
++	      tmp = sh_util_safe_name (list->str);
++              /*
++	      sh_error_handle(sh_prochk_severity, FIL__, __LINE__, 0, 
++			      MSG_PCK_MISS,
++			      tmp);
++              */
++	      SH_FREE(tmp);
++	      SH_MUTEX_UNLOCK(mutex_thread_nolog);
++	    }
++	}
++      list = list->next;
++    }
++
++  sh_dummy_413_whitelist = NULL;
++  return;
++}
+ 
+ /* Add 'str' to the list of watched processes for which
+  * existence should be checked.
+@@ -947,7 +1065,13 @@ static int sh_processes_readps (FILE * in, short * res,
+ 	      if (str != NULL && num == (unsigned long) pid)
+ 		sl_strlcpy(str, tstr, len);
+ 	      if (lnum != 0)
++              {
+ 		is_in_watchlist (tstr, num);
++                if(SH_PR_PS == flag)
++                {
++		   is_in_whitelist (tstr, num);
++                }
++              }
+ 	      ++lnum;
+ 	    }
+ 	  break;
+@@ -1292,6 +1416,7 @@ static int sh_process_check_int (short * res)
+     } /* loop end */
+ 
+   check_watchlist (res);
++  check_whitelist ();
+ 
+   SL_RETURN (0, _("sh_process_check_int"));
+ }
+@@ -1315,6 +1440,10 @@ static int sh_prochk_init_internal(void)
+     {
+       sh_prochk_free_list(process_check);
+       process_check = NULL;
++//vinoth
++      sh_prochk_free_list(process_whitelist);
++      process_whitelist = NULL;
++
+       SL_RETURN(-1, _("sh_prochk_init"));
+     }
+ 
+@@ -1408,6 +1537,50 @@ int sh_prochk_check(void)
+   SL_RETURN(status, _("sh_prochk_check"));
+ }
+ 
++int sh_prochk_whitelist(const char *str)
++{
++	//printf("sh_prochk_whitelist \n");
++
++	struct watchlist *new;
++	int               status;
++	char              errbuf[256];
++
++	SL_ENTER(_("sh_prochk_whitelist"));
++
++	if( str == NULL )
++		SL_RETURN(-1, _("sh_prochk_whitelist") );
++
++	new       = SH_ALLOC(sizeof(struct watchlist));
++        iWhite_List_Count++;
++	new->next = process_whitelist;
++	new->str  = sh_util_strdup(str);
++
++#ifdef HAVE_REGEX_H
++  status = regcomp(&(new->preg), str, REG_NOSUB|REG_EXTENDED);
++//printf("status === %d \n", status);
++  if (status != 0)
++    {
++      regerror(status, &(new->preg), errbuf, sizeof(errbuf));
++      SH_MUTEX_LOCK(mutex_thread_nolog);
++      sh_error_handle((-1), FIL__, __LINE__, status, MSG_E_SUBGEN, 
++		      errbuf, _("sh_processes_add_process"));
++      SH_MUTEX_UNLOCK(mutex_thread_nolog);
++      SH_FREE(new->str);
++      SH_FREE(new);
++      SL_RETURN(-1, _("sh_prochk_add_process") );
++    }
++#endif
++ 
++        //printf("new->str === %s\n", new->str);
++	new->pid  = 0;
++	new->seen = S_FALSE;
++
++	process_whitelist = new;
++	SL_RETURN(0, _("sh_prochk_whitelist") );
++
++}
++
++
+ /* Free our lists and the associated memory 
+  */
+ int sh_prochk_cleanup(void) 
+@@ -1446,9 +1619,14 @@ int sh_prochk_reconf(void)
+   sh_prochk_openvz   = S_FALSE;
+   p_store            = 0;
+   openvz_hidden      = 0;
+-
++   iWhite_List_Count=-1;
++//
+   sh_prochk_free_list(process_check);
+   process_check = NULL;
++//vinoth
++  sh_prochk_free_list(process_whitelist);
++  process_whitelist = NULL;
++
+   if (sh_prochk_res != NULL)
+     SH_FREE(sh_prochk_res);
+   sh_prochk_res = NULL;

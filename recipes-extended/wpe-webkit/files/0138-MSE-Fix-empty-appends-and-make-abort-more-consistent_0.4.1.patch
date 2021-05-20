@@ -1,0 +1,115 @@
+From 76bf61ad15670b3c117c5252c60f45ad138442e1 Mon Sep 17 00:00:00 2001
+From: Eugene Mutavchi <Ievgen_Mutavchi@comcast.com>
+Date: Fri, 17 May 2019 10:04:23 -0400
+Subject: [PATCH] [MSE] Fix empty appends and make 'abort' more consistent
+
+---
+ .../WebCore/Modules/mediasource/SourceBuffer.cpp   |  3 +++
+ .../graphics/gstreamer/mse/AppendPipeline.cpp      | 25 ++++++++++++++++------
+ 2 files changed, 22 insertions(+), 6 deletions(-)
+
+Index: git/Source/WebCore/Modules/mediasource/SourceBuffer.cpp
+===================================================================
+--- git.orig/Source/WebCore/Modules/mediasource/SourceBuffer.cpp
++++ git/Source/WebCore/Modules/mediasource/SourceBuffer.cpp
+@@ -420,6 +420,7 @@ void SourceBuffer::removedFromMediaSourc
+ 
+     m_private->removedFromMediaSource();
+     m_source = nullptr;
++    m_asyncEventQueue.cancelAllEvents();
+ }
+ 
+ void SourceBuffer::seekToTime(const MediaTime& time)
+@@ -575,6 +576,7 @@ void SourceBuffer::appendBufferTimerFire
+     // https://dvcs.w3.org/hg/html-media/raw-file/default/media-source/media-source.html#sourcebuffer-buffer-append
+ 
+     // 1. Run the segment parser loop algorithm.
++#if !USE(GSTREAMER)
+     size_t appendSize = m_pendingAppendData.size();
+     if (!appendSize) {
+         // Resize buffer for 0 byte appends so we always have a valid pointer.
+@@ -582,6 +584,7 @@ void SourceBuffer::appendBufferTimerFire
+         // that it can clear its end of stream state if necessary.
+         m_pendingAppendData.resize(1);
+     }
++#endif
+ 
+     // Section 3.5.1 Segment Parser Loop
+     // https://dvcs.w3.org/hg/html-media/raw-file/tip/media-source/media-source.html#sourcebuffer-segment-parser-loop
+Index: git/Source/WebCore/platform/graphics/gstreamer/mse/AppendPipeline.cpp
+===================================================================
+--- git.orig/Source/WebCore/platform/graphics/gstreamer/mse/AppendPipeline.cpp
++++ git/Source/WebCore/platform/graphics/gstreamer/mse/AppendPipeline.cpp
+@@ -580,11 +580,12 @@ void AppendPipeline::setAppendState(Appe
+         case AppendState::DataStarve:
+             ok = true;
+             GST_DEBUG("received all pending samples");
+-            m_sourceBufferPrivate->didReceiveAllPendingSamples();
+             if (m_abortPending)
+                 nextAppendState = AppendState::Aborting;
+-            else
++            else {
++                m_sourceBufferPrivate->didReceiveAllPendingSamples();
+                 nextAppendState = AppendState::NotStarted;
++            }
+             break;
+         default:
+             break;
+@@ -613,11 +614,12 @@ void AppendPipeline::setAppendState(Appe
+         case AppendState::LastSample:
+             ok = true;
+             GST_DEBUG("received all pending samples");
+-            m_sourceBufferPrivate->didReceiveAllPendingSamples();
+             if (m_abortPending)
+                 nextAppendState = AppendState::Aborting;
+-            else
++            else {
++                m_sourceBufferPrivate->didReceiveAllPendingSamples();
+                 nextAppendState = AppendState::NotStarted;
++            }
+             break;
+         default:
+             break;
+@@ -842,6 +844,8 @@ void AppendPipeline::appsinkEOS()
+ void AppendPipeline::didReceiveInitializationSegment()
+ {
+     ASSERT(WTF::isMainThread());
++    if (m_abortPending)
++        return;
+ 
+     WebCore::SourceBufferPrivateClient::InitializationSegment initializationSegment;
+ 
+@@ -957,7 +961,22 @@ void AppendPipeline::abort()
+     m_abortPending = true;
+     if (m_appendState == AppendState::NotStarted)
+         setAppendState(AppendState::Aborting);
+-    // Else, the automatic state transitions will take care when the ongoing append finishes.
++    else {
++        // Wait for append state change
++        for (int i = 0; m_appendState == AppendState::Ongoing && i < 100; ++i) {
++            drainBusIfNeeded();
++            WTF::sleepMS(10);
++        }
++        // Drain samples before source buffer state is reset
++        if (m_appendState == AppendState::Sampling) {
++            GRefPtr<GstPad> appsrcPad = adoptGRef(gst_element_get_static_pad(m_appsrc.get(), "src"));
++            if (appsrcPad) {
++                GRefPtr<GstQuery> query = adoptGRef(gst_query_new_drain());
++                gst_pad_peer_query(appsrcPad.get(), query.get());
++            }
++            drainBusIfNeeded();
++        }
++    }
+ }
+ 
+ GstFlowReturn AppendPipeline::pushNewBuffer(GstBuffer* buffer)
+@@ -1219,7 +1238,8 @@ void AppendPipeline::connectDemuxerSrcPa
+     default:
+         // No useful data, but notify anyway to complete the append operation.
+         GST_DEBUG("Received all pending samples (no data)");
+-        m_sourceBufferPrivate->didReceiveAllPendingSamples();
++        if (!m_abortPending)
++            m_sourceBufferPrivate->didReceiveAllPendingSamples();
+         break;
+     }
+ 

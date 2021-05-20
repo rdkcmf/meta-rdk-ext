@@ -1,0 +1,596 @@
+From 79fd864193c1ec12f44056944ef2cd30c5e9d144 Mon Sep 17 00:00:00 2001
+From: Siva Sankar Raja <sivasankar_raja@comcast.com>
+Source: COMCAST
+License: LICENSE-LGPL-2.1
+Upstream-Status: Pending
+Signed-off-by: Siva Sankar Raja <sivasankar_raja@comcast.com>
+Date: Fri, 5 Jul 2019 14:34:53 +0000
+Subject: [PATCH] Initial support for SQLite Encryption Extension
+
+---
+ Source/WebCore/CMakeLists.txt                      |  2 +
+ Source/WebCore/platform/sql/SQLiteDatabase.cpp     | 64 ++++++++++++++++-
+ Source/WebCore/platform/sql/SQLiteDatabase.h       |  2 +-
+ Source/WebKit/Sources.txt                          |  3 +
+ .../API/APILocalStorageEncryptionExtensionClient.h | 45 ++++++++++++
+ .../C/WKLocalStorageEncryptionExtensionClient.cpp  | 82 ++++++++++++++++++++++
+ .../C/WKLocalStorageEncryptionExtensionClient.h    | 53 ++++++++++++++
+ .../UIProcess/WebStorage/LocalStorageDatabase.cpp  |  5 +-
+ .../WebStorage/LocalStorageEncryptionExtension.cpp | 46 ++++++++++++
+ .../WebStorage/LocalStorageEncryptionExtension.h   | 56 +++++++++++++++
+ Source/cmake/FindSqlite3See.cmake                  | 44 ++++++++++++
+ Source/cmake/OptionsWPE.cmake                      |  7 +-
+ Source/cmake/WebKitFeatures.cmake                  |  1 +
+ 13 files changed, 406 insertions(+), 4 deletions(-)
+ create mode 100644 Source/WebKit/UIProcess/API/APILocalStorageEncryptionExtensionClient.h
+ create mode 100644 Source/WebKit/UIProcess/API/C/WKLocalStorageEncryptionExtensionClient.cpp
+ create mode 100644 Source/WebKit/UIProcess/API/C/WKLocalStorageEncryptionExtensionClient.h
+ create mode 100644 Source/WebKit/UIProcess/WebStorage/LocalStorageEncryptionExtension.cpp
+ create mode 100644 Source/WebKit/UIProcess/WebStorage/LocalStorageEncryptionExtension.h
+ create mode 100644 Source/cmake/FindSqlite3See.cmake
+
+Index: git/Source/WebCore/CMakeLists.txt
+===================================================================
+--- git.orig/Source/WebCore/CMakeLists.txt
++++ git/Source/WebCore/CMakeLists.txt
+@@ -148,6 +148,8 @@ set(WebCore_INCLUDE_DIRECTORIES
+     "${DERIVED_SOURCES_WEBCORE_DIR}"
+ )
+ 
++add_definitions(${SQLITE_DEFINITIONS})
++
+ set(WebCore_SYSTEM_INCLUDE_DIRECTORIES
+     ${ICU_INCLUDE_DIRS}
+     ${LIBXML2_INCLUDE_DIR}
+Index: git/Source/WebCore/platform/sql/SQLiteDatabase.cpp
+===================================================================
+--- git.orig/Source/WebCore/platform/sql/SQLiteDatabase.cpp
++++ git/Source/WebCore/platform/sql/SQLiteDatabase.cpp
+@@ -28,6 +28,8 @@
+ #include "SQLiteDatabase.h"
+ 
+ #include "DatabaseAuthorizer.h"
++#include "FileSystem.h"
++#include "FileHandle.h"
+ #include "Logging.h"
+ #include "MemoryRelease.h"
+ #include "SQLiteFileSystem.h"
+@@ -39,6 +41,10 @@
+ #include <wtf/text/CString.h>
+ #include <wtf/text/WTFString.h>
+ 
++#ifndef SQLITE_FILE_HEADER
++#define SQLITE_FILE_HEADER "SQLite format 3"
++#endif
++
+ namespace WebCore {
+ 
+ static const char notOpenErrorMessage[] = "database is not open";
+@@ -70,6 +76,23 @@ static void initializeSQLiteIfNecessary(
+     });
+ }
+ 
++#if defined(SQLITE_HAS_CODEC) && ENABLE(SQLITE_ENCRYPTION_EXTENSION)
++static bool isEncryped(const String& filename)
++{
++    auto fileHandle = WebCore::FileHandle(filename, WebCore::OpenForRead);
++    if (!fileHandle.open())
++        return false;
++
++   int magicSize = WTF_ARRAY_LENGTH(SQLITE_FILE_HEADER);
++    auto fileHeader = MallocPtr<char>::malloc(magicSize);
++    if (magicSize != fileHandle.read(fileHeader.get(), magicSize))
++        return false;
++
++    return ::memcmp(fileHeader.get(), SQLITE_FILE_HEADER, magicSize);
++}
++#endif
++
++
+ SQLiteDatabase::SQLiteDatabase() = default;
+ 
+ SQLiteDatabase::~SQLiteDatabase()
+@@ -77,12 +100,19 @@ SQLiteDatabase::~SQLiteDatabase()
+     close();
+ }
+ 
+-bool SQLiteDatabase::open(const String& filename, bool forWebSQLDatabase)
++bool SQLiteDatabase::open(const String& filename, bool forWebSQLDatabase, std::optional<Vector<uint8_t>> key)
+ {
+     initializeSQLiteIfNecessary();
+ 
+     close();
+ 
++#if defined(SQLITE_HAS_CODEC) && ENABLE(SQLITE_ENCRYPTION_EXTENSION)
++    bool shouldReKey = false;
++    if (key && key->size()) {
++        shouldReKey = fileExists(filename) && !isEncryped(filename);
++    }
++#endif
++
+     m_openError = SQLiteFileSystem::openDatabase(filename, &m_db, forWebSQLDatabase);
+     if (m_openError != SQLITE_OK) {
+         m_openErrorMessage = m_db ? sqlite3_errmsg(m_db) : "sqlite_open returned null";
+@@ -93,6 +123,37 @@ bool SQLiteDatabase::open(const String&
+         return false;
+     }
+ 
++    if (key && key->size()) {
++#if defined(SQLITE_HAS_CODEC) && ENABLE(SQLITE_ENCRYPTION_EXTENSION)
++        if (!shouldReKey)
++            m_openError = sqlite3_key_v2(m_db, nullptr, key->data(), key->size());
++        else {
++            m_openError = sqlite3_rekey_v2(m_db, nullptr, key->data(), key->size());
++            if (m_openError == SQLITE_OK)
++                m_openError = runVacuumCommand();
++        }
++
++        key->fill(0);
++
++        if (m_openError != SQLITE_OK) {
++            m_openErrorMessage = sqlite3_errmsg(m_db);
++            LOG_ERROR("Failed to attach encryption key to SQLite database %s\nCause - %s", filename.ascii().data(),
++                      m_openErrorMessage.data());
++            sqlite3_close(m_db);
++            m_db = 0;
++            return false;
++        }
++
++        if (shouldReKey) {
++            if (!isEncryped(filename))
++                LOG_ERROR("SQLite database file is clear after re-key, path=%s", filename.ascii().data());
++        }
++#else
++        key->fill(0);
++        LOG_ERROR("SQLite codec support is disabled, ignoring encryption key for database %s", filename.ascii().data());
++#endif
++    }
++
+     overrideUnauthorizedFunctions();
+ 
+     m_openError = sqlite3_extended_result_codes(m_db, 1);
+Index: git/Source/WebCore/platform/sql/SQLiteDatabase.h
+===================================================================
+--- git.orig/Source/WebCore/platform/sql/SQLiteDatabase.h
++++ git/Source/WebCore/platform/sql/SQLiteDatabase.h
+@@ -52,7 +52,7 @@ public:
+     WEBCORE_EXPORT SQLiteDatabase();
+     WEBCORE_EXPORT ~SQLiteDatabase();
+ 
+-    WEBCORE_EXPORT bool open(const String& filename, bool forWebSQLDatabase = false);
++    WEBCORE_EXPORT bool open(const String& filename, bool forWebSQLDatabase = false, std::optional<Vector<uint8_t>> = std::nullopt);
+     bool isOpen() const { return m_db; }
+     WEBCORE_EXPORT void close();
+ 
+Index: git/Source/WebKit/Sources.txt
+===================================================================
+--- git.orig/Source/WebKit/Sources.txt
++++ git/Source/WebKit/Sources.txt
+@@ -359,6 +359,8 @@ UIProcess/API/C/WKWebAutomationSession.c
+ UIProcess/API/C/WKWebsiteDataStoreRef.cpp @no-unify
+ UIProcess/API/C/WKWebsitePolicies.cpp @no-unify
+ UIProcess/API/C/WKWindowFeaturesRef.cpp @no-unify
++UIProcess/API/C/WKLocalStorageEncryptionExtensionClient.cpp @no-unify
++
+ 
+ UIProcess/Authentication/AuthenticationChallengeProxy.cpp
+ UIProcess/Authentication/AuthenticationDecisionListener.cpp
+@@ -396,6 +398,7 @@ UIProcess/UserContent/WebUserContentCont
+ 
+ UIProcess/WebStorage/LocalStorageDatabase.cpp
+ UIProcess/WebStorage/LocalStorageDatabaseTracker.cpp
++UIProcess/WebStorage/LocalStorageEncryptionExtension.cpp
+ 
+ UIProcess/WebsiteData/WebsiteDataRecord.cpp
+ UIProcess/WebsiteData/WebsiteDataStore.cpp
+Index: git/Source/WebKit/UIProcess/API/APILocalStorageEncryptionExtensionClient.h
+===================================================================
+--- /dev/null
++++ git/Source/WebKit/UIProcess/API/APILocalStorageEncryptionExtensionClient.h
+@@ -0,0 +1,45 @@
++/*
++* Copyright (c) 2018, Comcast
++* All rights reserved.
++*
++* Redistribution and use in source and binary forms, with or without modification,
++* are permitted provided that the following conditions are met:
++*
++*  * Redistributions of source code must retain the above copyright notice,
++*    this list of conditions and the following disclaimer.
++*  * Redistributions in binary form must reproduce the above copyright notice,
++*    this list of conditions and the following disclaimer in the documentation
++*    and/or other materials provided with the distribution.
++*
++* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
++* ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
++* WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
++* DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
++* ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
++* (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
++* LOSS OF USE, DATA, OR OR; PROFITS BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON
++* ANY OF THEORY LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
++* (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
++* SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
++*/
++
++#pragma once
++
++#include <wtf/Vector.h>
++#include <wtf/Optional.h>
++
++namespace WebCore {
++struct SecurityOriginData;
++}
++
++namespace API {
++
++class LocalStorageEncryptionExtensionClient {
++public:
++    virtual ~LocalStorageEncryptionExtensionClient() { }
++
++    virtual std::optional<Vector<uint8_t>> loadKeyWithOrigin(const WebCore::SecurityOriginData&) { return std::nullopt; }
++};
++
++} // namespace API
++
+Index: git/Source/WebKit/UIProcess/API/C/WKLocalStorageEncryptionExtensionClient.cpp
+===================================================================
+--- /dev/null
++++ git/Source/WebKit/UIProcess/API/C/WKLocalStorageEncryptionExtensionClient.cpp
+@@ -0,0 +1,82 @@
++/*
++* Copyright (c) 2018, Comcast
++* All rights reserved.
++*
++* Redistribution and use in source and binary forms, with or without modification,
++* are permitted provided that the following conditions are met:
++*
++*  * Redistributions of source code must retain the above copyright notice,
++*    this list of conditions and the following disclaimer.
++*  * Redistributions in binary form must reproduce the above copyright notice,
++*    this list of conditions and the following disclaimer in the documentation
++*    and/or other materials provided with the distribution.
++*
++* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
++* ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
++* WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
++* DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
++* ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
++* (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
++* LOSS OF USE, DATA, OR OR; PROFITS BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON
++* ANY OF THEORY LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
++* (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
++* SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
++*/
++
++#include "config.h"
++
++#include "APIClient.h"
++#include "APIData.h"
++#include "APILocalStorageEncryptionExtensionClient.h"
++#include "LocalStorageEncryptionExtension.h"
++#include "WKAPICast.h"
++#include "WKLocalStorageEncryptionExtensionClient.h"
++
++#include <WebCore/SecurityOriginData.h>
++
++#include <cstring>
++
++using namespace WebKit;
++
++namespace API {
++template<> struct ClientTraits<WKLocalStorageEncryptionExtensionClientBase> {
++    typedef std::tuple<WKLocalStorageEncryptionExtensionClientV0> Versions;
++};
++}
++
++void WKLocalStorageEncryptionExtensionSetClient(const WKLocalStorageEncryptionExtensionClientBase* wkClient)
++{
++    if (!wkClient) {
++        LocalStorageEncryptionExtension::singleton().setClient(nullptr);
++        return;
++    }
++
++    class WebLocalStorageEncryptionExtensionClient : public API::Client<WKLocalStorageEncryptionExtensionClientBase>, public API::LocalStorageEncryptionExtensionClient {
++    public:
++        explicit WebLocalStorageEncryptionExtensionClient(const WKLocalStorageEncryptionExtensionClientBase* client) {
++            initialize(client);
++        }
++    private:
++        std::optional<Vector<uint8_t>> loadKeyWithOrigin(const WebCore::SecurityOriginData& securityOriginData) final {
++            if (!m_client.loadKeyWithOrigin)
++                return std::nullopt;
++ 
++            WKDataRef keyDataRef = nullptr;
++            RefPtr<API::SecurityOrigin> securityOrigin = API::SecurityOrigin::create(securityOriginData.protocol, securityOriginData.host, securityOriginData.port);
++            m_client.loadKeyWithOrigin(toAPI(securityOrigin.get()), &keyDataRef, m_client.base.clientInfo);
++ 
++            if (!keyDataRef)
++                return std::nullopt;
++ 
++            auto data = adoptRef(WebKit::toImpl(keyDataRef));
++            Vector<uint8_t> keyVector;
++            keyVector.append(data->bytes(), data->size());
++            ::memset(const_cast<unsigned char*>(data->bytes()), 0, data->size());
++            return std::make_optional(WTFMove(keyVector));
++        }
++    };
++ 
++    auto client = std::make_unique<WebLocalStorageEncryptionExtensionClient>(wkClient);
++    LocalStorageEncryptionExtension::singleton().setClient(WTFMove(client));
++}
++
+Index: git/Source/WebKit/UIProcess/API/C/WKLocalStorageEncryptionExtensionClient.h
+===================================================================
+--- /dev/null
++++ git/Source/WebKit/UIProcess/API/C/WKLocalStorageEncryptionExtensionClient.h
+@@ -0,0 +1,53 @@
++/*
++* Copyright (c) 2018, Comcast
++* All rights reserved.
++*
++* Redistribution and use in source and binary forms, with or without modification,
++* are permitted provided that the following conditions are met:
++*
++*  * Redistributions of source code must retain the above copyright notice,
++*    this list of conditions and the following disclaimer.
++*  * Redistributions in binary form must reproduce the above copyright notice,
++*    this list of conditions and the following disclaimer in the documentation
++*    and/or other materials provided with the distribution.
++*
++* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
++* ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
++* WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
++* DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
++* ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
++* (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
++* LOSS OF USE, DATA, OR OR; PROFITS BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON
++* ANY OF THEORY LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
++* (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
++* SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
++*/
++
++#pragma once
++
++#include <WebKit/WKBase.h>
++
++#ifdef __cplusplus
++extern "C" {
++#endif
++
++typedef void (*WKLoadKeyWithOrigin)(WKSecurityOriginRef origin, WKDataRef *returnKeyData, const void* clientInfo);
++
++typedef struct WKLocalStorageEncryptionExtensionClientBase {
++    int  version;
++    const void * clientInfo;
++} WKLocalStorageEncryptionExtensionClientBase;
++
++typedef struct WKLocalStorageEncryptionExtensionClientV0 {
++    WKLocalStorageEncryptionExtensionClientBase base;
++
++    // Version 0.
++    WKLoadKeyWithOrigin loadKeyWithOrigin;
++} WKLocalStorageEncryptionExtensionClientV0;
++
++WK_EXPORT void WKLocalStorageEncryptionExtensionSetClient(const WKLocalStorageEncryptionExtensionClientBase*client);
++
++#ifdef __cplusplus
++}
++#endif
++
+Index: git/Source/WebKit/UIProcess/WebStorage/LocalStorageDatabase.cpp
+===================================================================
+--- git.orig/Source/WebKit/UIProcess/WebStorage/LocalStorageDatabase.cpp
++++ git/Source/WebKit/UIProcess/WebStorage/LocalStorageDatabase.cpp
+@@ -27,6 +27,7 @@
+ #include "LocalStorageDatabase.h"
+ 
+ #include "LocalStorageDatabaseTracker.h"
++#include "LocalStorageEncryptionExtension.h"
+ #include <WebCore/FileSystem.h>
+ #include <WebCore/SQLiteStatement.h>
+ #include <WebCore/SQLiteTransaction.h>
+@@ -93,7 +94,9 @@ bool LocalStorageDatabase::tryToOpenData
+         return false;
+     }
+ 
+-    if (!m_database.open(m_databasePath)) {
++    std::optional<Vector<uint8_t>> key = LocalStorageEncryptionExtension::singleton().loadKeyWithOrigin(m_securityOrigin);
++
++    if (!m_database.open(m_databasePath,  false, WTFMove(key))) {
+         LOG_ERROR("Failed to open database file %s for local storage", m_databasePath.utf8().data());
+         return false;
+     }
+Index: git/Source/WebKit/UIProcess/WebStorage/LocalStorageEncryptionExtension.cpp
+===================================================================
+--- /dev/null
++++ git/Source/WebKit/UIProcess/WebStorage/LocalStorageEncryptionExtension.cpp
+@@ -0,0 +1,46 @@
++/*
++* Copyright (c) 2018, Comcast
++* All rights reserved.
++*
++* Redistribution and use in source and binary forms, with or without modification,
++* are permitted provided that the following conditions are met:
++*
++*  * Redistributions of source code must retain the above copyright notice,
++*    this list of conditions and the following disclaimer.
++*  * Redistributions in binary form must reproduce the above copyright notice,
++*    this list of conditions and the following disclaimer in the documentation
++*    and/or other materials provided with the distribution.
++*
++* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
++* ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
++* WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
++* DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
++* ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
++* (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
++* LOSS OF USE, DATA, OR OR; PROFITS BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON
++* ANY OF THEORY LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
++* (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
++* SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
++*/
++
++#include "config.h"
++#include "LocalStorageEncryptionExtension.h"
++
++#include <wtf/NeverDestroyed.h>
++
++namespace WebKit {
++
++LocalStorageEncryptionExtension& LocalStorageEncryptionExtension::singleton() {
++    static NeverDestroyed<LocalStorageEncryptionExtension> instance;
++    return instance;
++}
++
++void LocalStorageEncryptionExtension::setClient(std::unique_ptr<API::LocalStorageEncryptionExtensionClient>&& client) {
++    m_client = WTFMove(client);
++}
++
++std::optional<Vector<uint8_t>> LocalStorageEncryptionExtension::loadKeyWithOrigin(const WebCore::SecurityOriginData& originData) {
++    return m_client ? m_client->loadKeyWithOrigin(originData) : std::nullopt;
++}
++
++} // namespace WebKit
+Index: git/Source/WebKit/UIProcess/WebStorage/LocalStorageEncryptionExtension.h
+===================================================================
+--- /dev/null
++++ git/Source/WebKit/UIProcess/WebStorage/LocalStorageEncryptionExtension.h
+@@ -0,0 +1,56 @@
++/*
++* Copyright (c) 2018, Comcast
++* All rights reserved.
++*
++* Redistribution and use in source and binary forms, with or without modification,
++* are permitted provided that the following conditions are met:
++*
++*  * Redistributions of source code must retain the above copyright notice,
++*    this list of conditions and the following disclaimer.
++*  * Redistributions in binary form must reproduce the above copyright notice,
++*    this list of conditions and the following disclaimer in the documentation
++*    and/or other materials provided with the distribution.
++*
++* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
++* ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
++* WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
++* DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
++* ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
++* (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
++* LOSS OF USE, DATA, OR OR; PROFITS BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON
++* ANY OF THEORY LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
++* (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
++* SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
++*/
++#pragma once
++
++#include "APILocalStorageEncryptionExtensionClient.h"
++
++#include <wtf/Forward.h>
++#include <wtf/Vector.h>
++#include <wtf/Noncopyable.h>
++
++namespace WebCore {
++struct SecurityOriginData;
++}
++
++namespace WebKit {
++
++class LocalStorageEncryptionExtension {
++    WTF_MAKE_NONCOPYABLE(LocalStorageEncryptionExtension);
++public:
++    static LocalStorageEncryptionExtension& singleton();
++
++    void setClient(std::unique_ptr<API::LocalStorageEncryptionExtensionClient>&& client);
++    std::optional<Vector<uint8_t>> loadKeyWithOrigin(const WebCore::SecurityOriginData&);
++
++private:
++    LocalStorageEncryptionExtension() = default;
++    ~LocalStorageEncryptionExtension() = default;
++
++    std::unique_ptr<API::LocalStorageEncryptionExtensionClient> m_client;
++
++    friend class NeverDestroyed<LocalStorageEncryptionExtension>;
++};
++
++}
+Index: git/Source/cmake/FindSqlite3See.cmake
+===================================================================
+--- /dev/null
++++ git/Source/cmake/FindSqlite3See.cmake
+@@ -0,0 +1,44 @@
++# Copyright (c) 2018, Comcast
++# All rights reserved.
++#
++# Redistribution and use in source and binary forms, with or without modification,
++# are permitted provided that the following conditions are met:
++#
++#  * Redistributions of source code must retain the above copyright notice,
++#    this list of conditions and the following disclaimer.
++#  * Redistributions in binary form must reproduce the above copyright notice,
++#    this list of conditions and the following disclaimer in the documentation
++#    and/or other materials provided with the distribution.
++#
++# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
++# ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
++# WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
++# DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
++# ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
++# (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
++# LOSS OF USE, DATA, OR OR; PROFITS BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON
++# ANY OF THEORY LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
++# (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
++# SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
++
++find_package(PkgConfig)
++pkg_check_modules(PC_SQLITE sqlite3see)
++
++set(SQLITE_DEFINITIONS ${PC_SQLITE_CFLAGS_OTHER})
++
++find_path(SQLITE_INCLUDE_DIR NAMES sqlite3.h
++    PATH_SUFFIXES sqlite3see
++    PATHS ${PC_SQLITE_INCLUDEDIR}
++)
++find_library(SQLITE_LIBRARIES NAMES sqlite3see
++    PATHS
++    ${PC_SQLITE_LIBDIR}
++    ${PC_SQLITE_LIBRARY_DIRS}
++)
++
++include(FindPackageHandleStandardArgs)
++FIND_PACKAGE_HANDLE_STANDARD_ARGS(Sqlite3See DEFAULT_MSG SQLITE_INCLUDE_DIR SQLITE_LIBRARIES)
++
++list(APPEND SQLITE_LIBRARIES "-ldl")
++
++mark_as_advanced(SQLITE_INCLUDE_DIR SQLITE_LIBRARIES)
+Index: git/Source/cmake/OptionsWPE.cmake
+===================================================================
+--- git.orig/Source/cmake/OptionsWPE.cmake
++++ git/Source/cmake/OptionsWPE.cmake
+@@ -94,9 +94,14 @@ find_package(LibGcrypt 1.6.0 REQUIRED)
+ find_package(LibSoup 2.42.0 REQUIRED)
+ find_package(LibXml2 2.8.0 REQUIRED)
+ find_package(PNG REQUIRED)
+-find_package(Sqlite REQUIRED)
+ find_package(Threads REQUIRED)
+ 
++if (ENABLE_SQLITE_ENCRYPTION_EXTENSION)
++  find_package(Sqlite3See REQUIRED)
++else()
++  find_package(Sqlite REQUIRED)
++endif()
++
+ find_package(WebP)
+ if (WEBP_FOUND)
+     SET_AND_EXPOSE_TO_BUILD(USE_WEBP TRUE)
+Index: git/Source/cmake/WebKitFeatures.cmake
+===================================================================
+--- git.orig/Source/cmake/WebKitFeatures.cmake
++++ git/Source/cmake/WebKitFeatures.cmake
+@@ -198,6 +198,7 @@ macro(WEBKIT_OPTION_BEGIN)
+     WEBKIT_OPTION_DEFINE(ENABLE_WEB_RTC "Toggle WebRTC API support" PRIVATE OFF)
+     WEBKIT_OPTION_DEFINE(ENABLE_XSLT "Toggle XSLT support" PRIVATE ON)
+     WEBKIT_OPTION_DEFINE(USE_SYSTEM_MALLOC "Toggle system allocator instead of WebKit's custom allocator" PRIVATE ${USE_SYSTEM_MALLOC_DEFAULT})
++    WEBKIT_OPTION_DEFINE(ENABLE_SQLITE_ENCRYPTION_EXTENSION "Toggle SQLite encryption extension support" PRIVATE OFF)
+ 
+     WEBKIT_OPTION_DEPEND(ENABLE_WEB_RTC ENABLE_MEDIA_STREAM)
+     WEBKIT_OPTION_DEPEND(ENABLE_LEGACY_ENCRYPTED_MEDIA ENABLE_VIDEO)

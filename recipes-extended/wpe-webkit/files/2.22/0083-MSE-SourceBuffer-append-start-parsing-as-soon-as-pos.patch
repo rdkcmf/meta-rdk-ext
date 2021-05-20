@@ -1,0 +1,137 @@
+From: a810e141291bcac21567c60957753d26ff4e48be Mon Sep 17 00:00:00 2001
+From: Ievgen Mutavchi <Ievgen_Mutavchi@comcast.com>
+Date: Sun, 26 Apr 2020 11:37:37 -0400
+Subject: [MSE] SourceBuffer append - start parsing as soon as
+ possible
+Source: COMCAST
+License: GPLV2
+Upstream-Status: None
+Signed-off-by: Eugene Mutavchi <Ievgen_Mutavchi@comcast.com>
+
+
+Also, adds logging track possible re-buffering.
+---
+ Source/WebCore/Modules/mediasource/SourceBuffer.cpp |  5 +++--
+ Source/WebCore/dom/GenericEventQueue.cpp            | 13 +++++++++++++
+ Source/WebCore/dom/GenericEventQueue.h              |  1 +
+ Source/WebCore/html/HTMLMediaElement.h              |  1 +
+ Source/WebCore/platform/graphics/MediaPlayer.h      |  2 ++
+ .../mse/MediaPlayerPrivateGStreamerMSE.cpp          |  9 +++++++++
+ .../gstreamer/mse/MediaPlayerPrivateGStreamerMSE.h  |  1 +
+ 7 files changed, 30 insertions(+), 2 deletions(-)
+
+Index: git/Source/WebCore/Modules/mediasource/SourceBuffer.cpp
+===================================================================
+--- git.orig/Source/WebCore/Modules/mediasource/SourceBuffer.cpp
++++ git/Source/WebCore/Modules/mediasource/SourceBuffer.cpp
+@@ -578,14 +578,15 @@ ExceptionOr<void> SourceBuffer::appendBu
+     m_updating = true;
+ 
+     // 5. Queue a task to fire a simple event named updatestart at this SourceBuffer object.
+-    scheduleEvent(eventNames().updatestartEvent);
++    if (hasEventListeners(eventNames().updatestartEvent))
++        scheduleEvent(eventNames().updatestartEvent);
+ 
+     // 6. Asynchronously run the buffer append algorithm.
+     m_appendBufferTimer.startOneShot(0_s);
+ 
+     // Add microtask to start append right after leaving current script context. Keep the timer active to check if append was aborted.
+     auto microtask = std::make_unique<ActiveDOMCallbackMicrotask>(MicrotaskQueue::mainThreadQueue(), *scriptExecutionContext(), [protectedThis = makeRef(*this)]() mutable {
+-        if (!protectedThis->m_asyncEventQueue.hasPendingEvents() && protectedThis->m_appendBufferTimer.isActive()) {
++        if (!protectedThis->m_asyncEventQueue.hasPendingEventsListeners() && protectedThis->m_appendBufferTimer.isActive()) {
+             protectedThis->m_appendBufferTimer.stop();
+             protectedThis->appendBufferTimerFired();
+         }
+Index: git/Source/WebCore/dom/GenericEventQueue.cpp
+===================================================================
+--- git.orig/Source/WebCore/dom/GenericEventQueue.cpp
++++ git/Source/WebCore/dom/GenericEventQueue.cpp
+@@ -92,6 +92,19 @@ bool GenericEventQueue::hasPendingEvents
+     return !m_pendingEvents.isEmpty();
+ }
+ 
++bool GenericEventQueue::hasPendingEventsListeners() const
++{
++    if (m_isClosed || m_pendingEvents.isEmpty())
++        return false;
++
++    for (auto& event : m_pendingEvents) {
++        if (m_owner.hasEventListeners(event->type()))
++            return true;
++    }
++
++    return false;
++}
++
+ bool GenericEventQueue::hasPendingEventsOfType(const AtomicString& type) const
+ {
+     for (auto& event : m_pendingEvents) {
+Index: git/Source/WebCore/dom/GenericEventQueue.h
+===================================================================
+--- git.orig/Source/WebCore/dom/GenericEventQueue.h
++++ git/Source/WebCore/dom/GenericEventQueue.h
+@@ -47,6 +47,7 @@ public:
+     void cancelAllEvents();
+     bool hasPendingEvents() const;
+     bool hasPendingEventsOfType(const AtomicString&) const;
++    bool hasPendingEventsListeners() const;
+ 
+     void suspend();
+     void resume();
+Index: git/Source/WebCore/html/HTMLMediaElement.h
+===================================================================
+--- git.orig/Source/WebCore/html/HTMLMediaElement.h
++++ git/Source/WebCore/html/HTMLMediaElement.h
+@@ -900,6 +900,7 @@ private:
+     void updateMediaState(UpdateState updateState = UpdateState::Synchronously);
+     bool hasPlaybackTargetAvailabilityListeners() const { return m_hasPlaybackTargetAvailabilityListeners; }
+ #endif
++    bool mediaPlayerHasSeekPending() const final { return m_seeking && m_pendingSeek; }
+ 
+     bool isVideoTooSmallForInlinePlayback();
+     void updateShouldAutoplay();
+Index: git/Source/WebCore/platform/graphics/MediaPlayer.h
+===================================================================
+--- git.orig/Source/WebCore/platform/graphics/MediaPlayer.h
++++ git/Source/WebCore/platform/graphics/MediaPlayer.h
+@@ -241,6 +241,8 @@ public:
+     virtual const void* mediaPlayerLogIdentifier() { return nullptr; }
+     virtual const Logger& mediaPlayerLogger() = 0;
+ #endif
++
++    virtual bool mediaPlayerHasSeekPending() const { return false; }
+ };
+ 
+ class MediaPlayer : public MediaPlayerEnums, public RefCounted<MediaPlayer> {
+Index: git/Source/WebCore/platform/graphics/gstreamer/mse/MediaPlayerPrivateGStreamerMSE.cpp
+===================================================================
+--- git.orig/Source/WebCore/platform/graphics/gstreamer/mse/MediaPlayerPrivateGStreamerMSE.cpp
++++ git/Source/WebCore/platform/graphics/gstreamer/mse/MediaPlayerPrivateGStreamerMSE.cpp
+@@ -548,6 +548,15 @@ void MediaPlayerPrivateGStreamerMSE::set
+     GstStateChangeReturn getStateResult = gst_element_get_state(m_pipeline.get(), &pipelineState, nullptr, 250 * GST_NSECOND);
+     bool isPlaying = (getStateResult == GST_STATE_CHANGE_SUCCESS && pipelineState == GST_STATE_PLAYING);
+ 
++    if (!m_didLogRebufferingOnce && oldReadyState > MediaPlayer::HaveMetadata && m_readyState == MediaPlayer::HaveMetadata
++        && !m_eosPending && !m_eosMarked && !m_player->client().mediaPlayerHasSeekPending()) {
++        WTFLogAlways("MSE is likely re-buffering, url = '%s', position = %s, duration = %s"
++                     , m_url.string().utf8().data()
++                     , toString(currentMediaTime()).utf8().data()
++                     , toString(durationMediaTime()).utf8().data());
++        m_didLogRebufferingOnce = true;
++    }
++
+     if (m_readyState == MediaPlayer::HaveMetadata && oldReadyState > MediaPlayer::HaveMetadata && isPlaying && !playbackPipelineHasFutureData()) {
+         GST_TRACE("Changing pipeline to PAUSED...");
+         bool ok = changePipelineState(GST_STATE_PAUSED);
+Index: git/Source/WebCore/platform/graphics/gstreamer/mse/MediaPlayerPrivateGStreamerMSE.h
+===================================================================
+--- git.orig/Source/WebCore/platform/graphics/gstreamer/mse/MediaPlayerPrivateGStreamerMSE.h
++++ git/Source/WebCore/platform/graphics/gstreamer/mse/MediaPlayerPrivateGStreamerMSE.h
+@@ -130,6 +130,7 @@ private:
+     MediaTime m_mediaTimeDuration;
+     bool m_mseSeekCompleted = true;
+     RefPtr<PlaybackPipeline> m_playbackPipeline;
++    bool m_didLogRebufferingOnce { false };
+     URL m_url;
+ };
+ 

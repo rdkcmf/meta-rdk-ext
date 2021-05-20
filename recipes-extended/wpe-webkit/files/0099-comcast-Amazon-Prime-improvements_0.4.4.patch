@@ -1,0 +1,399 @@
+From d8131bf51b96d7092d7ef482e644c85f3730b360 Mon Sep 17 00:00:00 2001
+From: Amadeusz Skrzypczak <amadeusz.skrzypczak@redembedded.com>
+Date: Thu, 25 Jun 2020 08:05:16 +0000
+Source: COMCAST
+License: GPLV2
+Upstream-Status: None
+Signed-off-by: Amadeusz Skrzypczak <amadeusz.skrzypczak@redembedded.com>
+Subject: [PATCH] XIONE-772 Fixed failed YT tests MSE (h264)
+
+---
+ Source/JavaScriptCore/runtime/ConsoleObject.cpp    |  4 +++
+ Source/JavaScriptCore/runtime/Options.h            |  3 +-
+ .../WebCore/Modules/mediasource/SourceBuffer.cpp   | 13 +++++++--
+ Source/WebCore/Modules/mediasource/SourceBuffer.h  |  1 +
+ .../WebCore/Modules/mediasource/SourceBuffer.idl   |  1 +
+ Source/WebCore/html/HTMLMediaElement.cpp           | 10 ++++++
+ Source/WebCore/platform/graphics/MediaPlayer.cpp   | 20 +++++++++++++
+ Source/WebCore/platform/graphics/MediaPlayer.h     |  2 ++
+ .../graphics/gstreamer/mse/AppendPipeline.cpp      | 34 +++++++++++++++++++---
+ .../graphics/gstreamer/mse/AppendPipeline.h        |  4 +++
+ .../graphics/gstreamer/mse/PlaybackPipeline.cpp    |  1 +
+ .../gstreamer/mse/WebKitMediaSourceGStreamer.cpp   |  4 ++-
+ .../mse/WebKitMediaSourceGStreamerPrivate.h        |  1 +
+ .../WebProcess/Network/WebLoaderStrategy.cpp       |  6 ++++
+ 14 files changed, 96 insertions(+), 8 deletions(-)
+
+diff --git a/Source/JavaScriptCore/runtime/ConsoleObject.cpp b/Source/JavaScriptCore/runtime/ConsoleObject.cpp
+index 08a7a035590..f0dd65fa30c 100644
+--- a/Source/JavaScriptCore/runtime/ConsoleObject.cpp
++++ b/Source/JavaScriptCore/runtime/ConsoleObject.cpp
+@@ -31,6 +31,7 @@
+ #include "JSCInlines.h"
+ #include "ScriptArguments.h"
+ #include "ScriptCallStackFactory.h"
++#include "Options.h"
+ 
+ namespace JSC {
+ 
+@@ -110,6 +111,9 @@ static EncodedJSValue consoleLogWithLevel(ExecState* exec, MessageLevel level)
+     if (!client)
+         return JSValue::encode(jsUndefined());
+ 
++    if (Options::disableConsoleLog())
++        return JSValue::encode(jsUndefined());
++
+     client->logWithLevel(exec, Inspector::createScriptArguments(exec, 0), level);
+     return JSValue::encode(jsUndefined());
+ }
+diff --git a/Source/JavaScriptCore/runtime/Options.h b/Source/JavaScriptCore/runtime/Options.h
+index c32deb773ee..7d262fe983d 100644
+--- a/Source/JavaScriptCore/runtime/Options.h
++++ b/Source/JavaScriptCore/runtime/Options.h
+@@ -475,7 +475,8 @@ typedef const char* optionString;
+     v(bool, useFastTLSForWasmContext, true, Normal, "If true (and fast TLS is enabled), we will store context in fast TLS. If false, we will pin it to a register.") \
+     v(bool, useCallICsForWebAssemblyToJSCalls, true, Normal, "If true, we will use CallLinkInfo to inline cache Wasm to JS calls.") \
+     v(bool, useObjectRestSpread, true, Normal, "If true, we will enable Object Rest/Spread feature.") \
+-    v(bool, useArrayAllocationProfiling, true, Normal, "If true, we will use our normal array allocation profiling. If false, the allocation profile will always claim to be undecided.")
++    v(bool, useArrayAllocationProfiling, true, Normal, "If true, we will use our normal array allocation profiling. If false, the allocation profile will always claim to be undecided.") \
++    v(bool, disableConsoleLog, false, Normal, "Disable printing of JS console logs.")
+ 
+ 
+ enum OptionEquivalence {
+diff --git a/Source/WebCore/Modules/mediasource/SourceBuffer.cpp b/Source/WebCore/Modules/mediasource/SourceBuffer.cpp
+index c62f17460b5..349d7e539db 100644
+--- a/Source/WebCore/Modules/mediasource/SourceBuffer.cpp
++++ b/Source/WebCore/Modules/mediasource/SourceBuffer.cpp
+@@ -873,6 +873,10 @@ void SourceBuffer::removeCodedFrames(const MediaTime& start, const MediaTime& en
+     // No-op
+ 
+     LOG(Media, "SourceBuffer::removeCodedFrames(%p) - buffered = %s", this, toString(m_buffered->ranges()).utf8().data());
++
++    size_t extraMemoryCost = this->extraMemoryCost();
++    if (m_reportedExtraMemoryCost > extraMemoryCost)
++        m_reportedExtraMemoryCost = extraMemoryCost;
+ }
+ 
+ void SourceBuffer::removeTimerFired()
+@@ -2032,7 +2036,6 @@ void SourceBuffer::provideMediaData(TrackBuffer& trackBuffer, const AtomicString
+         // against re-entrancy introduces a small inefficency when removing appended samples from the decode queue one at a time
+         // rather than when all samples have been enqueued.
+         auto sample = trackBuffer.decodeQueue.begin()->second;
+-        trackBuffer.decodeQueue.erase(trackBuffer.decodeQueue.begin());
+ 
+         // Do not enqueue samples spanning a significant unbuffered gap.
+         // NOTE: one second is somewhat arbitrary. MediaSource::monitorSourceBuffers() is run
+@@ -2045,6 +2048,7 @@ void SourceBuffer::provideMediaData(TrackBuffer& trackBuffer, const AtomicString
+         if (trackBuffer.lastEnqueuedDecodeEndTime.isValid() && sample->decodeTime() - trackBuffer.lastEnqueuedDecodeEndTime > oneSecond)
+             break;
+ 
++        trackBuffer.decodeQueue.erase(trackBuffer.decodeQueue.begin());
+         trackBuffer.lastEnqueuedPresentationTime = sample->presentationTime();
+         trackBuffer.lastEnqueuedDecodeEndTime = sample->decodeTime() + sample->duration();
+         m_private->enqueueSample(sample.releaseNonNull(), trackID);
+@@ -2216,9 +2220,9 @@ void SourceBuffer::reportExtraMemoryAllocated()
+         return;
+ 
+     size_t extraMemoryCostDelta = extraMemoryCost - m_reportedExtraMemoryCost;
+-    m_reportedExtraMemoryCost = extraMemoryCost;
+ 
+     JSC::JSLockHolder lock(scriptExecutionContext()->vm());
++    m_reportedExtraMemoryCost = extraMemoryCost;
+     // FIXME: Adopt reportExtraMemoryVisited, and switch to reportExtraMemoryAllocated.
+     // https://bugs.webkit.org/show_bug.cgi?id=142595
+     scriptExecutionContext()->vm().heap.deprecatedReportExtraMemory(extraMemoryCostDelta);
+@@ -2287,6 +2291,11 @@ ExceptionOr<void> SourceBuffer::setMode(AppendMode newMode)
+     return { };
+ }
+ 
++size_t SourceBuffer::memoryCost() const
++{
++    return sizeof(SourceBuffer) + m_reportedExtraMemoryCost;
++}
++
+ } // namespace WebCore
+ 
+ #endif
+diff --git a/Source/WebCore/Modules/mediasource/SourceBuffer.h b/Source/WebCore/Modules/mediasource/SourceBuffer.h
+index 09475fa43e5..395a94b8609 100644
+--- a/Source/WebCore/Modules/mediasource/SourceBuffer.h
++++ b/Source/WebCore/Modules/mediasource/SourceBuffer.h
+@@ -118,6 +118,7 @@ public:
+ 
+     bool hasPendingActivity() const final;
+ 
++    size_t memoryCost() const;
+ private:
+     SourceBuffer(Ref<SourceBufferPrivate>&&, MediaSource*);
+ 
+diff --git a/Source/WebCore/Modules/mediasource/SourceBuffer.idl b/Source/WebCore/Modules/mediasource/SourceBuffer.idl
+index 4d8f7323283..b23d62b447b 100644
+--- a/Source/WebCore/Modules/mediasource/SourceBuffer.idl
++++ b/Source/WebCore/Modules/mediasource/SourceBuffer.idl
+@@ -37,6 +37,7 @@
+     ActiveDOMObject,
+     Conditional=MEDIA_SOURCE,
+     ExportMacro=WEBCORE_EXPORT,
++    ReportExtraMemoryCost,
+ ] interface SourceBuffer : EventTarget {
+     attribute AppendMode mode;
+ 
+diff --git a/Source/WebCore/html/HTMLMediaElement.cpp b/Source/WebCore/html/HTMLMediaElement.cpp
+index 1a81815bc27..168b9e22977 100644
+--- a/Source/WebCore/html/HTMLMediaElement.cpp
++++ b/Source/WebCore/html/HTMLMediaElement.cpp
+@@ -463,6 +463,16 @@ HTMLMediaElement::HTMLMediaElement(const QualifiedName& tagName, Document& docum
+     , m_logIdentifier(nextLogIdentifier())
+ #endif
+ {
++    {
++        String host = document.url().host();
++        if (host.endsWith(".youtube.com", false) ||
++            equalLettersIgnoringASCIICase(host, "www.youtube.com") ||
++            host.contains("yt-dash-mse-test") ||
++            host.contains("ytlr-cert"))
++            MediaPlayer::setYouTubeQuirksEnabled(true);
++        else
++            MediaPlayer::setYouTubeQuirksEnabled(false);
++    }
+     allMediaElements().add(this);
+ 
+     ALWAYS_LOG(LOGIDENTIFIER);
+diff --git a/Source/WebCore/platform/graphics/MediaPlayer.cpp b/Source/WebCore/platform/graphics/MediaPlayer.cpp
+index df85a59aa22..bb992f24047 100644
+--- a/Source/WebCore/platform/graphics/MediaPlayer.cpp
++++ b/Source/WebCore/platform/graphics/MediaPlayer.cpp
+@@ -1553,4 +1553,24 @@ const PAL::Logger& MediaPlayer::mediaPlayerLogger()
+ 
+ }
+ 
++namespace WebCore {
++
++namespace
++{
++bool gYouTubeQuirksEnabled = false;
++}
++
++void MediaPlayer::setYouTubeQuirksEnabled(bool enabled)
++{
++    gYouTubeQuirksEnabled = enabled;
++}
++
++bool MediaPlayer::isYouTubeQuirksEnabled()
++{
++    static bool enableYTQuirks = !!getenv("WPE_ENABLE_YT_MSE_HACKS");
++    return gYouTubeQuirksEnabled || enableYTQuirks;
++}
++
++}
++
+ #endif
+diff --git a/Source/WebCore/platform/graphics/MediaPlayer.h b/Source/WebCore/platform/graphics/MediaPlayer.h
+index 6056a17a4d2..a4ee969fc61 100644
+--- a/Source/WebCore/platform/graphics/MediaPlayer.h
++++ b/Source/WebCore/platform/graphics/MediaPlayer.h
+@@ -334,6 +334,8 @@ public:
+     static void clearMediaCache(const String& path, std::chrono::system_clock::time_point modifiedSince);
+     static void clearMediaCacheForOrigins(const String& path, const HashSet<RefPtr<SecurityOrigin>>&);
+     static bool supportsKeySystem(const String& keySystem, const String& mimeType);
++    static void setYouTubeQuirksEnabled(bool);
++    static bool isYouTubeQuirksEnabled();
+ 
+     bool supportsPictureInPicture() const;
+     bool supportsFullscreen() const;
+diff --git a/Source/WebCore/platform/graphics/gstreamer/mse/AppendPipeline.cpp b/Source/WebCore/platform/graphics/gstreamer/mse/AppendPipeline.cpp
+index 601ffff32c2..3169dd0304f 100644
+--- a/Source/WebCore/platform/graphics/gstreamer/mse/AppendPipeline.cpp
++++ b/Source/WebCore/platform/graphics/gstreamer/mse/AppendPipeline.cpp
+@@ -157,7 +157,7 @@ public:
+             }
+ 
+             // Apply the offset to zero-align the first sample and also correct the next ones.
+-            if (m_ptsOffset.isValid())
++            if (MediaPlayer::isYouTubeQuirksEnabled() && m_ptsOffset.isValid())
+                 GST_BUFFER_PTS(buffer) += toGstClockTime(m_ptsOffset);
+ 
+             m_lastPts = MediaTime(GST_BUFFER_PTS(buffer), GST_SECOND);
+@@ -365,6 +365,9 @@ void AppendPipeline::clearPlayerPrivate()
+ 
+ void AppendPipeline::handleNeedContextSyncMessage(GstMessage* message)
+ {
++    if (GST_MESSAGE_TYPE(message) != GST_MESSAGE_NEED_CONTEXT)
++        return;
++
+     const gchar* contextType = nullptr;
+     gst_message_parse_context_type(message, &contextType);
+     GST_TRACE("context type: %s", contextType);
+@@ -780,7 +783,7 @@ void AppendPipeline::appsinkNewSample(GstSample* sample)
+ 
+     // If we're beyond the duration, ignore this sample and the remaining ones.
+     MediaTime duration = m_mediaSourceClient->duration();
+-    if (duration.isValid() && !duration.isIndefinite() && mediaSample->presentationTime() > duration) {
++    if (MediaPlayer::isYouTubeQuirksEnabled() && duration.isValid() && !duration.isIndefinite() && mediaSample->presentationTime() > duration) {
+         GST_DEBUG("Detected sample (%s) beyond the duration (%s), declaring LastSample", mediaSample->presentationTime().toString().utf8().data(), duration.toString().utf8().data());
+         setAppendState(AppendState::LastSample);
+         gst_sample_unref(sample);
+@@ -792,15 +795,16 @@ void AppendPipeline::appsinkNewSample(GstSample* sample)
+         && mediaSample->presentationTime() > MediaTime::zeroTime()) {
+         if( mediaSample->presentationTime() <= MediaTime(1, 10)) {
+             GST_DEBUG("Adding gap offset 0.1");
+-            mediaSample->applyPtsOffset(MediaTime::zeroTime());
+             m_allowedGap = MediaTime(1,10);
+         } else if (mediaSample->presentationTime() <= MediaTime(2, 10)) {
+             GST_WARNING("Adding gap offset 0.2");
+-            mediaSample->applyPtsOffset(MediaTime::zeroTime());
+             m_allowedGap = MediaTime(2,10);
+         } else {
+             GST_ERROR("Sample Gap greater then 0.2 sec");
+         }
++
++        if (MediaPlayer::isYouTubeQuirksEnabled() && mediaSample->presentationTime() <= MediaTime(2, 10))
++            mediaSample->applyPtsOffset(MediaTime::zeroTime());
+     }
+     m_sourceBufferPrivate->didReceiveSample(*mediaSample);
+     setAppendState(AppendState::Sampling);
+@@ -973,6 +977,7 @@ GstFlowReturn AppendPipeline::pushNewBuffer(GstBuffer* buffer)
+ void AppendPipeline::reportAppsrcAtLeastABufferLeft()
+ {
+     GST_TRACE("buffer left appsrc, reposting to bus");
++    m_busAlreadyNotifiedOfNeedData = false;
+     GstStructure* structure = gst_structure_new_empty("appsrc-buffer-left");
+     GstMessage* message = gst_message_new_application(GST_OBJECT(m_appsrc.get()), structure);
+     gst_bus_post(m_bus.get(), message);
+@@ -980,6 +985,9 @@ void AppendPipeline::reportAppsrcAtLeastABufferLeft()
+ 
+ void AppendPipeline::reportAppsrcNeedDataReceived()
+ {
++    if (m_busAlreadyNotifiedOfNeedData)
++        return;
++    m_busAlreadyNotifiedOfNeedData = true;
+     GST_TRACE("received need-data signal at appsrc, reposting to bus");
+     GstStructure* structure = gst_structure_new_empty("appsrc-need-data");
+     GstMessage* message = gst_message_new_application(GST_OBJECT(m_appsrc.get()), structure);
+@@ -1246,6 +1254,24 @@ void AppendPipeline::appendPipelineDemuxerNoMorePadsFromAnyThread()
+     GST_TRACE("appendPipelineDemuxerNoMorePadsFromAnyThread - posted to bus");
+ }
+ 
++void AppendPipeline::drainBusIfNeeded()
++{
++    if (m_appendState == AppendState::Invalid || m_appendState == AppendState::NotStarted)
++        return;
++
++    GstBus *bus = m_bus.get();
++    if (UNLIKELY (bus == nullptr))
++        return;
++
++    while(gst_bus_have_pending(bus)) {
++        GstMessage *message = gst_bus_pop(bus);
++        if (UNLIKELY (message == nullptr))
++            break;
++        gst_bus_async_signal_func(bus, message, nullptr);
++        gst_message_unref (message);
++    }
++}
++
+ static void appendPipelineAppsinkCapsChanged(GObject* appsinkPad, GParamSpec*, AppendPipeline* appendPipeline)
+ {
+     GstStructure* structure = gst_structure_new_empty("appsink-caps-changed");
+diff --git a/Source/WebCore/platform/graphics/gstreamer/mse/AppendPipeline.h b/Source/WebCore/platform/graphics/gstreamer/mse/AppendPipeline.h
+index ef31051cca2..8496d00b988 100644
+--- a/Source/WebCore/platform/graphics/gstreamer/mse/AppendPipeline.h
++++ b/Source/WebCore/platform/graphics/gstreamer/mse/AppendPipeline.h
+@@ -29,6 +29,7 @@
+ 
+ #include <gst/gst.h>
+ #include <wtf/Condition.h>
++#include <wtf/WeakPtr.h>
+ 
+ #define INIT_DATATYPE_CENC "cenc"
+ #define INIT_DATATYPE_WEBM "webm"
+@@ -99,6 +100,7 @@ public:
+ #endif
+ 
+ private:
++    void drainBusIfNeeded();
+     void resetPipeline();
+     void checkEndOfAppend();
+     void handleAppsrcAtLeastABufferLeft();
+@@ -108,6 +110,7 @@ private:
+     void demuxerNoMorePads();
+     void consumeAppSinkAvailableSamples();
+ 
++    WeakPtrFactory<AppendPipeline> m_weakPtrFactory;
+     Ref<MediaSourceClientGStreamerMSE> m_mediaSourceClient;
+     Ref<SourceBufferPrivateGStreamer> m_sourceBufferPrivate;
+     MediaPlayerPrivateGStreamerMSE* m_playerPrivate;
+@@ -133,6 +136,7 @@ private:
+     // queue, instead of it growing unbounded.
+     // Used intentionally without locks.
+     bool m_busAlreadyNotifiedOfAvailablesamples;
++    bool m_busAlreadyNotifiedOfNeedData { false };
+ 
+     Lock m_padAddRemoveLock;
+     Condition m_padAddRemoveCondition;
+diff --git a/Source/WebCore/platform/graphics/gstreamer/mse/PlaybackPipeline.cpp b/Source/WebCore/platform/graphics/gstreamer/mse/PlaybackPipeline.cpp
+index 4447e88a8ca..86c53180a19 100644
+--- a/Source/WebCore/platform/graphics/gstreamer/mse/PlaybackPipeline.cpp
++++ b/Source/WebCore/platform/graphics/gstreamer/mse/PlaybackPipeline.cpp
+@@ -116,6 +116,7 @@ MediaSourcePrivate::AddStatus PlaybackPipeline::addSourceBuffer(RefPtr<SourceBuf
+     stream->parent = m_webKitMediaSrc.get();
+     stream->appsrc = gst_element_factory_make("appsrc", nullptr);
+     stream->appsrcNeedDataFlag = false;
++    stream->busAlreadyNotifiedOfNeedDataFlag = false;
+     stream->sourceBuffer = sourceBufferPrivate.get();
+ 
+     // No track has been attached yet.
+diff --git a/Source/WebCore/platform/graphics/gstreamer/mse/WebKitMediaSourceGStreamer.cpp b/Source/WebCore/platform/graphics/gstreamer/mse/WebKitMediaSourceGStreamer.cpp
+index 5a458f51ddf..07446f9c55f 100644
+--- a/Source/WebCore/platform/graphics/gstreamer/mse/WebKitMediaSourceGStreamer.cpp
++++ b/Source/WebCore/platform/graphics/gstreamer/mse/WebKitMediaSourceGStreamer.cpp
+@@ -138,7 +138,8 @@ static void enabledAppsrcNeedData(GstAppSrc* appsrc, guint, gpointer userData)
+         // Search again for the Stream, just in case it was removed between the previous lock and this one.
+         appsrcStream = getStreamByAppsrc(webKitMediaSrc, GST_ELEMENT(appsrc));
+ 
+-        if (appsrcStream && appsrcStream->type != WebCore::Invalid) {
++        if (appsrcStream && appsrcStream->type != WebCore::Invalid && !appsrcStream->busAlreadyNotifiedOfNeedDataFlag) {
++            appsrcStream->busAlreadyNotifiedOfNeedDataFlag = true;
+             GstStructure* structure = gst_structure_new("ready-for-more-samples", "appsrc-stream", G_TYPE_POINTER, appsrcStream, nullptr);
+             GstMessage* message = gst_message_new_application(GST_OBJECT(appsrc), structure);
+             gst_bus_post(webKitMediaSrc->priv->bus.get(), message);
+@@ -166,6 +167,7 @@ static void enabledAppsrcEnoughData(GstAppSrc *appsrc, gpointer userData)
+         return;
+ 
+     stream->sourceBuffer->setReadyForMoreSamples(false);
++    stream->busAlreadyNotifiedOfNeedDataFlag = false;
+ }
+ 
+ static gboolean enabledAppsrcSeekData(GstAppSrc*, guint64, gpointer userData)
+diff --git a/Source/WebCore/platform/graphics/gstreamer/mse/WebKitMediaSourceGStreamerPrivate.h b/Source/WebCore/platform/graphics/gstreamer/mse/WebKitMediaSourceGStreamerPrivate.h
+index 7f30b34ba1b..27943a5a97a 100644
+--- a/Source/WebCore/platform/graphics/gstreamer/mse/WebKitMediaSourceGStreamerPrivate.h
++++ b/Source/WebCore/platform/graphics/gstreamer/mse/WebKitMediaSourceGStreamerPrivate.h
+@@ -77,6 +77,7 @@ struct _Stream {
+     // This helps WebKitMediaSrcPrivate.appsrcNeedDataCount, ensuring that needDatas are
+     // counted only once per each appsrc.
+     bool appsrcNeedDataFlag;
++    bool busAlreadyNotifiedOfNeedDataFlag;
+ 
+     // Used to enforce continuity in the appended data and avoid breaking the decoder.
+     // Only used from the main thread.
+diff --git a/Source/WebKit/WebProcess/Network/WebLoaderStrategy.cpp b/Source/WebKit/WebProcess/Network/WebLoaderStrategy.cpp
+index 99e4bf6c4b8..28094af15d8 100644
+--- a/Source/WebKit/WebProcess/Network/WebLoaderStrategy.cpp
++++ b/Source/WebKit/WebProcess/Network/WebLoaderStrategy.cpp
+@@ -248,6 +248,12 @@ void WebLoaderStrategy::scheduleLoad(ResourceLoader& resourceLoader, CachedResou
+     loadParameters.maximumBufferingTime = maximumBufferingTime(resource);
+     loadParameters.derivedCachedDataTypesToRetrieve = resourceLoader.options().derivedCachedDataTypesToRetrieve;
+ 
++    if (resource && resource->type() == CachedResource::RawResource &&
++        loadParameters.maximumBufferingTime.value() == 0 && resourceLoader.request().timeoutInterval() > 0) {
++        double bufferingTime = std::min(0.25, resourceLoader.request().timeoutInterval() / 2.0);
++        loadParameters.maximumBufferingTime = Seconds(bufferingTime);
++    }
++
+     ASSERT((loadParameters.webPageID && loadParameters.webFrameID) || loadParameters.clientCredentialPolicy == ClientCredentialPolicy::CannotAskClientForCredentials);
+ 
+     RELEASE_LOG_IF_ALLOWED(resourceLoader, "scheduleLoad: Resource is being scheduled with the NetworkProcess (frame = %p, priority = %d, pageID = %" PRIu64 ", frameID = %" PRIu64 ", resourceID = %" PRIu64 ")", resourceLoader.frame(), static_cast<int>(resourceLoader.request().priority()), loadParameters.webPageID, loadParameters.webFrameID, loadParameters.identifier);
+-- 
+2.16.2
+

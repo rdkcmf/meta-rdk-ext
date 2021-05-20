@@ -1,0 +1,50 @@
+[ARRISEOS-27935] - CPE unexpectedly rebooted because of wpe-launcher
+
+based on: https://github.com/brauner/lxc/commit/4288b79f23248e64f182bad5273e084b28680f69?diff=unified
+
+When a container is marked as being in STOPPED state it is possible for another
+thread to start it again even though not all cleanup operations for that
+container have finished. This is not a problem for most things like sockets and
+friends which are unique to the container. It is however a problem for cgroups
+which are named after that container in that we cause our cgroup driver to
+waste cpu cycles finding a new cgroup name.
+
+(artur.fogiel@redmebedded.com)
+diff --git lxc-2.0.6/src/lxc/start.c lxc-2.0.6/src/lxc/start.c
+index 0ca5ba0..4ecf732 100644
+--- lxc-2.0.6/src/lxc/start.c
++++ lxc-2.0.6/src/lxc/start.c
+@@ -539,9 +539,14 @@ void lxc_fini(const char *name, struct lxc_handler *handler)
+ 		close(handler->netnsfd);
+ 		handler->netnsfd = -1;
+ 	}
++	cgroup_destroy(handler);
+ 
+ 	lxc_set_state(name, handler, STOPPED);
+ 
++	/* close command socket */
++	close(handler->conf->maincmd_fd);
++	handler->conf->maincmd_fd = -1;
++
+ 	if (run_lxc_hooks(name, "post-stop", handler->conf, handler->lxcpath, NULL)) {
+ 		ERROR("Failed to run lxc.hook.post-stop for container \"%s\".", name);
+ 		if (handler->conf->reboot) {
+@@ -558,9 +563,6 @@ void lxc_fini(const char *name, struct lxc_handler *handler)
+ 
+ 	lxc_console_delete(&handler->conf->console);
+ 	lxc_delete_tty(&handler->conf->tty_info);
+-	close(handler->conf->maincmd_fd);
+-	handler->conf->maincmd_fd = -1;
+-	free(handler->name);
+ 	if (handler->ttysock[0] != -1) {
+ 		close(handler->ttysock[0]);
+ 		close(handler->ttysock[1]);
+@@ -569,7 +571,7 @@ void lxc_fini(const char *name, struct lxc_handler *handler)
+ 	if (handler->conf->ephemeral == 1 && handler->conf->reboot != 1)
+ 		lxc_destroy_container_on_signal(handler, name);
+ 
+-	cgroup_destroy(handler);
++	free(handler->name);
+ 	free(handler);
+ }
+ 

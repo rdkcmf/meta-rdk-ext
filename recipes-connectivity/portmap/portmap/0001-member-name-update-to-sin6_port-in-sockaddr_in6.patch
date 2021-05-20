@@ -1,0 +1,37 @@
+From a04842195ae1b2ea11930ee1de86f34363eb5dc7 Mon Sep 17 00:00:00 2001
+From: Jaga <jagadheesan_duraisamy@comcast.com>
+Date: Tue, 25 Feb 2020 15:09:30 +0000
+Subject: [PATCH] member name update to sin6_port in sockaddr_in6
+
+Reason for Change: Updated sin_port to sin6_port in struct sockaddr_in6
+Source: COMCAST
+License: BSD
+Upstream-Status: Pending
+
+Signed-off-by: Jaga <jagadheesan_duraisamy@comcast.com>
+---
+ portmap.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/portmap.c b/portmap.c
+index f3b3775..eb1db72 100644
+--- a/portmap.c
++++ b/portmap.c
+@@ -535,7 +535,7 @@ static void reg_service(struct svc_req *rqstp, SVCXPRT *xprt)
+ 				    malloc((u_int)sizeof(struct flagged_pml));
+ 				pml = &fpml->pml;
+ 				fpml->priv =
+-					(ntohs(svc_getcaller(xprt)->sin_port)
++					(ntohs(svc_getcaller(xprt)->sin6_port)
+ 					 < IPPORT_RESERVED);
+ 				pml->pml_map = reg;
+ 				pml->pml_next = 0;
+@@ -591,7 +591,7 @@ static void reg_service(struct svc_req *rqstp, SVCXPRT *xprt)
+ 				}
+ 				fpml = (struct flagged_pml*)pml;
+ 				if (fpml->priv &&
+-				    (ntohs(svc_getcaller(xprt)->sin_port)
++				    (ntohs(svc_getcaller(xprt)->sin6_port)
+ 				     >= IPPORT_RESERVED)) {
+ 					ans = 0;
+ 					break;

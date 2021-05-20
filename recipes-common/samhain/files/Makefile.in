@@ -1,0 +1,1819 @@
+#
+# Copyright Rainer Wichmann (2006)
+#
+# License Information:
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 2 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+
+
+# --- boiler-plate stuff ---
+#
+SHELL = /bin/sh
+
+srcdir = @srcdir@
+srcsrc = @srcdir@/src
+srcinc = @srcdir@/include
+top_srcdir = @top_srcdir@
+
+# Don't use VPATH - it's a portability mess
+#
+# VPATH = $(top_srcdir)/src
+
+prefix = @prefix@
+exec_prefix = @exec_prefix@
+
+sbindir = @sbindir@
+sysconfdir = @sysconfdir@
+localstatedir = @localstatedir@
+mandir = @mandir@
+datarootdir = @datarootdir@
+mytmpdir = @mytmpdir@
+
+configfile = @myconffile@
+mydatafile = @mydatafile@
+mylockfile = @mylockfile@
+mylogfile = @mylogfile@
+
+mydatadir = @mydataroot@
+mylogdir = @mylogdir@
+mylockdir = @mylockdir@
+
+selectconfig = @selectconfig@
+
+top_builddir = .
+
+INSTALL = @INSTALL@
+INSTALL_PROGRAM = @INSTALL@ -s -m 700
+INSTALL_SHELL = @INSTALL@ -m 700
+INSTALL_DATA = @INSTALL@ -m 600
+INSTALL_MAN = @INSTALL@ -m 644
+INSTALL_SCRIPT = @INSTALL_SCRIPT@
+INSTALL_NAME = @install_name@
+INSTALL_DSYS = @INSTALL@ -m 755
+
+PACKAGE = @PACKAGE@
+VERSION = @VERSION@
+BUILD_NUM = 1
+
+DEFAULT_MAINTAINER = Nobody Nowhere <nobody@example.com>
+
+VFLAG    = @mytclient@
+SETPWD   = @setpwd_prg@
+STEGIN   = @stegin_prg@
+SAMHAIN  = @sh_main_prg@
+YULECTL  = @yulectl_prg@
+XOR_CODE = @xor_code@
+SH_LKM   = @sh_lkm@
+TIGER_SRC = @tiger_src@
+
+ACLOCAL_M4 = $(top_srcdir)/aclocal.m4
+mkinstalldirs = $(SHELL) $(top_srcdir)/mkinstalldirs
+
+
+CC ?= @CC@
+BUILD_CC ?= @BUILD_CC@
+# DBGDEF = -pg -DSH_PROFILE=1
+DBGDEF = @mydebugdef@
+DEFS = $(DBGDEF) @DEFS@ -I. -I$(top_srcdir)/include
+CPPFLAGS ?= @CPPFLAGS@
+LDFLAGS ?= @LDFLAGS@
+LIBS_TRY = @LIBS@
+LIBS_SOCK = @sh_libsocket@
+LIBS_KVM = @sh_libkvm@
+CFLAGS ?= @CFLAGS@
+CUTEST =
+COMPILE = $(CC) $(DEFS) $(INCLUDES) $(CPPFLAGS) $(CFLAGS) $(CUTEST)
+LINK = $(CC) $(DBGDEF) -O $(LDFLAGS) -o $@
+
+DESTDIR =
+
+TAR = tar
+GZIP = --best
+
+# For creating a packed client
+#
+CLIENTPASSWD =
+
+.SUFFIXES:                      # Delete the default suffixes
+
+#
+# ---  Files -------
+#
+
+
+
+HEADERS = samhain.h sh_unix.h sh_utils.h sh_error.h sh_error_min.h sh_files.h \
+	sh_getopt.h sh_readconf.h sh_tiger.h sh_hash.h \
+	sh_mail.h sh_mail_int.h sh_nmail.h sh_filter.h \
+	sh_mem.h sh_entropy.h sh_forward.h sh_modules.h sh_utmp.h \
+	sh_kern.h sh_suidchk.h sh_srp.h sh_fifo.h sh_html.h sh_tools.h \
+	sh_gpg.h sh_cat.h sh_calls.h sh_extern.h sh_database.h sh_trace.h \
+	sh_schedule.h bignum.h trustfile.h slib.h zAVLTree.h \
+	lzoconf.h minilzo.h rijndael-alg-fst.h rijndael-api-fst.h \
+	rijndael-boxes-fst.h sh_socket.h sh_ignore.h sh_prelude.h \
+	sh_mounts.h sh_userfiles.h sh_static.h sh_prelink.h \
+	sh_processcheck.h sh_portcheck.h sh_pthread.h sh_string.h \
+	sh_log_check.h sh_log_evalrule.h sh_log_correlate.h \
+	sh_log_mark.h sh_log_repeat.h sh_inotify.h sh_registry.h sh_ipvx.h \
+	sh_restrict.h sh_sub.h sh_fInotify.h sh_checksum.h
+
+
+SOURCES = $(srcsrc)/samhain.c $(srcsrc)/sh_unix.c \
+	$(srcsrc)/sh_utils.c $(srcsrc)/sh_error.c \
+	$(srcsrc)/sh_files.c $(srcsrc)/sh_getopt.c \
+	$(srcsrc)/sh_readconf.c $(srcsrc)/sh_tiger0.c \
+	$(srcsrc)/sh_tiger1.c $(srcsrc)/sh_tiger2.c \
+	$(srcsrc)/sh_tiger1_64.c $(srcsrc)/sh_tiger2_64.c \
+	$(srcsrc)/sh_hash.c $(srcsrc)/sh_mail.c $(srcsrc)/sh_nmail.c \
+	$(srcsrc)/sh_mem.c $(srcsrc)/sh_entropy.c \
+	$(srcsrc)/sh_forward.c $(srcsrc)/sh_modules.c \
+	$(srcsrc)/sh_utmp.c $(srcsrc)/sh_login_track.c $(srcsrc)/sh_kern.c \
+	$(srcsrc)/sh_suidchk.c $(srcsrc)/sh_srp.c \
+	$(srcsrc)/sh_fifo.c $(srcsrc)/sh_tools.c \
+	$(srcsrc)/sh_html.c $(srcsrc)/sh_gpg.c \
+	$(srcsrc)/sh_cat.c $(srcsrc)/sh_calls.c \
+	$(srcsrc)/sh_extern.c $(srcsrc)/sh_database.c \
+	$(srcsrc)/sh_err_log.c $(srcsrc)/sh_err_console.c \
+	$(srcsrc)/sh_err_syslog.c $(srcsrc)/sh_schedule.c \
+	$(srcsrc)/bignum.c $(srcsrc)/mkhdr.c \
+	$(srcsrc)/samhain_setpwd.c $(srcsrc)/samhain_stealth.c \
+	$(srcsrc)/encode.c $(srcsrc)/sstrip.c $(srcsrc)/sample.c \
+	$(srcsrc)/trustfile.c $(srcsrc)/exepack.c \
+	$(srcsrc)/exepack_fill.c $(srcsrc)/exepack_mkdata.c \
+	$(srcsrc)/minilzo.c $(srcsrc)/slib.c \
+	$(srcsrc)/rijndael-alg-fst.c $(srcsrc)/rijndael-api-fst.c \
+	$(srcsrc)/zAVLTree.c $(srcsrc)/bignum.c \
+	$(srcsrc)/sh_socket.c $(srcsrc)/sh_ignore.c \
+	$(srcsrc)/yulectl.c $(srcsrc)/sh_mounts.c \
+	$(srcsrc)/sh_userfiles.c $(srcsrc)/sh_prelude.c \
+	$(srcsrc)/sh_prelink.c $(srcsrc)/sh_static.c \
+	$(srcsrc)/sh_portcheck.c $(srcsrc)/sh_port2proc.c\
+	$(srcsrc)/sh_processcheck.c $(srcsrc)/sh_filter.c \
+	$(srcsrc)/sh_pthread.c $(srcsrc)/sh_string.c \
+	$(srcsrc)/sh_log_parse_syslog.c $(srcsrc)/sh_log_parse_pacct.c \
+	$(srcsrc)/sh_log_parse_samba.c $(srcsrc)/sh_log_parse_generic.c \
+	$(srcsrc)/sh_log_parse_apache.c $(srcsrc)/sh_log_evalrule.c \
+	$(srcsrc)/sh_log_correlate.c $(srcsrc)/sh_log_mark.c \
+	$(srcsrc)/sh_log_check.c $(srcsrc)/dnmalloc.c \
+	$(srcsrc)/sh_inotify.c $(srcsrc)/sh_log_repeat.c \
+	$(srcsrc)/sh_audit.c $(srcsrc)/sh_registry.c \
+	$(srcsrc)/sh_ipvx.c $(srcsrc)/sh_restrict.c \
+	$(srcsrc)/sh_filetype.c $(srcsrc)/sh_sub.c $(srcsrc)/sh_fInotify.c\
+	$(srcsrc)/sh_checksum.c \
+	$(srcsrc)/t-test1.c 
+
+OBJECTS = sh_files.o sh_tiger0.o sh_tiger2.o sh_tiger2_64.o \
+	samhain.o sh_unix.o sh_utils.o sh_error.o \
+	sh_getopt.o sh_readconf.o sh_filter.o \
+	sh_hash.o sh_mail.o sh_nmail.o sh_mem.o sh_login_track.o \
+	sh_entropy.o sh_forward.o sh_modules.o sh_utmp.o sh_kern.o \
+	sh_suidchk.o sh_srp.o sh_fifo.o sh_tools.o sh_html.o sh_gpg.o \
+	sh_cat.o sh_calls.o sh_extern.o sh_database.o sh_err_log.o \
+	sh_err_console.o sh_err_syslog.o sh_schedule.o bignum.o \
+	trustfile.o rijndael-alg-fst.o rijndael-api-fst.o slib.o \
+	zAVLTree.o sh_socket.o sh_ignore.o sh_prelude.o \
+	sh_mounts.o sh_userfiles.o sh_prelink.o sh_static.o \
+	sh_processcheck.o sh_portcheck.o sh_port2proc.o \
+	sh_log_parse_syslog.o sh_log_parse_pacct.o sh_log_parse_apache.o \
+	sh_log_parse_samba.o sh_log_evalrule.o sh_log_check.o \
+	sh_log_parse_generic.o \
+	sh_log_correlate.o sh_log_mark.o sh_log_repeat.o \
+	sh_pthread.o sh_string.o sh_inotify.o dnmalloc.o \
+	sh_audit.o sh_registry.o sh_ipvx.o sh_restrict.o \
+	sh_filetype.o sh_sub.o sh_fInotify.o sh_checksum.o
+
+KERN = kern_head.h kern_head.c
+
+TESTSUITE = test.sh testcompile.sh testhash.sh testtiger.txt \
+	testtimesrv.sh \
+	testext.sh testrc_1ext.in test_ext.c.in testrun_1d.sh \
+	testrun_1.sh testrun_1a.sh testrun_1b.sh testrun_1c.sh testrc_1 \
+	testrun_2.sh testrun_2a.sh testrun_2b.sh testrc_2.in \
+	testrun_2c.sh testrun_2d.sh
+
+DIST_COMMON =  README COPYING LICENSE samhain.jpg \
+samhainrc.linux samhainrc.solaris samhainrc.freebsd samhainrc.aix5.2.0 \
+samhainrc.netbsd yulerc.template \
+Install.sh 
+
+DIST_NEEDED = Makefile.in deploy.sh.in samhain-install.sh.in \
+samhain.spec.in rules.deb.in rules.deb-light.in samhain.spec hp_ux.psf.in \
+stealth_template.jpg \
+config.guess config.h.in stamp-h.in config.sub configure \
+configure.ac acconfig.h aclocal.m4 install-sh missing mkinstalldirs \
+c_random.sh c_bits.sh depend.sum depend.dep stamp-hdep
+
+DISTFILES = $(DIST_COMMON) $(DIST_NEEDED) \
+        src include man scripts init docs sql_init test dsys
+
+PROGRAMS = $(SETPWD) $(STEGIN) $(SAMHAIN) $(YULECTL)
+
+#----------------------------------------------------------
+#
+# the first target is the default one
+#
+#----------------------------------------------------------
+
+all: $(top_srcdir)/depend.sum $(SETPWD) $(STEGIN) $(SAMHAIN) $(YULECTL) @sh_lkm@ sstrip sample
+
+
+#----------------------------------------------------------
+#
+# rules for automatic updating of configuration information
+# after changing the configuration files
+#
+#----------------------------------------------------------
+
+$(top_srcdir)/configure: $(top_srcdir)/configure.ac $(top_srcdir)/aclocal.m4
+	cd $(srcdir) && autoconf
+
+# autoheader might not change config.h.in, so touch a stamp file.
+$(top_srcdir)/config.h.in: $(top_srcdir)/stamp-h.in
+	touch $(top_srcdir)/config.h.in
+
+$(top_srcdir)/stamp-h.in: $(top_srcdir)/configure.ac $(top_srcdir)/aclocal.m4
+	cd $(top_srcdir) && autoheader
+	echo timestamp > $(top_srcdir)/stamp-h.in
+
+config.h: stamp-h
+	@sleep 1; \
+	touch config.h
+
+stamp-h: $(top_srcdir)/config.h.in config.status
+	./config.status
+
+Makefile: $(top_srcdir)/Makefile.in config.status
+	./config.status
+
+samhain-install.sh: $(top_srcdir)/samhain-install.sh.in config.status
+	./config.status
+
+config.status: $(top_srcdir)/configure
+	./config.status --recheck
+
+#----------------------------------------------------------
+#
+# rules for automatic dependency tracking
+#
+#----------------------------------------------------------
+
+
+depend-gen: $(srcsrc)/depend-gen.c 
+	@echo "$(BUILD_CC) -I. -o depend-gen $(srcsrc)/depend-gen.c"; \
+	$(BUILD_CC) -I. -o depend-gen $(srcsrc)/depend-gen.c 2>/dev/null || \
+	echo "failed to compile ... hope depend.dep is ok"
+
+# redo if sources change
+#
+$(top_srcdir)/depend.dep: depend-gen $(SOURCES)
+	@echo "update depend.dep ..."; \
+	test -f $(srcdir)/depend.dep || echo > $(srcdir)/depend.dep; \
+	if test -f depend-gen; then \
+	  failfiles=""; \
+	  for ff in $(SOURCES) $(srcsrc)/kern_head.c; do \
+	    ./depend-gen -i '$$(srcinc)/' -o $(top_srcdir)/depend.dep $$ff || \
+		failfiles="$${failfiles} $$ff"; \
+	  done; \
+	  if test x"$${failfiles}" != x; then \
+	    echo "--------------------------------------------------------";\
+	    echo " depend-gen failed to update depend.dep. You can safely"; \
+	    echo " ignore this error, unless you have modified the source"; \
+	    echo " files and changed their dependencies.";                  \
+	    echo "--------------------------------------------------------";\
+	  else \
+	    echo $(srcsrc) > $(top_srcdir)/stamp-dep; \
+	  fi; \
+	else \
+	  echo "depend-gen not found ... depend.dep not modified"; \
+	fi
+
+# only updated if depencies change
+#
+$(top_srcdir)/depend.sum: $(top_srcdir)/depend.dep
+	@if test -f depend-gen; then \
+	  nsum=`./depend-gen -c $(top_srcdir)/depend.dep|awk '{print $$1}'`; \
+	  osum=`cat $(top_srcdir)/depend.sum 2>/dev/null`; \
+	  if test "x$$osum" != "x$$nsum"; then \
+	    echo "update $(top_srcdir)/depend.sum ..."; \
+	    echo $$nsum > $(top_srcdir)/depend.sum; \
+	    echo timestamp > $(top_srcdir)/stamp-hdep; \
+	  fi; \
+	fi;
+
+$(top_srcdir)/stamp-hdep:
+	touch $(top_srcdir)/stamp-hdep && touch $(top_srcdir)/Makefile.in
+
+$(top_srcdir)/Makefile.in: $(top_srcdir)/stamp-hdep
+	@echo "update Makefile.in ..."; \
+	echo "cp Makefile.in Makefile.in.bak"; \
+	cp $(top_srcdir)/Makefile.in $(top_srcdir)/Makefile.in.bak; \
+	if test -f depend-gen; then \
+	  failfiles=""; \
+	  for ff in $(SOURCES) $(srcsrc)/kern_head.c; do \
+	     ./depend-gen -i '$$(srcinc)/' -o $(top_srcdir)/Makefile.in $$ff || \
+		failfiles="$${failfiles} $$ff"; \
+	  done; \
+	  if test x"$${failfiles}" != x; then \
+	    echo "--------------------------------------------------------";\
+	    echo " depend-gen failed to update Makefile.in. You can safely"; \
+	    echo " ignore this error, unless you have modified the source"; \
+	    echo " files and changed their dependencies.";                  \
+	    echo "--------------------------------------------------------";\
+	  else \
+	    echo $(srcsrc) > $(top_srcdir)/stamp-dep; \
+	  fi; \
+	fi
+
+# do it manually
+#
+depend: depend-gen
+	@echo "update Makefile.in ..."; \
+	for ff in $(SOURCES) $(srcsrc)/kern_head.c; do \
+	  ./depend-gen -i '$$(srcinc)/' -o $(top_srcdir)/Makefile.in $$ff; \
+	  echo $(srcsrc) > $(top_srcdir)/stamp-dep; \
+	done
+
+ 
+#----------------------------------------------------------
+#
+# CLEAN  rules
+#
+#----------------------------------------------------------
+
+
+# everything created by make
+#
+
+CLEANFILES = encode config_xor.h depend-gen sh_ks.h sh_ks_xor.h kern_head \
+	internal.h sh_MK.h trustfile sstrip samhain mkhdr encode cutest \
+	yule samhain_setpwd samhain_stealth samhainrc yulectl \
+	samhain_hide.ko samhain_kmem.ko 
+
+clean:
+	-rm -f core *.o
+	@-test -z "$(CLEANFILES)" || rm -f $(CLEANFILES)
+
+
+# everything created by (./configure && make)
+#
+
+DISTCLEANFILES = Makefile samhain.spec sh_gpg_checksum.h sh_gpg_fp.h \
+	init/samhain.startLinux init/samhain.startGentoo \
+	init/samhain.startLSB init/samhain.startFreeBSD \
+	init/samhain.startSolaris init/samhain.startHPUX \
+	init/samhain.startIRIX init/samhain.startMACOSX \
+	deploy.sh sh_MK.h samhain-install.sh sh_gpg_chksum.h sh_gpg_fp.h \
+	rules.deb rules.deb-light \
+	scripts/samhainadmin.pl scripts/check_samhain.pl \
+	scripts/samhain.ebuild scripts/samhain.ebuild-light 
+
+TESTCLEANFILES = samhain.build samhain.new yule.html \
+	test_ext test_ext.c test_ext.res testhash.tmp \
+	testrc1.signed testrc_1ext testrc_2 testrc_2.signed \
+	test_dnmalloc 
+
+distclean:  clean
+	-rm -f config.status config.log configure.lineno config.h config.cache
+	@-test -z "$(TESTCLEANFILES)" || rm -f $(TESTCLEANFILES)
+	@-test -z "$(DISTCLEANFILES)" || rm -f $(DISTCLEANFILES)
+
+
+#----------------------------------------------------------
+#
+# TEST rules
+#
+#----------------------------------------------------------
+
+test14: test
+	@cd test && TOP_SRCDIR=$(top_srcdir) && \
+	export TOP_SRCDIR && ./test.sh 14 `hostname -f`
+
+test13: test
+	@cd test && TOP_SRCDIR=$(top_srcdir) && \
+	export TOP_SRCDIR && ./test.sh 13 `hostname -f`
+
+test12: test
+	@cd test && TOP_SRCDIR=$(top_srcdir) && \
+	export TOP_SRCDIR && ./test.sh 12 `hostname -f`
+
+test11: test
+	@cd test && TOP_SRCDIR=$(top_srcdir) && \
+	export TOP_SRCDIR && ./test.sh 11 `hostname -f`
+
+test10: test
+	@cd test && TOP_SRCDIR=$(top_srcdir) && \
+	export TOP_SRCDIR && ./test.sh 10 `hostname -f`
+
+test7: test
+	@cd test && TOP_SRCDIR=$(top_srcdir) && \
+	export TOP_SRCDIR && ./test.sh 7
+
+test6: test
+	@cd test && TOP_SRCDIR=$(top_srcdir) && \
+	export TOP_SRCDIR && ./test.sh 6
+
+test5: test
+	@cd test && TOP_SRCDIR=$(top_srcdir) && \
+	export TOP_SRCDIR && ./test.sh 5
+
+test4: test
+	@cd test && TOP_SRCDIR=$(top_srcdir) && \
+	export TOP_SRCDIR && ./test.sh 4
+
+test3: test
+	@cd test && TOP_SRCDIR=$(top_srcdir) && \
+	export TOP_SRCDIR && ./test.sh 3
+
+test2: test
+	@cd test && TOP_SRCDIR=$(top_srcdir) && \
+	export TOP_SRCDIR && ./test.sh 2
+
+test1: test
+	@cd test && TOP_SRCDIR=$(top_srcdir) && \
+	export TOP_SRCDIR && ./test.sh 1
+
+test:
+	@if test -f test; then \
+	  :; \
+	else \
+	  cp -pr $(top_srcdir)/test .; \
+	  cat $(top_srcdir)/test/test.sh | \
+	    sed 's%XXXSRCXXX%$(top_srcdir)%' > test/test.sh; \
+	  chmod +x test/test.sh; \
+	fi
+
+test_dnmalloc: $(srcsrc)/t-test1.c dnmalloc.o
+	$(COMPILE) $(VFLAG) -o t-test1.o -c $(srcsrc)/t-test1.c; \
+	$(LINK) t-test1.o dnmalloc.o $(LIBS_TRY)
+
+
+#----------------------------------------------------------
+#
+# INSTALL  rules
+#
+#----------------------------------------------------------
+
+install: install-lkm install-program install-man install-data
+	@echo; \
+	echo "  You can use 'samhain-install.sh uninstall' for uninstalling"; \
+	echo "  i.e. you might consider saving that script for future use";\
+	echo; \
+	echo "  Use 'make install-boot' if you want @install_name@ to start on system boot"; \
+	echo
+
+install-light: install-lkm install-program install-data
+	@echo; \
+	echo "  You can use 'samhain-install.sh uninstall' for uninstalling"; \
+	echo "  i.e. you might consider saving that script for future use";\
+	echo; \
+	echo "  Use 'make install-boot' if you want @install_name@ to start on system boot"; \
+	echo
+
+purge: uninstall-lkm uninstall-program uninstall-man 
+	@echo "./samhain-install.sh --destdir=$(DESTDIR) --force --verbose uninstall-data"; \
+	./samhain-install.sh --destdir=$(DESTDIR) --force --verbose uninstall-data
+
+remove: uninstall
+
+uninstall: uninstall-lkm uninstall-program uninstall-man uninstall-data
+	@echo; \
+	echo "  Use 'make purge' if you also want to uninstall the configuration file"; \
+	echo "  Use 'make uninstall-boot' to uninstall the runlevel scripts"; \
+	echo
+
+#
+# --- boot  ---
+#
+install-boot: samhain-install.sh
+	./samhain-install.sh --destdir=$(DESTDIR) --express --verbose install-boot
+
+
+uninstall-boot: samhain-install.sh
+	./samhain-install.sh --destdir=$(DESTDIR) --express --verbose uninstall-boot
+
+#
+# --- program  ---
+#
+
+# -- NEW --
+install-lkm: @sh_lkm@
+	@RVER=`uname -r`; \
+	if test "x@sh_lkm@" != "x"; then \
+	  if test -d /lib/modules/$$RVER; then \
+	    MODDIR="/lib/modules/$$RVER"; \
+	  elif test -d /lib/modules/misc; then \
+	    MODDIR="/lib/modules/misc"; \
+	  elif test -d /lib/modules; then \
+	    MODDIR="/lib/modules/misc"; \
+	  fi; \
+	  $(mkinstalldirs) $(DESTDIR)$${MODDIR}; \
+	  list='@sh_lkm@'; for p in $$list; do \
+	    echo " cp $$p $(DESTDIR)$${MODDIR}/`echo $$p|sed 's%samhain%@install_name@%'`"; \
+	    cp $$p $(DESTDIR)$${MODDIR}/`echo $$p|sed 's%samhain%@install_name@%'` ; \
+	    chown root $(DESTDIR)$${MODDIR}/`echo $$p|sed 's%samhain%@install_name@%'`; \
+	  done; \
+	  if test "x$(DESTDIR)" = x; then \
+	    echo " depmod -a || /sbin/depmod -a"; \
+	    depmod -a || /sbin/depmod -a; \
+	  fi; \
+	fi
+
+uninstall-lkm:
+	@echo "./samhain-install.sh --destdir=$(DESTDIR) --express --verbose uninstall-lkm";\
+	./samhain-install.sh --destdir=$(DESTDIR) --express --verbose uninstall-lkm
+
+
+install-program: $(PROGRAMS) sstrip
+	@$(mkinstalldirs) $(DESTDIR)$(sbindir)
+	@if test x$(mytmpdir) != x; then \
+		$(mkinstalldirs) $(DESTDIR)$(mytmpdir); \
+	fi
+	@list='$(PROGRAMS)'; for p in $$list; do \
+	  if test -f $$p; then \
+	    echo " $(INSTALL_PROGRAM) $$p $(DESTDIR)$(sbindir)/`echo $$p|sed 's%samhain%@install_name@%'|sed 's%yule%@install_name@%'`"; \
+	    $(INSTALL_PROGRAM) $$p $(DESTDIR)$(sbindir)/`echo $$p|sed 's%samhain%@install_name@%'|sed 's%yule%@install_name@%'`; \
+	    chmod 0700 $(DESTDIR)$(sbindir)/`echo $$p|sed 's%samhain%@install_name@%'|sed 's%yule%@install_name@%'`; \
+	    echo " ./sstrip $(DESTDIR)$(sbindir)/`echo $$p|sed 's%samhain%@install_name@%'|sed 's%yule%@install_name@%'`"; \
+	    ./sstrip $(DESTDIR)$(sbindir)/`echo $$p|sed 's%samhain%@install_name@%'|sed 's%yule%@install_name@%'`; \
+	  else :; fi; \
+	done
+
+uninstall-program:
+	@echo "./samhain-install.sh --destdir=$(DESTDIR) --express --verbose uninstall-program";\
+	./samhain-install.sh --destdir=$(DESTDIR) --express --verbose uninstall-program
+
+
+#
+#  -- data files
+#
+
+install-user:
+	@if test "x@need_user_install@" = x1; then \
+	  echo "./samhain-install.sh --destdir=$(DESTDIR) --express --verbose install-user @myident@"; \
+	  ./samhain-install.sh --destdir=$(DESTDIR) --express --verbose install-user @myident@; \
+	fi
+	@if test x"$(VFLAG)" = "x-DSH_WITH_SERVER"; then \
+	    echo "  chown root $(DESTDIR)$(mydatadir)"; \
+	    chown root $(DESTDIR)$(mydatadir); \
+	    echo "  chmod 755 $(DESTDIR)$(mydatadir)"; \
+	    chmod 755 $(DESTDIR)$(mydatadir); \
+	    echo "  chown @myident@ $(DESTDIR)$(configfile)"; \
+	    chown @myident@ $(DESTDIR)$(configfile); \
+	    if test x"$(mylogdir)" = "x/var/log"; then \
+	      if test x"@myident@" = xroot; then \
+		    :; \
+	      else \
+		    echo; \
+		    echo "  ----------------------------------------------------------------"; \
+		    echo "  Directory $(mylogdir) (log file) looks like a system directory."; \
+		    echo "  You may run into problems (need write access for user @myident@)."; \
+		    echo "  ----------------------------------------------------------------"; \
+		    echo; \
+	      fi; \
+	    else \
+	      echo "  chown @myident@ $(DESTDIR)$(mylogdir)"; \
+	      chown @myident@ $(DESTDIR)$(mylogdir); \
+	    fi; \
+	fi
+
+install-data: trustfile
+	@$(mkinstalldirs) $(DESTDIR)$(sysconfdir)
+	@$(mkinstalldirs) $(DESTDIR)$(mylockdir)
+	@$(mkinstalldirs) $(DESTDIR)$(mylogdir)
+	@$(mkinstalldirs) $(DESTDIR)$(mydatadir); \
+	chmod 700 $(DESTDIR)$(mydatadir)
+	@if test -f samhainrc.$(selectconfig); then \
+		:; \
+	else \
+		if test -f $(srcdir)/samhainrc.$(selectconfig); then \
+			cp $(srcdir)/samhainrc.$(selectconfig) . ; \
+		fi; \
+	fi; \
+	if test -f yulerc; then \
+		:; \
+	else \
+		if test -f $(srcdir)/yulerc.template; then \
+			cp $(srcdir)/yulerc.template yulerc; \
+		fi; \
+	fi; \
+	if test -f stealth_template.jpg; then \
+		:; \
+	else \
+		if test -f $(srcdir)/stealth_template.jpg; then \
+			cp $(srcdir)/stealth_template.jpg . ; \
+		fi; \
+	fi
+	@if test -d /etc/logrotate.d; then \
+		if test ! -d $(DESTDIR)/etc/logrotate.d; then \
+			$(mkinstalldirs) $(DESTDIR)/etc/logrotate.d; \
+		fi; \
+		if test ! -f $(DESTDIR)/etc/logrotate.d/@install_name@; then \
+			if test -w $(DESTDIR)/etc/logrotate.d; then \
+				cp $(srcdir)/scripts/logrotate $(DESTDIR)/etc/logrotate.d/@install_name@; \
+			else \
+				echo "$(DESTDIR)/etc/logrotate.d not writable"; \
+			fi; \
+		else \
+			echo "$(DESTDIR)/etc/logrotate.d/@install_name@ exists, not overwriting"; \
+		fi; \
+	fi
+	@echo "./samhain-install.sh --destdir=$(DESTDIR) --express --verbose install-data"; \
+	./samhain-install.sh --destdir=$(DESTDIR) --express --verbose install-data || \
+	echo " ERROR: Failed to install the configuration file to $(DESTDIR)$(configfile). You need to install the configuration file manually."
+	@if test x"$(VFLAG)" = "x-DSH_WITH_SERVER"; then \
+	    echo;\
+	    echo "  -----------------------------------------------------";\
+	    echo "  The server will run as user @myident@ if started with";\
+	    echo "  root privileges, otherwise as the user of the parent ";\
+	    echo "  process (use --enable-identity=USER to change).";\
+	    echo;\
+	    echo "  You may want to use: make install-user";\
+	    echo;\
+	    echo "    - to add the user @myident@ (if not existing already)";\
+	    echo "    - to chown the data            directory $(mydatadir)";\
+	    echo "    - to chown the log file        directory $(mylogdir)";\
+	    echo "    - to chown the configuration   file      $(configfile)";\
+	    echo "  -----------------------------------------------------";\
+	else \
+	    if test "x@need_user_install@" = x1; then \
+	    echo;\
+	    echo "  -----------------------------------------------------";\
+	    echo "  You may want to use: make install-user";\
+	    echo;\
+	    echo "    - to add the user @myident@ (if not existing already)";\
+	    echo "  -----------------------------------------------------";\
+	    fi; \
+	fi
+
+uninstall-data:
+	@echo "./samhain-install.sh --destdir=$(DESTDIR) --express --verbose uninstall-data"; \
+	./samhain-install.sh --destdir=$(DESTDIR) --express --verbose uninstall-data
+
+#
+#  -- man files
+#
+
+install-man: 
+	$(mkinstalldirs) $(DESTDIR)$(mandir)/man8
+	$(mkinstalldirs) $(DESTDIR)$(mandir)/man5
+	@if test -f $(top_srcdir)/man/samhain.8 ; then \
+	    echo "  $(INSTALL_MAN) $(top_srcdir)/man/samhain.8 $(DESTDIR)$(mandir)/man8/@install_name@.8"; \
+	     $(INSTALL_MAN) $(top_srcdir)/man/samhain.8 $(DESTDIR)$(mandir)/man8/@install_name@.8; \
+	fi
+	@if test -f $(top_srcdir)/man/samhainrc.5 ; then \
+	    echo "  $(INSTALL_MAN) $(top_srcdir)/man/samhainrc.5 $(DESTDIR)$(mandir)/man5/@install_name@rc.5"; \
+	     $(INSTALL_MAN) $(top_srcdir)/man/samhainrc.5 $(DESTDIR)$(mandir)/man5/@install_name@rc.5; \
+	fi
+
+uninstall-man:
+	@echo "./samhain-install.sh --destdir=$(DESTDIR) --express --verbose uninstall-man";\
+	./samhain-install.sh --destdir=$(DESTDIR) --express --verbose uninstall-man
+
+
+#----------------------------------------------------------
+#
+# BUILD  rules
+#
+#----------------------------------------------------------
+
+run: run-light
+
+run-light: all
+	@echo "Building $(PACKAGE)-$(VERSION).run"; \
+	STAGE=$(PACKAGE)-$(VERSION); \
+	mkdir $$STAGE; \
+	if test x"$$?" != x0; then \
+	  echo "ERROR ... mkdir $$STAGE failed"; \
+	  exit 1; \
+	fi; \
+	$(MAKE) DESTDIR=$$STAGE install-light; \
+	rm -f $$STAGE/@sbindir@/@install_name@_stealth; \
+	echo "#! /bin/sh"                        > $$STAGE/setup.sh; \
+	if test x$(mytmpdir) != x; then \
+	echo  "./mkinstalldirs @mytmpdir@ || exit 1"    >> $$STAGE/setup.sh; \
+	fi; \
+	echo  "./mkinstalldirs @sbindir@ || exit 1"     >> $$STAGE/setup.sh; \
+	echo  "./mkinstalldirs @sysconfdir@ || exit 1"  >> $$STAGE/setup.sh; \
+	echo  "./mkinstalldirs @mylockdir@ || exit 1"   >> $$STAGE/setup.sh; \
+	echo  "./mkinstalldirs @mylogdir@ || exit 1"    >> $$STAGE/setup.sh; \
+	echo  "./mkinstalldirs @mydataroot@ || exit 1"  >> $$STAGE/setup.sh; \
+	echo  "chmod 700       @mydataroot@ || exit 1"  >> $$STAGE/setup.sh; \
+	if test -f $$STAGE/lib/modules; then \
+	  RVER=`uname -r`; \
+	  echo "chown root:root lib/modules/$$RVER/*" >> $$STAGE/setup.sh; \
+	  if test -d /lib/modules/$$RVER; then \
+	    echo "./mkinstalldirs /lib/modules/$$RVER" >> $$STAGE/setup.sh; \
+	    echo  "cp -p lib/modules/$$RVER/* /lib/modules/$$RVER/" >> $$STAGE/setup.sh; \
+	  elif test -d /lib/modules/misc; then \
+	    echo "./mkinstalldirs /lib/modules/misc"   >> $$STAGE/setup.sh; \
+	    echo  "cp -p lib/modules/misc/* /lib/modules/misc/" >> $$STAGE/setup.sh; \
+	  elif test -d /lib/modules; then \
+	    echo "./mkinstalldirs /lib/modules/misc"   >> $$STAGE/setup.sh; \
+	    echo  "cp -p lib/modules/misc/* /lib/modules/misc/" >> $$STAGE/setup.sh; \
+	  fi; \
+	  echo "/sbin/depmod -a" >> $$STAGE/setup.sh; \
+	fi; \
+	temp=`echo $(sbindir) | sed s,^/,,`; \
+	echo "chown root $$temp/*" >> $$STAGE/setup.sh; \
+	echo  "cp -p $$temp/* $(sbindir) || exit 1" >> $$STAGE/setup.sh; \
+	temp=`echo $(sysconfdir) | sed s,^/,,`; \
+	echo "chown root $$temp/*" >> $$STAGE/setup.sh; \
+	configfile=`echo  @myconffile@ | sed 's%^REQ_FROM_SERVER%%'`; \
+	echo  "test -f $$configfile || cp -p $$temp/* $$configfile" >> $$STAGE/setup.sh; \
+	echo  "./samhain-install.sh --express --verbose install-boot || echo 'Cannot install init script'"    >> $$STAGE/setup.sh; \
+	cp $(top_srcdir)/mkinstalldirs $$STAGE/; \
+	cp $(top_srcdir)/install-sh $$STAGE/; \
+	cp ./samhain-install.sh $$STAGE/; \
+	cp -r init/ $$STAGE/; \
+	chmod +x $$STAGE/setup.sh; \
+	chmod +x $$STAGE/samhain-install.sh; \
+	chmod +x $$STAGE/mkinstalldirs; \
+	chmod +x $$STAGE/install-sh; \
+	$(top_srcdir)/scripts/makeself/makeself.sh --header $(top_srcdir)/scripts/makeself/makeself-header.sh --nocomp --nomd5 --notemp $$STAGE $(PACKAGE)-$(VERSION).run "$(PACKAGE)_$(VERSION)_self_extracting_installer" ./setup.sh && \
+	rm -r $(PACKAGE)-$(VERSION)
+
+emerge-prepare: dist
+	@echo "Building $(PACKAGE)-$(VERSION)"; \
+	test -f /etc/make.globals && . /etc/make.globals; \
+	test -f /etc/make.conf    && . /etc/make.conf; \
+	echo "$(INSTALL_MAN) $(PACKAGE)-$(VERSION).tar.gz $${DISTDIR}/@install_name@-$(VERSION).tar.gz"; \
+	$(INSTALL_MAN) $(PACKAGE)-$(VERSION).tar.gz $${DISTDIR}/@install_name@-$(VERSION).tar.gz; \
+	if test "x$${PORTDIR_OVERLAY}" = "x"; then \
+		COPY_TO="$${PORTDIR}"; \
+	else \
+		COPY_TO="$${PORTDIR_OVERLAY}"; \
+	fi; \
+	$(mkinstalldirs) $${COPY_TO}/app-admin/@install_name@; \
+	echo "$(INSTALL_MAN) scripts/samhain.ebuild $${COPY_TO}/app-admin/@install_name@/@install_name@-$(VERSION).ebuild";\
+	$(INSTALL_MAN) scripts/samhain.ebuild $${COPY_TO}/app-admin/@install_name@/@install_name@-$(VERSION).ebuild; \
+	test -f $${COPY_TO}/app-admin/@install_name@/files/digest-@install_name@-$(VERSION) && rm $${COPY_TO}/app-admin/@install_name@/files/digest-@install_name@-$(VERSION);\
+	ebuild $${COPY_TO}/app-admin/@install_name@/@install_name@-$(VERSION).ebuild digest;
+
+emerge-prepare-light: dist
+	@echo "Building $(PACKAGE)-$(VERSION)"; \
+	test -f /etc/make.globals && . /etc/make.globals; \
+	test -f /etc/make.conf    && . /etc/make.conf; \
+	echo "$(INSTALL_MAN) $(PACKAGE)-$(VERSION).tar.gz $${DISTDIR}/@install_name@-$(VERSION).tar.gz"; \
+	$(INSTALL_MAN) $(PACKAGE)-$(VERSION).tar.gz $${DISTDIR}/@install_name@-$(VERSION).tar.gz; \
+	if test "x$${PORTDIR_OVERLAY}" = "x"; then \
+		COPY_TO="$${PORTDIR}"; \
+	else \
+		COPY_TO="$${PORTDIR_OVERLAY}"; \
+	fi; \
+	$(mkinstalldirs) $${COPY_TO}/app-admin/@install_name@; \
+	echo "$(INSTALL_MAN) scripts/samhain.ebuild-light $${COPY_TO}/app-admin/@install_name@/@install_name@-$(VERSION).ebuild";\
+	$(INSTALL_MAN) scripts/samhain.ebuild-light $${COPY_TO}/app-admin/@install_name@/@install_name@-$(VERSION).ebuild; \
+	test -f $${COPY_TO}/app-admin/@install_name@/files/digest-@install_name@-$(VERSION) && rm $${COPY_TO}/app-admin/@install_name@/files/digest-@install_name@-$(VERSION);\
+	ebuild $${COPY_TO}/app-admin/@install_name@/@install_name@-$(VERSION).ebuild digest;
+
+
+tbz2: emerge-prepare
+	@emerge --buildpkgonly @install_name@; \
+	test -f /etc/make.globals && . /etc/make.globals; \
+	test -f /etc/make.conf    && . /etc/make.conf; \
+	echo; \
+	echo "@install_name@-$(VERSION).tbz2 should be in $${PKGDIR}/All"; \
+	if test -f $${PKGDIR}/All/@install_name@-$(VERSION).tbz2; then \
+		echo "Package $${PKGDIR}/All/@install_name@-$(VERSION).tbz2 built."; \
+		mv $${PKGDIR}/All/@install_name@-$(VERSION).tbz2 $(PACKAGE)-$(VERSION).tbz2; \
+		rm -f $${PKGDIR}/app-admin/@install_name@-$(VERSION).tbz2; \
+		rm -rf $${PORTAGE_TMPDIR}/portage/@install_name@-$(VERSION); \
+	else \
+		echo "Error ... cannot find package."; \
+		exit 1; \
+	fi; \
+	echo
+
+tbz2-light: emerge-prepare-light
+	@emerge --buildpkgonly @install_name@; \
+	test -f /etc/make.globals && . /etc/make.globals; \
+	test -f /etc/make.conf    && . /etc/make.conf; \
+	echo; \
+	if test -f $${PKGDIR}/All/@install_name@-$(VERSION).tbz2; then \
+		echo "Package $${PKGDIR}/All/@install_name@-$(VERSION).tbz2 built."; \
+		mv $${PKGDIR}/All/@install_name@-$(VERSION).tbz2 $(PACKAGE)-$(VERSION).tbz2; \
+		rm -f $${PKGDIR}/app-admin/@install_name@-$(VERSION).tbz2; \
+		rm -rf $${PORTAGE_TMPDIR}/portage/@install_name@-$(VERSION); \
+	else \
+		echo "Error ... cannot find package."; \
+		exit 1; \
+	fi; \
+	echo
+
+emerge:
+	emerge $(PACKAGE);
+
+deb-light:
+	@echo "creating subdirectory debian"; \
+	mkdir -p debian; \
+	cp rules.deb-light debian/rules; \
+	chmod +x debian/rules; \
+	echo $(sbindir)     | sed s,^/,,  > debian/dirs; \
+	if test x$(mytmpdir) != x; then \
+	echo $(mytmpdir)    | sed s,^/,, >> debian/dirs; \
+	fi; \
+	echo $(sysconfdir)  | sed s,^/,, >> debian/dirs; \
+	echo etc/init.d                  >> debian/dirs; \
+	echo $(mydatadir)   | sed s,^/,, >> debian/dirs; \
+	echo $(mylogdir)    | sed s,^/,, >> debian/dirs; \
+	echo $(mylockdir)   | sed s,^/,, >> debian/dirs; \
+	if test "x@sh_lkm@" != x; then \
+	  RVER=`uname -r`; \
+	  if test -d /lib/modules/$$RVER; then \
+	    echo "lib/modules/$$RVER"    >> debian/dirs; \
+	  elif test -d /lib/modules/misc; then \
+	    echo "lib/modules/misc"      >> debian/dirs; \
+	  elif test -d /lib/modules; then \
+	    echo "lib/modules/misc"      >> debian/dirs; \
+	  fi; \
+	fi; \
+	$(MAKE) deb-run
+
+deb:
+	@echo "creating subdirectory debian"; \
+	mkdir -p debian; \
+	cp rules.deb debian/rules; \
+	chmod +x debian/rules; \
+	echo $(sbindir)     | sed s,^/,,  > debian/dirs; \
+	if test x$(mytmpdir) != x; then \
+	echo $(mytmpdir)    | sed s,^/,, >> debian/dirs; \
+	fi; \
+	echo $(sysconfdir)  | sed s,^/,, >> debian/dirs; \
+	echo etc/init.d                  >> debian/dirs; \
+	echo $(mydatadir)   | sed s,^/,, >> debian/dirs; \
+	echo $(mylogdir)    | sed s,^/,, >> debian/dirs; \
+	echo $(mylockdir)   | sed s,^/,, >> debian/dirs; \
+	echo $(mandir)/man5 | sed s,^/,, >> debian/dirs; \
+	echo $(mandir)/man8 | sed s,^/,, >> debian/dirs; \
+	echo usr/share/doc/$(PACKAGE)    >> debian/dirs; \
+	if test "x@sh_lkm@" != x; then \
+	  RVER=`uname -r`; \
+	  if test -d /lib/modules/$$RVER; then \
+	    echo "lib/modules/$$RVER"    >> debian/dirs; \
+	  elif test -d /lib/modules/misc; then \
+	    echo "lib/modules/misc"      >> debian/dirs; \
+	  elif test -d /lib/modules; then \
+	    echo "lib/modules/misc"      >> debian/dirs; \
+	  fi; \
+	fi; \
+	echo $(top_srcdir)/README                         > debian/docs; \
+	echo $(top_srcdir)/test/testtiger.txt            >> debian/docs; \
+	echo $(srcsrc)/simple-bignum.tar.bz2             >> debian/docs; \
+	echo $(top_srcdir)/scripts/head.html             >> debian/docs; \
+	echo $(top_srcdir)/scripts/foot.html             >> debian/docs; \
+	echo $(top_srcdir)/samhain.jpg                   >> debian/docs; \
+	echo $(top_srcdir)/docs/BUGS                     >> debian/docs; \
+	echo $(top_srcdir)/docs/HOWTO-client+server.html >> debian/docs; \
+	echo $(top_srcdir)/docs/HOWTO-samhain+GnuPG.html >> debian/docs; \
+	echo $(top_srcdir)/docs/MANUAL-2_3.html.tar      >> debian/docs; \
+	echo $(top_srcdir)/docs/MANUAL-2_3.pdf           >> debian/docs; \
+	echo $(top_srcdir)/docs/README.gcc_bug           >> debian/docs; \
+	echo $(top_srcdir)/docs/README.LZO               >> debian/docs; \
+	echo $(top_srcdir)/docs/README.sstrip            >> debian/docs; \
+	echo $(top_srcdir)/docs/README.UPGRADE           >> debian/docs; \
+	echo $(top_srcdir)/docs/README.win2K             >> debian/docs; \
+	echo $(top_srcdir)/docs/TODO                     >> debian/docs; \
+	$(MAKE) deb-run
+
+deb-run:
+	@maintainer=`gpg --list-secret-keys | grep 'uid ' | cut -d" " -f 5- | sed 's/^ *//' | sed q1`;\
+	if test "x$$maintainer" = x; then \
+		maintainer="$(DEFAULT_MAINTAINER)"; \
+	fi; \
+	echo "$(PACKAGE) ($(VERSION)-$(BUILD_NUM)) stable; urgency=low" > debian/changelog; \
+	echo >> debian/changelog; \
+	echo "  * Initial release." >> debian/changelog; \
+	echo >> debian/changelog; \
+	echo " -- $$maintainer  `date -R`" >> debian/changelog; \
+	echo >> debian/changelog; \
+	echo "Local variables:" >> debian/changelog; \
+	echo "mode: debian-changelog" >> debian/changelog; \
+	echo "End:" >> debian/changelog; \
+	cp   $(top_srcdir)/COPYING  debian/copyright; \
+	touch debian/README.debian; \
+	echo "Document: @install_name@-manual" > debian/@install_name@.doc-base; \
+	echo "Title: @install_name@ Manual" >> debian/@install_name@.doc-base; \
+	echo "Author: Rainer Wichmann" >> debian/@install_name@.doc-base; \
+	echo "Abstract: This manual describes what @install_name@ is" >> debian/@install_name@.doc-base; \
+	echo " and how it can be used to check the file integrity of your" >> debian/@install_name@.doc-base; \
+	echo " server." >> debian/@install_name@.doc-base; \
+	echo "Section: System/Security" >> debian/@install_name@.doc-base; \
+	echo  >> debian/@install_name@.doc-base; \
+	echo  >> debian/@install_name@.doc-base; \
+	echo "Format: Postscript" >> debian/@install_name@.doc-base; \
+	echo "Files: /usr/share/doc/@install_name@/manual.pdf.gz" >> debian/@install_name@.doc-base; \
+	echo  >> debian/@install_name@.doc-base; \
+	echo "Format: HTML" >> debian/@install_name@.doc-base; \
+	echo "Index: /usr/share/doc/@install_name@/manual.html/index.html" >> debian/@install_name@.doc-base; \
+	echo "Files: /usr/share/doc/@install_name@/manual.html/*.html" >> debian/@install_name@.doc-base; \
+	if test -f /usr/lib/lsb/install_initd; then \
+	  cp init/samhain.startLSB debian/@install_name@.init; \
+	else \
+	  cp init/samhain.startLinux debian/@install_name@.init; \
+	fi; \
+	echo "Source: samhain"     > debian/control; \
+	echo "Section: admin"     >> debian/control; \
+	echo "Priority: optional" >> debian/control; \
+	echo "Maintainer: $$maintainer" >> debian/control; \
+	echo "Standards-Version: 3.2.1" >> debian/control; \
+	echo >> debian/control; \
+	echo "Package: @install_name@" >> debian/control; \
+	echo "Architecture: any" >> debian/control; \
+	echo "Depends: libc6" >> debian/control; \
+	echo "Description: File integrity checker"  >> debian/control; \
+	echo " A file integrity checker"  >> debian/control; \
+	echo "running debuild -us -uc"; \
+	debuild --preserve-envvar=PASSWORD -us -uc -b; \
+	DEBFILE=`find ../ -follow -maxdepth 1 -cnewer ./debian/control 2>/dev/null | grep '@install_name@_$(VERSION)' | grep '\.deb'`; \
+	if test x"$$DEBFILE" = x; then \
+	  echo "Error ... cannot find package file"; \
+	  exit 1; \
+	else \
+	  echo "Package $$DEBFILE built."; \
+	  cp $$DEBFILE ./$(PACKAGE)-$(VERSION)-$(BUILD_NUM).deb; \
+	  ln -s ./$(PACKAGE)-$(VERSION)-$(BUILD_NUM).deb ./$(PACKAGE)-$(VERSION).deb; \
+	fi; \
+	echo
+
+#
+# Check samhain.spec
+#
+rpmspec-full:
+	@grep 'install-light' samhain.spec >/dev/null 2>&1; \
+	if test x"$$?" = "x0"; then \
+	  echo "Your samhain.spec is from rpm-light. Please run"; \
+	  echo " .config.status to re-create the original samhain.spec"; \
+	  exit 1; \
+	fi
+
+# when editing the spec file, make an additional blank after 'make'
+# to avoid that it matches on a second processing
+#
+rpmspec-light: samhain.spec
+	@echo "Stripping docs from samhain.spec"; \
+	cat samhain.spec | sed 's,make DESTDIR=$${RPM_BUILD_ROOT} install,make   DESTDIR=$${RPM_BUILD_ROOT} install-light,' | sed s,shkeep=yes,shkeep=no, | sed s,%doc.*,, | sed '/logrotate/! { s,%attr.*,, }' > samhain.spec-light; \
+	mv samhain.spec-light samhain.spec
+
+rpm-light: rpmspec-light distrpm
+	rpmbuild -ta ./$(PACKAGE)-$(VERSION).tar.gz; 
+	@RPMTOP=`cat ~/.rpmmacros 2>/dev/null | grep '%_topdir' | awk '{ print $$2}'`; \
+	if test x"$$RPMTOP" = x; then RPMTOP=/usr/src; fi; \
+	echo "Searching the RPM package below $$RPMTOP ..."; \
+	RPMFILE=`find $$RPMTOP -follow -maxdepth 4 -cnewer ./samhain.spec 2>/dev/null | grep '@install_name@-$(VERSION)' | grep '\.rpm' | grep -v '\.src\.'`; \
+	echo; \
+	if test x"$$RPMFILE" = x; then \
+	  echo "Error ... cannot find package file"; \
+	  exit 1; \
+	else \
+	  echo "Package $$RPMFILE built."; \
+	  echo "Copying it to ./$(PACKAGE)-$(VERSION).rpm"; \
+	  cp $$RPMFILE ./$(PACKAGE)-$(VERSION).rpm; \
+	fi; \
+	echo  
+
+rpm: rpmspec-full distrpm
+	rpmbuild -ta ./$(PACKAGE)-$(VERSION).tar.gz; 
+	@RPMTOP=`cat ~/.rpmmacros 2>/dev/null | grep '%_topdir' | awk '{ print $$2}'`; \
+	if test x"$$RPMTOP" = x; then RPMTOP=/usr/src; fi; \
+	if ! test -d "$$RPMTOP"; then \
+	  RPMTOP=`echo $$HOME/rpmbuild`; \
+	fi; \
+	echo "Searching the RPM package below $$RPMTOP ..."; \
+	RPMFILE=`find $$RPMTOP -follow -maxdepth 4 -cnewer ./samhain.spec 2>/dev/null | grep '@install_name@-$(VERSION)' | grep '\.rpm' | grep -v '\.src\.'`; \
+	echo; \
+	if test x"$$RPMFILE" = x; then \
+	  echo "Error ... cannot find package file"; \
+	  exit 1; \
+	else \
+	  echo "Package $$RPMFILE built."; \
+	  echo "Copying it to ./$(PACKAGE)-$(VERSION).rpm"; \
+	  cp $$RPMFILE ./$(PACKAGE)-$(VERSION).rpm; \
+	fi; \
+	echo  
+
+srpm-dist: rpmspec-full samhain.spec 
+	@cat samhain.spec | \
+	 sed s%\-\-with\-base=.*\,[0123456789]*%% | \
+	 sed s%\'\'%% > samhain.spec.m; \
+	 mv samhain.spec.m samhain.spec
+	$(MAKE) distrpm
+	rpmbuild -ts ./$(PACKAGE)-$(VERSION).tar.gz
+
+
+srpm: rpmspec-full distrpm
+	rpmbuild -ts ./$(PACKAGE)-$(VERSION).tar.gz
+
+solaris-pkg-light: all
+	@STAGE=/tmp/samhain-pkg-staging; \
+	mkdir $$STAGE; \
+	if test x"$$?" != x0; then \
+	  echo "ERROR ... mkdir $$STAGE failed"; \
+	  exit 1; \
+	fi; \
+	$(MAKE) DESTDIR=$$STAGE install-light;
+	$(MAKE) solaris-pkg-finish
+
+solaris-pkg: all
+	@STAGE=/tmp/samhain-pkg-staging; \
+	mkdir $$STAGE; \
+	if test x"$$?" != x0; then \
+	  echo "ERROR ... mkdir $$STAGE failed"; \
+	  exit 1; \
+	fi; \
+	$(MAKE) DESTDIR=$$STAGE install; 
+	$(MAKE) solaris-pkg-finish
+
+solaris-pkg-finish:
+	@STAGE=/tmp/samhain-pkg-staging; \
+	$(mkinstalldirs) $$STAGE/etc/init.d; \
+	$(INSTALL_SHELL) init/samhain.startSolaris $$STAGE/etc/init.d/@install_name@; \
+	(echo 'i pkginfo'; pkgproto $$STAGE=/ ) >prototype; \
+	user=`id | sed s,uid=[0123456789]*\(,, | sed s,\).*,,`; \
+	group=`id | sed s,.*gid=[0123456789]*\(,, | sed s,\).*,,`; \
+	cat prototype | grep -v 'none / ' | \
+	sed s,$$user\ $$group,root\ sys,g > prototype.1; \
+	rm -f prototype.2; \
+	while read line; do \
+		echo "$${line}" | egrep '^d none' >/dev/null 2>&1;  \
+		if [ $$? = 0 ]; then \
+			dir=`echo "$${line}" | awk '{ print $$3 }'`; \
+			if [ -d "$$dir" ]; then \
+				echo "d none $${dir} ? ? ?" >> prototype.2; \
+			else \
+				echo "$${line}" >> prototype.2; \
+			fi; \
+		else \
+			echo "$${line}" >> prototype.2; \
+		fi; \
+	done < prototype.1; \
+	rm -f prototype && rm prototype.1 && mv prototype.2 prototype; \
+	echo "d none /etc/rc0.d ? ? ?" >> prototype; \
+	echo "d none /etc/rc1.d ? ? ?" >> prototype; \
+	echo "d none /etc/rc3.d ? ? ?" >> prototype; \
+	echo "l none /etc/rc3.d/S99@install_name@=/etc/init.d/@install_name@" >> prototype; \
+	echo "l none /etc/rc0.d/K10@install_name@=/etc/init.d/@install_name@" >> prototype; \
+	echo "l none /etc/rc1.d/K10@install_name@=/etc/init.d/@install_name@" >> prototype; \
+	ARCH=`uname -p`; \
+	PSTAMP=`date '+%c%y%m%d%H%M%S'`; \
+	echo "PKG=@install_name@"         >  pkginfo; \
+	echo "NAME=file integrity check"  >> pkginfo; \
+	echo "VERSION=$(VERSION)"         >> pkginfo; \
+	echo "CATEGORY=system"            >> pkginfo; \
+	echo "CLASSES=none"               >> pkginfo; \
+	echo "VENDOR=http://la-samhna.de/samhain" >> pkginfo; \
+	echo "EMAIL=support@la-samhna.de" >> pkginfo; \
+	echo "ARCH=$$ARCH"                >> pkginfo; \
+	echo "PSTAMP=$$PSTAMP"            >> pkginfo; \
+	pkgmk -o; \
+	pkgtrans -s /var/spool/pkg /tmp/samhain-pkg-staging/@install_name@.pkg @install_name@; \
+	if test -f /tmp/samhain-pkg-staging/@install_name@.pkg; then \
+	  echo; \
+	  cp /tmp/samhain-pkg-staging/@install_name@.pkg $(PACKAGE)-$(VERSION).pkg; \
+	  echo "Package $(PACKAGE)-$(VERSION).pkg is ready for installation"; \
+	  echo "to install, use: pkgadd -n -d $(PACKAGE)-$(VERSION).pkg all"; \
+	  echo; \
+	  rm -rf /var/spool/pkg/@install_name@ /tmp/samhain-pkg-staging; \
+	else \
+	  echo; \
+	  echo "**************************************************************"; \
+	  echo "Error ... cannot find /tmp/samhain-pkg-staging/@install_name@.pkg."; \
+	  echo "Keeping /var/spool/pkg/@install_name@ /tmp/samhain-pkg-staging"; \
+	  if test -d /var/spool/pkg; then \
+		echo "**************************************************************"; \
+	  else \
+		echo "************** /var/spool/pkg is missing *********************"; \
+	  fi; \
+	  echo; \
+	  exit 1; \
+	fi
+
+depot-prep: all
+	STAGE=/tmp/samhain-pkg-staging; \
+	mkdir $$STAGE; \
+	if test x"$$?" != x0; then \
+	  echo "ERROR ... mkdir $$STAGE failed"; \
+	  exit 1; \
+	fi; \
+	$(MAKE) DESTDIR=$$STAGE install; \
+	$(MAKE) DESTDIR=$$STAGE install-boot; \
+	cp hp_ux.psf $$STAGE; \
+	mkdir $$STAGE/sc; \
+	echo "#!/sbin/sh"                        > $$STAGE/sc/configure; \
+	echo "PATH=\$$SW_PATH; export PATH"     >> $$STAGE/sc/configure; \
+	echo "chmod 555 /sbin/init.d/samhain; chown bin:bin /sbin/init.d/@install_name@; (cd /sbin; ln -f -s /sbin/init.d/@install_name@ rc2.d/S900@install_name@; ln -f -s /sbin/init.d/@install_name@ rc1.d/K100@install_name@; )"                                                           >> $$STAGE/sc/configure; \
+	chmod +x $$STAGE/sc/configure; \
+	echo "#!/sbin/sh"                        > $$STAGE/sc/unconfigure; \
+	echo "PATH=\$$SW_PATH; export PATH"     >> $$STAGE/sc/unconfigure; \
+	echo "rm -f /sbin/rc2.d/S900@install_name@; rm -f /sbin/rc1.d/K100@install_name@"                                       >> $$STAGE/sc/unconfigure; \
+	chmod +x $$STAGE/sc/unconfigure; \
+	echo "#!/sbin/sh"                        > $$STAGE/sc/preremove; \
+	echo "PATH=\$$SW_PATH; export PATH"     >> $$STAGE/sc/preremove; \
+	echo "/sbin/init.d/@install_name@ stop" >> $$STAGE/sc/preremove; \
+	echo "exit 0"                           >> $$STAGE/sc/preremove; \
+	chmod +x $$STAGE/sc/preremove;
+
+depot: depot-prep
+	(cd /tmp/samhain-pkg-staging && /usr/sbin/swpackage -v -s ./hp_ux.psf -x media_type=tape @ $(PACKAGE)-$(VERSION).depot)
+	cp /tmp/samhain-pkg-staging/$(PACKAGE)-$(VERSION).depot .
+	rm -rf /tmp/samhain-pkg-staging
+
+depot-light: depot
+
+#---------------------------------------------------------------
+
+
+trustfile: $(srcsrc)/trustfile.c config.h
+	$(COMPILE) $(VFLAG) -DSH_IDENT=\"@myident@\" -DTRUST_MAIN -DSL_ALWAYS_TRUSTED=@mytrust@ -o trustfile $(srcsrc)/trustfile.c
+
+sh_MK.h: config.h
+	@echo "creating sh_MK.h"; \
+	echo "#ifndef SH_MK_H" > sh_MK.h; \
+	echo "#define SH_MK_H" >> sh_MK.h; \
+	$(top_srcdir)/c_bits.sh @my_key_1@ MKB >> sh_MK.h; \
+	$(top_srcdir)/c_bits.sh @my_key_2@ MKA >> sh_MK.h; \
+	$(top_srcdir)/c_bits.sh @my_key_3@ MKC >> sh_MK.h; \
+	$(top_srcdir)/c_bits.sh @my_key_4@ MKD >> sh_MK.h; \
+	echo "#endif" >> sh_MK.h
+
+
+sstrip: $(srcsrc)/sstrip.c Makefile
+	$(BUILD_CC) -m32 -I.  -o sstrip $(srcsrc)/sstrip.c
+
+sample: $(srcsrc)/sample.c Makefile
+	$(CC) -I.  -o sample $(srcsrc)/sample.c
+
+encode: $(srcsrc)/encode.c Makefile
+	$(BUILD_CC) -m32 -I. -o encode $(srcsrc)/encode.c
+
+config_xor.h: config.h encode
+	@echo 'encode $(XOR_CODE) config.h'; \
+	sleep 1; \
+	./encode $(XOR_CODE) config.h; \
+	mv x_config.h  config_xor.h
+
+#.c.o:
+#	@echo "./encode $(XOR_CODE) $<  -->  x_`echo $< |sed 's%.*/%%'`"; \
+#	./encode $(XOR_CODE) $<; \
+#	echo "$(COMPILE) $(VFLAG) -o `echo $@ |sed 's%.*/%%'` -c x_`echo $< |sed 's%.*/%%'`"; \
+#	$(COMPILE) $(VFLAG) -o `echo $@ |sed 's%.*/%%'` -c x_`echo $< |sed 's%.*/%%'`; \
+#	rm x_`echo $< |sed 's%.*/%%'`
+
+$(OBJECTS): encode internal.h
+	@echo "./encode $(XOR_CODE) $(srcsrc)/`echo $@ |sed 's%\.o$$%%'`.c --> x_`echo $@ |sed 's%\.o$$%%'`.c"; \
+	./encode $(XOR_CODE) $(srcsrc)/`echo $@ |sed 's%\.o$$%%'`.c; \
+	echo "$(COMPILE) $(VFLAG) -o `echo $@ |sed 's%.*/%%'` -c x_`echo $@ |sed 's%\.o$$%%'`.c"; \
+	$(COMPILE) $(VFLAG) -o `echo $@ |sed 's%.*/%%'` -c x_`echo $@ |sed 's%\.o$$%%'`.c && \
+	rm x_`echo $@ |sed 's%\.o$$%%'`.c
+
+sh_tiger_i.o: $(srcsrc)/$(TIGER_SRC) Makefile config_xor.h 
+	@echo "$(COMPILE) $(VFLAG) -o sh_tiger_i.o -c $(srcsrc)/$(TIGER_SRC)";\
+	$(COMPILE) $(VFLAG) -o sh_tiger_i.o -c $(srcsrc)/$(TIGER_SRC);
+
+samhain_setpwd: encode config_xor.h $(srcsrc)/samhain_setpwd.c
+	@echo '$(COMPILE)  -o samhain_setpwd $(srcsrc)/samhain_setpwd.c'; \
+	./encode $(XOR_CODE) $(srcsrc)/samhain_setpwd.c; \
+	$(COMPILE)  -o samhain_setpwd x_samhain_setpwd.c; \
+	rm x_samhain_setpwd.c
+
+samhain_stealth: encode config_xor.h $(srcsrc)/samhain_stealth.c
+	@echo '$(COMPILE)  -o samhain_stealth $(srcsrc)/samhain_stealth.c'; \
+	./encode $(XOR_CODE) $(srcsrc)/samhain_stealth.c; \
+	$(COMPILE)  -o samhain_stealth x_samhain_stealth.c; \
+	rm x_samhain_stealth.c
+
+yulectl: encode config_xor.h $(srcsrc)/yulectl.c
+	@echo '$(COMPILE)  -o yulectl $(srcsrc)/yulectl.c $(LIBS_SOCK)'; \
+	./encode $(XOR_CODE) $(srcsrc)/yulectl.c; \
+	$(COMPILE)  -o yulectl x_yulectl.c $(LIBS_SOCK); \
+	rm x_yulectl.c
+
+$(SAMHAIN): internal.h $(OBJECTS) sh_tiger_i.o
+	@-rm -f $(SAMHAIN)
+	@echo "$(LINK) sh_tiger_i.o $(OBJECTS) $(LIBS_TRY)"; \
+	$(LINK) sh_tiger_i.o $(OBJECTS) $(LIBS_TRY)
+
+
+CUTEST_SOURCES = $(srcsrc)/cutest_sh_tools.c \
+		$(srcsrc)/cutest_sh_utils.c \
+		$(srcsrc)/cutest_sh_unix.c \
+		$(srcsrc)/cutest_slib.c \
+		$(srcsrc)/cutest_zAVLTree.c \
+		$(srcsrc)/cutest_sh_hash.c \
+		$(srcsrc)/cutest_sh_tiger0.c
+
+CUTEST_OBJECTS = cutest_sh_tools.o \
+	cutest_sh_utils.o \
+	cutest_sh_unix.o \
+	cutest_slib.o \
+	cutest_zAVLTree.o \
+	cutest_sh_hash.o \
+	cutest_sh_tiger0.o
+
+$(CUTEST_OBJECTS): $(CUTEST_SOURCES) config_xor.h internal.h
+	@echo "./encode $(XOR_CODE) $(srcsrc)/`echo $@ |sed 's%\.o$$%%'`.c --> x_`echo $@ |sed 's%\.o$$%%'`.c"; \
+	./encode $(XOR_CODE) $(srcsrc)/`echo $@ |sed 's%\.o$$%%'`.c; \
+	echo "$(COMPILE) $(VFLAG) -o `echo $@ |sed 's%.*/%%'` -c x_`echo $@ |sed 's%\.o$$%%'`.c"; \
+	$(COMPILE) $(VFLAG) -o `echo $@ |sed 's%.*/%%'` -c x_`echo $@ |sed 's%\.o$$%%'`.c; \
+	rm x_`echo $@ |sed 's%\.o$$%%'`.c
+
+
+cutest: $(SOURCES) $(CUTEST_SOURCES)
+	@$(MAKE) CUTEST='-DSH_CUTEST=1' intcutest
+
+$(srcsrc)/CuTestMain.c: $(SOURCES) $(CUTEST_SOURCES) $(srcsrc)/make-tests.sh
+	cd $(srcsrc)/ && ./make-tests.sh >CuTestMain.c;
+
+intcutest: internal.h $(OBJECTS) $(CUTEST_OBJECTS) sh_tiger_i.o $(srcsrc)/CuTestMain.c
+	@$(COMPILE) -o CuTestMain.o -c $(srcsrc)/CuTestMain.c; \
+	$(COMPILE) -o CuTest.o -c $(srcsrc)/CuTest.c; \
+	rm -f samhain.o; \
+	./encode $(XOR_CODE) $(srcsrc)/samhain.c; \
+	$(COMPILE) $(VFLAG) -o samhain.o -c x_samhain.c; \
+	rm x_samhain.c; \
+	$(LINK) sh_tiger_i.o $(CUTEST_OBJECTS) CuTestMain.o CuTest.o $(OBJECTS) $(LIBS_TRY); \
+	test -f ./intcutest && mv ./intcutest ./cutest; \
+	./cutest
+
+runcutest:
+	gdb ./cutest
+
+samhain_hide.o: $(srcsrc)/samhain_hide.c samhain_erase.o
+	$(COMPILE) @lkm_inc@ -I. -Wall -O2  -c $(srcsrc)/samhain_hide.c
+
+samhain_erase.o: $(srcsrc)/samhain_erase.c
+	$(COMPILE) @lkm_inc@ -I. -Wall -O2  -c $(srcsrc)/samhain_erase.c
+
+# -- NEW --
+samhain_hide.ko: $(srcsrc)/samhain_hide.c
+	@test -d m_comp || mkdir m_comp; \
+	echo "KVERSION := \$$(shell uname -r)" > m_comp/Makefile;\
+	echo "KSOURCE ?= /lib/modules/\$$(KVERSION)/build" >> m_comp/Makefile;\
+	echo "obj-m   := samhain_hide.o"                   >> m_comp/Makefile;\
+	echo ".PHONY: modules install clean modules_add"   >> m_comp/Makefile;\
+	echo "install : modules_add"                       >> m_comp/Makefile;\
+	echo "modules modules_install clean:"              >> m_comp/Makefile;\
+	echo "T\$$(MAKE) -C \$$(KSOURCE) \$$@ SUBDIRS=\$$(CURDIR) KBUILD_VERBOSE=2" |  tr T '\t' >> m_comp/Makefile;\
+	cp config.h m_comp/; \
+	cp $(srcsrc)/samhain_hide.c m_comp/; \
+	cd m_comp && $(MAKE) modules
+	@if test -f m_comp/samhain_hide.ko; then \
+	  cp -p m_comp/samhain_hide.ko samhain_hide.ko; \
+	  rm -rf m_comp/; \
+	else \
+	  echo "Kernel module samhain_hide.ko not build"; \
+	  exit 1; \
+	fi
+
+# -- NEW --
+samhain_kmem.ko: $(srcsrc)/samhain_kmem.c
+	@test -d m_comp || mkdir m_comp; \
+	echo "KVERSION := \$$(shell uname -r)" > m_comp/Makefile;\
+	echo "KSOURCE ?= /lib/modules/\$$(KVERSION)/build" >> m_comp/Makefile;\
+	echo "obj-m   := @install_name@_kmem.o"            >> m_comp/Makefile;\
+	echo ".PHONY: modules install clean modules_add"   >> m_comp/Makefile;\
+	echo "install : modules_add"                       >> m_comp/Makefile;\
+	echo "modules modules_install clean:"              >> m_comp/Makefile;\
+	echo "T\$$(MAKE) -C \$$(KSOURCE) \$$@ SUBDIRS=\$$(CURDIR) KBUILD_VERBOSE=2" |  tr T '\t' >> m_comp/Makefile;\
+	cp config.h m_comp/; \
+	cp $(srcsrc)/samhain_kmem.c m_comp/@install_name@_kmem.c; \
+	cd m_comp && $(MAKE) modules
+	@if test -f m_comp/@install_name@_kmem.ko; then \
+	  cp -p m_comp/@install_name@_kmem.ko samhain_kmem.ko; \
+	  rm -rf m_comp/; \
+	else \
+	  echo "Kernel module samhain_kmem.ko not build"; \
+	  exit 1; \
+	fi
+
+
+# -- NEW --
+lkm: @sh_lkm@
+
+
+
+# For kernel syscall monitoring
+kern_head: Makefile $(top_srcdir)/include/kern_head.h $(srcsrc)/kern_head.c
+	@echo "$(BUILD_CC) -I. -I./include -DSYSTEMMAP=\"@systemmap@\" -o kern_head $(srcsrc)/kern_head.c $(LIBS_KVM)"; \
+	$(BUILD_CC) -m32 -I. -I./include -DSYSTEMMAP=\"@systemmap@\" -o kern_head $(srcsrc)/kern_head.c $(LIBS_KVM)
+
+sh_ks.h: kern_head
+	@sleep 1; \
+	./kern_head > sh_ks.h
+
+sh_ks_xor.h: encode sh_ks.h
+	@echo 'encode $(XOR_CODE) sh_ks.h'; \
+	sleep 1; \
+	./encode $(XOR_CODE) sh_ks.h; \
+	mv x_sh_ks.h  sh_ks_xor.h
+
+# For bignum
+internal.h: mkhdr
+	@sleep 1; \
+	./mkhdr
+
+bignum.o: internal.h
+
+
+# If your compiler can't handle long identifiers (> 6 chars), move the `#' to
+# the other line.
+
+mkhdr: $(srcsrc)/mkhdr.c config.h 
+	@echo "$(BUILD_CC) -I. -o mkhdr $(srcsrc)/mkhdr.c"; \
+	sleep 1; \
+	$(BUILD_CC) -m32 -I. -o mkhdr $(srcsrc)/mkhdr.c
+
+	#$(COMPILE)  -DBIG_SHORT_NAMES -o mkhdr $(srcdir)/mkhdr.c
+
+#----------------------------------------------------------
+#
+# EXE PACKER  rules
+#
+#----------------------------------------------------------
+
+minilzo.o: $(srcsrc)/minilzo.c $(srcinc)/lzoconf.h $(srcinc)/minilzo.h config.h
+	@echo "$(COMPILE) -DMINILZO_HAVE_CONFIG_H -o minilzo.o -c $(srcsrc)/minilzo.c"; \
+	$(COMPILE) -DMINILZO_HAVE_CONFIG_H -o minilzo.o -c $(srcsrc)/minilzo.c
+
+exepack_mkdata: $(srcsrc)/exepack_mkdata.c $(srcinc)/lzoconf.h $(srcinc)/minilzo.h minilzo.o
+	@echo "$(COMPILE) -o exepack_mkdata.o -c $(srcsrc)/exepack_mkdata.c"; \
+	$(COMPILE)  -o exepack_mkdata.o -c $(srcsrc)/exepack_mkdata.c; \
+	echo "$(LINK) exepack_mkdata.o minilzo.o"; \
+	$(LINK) exepack_mkdata.o minilzo.o
+
+#
+# prepare the data to be packed
+#
+exepack.data: $(SAMHAIN) exepack_mkdata sstrip
+	@echo "cp ./$(SAMHAIN) ./samhain.pk.data"; \
+	cp ./$(SAMHAIN) ./samhain.pk.data; \
+	echo "strip ./samhain.pk.data"; \
+	strip ./samhain.pk.data > /dev/null 2>&1  || echo "... is already stripped"; \
+	echo "./sstrip ./samhain.pk.data"; \
+	./sstrip ./samhain.pk.data > /dev/null 2>&1  || echo "sstrip returned false"; \
+	echo "./exepack_mkdata ./samhain.pk.data ./exepack.data 0"; \
+	./exepack_mkdata ./samhain.pk.data ./exepack.data 0; \
+	echo "rm -f ./samhain.pk.data"; \
+	rm -f ./samhain.pk.data;
+
+exepack: $(srcsrc)/exepack.c minilzo.o exepack.data
+	@echo "$(COMPILE)  -o exepack.o -c $(srcsrc)/exepack.c"; \
+	$(COMPILE) -o exepack.o -c $(srcsrc)/exepack.c; \
+	echo "$(LINK) exepack.o minilzo.o"; \
+	$(LINK) exepack.o minilzo.o; 
+
+#
+# this program fills the data section with the binary
+#
+exepack_fill: $(srcsrc)/exepack_fill.c minilzo.o exepack
+	@echo "$(COMPILE)  -o exepack_fill.o -c $(srcsrc)/exepack_fill.c"; \
+	$(COMPILE)  -o exepack_fill.o -c $(srcsrc)/exepack_fill.c; \
+	echo "$(LINK) exepack_fill.o minilzo.o"; \
+	$(LINK) exepack_fill.o minilzo.o
+
+samhain.pk: $(SAMHAIN) exepack exepack_fill sstrip
+	@echo "cp ./$(SAMHAIN) ./samhain.pk.data"; \
+	cp ./$(SAMHAIN) ./samhain.pk.data; \
+	echo "strip ./samhain.pk.data"; \
+	strip ./samhain.pk.data > /dev/null 2>&1  || echo "... is already stripped"; \
+	echo "./sstrip ./samhain.pk.data"; \
+	./sstrip ./samhain.pk.data > /dev/null 2>&1  || echo "sstrip returned false"; \
+	test -f exepack.out && rm exepack.out; \
+	echo "./exepack_fill exepack samhain.pk.data exepack.out"; \
+	./exepack_fill exepack samhain.pk.data exepack.out; \
+	chmod +x exepack.out; \
+	echo "strip exepack.out"; \
+	strip exepack.out > /dev/null 2>&1 || echo "... is already stripped"; \
+	./sstrip exepack.out > /dev/null 2>&1 || echo "sstrip returned false"; \
+	echo "mv exepack.out samhain.pk"; \
+	rm -f samhain.pk; mv exepack.out samhain.pk
+
+samhain-packed: $(SAMHAIN) samhain_setpwd
+	@echo "samhain_setpwd samhain new $(CLIENTPASSWD)"; \
+	samhain_setpwd samhain new $(CLIENTPASSWD); \
+	echo "rm -f samhain; mv samhain.new samhain"; \
+	rm -f samhain; mv samhain.new samhain; \
+	$(MAKE) samhain.pk; \
+	echo "rm -f samhain; mv samhain.pk samhain"; \
+	rm -f samhain; mv samhain.pk samhain
+
+#----------------------------------------------------------
+#
+# DEPLOY  rules
+#
+#----------------------------------------------------------
+
+uninstall-deploy:
+	rm -rf $(mydatadir)/profiles/source
+	rm -rf $(mydatadir)/profiles/archpkg
+	rm -rf $(mydatadir)/profiles/libexec
+	rm -rf $(mydatadir)/profiles/tmp
+	rm -rf $(mydatadir)/profiles/private
+	@if test -f $(sbindir)/deploy.sh; then \
+	  old_deploy=`grep 'VERSION2' $(sbindir)/deploy.sh >/dev/null 2>&1 || echo old`; \
+	  if test x"$$old_deploy" = xold; then \
+		echo "rm -f $(sbindir)/deploy2.sh"; \
+		rm -f $(sbindir)/deploy2.sh; \
+	  else \
+		echo "rm -f $(sbindir)/deploy.sh"; \
+		rm -f $(sbindir)/deploy.sh; \
+	  fi; \
+	fi
+
+EXECFILES= comCHECKSRC comDOWNLOAD comBUILD comCLEAN comINSTALL \
+	funcDIALOG funcEXE funcPRINT funcSETUP funcBUILD funcINSTALL \
+	funcDB comUNINSTALL \
+	preinstall postinstall initscript
+
+# $(mydatadir)/profiles/
+#                       |
+#                       |
+#                       |-- source -------------> (tarballs)
+#                       |
+#                       |-- configs ------------> (default configs)
+#                       |
+#                       |-- archpkg
+#                       |     | 
+#                       |     |-- architecture -> (package, setup script)
+#                       |
+#                       |-- hosts
+#                       |     |
+#                       |     |-- hostname -----> (config)
+#                       |
+#                       |-- libexec ------------> (scripts)
+#                       |
+#                       |-- private ------------> (gpg key)
+#                       |
+#                       |-- tmp
+#
+install-deploy:  deploy.sh samhain_stealth
+	@echo "Creating directory tree under $(mydatadir)/profiles/"; \
+	$(mkinstalldirs) $(sbindir); \
+	$(mkinstalldirs) $(mydatadir)/profiles/source; \
+	$(mkinstalldirs) $(mydatadir)/profiles/configs; \
+	$(mkinstalldirs) $(mydatadir)/profiles/archpkg/debian_i386; \
+	$(mkinstalldirs) $(mydatadir)/profiles/archpkg/gentoo_i386; \
+	$(mkinstalldirs) $(mydatadir)/profiles/archpkg/redhat_i386; \
+	$(mkinstalldirs) $(mydatadir)/profiles/archpkg/linux_i386;  \
+	$(mkinstalldirs) $(mydatadir)/profiles/archpkg/freebsd_i386;\
+	$(mkinstalldirs) $(mydatadir)/profiles/archpkg/solaris;     \
+	$(mkinstalldirs) $(mydatadir)/profiles/archpkg/aix;         \
+	$(mkinstalldirs) $(mydatadir)/profiles/hosts; \
+	$(mkinstalldirs) $(mydatadir)/profiles/libexec; \
+	$(mkinstalldirs) $(mydatadir)/profiles/private; \
+	$(mkinstalldirs) $(mydatadir)/profiles/tmp; \
+	if test -f $(srcdir)/../$(PACKAGE)-$(VERSION).tar.gz.asc; then \
+	  if test -f $(srcdir)/../$(PACKAGE)-$(VERSION).tar.gz; then \
+	    echo "Installing source tarball"; \
+	    $(INSTALL_DATA) $(srcdir)/../$(PACKAGE)-$(VERSION).tar.gz.asc \
+	      $(mydatadir)/profiles/source/$(PACKAGE)-$(VERSION).tar.gz.asc; \
+	    $(INSTALL_DATA) $(srcdir)/../$(PACKAGE)-$(VERSION).tar.gz \
+	      $(mydatadir)/profiles/source/$(PACKAGE)-$(VERSION).tar.gz; \
+	  fi; \
+	fi; \
+	echo "Installing default configs"; \
+	test -f $(mydatadir)/profiles/configs/freebsd_i386.samhainrc || \
+		$(INSTALL_DATA)  $(srcdir)/samhainrc.freebsd \
+		$(mydatadir)/profiles/configs/freebsd_i386.samhainrc; \
+	test -f $(mydatadir)/profiles/configs/debian_i386.samhainrc || \
+		$(INSTALL_DATA)  $(srcdir)/samhainrc.linux \
+		$(mydatadir)/profiles/configs/debian_i386.samhainrc; \
+	test -f $(mydatadir)/profiles/configs/gentoo_i386.samhainrc || \
+		$(INSTALL_DATA)  $(srcdir)/samhainrc.linux \
+		$(mydatadir)/profiles/configs/gentoo_i386.samhainrc; \
+	test -f $(mydatadir)/profiles/configs/redhat_i386.samhainrc || \
+		$(INSTALL_DATA)  $(srcdir)/samhainrc.linux \
+		$(mydatadir)/profiles/configs/redhat_i386.samhainrc; \
+	test -f $(mydatadir)/profiles/configs/linux_i386.samhainrc || \
+		$(INSTALL_DATA)  $(srcdir)/samhainrc.linux \
+		$(mydatadir)/profiles/configs/linux_i386.samhainrc; \
+	test -f $(mydatadir)/profiles/configs/solaris.samhainrc || \
+		$(INSTALL_DATA)  $(srcdir)/samhainrc.solaris \
+		$(mydatadir)/profiles/configs/solaris.samhainrc; \
+	test -f $(mydatadir)/profiles/configs/aix.samhainrc || \
+		$(INSTALL_DATA)  $(srcdir)/samhainrc.aix5.2.0 \
+		$(mydatadir)/profiles/configs/aix.samhainrc; \
+	if test -f $(mydatadir)/profiles/configs/generic.configure; then \
+		:; \
+	else \
+		SH_FQDN_SYSTEM=`uname -n`; \
+		SH_FQDN_DOMAIN=`grep -i domain /etc/resolv.conf |grep -v "\#" |awk '{print $$2}' |head -1`; \
+		if test -n "$${SH_FQDN_SYSTEM}" -a -n "$${SH_FQDN_DOMAIN}"; then \
+		    sh_thishost="$${SH_FQDN_SYSTEM}.$${SH_FQDN_DOMAIN}"; \
+		else \
+		    sh_thishost="FQDN_MISSING"; \
+		fi; \
+		outfile=$(mydatadir)/profiles/configs/generic.configure; \
+		echo "'--enable-network=client'" >  $$outfile; \
+		echo "'--with-logserver=$${sh_thishost}'" >> $$outfile; \
+		echo "'--with-data-file=REQ_FROM_SERVER/var/lib/samhain/samhain_file'" >>  $$outfile; \
+		echo "'--with-config-file=REQ_FROM_SERVER/etc/samhainrc'" >>  $$outfile; \
+		echo "'--enable-base=@mykeybase@'"   >> $$outfile; \
+	fi; \
+	$(INSTALL_SHELL) $(srcdir)/mkinstalldirs \
+		$(mydatadir)/profiles/libexec; \
+	$(INSTALL_SHELL) $(srcdir)/install-sh \
+		$(mydatadir)/profiles/libexec; \
+	for ff in $(EXECFILES); do \
+	  test -f $(srcdir)/dsys/$$ff && $(INSTALL_SHELL) $(srcdir)/dsys/$$ff \
+	    $(mydatadir)/profiles/libexec; \
+	done; \
+	$(INSTALL_SHELL) samhain_stealth $(mydatadir)/profiles/libexec; \
+	test -f $(srcdir)/dsys/0F571F6C.asc && $(INSTALL_DATA) $(srcdir)/dsys/0F571F6C.asc \
+	    $(mydatadir)/profiles/private; \
+	convert +compress $(srcdir)/stealth_template.jpg stealth_template.ps >/dev/null || \
+	{ echo "*"; echo "* 'convert' not found or not working, not installing"; echo "* $(mydatadir)/profiles/private/stealth_template.ps"; echo "* (only required for installing packages built with --enable-stealth)"; echo "*"; }; \
+	if test -f stealth_template.ps; then \
+	  if test -f $(mydatadir)/profiles/private/stealth_template.ps; then \
+	   :; \
+	  else \
+	   $(INSTALL_DATA) stealth_template.ps $(mydatadir)/profiles/private; \
+          fi; \
+        fi; \
+	if test -f $(sbindir)/deploy.sh; then \
+	   old_deploy=`grep 'VERSION2' $(sbindir)/deploy.sh >/dev/null 2>&1 || echo old`; \
+	   if test x"$$old_deploy" = xold; then \
+		echo "*"; echo "* Version 1 of deploy.sh found"; echo "*"; \
+		echo "* Installing $(sbindir)/deploy2.sh"; echo "*"; \
+		$(INSTALL_SHELL) deploy.sh $(sbindir)/deploy2.sh; \
+	   else \
+		echo "Installing $(sbindir)/deploy.sh"; \
+		$(INSTALL_SHELL) deploy.sh $(sbindir)/deploy.sh; \
+	   fi; \
+	else \
+		echo "Installing $(sbindir)/deploy.sh"; \
+		$(INSTALL_SHELL) deploy.sh $(sbindir)/deploy.sh; \
+	fi
+
+
+#----------------------------------------------------------
+#
+# DISTRIBUTION  rules
+#
+#----------------------------------------------------------
+
+distdir = $(PACKAGE)-$(VERSION)
+top_distdir = $(distdir)
+
+# This target untars the dist file and tries a VPATH configuration.  Then
+# it guarantees that the distribution is self-contained by making another
+# tarfile.
+
+#
+# 1) make distribution tarfile
+# 2) unpack the tarfile into distdir
+# 3) create build and install directories
+# 4) do the build in the build dir, with sources from distdir
+# 5) check (there are no subdirs, thus does nothing)
+# 6) install
+# 7) installcheck (equal to check, does nothing)
+#
+distcheck: dist
+	-rm -rf $(distdir)
+	GZIP=$(GZIP) $(TAR) zxf $(distdir).tar.gz
+	mkdir $(distdir)/=build
+	mkdir $(distdir)/=inst
+	dc_install_base=`cd $(distdir)/=inst && pwd`; \
+	cd $(distdir)/=build \
+	  && ../configure --srcdir=.. --prefix=$$dc_install_base \
+	  && $(MAKE) \
+	  && $(MAKE) install 
+	-rm -rf $(distdir)
+	-rm -f $(distdir).tar.gz.asc
+	@gpg -a --detach-sign $(distdir).tar.gz; \
+	$(TAR) chof $(distdir).tar $(distdir).tar.gz $(distdir).tar.gz.asc; \
+	rm -f $(distdir).tar.gz; \
+	rm -f $(distdir).tar.gz.asc; \
+	gzip --best $(distdir).tar
+	mv $(distdir).tar.gz $(PACKAGE)_signed-$(VERSION).tar.gz
+	@echo "========================"; \
+	echo "$(PACKAGE)_signed-$(VERSION).tar.gz is ready for distribution"; \
+	echo "========================"
+
+#
+# create a tarfile for the distibution
+#
+distrpm: distdirrpm
+	-chmod -R a+r $(distdir)
+	-rm -rf $(distdir).tar.gz
+	-rm -rf $(distdir).tar
+	$(TAR) chof $(distdir).tar $(distdir)
+	gzip -c --best $(distdir).tar > $(distdir).tar.gz
+	-rm -rf $(distdir)
+
+dist: distdir
+	-chmod -R a+r $(distdir)
+	-rm -rf $(distdir).tar.gz
+	-rm -rf $(distdir).tar
+	$(TAR) chof $(distdir).tar $(distdir)
+	gzip -c --best $(distdir).tar > $(distdir).tar.gz
+	-rm -rf $(distdir)
+
+#
+# create a tarfile for the distibution
+#
+dist-sign: distdir
+	-rm -f $(distdir)/scripts/samhain.ebuild
+	-rm -f $(distdir)/scripts/samhain.ebuild-light
+	-chmod -R a+r $(distdir)
+	-rm -rf $(distdir).tar.gz
+	-rm -rf $(distdir).tar
+	$(TAR) chof $(distdir).tar $(distdir)
+	gzip --best $(distdir).tar
+	-rm -rf $(distdir)
+	-rm -f $(distdir).tar.gz.asc
+	gpg -a --detach-sign $(distdir).tar.gz
+	$(TAR) chof $(distdir).tar $(distdir).tar.gz $(distdir).tar.gz.asc
+	-rm -f $(distdir).tar.gz
+	-rm -f $(distdir).tar.gz.asc
+	gzip --best $(distdir).tar
+	mv $(distdir).tar.gz $(PACKAGE)_signed-$(VERSION).tar.gz
+
+
+#
+# same as dist
+#
+dist-all: distdir
+	-chmod -R a+r $(distdir)
+	GZIP=$(GZIP) $(TAR) chozf $(distdir).tar.gz $(distdir)
+	-rm -rf $(distdir)
+
+#
+#  create distribution directory and copy files into it
+#
+INITFILES=samhain.startIRIX samhain.startFreeBSD samhain.startSolaris \
+samhain.startLSB samhain.startGentoo samhain.startLinux samhain.startHPUX \
+samhain.startIRIX samhain.startMACOSX
+
+SCRIPTFILES=redhat_i386.client.spec check_samhain.pl samhainadmin.pl \
+yuleadmin.pl samhain.ebuild samhain.ebuild-light samhain.spec
+
+distdir: distfilecheck
+	-rm -f $(top_srcdir)/init/*~
+	-rm -f $(top_srcdir)/sql_init/*~
+	-rm -f $(top_srcdir)/dsys/*~
+	-rm -f $(top_srcdir)/docs/*~
+	-rm -f $(top_srcdir)/include/*~
+	-rm -f $(top_srcdir)/src/*~
+	-rm -f $(top_srcdir)/test/*~
+	-rm -f $(top_srcdir)/scripts/*~
+	(cd $(top_srcdir)/init && rm -f $(INITFILES))
+	(cd $(top_srcdir)/scripts && rm -f $(SCRIPTFILES))
+	-rm -rf $(distdir)
+	mkdir $(distdir)
+	-chmod 777 $(distdir)
+	@for file in $(DISTFILES); do \
+	  d=$(top_srcdir); \
+	  if test -f $$d/$$file || test -d $$d/$$file; then \
+	    cp -pr $$d/$$file $(distdir)/$$file; \
+	  fi; \
+	done; \
+	cp scripts/samhain.spec $(distdir)/samhain.spec; \
+	rm -f $(distdir)/scripts/*.spec
+
+#
+# as distdir, but don't copy spec file from scripts
+#
+distdirrpm: distfilecheck
+	-rm -rf $(distdir)
+	mkdir $(distdir)
+	-chmod 777 $(distdir)
+	@if test -f ./samhain.spec; then \
+	  :; \
+	else \
+	  echo "Error: ./samhain.spec not found, please run configure"; \
+	  exit 1; \
+	fi
+	@cp -p samhain.spec $(distdir)/samhain.spec; \
+	for file in $(DISTFILES); do \
+	  d=$(top_srcdir); \
+	  if test -f $$d/$$file || test -d $$d/$$file; then \
+	    if test x"$$file" = "xsamhain.spec"; then \
+	      :; \
+	    else \
+	      cp -pr $$d/$$file $(distdir)/$$file; \
+	    fi; \
+	  fi; \
+	done; \
+	rm -f $(distdir)/scripts/*.spec
+
+
+distfilecheck: $(top_srcdir)/config.h.in $(top_srcdir)/depend.sum
+	@for file in $(DISTFILES); do \
+	  d=$(top_srcdir); \
+	  if test -f $$d/$$file || test -d $$d/$$file; then \
+	    : \
+	  else \
+	    echo "File not found: $$d/$$file"; \
+	  fi; \
+	done
+	@for file in $(SOURCES); do \
+	  if test -f $$file; then \
+	    : \
+	  else \
+	    echo "File not found: $$file"; \
+	  fi; \
+	done
+
+
+# DO NOT DELETE THIS LINE
+
+
+samhain.o: $(srcsrc)/samhain.c Makefile config_xor.h $(srcinc)/samhain.h $(srcinc)/sh_pthread.h $(srcinc)/sh_utils.h $(srcinc)/sh_error.h $(srcinc)/sh_unix.h $(srcinc)/sh_files.h $(srcinc)/sh_getopt.h $(srcinc)/sh_readconf.h $(srcinc)/sh_hash.h $(srcinc)/sh_restrict.h $(srcinc)/sh_nmail.h $(srcinc)/sh_tiger.h $(srcinc)/sh_gpg.h $(srcinc)/sh_mem.h $(srcinc)/sh_forward.h $(srcinc)/sh_tools.h $(srcinc)/sh_hash.h $(srcinc)/sh_extern.h $(srcinc)/sh_modules.h $(srcinc)/sh_ignore.h $(srcinc)/sh_prelink.h sh_MK.h $(srcinc)/sh_schedule.h 
+sh_unix.o: $(srcsrc)/sh_unix.c Makefile config_xor.h $(srcinc)/samhain.h $(srcinc)/sh_error.h $(srcinc)/sh_unix.h $(srcinc)/sh_utils.h $(srcinc)/sh_mem.h $(srcinc)/sh_hash.h $(srcinc)/sh_tools.h $(srcinc)/sh_restrict.h $(srcinc)/sh_ipvx.h $(srcinc)/sh_tiger.h $(srcinc)/sh_prelink.h $(srcinc)/sh_pthread.h $(srcinc)/sh_static.h $(srcinc)/sh_prelude.h $(srcinc)/zAVLTree.h $(srcinc)/sh_ignore.h 
+sh_utils.o: $(srcsrc)/sh_utils.c Makefile config_xor.h $(srcinc)/samhain.h $(srcinc)/sh_error.h $(srcinc)/sh_utils.h $(srcinc)/sh_unix.h $(srcinc)/sh_tiger.h $(srcinc)/sh_entropy.h $(srcinc)/sh_pthread.h 
+sh_error.o: $(srcsrc)/sh_error.c Makefile config_xor.h $(srcinc)/samhain.h $(srcinc)/sh_cat.h $(srcinc)/sh_database.h $(srcinc)/sh_error.h $(srcinc)/sh_utils.h $(srcinc)/sh_unix.h $(srcinc)/sh_tiger.h $(srcinc)/sh_nmail.h $(srcinc)/sh_forward.h $(srcinc)/sh_prelude.h $(srcinc)/sh_pthread.h $(srcinc)/sh_tools.h $(srcinc)/sh_extern.h $(srcinc)/sh_checksum.h 
+sh_files.o: $(srcsrc)/sh_files.c Makefile config_xor.h $(srcinc)/samhain.h $(srcinc)/sh_pthread.h $(srcinc)/sh_error.h $(srcinc)/sh_utils.h $(srcinc)/sh_unix.h $(srcinc)/sh_files.h $(srcinc)/sh_tiger.h $(srcinc)/sh_hash.h $(srcinc)/sh_ignore.h $(srcinc)/sh_inotify.h $(srcinc)/zAVLTree.h $(srcinc)/CuTest.h 
+sh_getopt.o: $(srcsrc)/sh_getopt.c Makefile config_xor.h $(srcinc)/samhain.h $(srcinc)/sh_error.h $(srcinc)/sh_getopt.h $(srcinc)/sh_unix.h $(srcinc)/sh_files.h $(srcinc)/sh_utils.h $(srcinc)/sh_mail.h $(srcinc)/sh_forward.h $(srcinc)/sh_hash.h $(srcinc)/sh_extern.h 
+sh_readconf.o: $(srcsrc)/sh_readconf.c Makefile config_xor.h $(srcinc)/samhain.h $(srcinc)/sh_calls.h $(srcinc)/sh_error.h $(srcinc)/sh_extern.h $(srcinc)/sh_unix.h $(srcinc)/sh_files.h $(srcinc)/sh_forward.h $(srcinc)/sh_gpg.h $(srcinc)/sh_hash.h $(srcinc)/sh_ignore.h $(srcinc)/sh_database.h $(srcinc)/sh_mail.h $(srcinc)/sh_modules.h $(srcinc)/sh_nmail.h $(srcinc)/sh_prelink.h $(srcinc)/sh_prelude.h $(srcinc)/sh_tiger.h $(srcinc)/sh_tools.h $(srcinc)/sh_utils.h $(srcinc)/sh_restrict.h 
+sh_tiger0.o: $(srcsrc)/sh_tiger0.c Makefile config_xor.h $(srcinc)/sh_tiger.h $(srcinc)/sh_unix.h $(srcinc)/sh_error.h $(srcinc)/sh_utils.h $(srcinc)/sh_pthread.h $(srcinc)/sh_string.h $(srcinc)/sh_checksum.h 
+sh_tiger1.o: $(srcsrc)/sh_tiger1.c Makefile config_xor.h 
+sh_tiger2.o: $(srcsrc)/sh_tiger2.c Makefile config_xor.h 
+sh_tiger1_64.o: $(srcsrc)/sh_tiger1_64.c Makefile config_xor.h 
+sh_tiger2_64.o: $(srcsrc)/sh_tiger2_64.c Makefile config_xor.h 
+sh_hash.o: $(srcsrc)/sh_hash.c Makefile config_xor.h $(srcinc)/sh_hash.h $(srcinc)/sh_utils.h $(srcinc)/sh_error.h $(srcinc)/sh_tiger.h $(srcinc)/sh_gpg.h $(srcinc)/sh_unix.h $(srcinc)/sh_files.h $(srcinc)/sh_ignore.h $(srcinc)/sh_pthread.h $(srcinc)/sh_forward.h $(srcinc)/sh_hash.h $(srcinc)/sh_checksum.h 
+sh_mail.o: $(srcsrc)/sh_mail.c Makefile config_xor.h $(srcinc)/samhain.h $(srcinc)/sh_error.h $(srcinc)/sh_unix.h $(srcinc)/sh_tiger.h $(srcinc)/sh_mail.h $(srcinc)/sh_utils.h $(srcinc)/sh_fifo.h $(srcinc)/sh_tools.h $(srcinc)/sh_pthread.h $(srcinc)/sh_filter.h $(srcinc)/sh_mail_int.h $(srcinc)/sh_nmail.h $(srcinc)/sh_ipvx.h $(srcinc)/sh_static.h $(srcinc)/sh_tools.h 
+sh_mem.o: $(srcsrc)/sh_mem.c Makefile config_xor.h $(srcinc)/samhain.h $(srcinc)/sh_error.h $(srcinc)/sh_utils.h $(srcinc)/sh_mem.h $(srcinc)/sh_pthread.h 
+sh_entropy.o: $(srcsrc)/sh_entropy.c Makefile config_xor.h $(srcinc)/samhain.h $(srcinc)/sh_utils.h $(srcinc)/sh_unix.h $(srcinc)/sh_tiger.h $(srcinc)/sh_calls.h $(srcinc)/sh_pthread.h $(srcinc)/sh_static.h $(srcinc)/sh_pthread.h $(srcinc)/CuTest.h 
+sh_forward.o: $(srcsrc)/sh_forward.c Makefile config_xor.h $(srcinc)/sh_ipvx.h $(srcinc)/samhain.h $(srcinc)/sh_tiger.h $(srcinc)/sh_utils.h $(srcinc)/sh_unix.h $(srcinc)/sh_forward.h $(srcinc)/sh_srp.h $(srcinc)/sh_fifo.h $(srcinc)/sh_tools.h $(srcinc)/sh_entropy.h $(srcinc)/sh_html.h $(srcinc)/sh_nmail.h $(srcinc)/sh_socket.h $(srcinc)/sh_static.h $(srcinc)/rijndael-api-fst.h $(srcinc)/sh_readconf.h $(srcinc)/zAVLTree.h $(srcinc)/sh_extern.h 
+sh_modules.o: $(srcsrc)/sh_modules.c Makefile config_xor.h $(srcinc)/sh_modules.h $(srcinc)/sh_pthread.h $(srcinc)/sh_utmp.h $(srcinc)/sh_mounts.h $(srcinc)/sh_userfiles.h $(srcinc)/sh_kern.h $(srcinc)/sh_suidchk.h $(srcinc)/sh_processcheck.h $(srcinc)/sh_portcheck.h $(srcinc)/sh_logmon.h $(srcinc)/sh_registry.h $(srcinc)/sh_fInotify.h 
+sh_utmp.o: $(srcsrc)/sh_utmp.c Makefile config_xor.h $(srcinc)/samhain.h $(srcinc)/sh_utils.h $(srcinc)/sh_error.h $(srcinc)/sh_modules.h $(srcinc)/sh_utmp.h $(srcinc)/sh_pthread.h $(srcinc)/sh_inotify.h 
+sh_kern.o: $(srcsrc)/sh_kern.c Makefile config_xor.h $(srcinc)/samhain.h $(srcinc)/sh_pthread.h $(srcinc)/sh_utils.h $(srcinc)/sh_error.h $(srcinc)/sh_modules.h $(srcinc)/sh_kern.h sh_ks_xor.h $(srcinc)/sh_unix.h $(srcinc)/sh_hash.h 
+sh_suidchk.o: $(srcsrc)/sh_suidchk.c Makefile config_xor.h $(srcinc)/samhain.h $(srcinc)/sh_pthread.h $(srcinc)/sh_utils.h $(srcinc)/sh_error.h $(srcinc)/sh_modules.h $(srcinc)/sh_suidchk.h $(srcinc)/sh_hash.h $(srcinc)/sh_unix.h $(srcinc)/sh_files.h $(srcinc)/sh_schedule.h $(srcinc)/sh_calls.h $(srcinc)/zAVLTree.h 
+sh_srp.o: $(srcsrc)/sh_srp.c Makefile config_xor.h $(srcinc)/samhain.h $(srcinc)/sh_tiger.h $(srcinc)/sh_mem.h $(srcinc)/sh_utils.h $(srcinc)/sh_srp.h $(srcinc)/bignum.h $(srcinc)/CuTest.h 
+sh_fifo.o: $(srcsrc)/sh_fifo.c Makefile config_xor.h $(srcinc)/samhain.h $(srcinc)/sh_mem.h $(srcinc)/sh_unix.h $(srcinc)/sh_utils.h $(srcinc)/sh_string.h $(srcinc)/sh_fifo.h 
+sh_tools.o: $(srcsrc)/sh_tools.c Makefile config_xor.h $(srcinc)/samhain.h $(srcinc)/sh_mem.h $(srcinc)/sh_error.h $(srcinc)/sh_tools.h $(srcinc)/sh_utils.h $(srcinc)/sh_tiger.h $(srcinc)/sh_static.h $(srcinc)/sh_pthread.h $(srcinc)/sh_ipvx.h $(srcinc)/rijndael-api-fst.h $(srcinc)/rijndael-api-fst.h 
+sh_html.o: $(srcsrc)/sh_html.c Makefile config_xor.h $(srcinc)/samhain.h $(srcinc)/sh_forward.h $(srcinc)/sh_error.h $(srcinc)/sh_unix.h $(srcinc)/sh_utils.h $(srcinc)/sh_html.h $(srcinc)/zAVLTree.h 
+sh_gpg.o: $(srcsrc)/sh_gpg.c Makefile config_xor.h $(srcinc)/samhain.h $(srcinc)/sh_utils.h $(srcinc)/sh_error.h $(srcinc)/sh_tiger.h $(srcinc)/sh_static.h 
+sh_cat.o: $(srcsrc)/sh_cat.c Makefile config_xor.h $(srcinc)/samhain.h $(srcinc)/sh_error.h $(srcinc)/sh_cat.h 
+sh_calls.o: $(srcsrc)/sh_calls.c Makefile config_xor.h $(srcinc)/samhain.h $(srcinc)/sh_error.h $(srcinc)/sh_calls.h $(srcinc)/sh_ipvx.h $(srcinc)/sh_sub.h $(srcinc)/sh_utils.h 
+sh_extern.o: $(srcsrc)/sh_extern.c Makefile config_xor.h $(srcinc)/samhain.h $(srcinc)/sh_utils.h $(srcinc)/sh_unix.h $(srcinc)/sh_tiger.h $(srcinc)/sh_extern.h $(srcinc)/sh_calls.h $(srcinc)/sh_filter.h $(srcinc)/sh_static.h 
+sh_database.o: $(srcsrc)/sh_database.c Makefile config_xor.h $(srcinc)/samhain.h $(srcinc)/sh_cat.h $(srcinc)/sh_error.h $(srcinc)/sh_utils.h 
+sh_err_log.o: $(srcsrc)/sh_err_log.c Makefile config_xor.h $(srcinc)/samhain.h $(srcinc)/sh_error.h $(srcinc)/sh_utils.h $(srcinc)/sh_tiger.h 
+sh_err_console.o: $(srcsrc)/sh_err_console.c Makefile config_xor.h $(srcinc)/samhain.h $(srcinc)/sh_error.h $(srcinc)/sh_utils.h 
+sh_err_syslog.o: $(srcsrc)/sh_err_syslog.c Makefile config_xor.h $(srcinc)/samhain.h $(srcinc)/sh_error.h 
+sh_schedule.o: $(srcsrc)/sh_schedule.c Makefile config_xor.h $(srcinc)/samhain.h $(srcinc)/sh_mem.h $(srcinc)/sh_schedule.h 
+bignum.o: $(srcsrc)/bignum.c Makefile config_xor.h $(srcinc)/samhain.h $(srcinc)/bignum.h 
+mkhdr.o: $(srcsrc)/mkhdr.c Makefile config.h 
+samhain_setpwd.o: $(srcsrc)/samhain_setpwd.c Makefile config_xor.h 
+samhain_stealth.o: $(srcsrc)/samhain_stealth.c Makefile config_xor.h 
+encode.o: $(srcsrc)/encode.c Makefile 
+sstrip.o: $(srcsrc)/sstrip.c Makefile config.h 
+trustfile.o: $(srcsrc)/trustfile.c Makefile config_xor.h $(srcinc)/sh_calls.h $(srcinc)/slib.h $(srcinc)/sh_static.h $(srcinc)/sh_pthread.h 
+exepack.o: $(srcsrc)/exepack.c Makefile config.h $(srcinc)/minilzo.h $(srcinc)/exepack.data 
+exepack_fill.o: $(srcsrc)/exepack_fill.c Makefile config.h config.h $(srcinc)/minilzo.h 
+exepack_mkdata.o: $(srcsrc)/exepack_mkdata.c Makefile config.h $(srcinc)/minilzo.h 
+minilzo.o: $(srcsrc)/minilzo.c Makefile $(srcinc)/minilzo.h 
+slib.o: $(srcsrc)/slib.c Makefile config_xor.h $(srcinc)/slib.h $(srcinc)/sh_calls.h $(srcinc)/sh_static.h $(srcinc)/sh_pthread.h $(srcinc)/sh_string.h $(srcinc)/sh_mem.h 
+rijndael-alg-fst.o: $(srcsrc)/rijndael-alg-fst.c Makefile config_xor.h $(srcinc)/rijndael-alg-fst.h $(srcinc)/rijndael-boxes-fst.h 
+rijndael-api-fst.o: $(srcsrc)/rijndael-api-fst.c Makefile config_xor.h $(srcinc)/rijndael-api-fst.h 
+zAVLTree.o: $(srcsrc)/zAVLTree.c Makefile $(srcinc)/zAVLTree.h 
+sh_socket.o: $(srcsrc)/sh_socket.c Makefile config_xor.h $(srcinc)/samhain.h $(srcinc)/sh_socket.h $(srcinc)/sh_error.h $(srcinc)/sh_unix.h $(srcinc)/sh_calls.h $(srcinc)/sh_utils.h $(srcinc)/zAVLTree.h $(srcinc)/sh_html.h $(srcinc)/sh_tools.h 
+sh_ignore.o: $(srcsrc)/sh_ignore.c Makefile config_xor.h $(srcinc)/samhain.h $(srcinc)/sh_mem.h $(srcinc)/sh_error.h $(srcinc)/CuTest.h 
+yulectl.o: $(srcsrc)/yulectl.c Makefile config_xor.h 
+sh_mounts.o: $(srcsrc)/sh_mounts.c Makefile config_xor.h $(srcinc)/samhain.h $(srcinc)/sh_utils.h $(srcinc)/sh_error.h $(srcinc)/sh_modules.h $(srcinc)/sh_mounts.h 
+sh_userfiles.o: $(srcsrc)/sh_userfiles.c Makefile config_xor.h $(srcinc)/samhain.h $(srcinc)/sh_modules.h $(srcinc)/sh_userfiles.h $(srcinc)/sh_utils.h $(srcinc)/sh_schedule.h $(srcinc)/sh_error.h $(srcinc)/sh_hash.h $(srcinc)/sh_files.h $(srcinc)/sh_static.h $(srcinc)/sh_pthread.h 
+sh_prelude.o: $(srcsrc)/sh_prelude.c Makefile config_xor.h $(srcinc)/samhain.h $(srcinc)/sh_cat.h $(srcinc)/sh_error_min.h $(srcinc)/sh_prelude.h $(srcinc)/sh_static.h 
+kern_head.o: $(srcsrc)/kern_head.c Makefile config.h $(srcinc)/kern_head.h $(srcinc)/kern_head.h 
+sh_prelink.o: $(srcsrc)/sh_prelink.c Makefile config_xor.h $(srcinc)/samhain.h $(srcinc)/sh_tiger.h $(srcinc)/sh_extern.h $(srcinc)/sh_utils.h $(srcinc)/sh_unix.h 
+sh_static.o: $(srcsrc)/sh_static.c Makefile config_xor.h $(srcinc)/sh_pthread.h 
+sh_async.o: $(srcsrc)/sh_async.c Makefile config_xor.h $(srcinc)/samhain.h $(srcinc)/sh_calls.h $(srcinc)/sh_error.h 
+sh_processcheck.o: $(srcsrc)/sh_processcheck.c Makefile config_xor.h $(srcinc)/samhain.h $(srcinc)/sh_modules.h $(srcinc)/sh_processcheck.h $(srcinc)/sh_utils.h $(srcinc)/sh_error.h $(srcinc)/sh_extern.h $(srcinc)/sh_calls.h $(srcinc)/sh_pthread.h $(srcinc)/CuTest.h 
+sh_portcheck.o: $(srcsrc)/sh_portcheck.c Makefile config_xor.h $(srcinc)/samhain.h $(srcinc)/sh_error.h $(srcinc)/sh_mem.h $(srcinc)/sh_calls.h $(srcinc)/sh_utils.h $(srcinc)/sh_modules.h $(srcinc)/sh_static.h $(srcinc)/sh_pthread.h $(srcinc)/sh_ipvx.h $(srcinc)/CuTest.h 
+sh_pthread.o: $(srcsrc)/sh_pthread.c Makefile config_xor.h $(srcinc)/sh_pthread.h $(srcinc)/sh_calls.h $(srcinc)/sh_modules.h 
+sh_string.o: $(srcsrc)/sh_string.c Makefile config_xor.h $(srcinc)/sh_string.h $(srcinc)/sh_mem.h $(srcinc)/CuTest.h 
+dnmalloc.o: $(srcsrc)/dnmalloc.c Makefile config.h 
+t-test1.o: $(srcsrc)/t-test1.c Makefile config.h $(srcinc)/malloc.h 
+sh_port2proc.o: $(srcsrc)/sh_port2proc.c Makefile config_xor.h $(srcinc)/samhain.h $(srcinc)/sh_utils.h $(srcinc)/sh_error_min.h $(srcinc)/sh_pthread.h $(srcinc)/sh_ipvx.h $(srcinc)/samhain.h $(srcinc)/sh_utils.h $(srcinc)/sh_ipvx.h 
+sh_log_parse_syslog.o: $(srcsrc)/sh_log_parse_syslog.c Makefile config_xor.h $(srcinc)/samhain.h $(srcinc)/sh_pthread.h $(srcinc)/sh_log_check.h $(srcinc)/sh_utils.h $(srcinc)/sh_string.h 
+sh_log_parse_pacct.o: $(srcsrc)/sh_log_parse_pacct.c Makefile config_xor.h $(srcinc)/samhain.h $(srcinc)/sh_pthread.h $(srcinc)/sh_log_check.h $(srcinc)/sh_utils.h $(srcinc)/sh_string.h 
+sh_log_parse_apache.o: $(srcsrc)/sh_log_parse_apache.c Makefile config_xor.h $(srcinc)/samhain.h $(srcinc)/sh_pthread.h $(srcinc)/sh_log_check.h $(srcinc)/sh_utils.h $(srcinc)/sh_string.h 
+sh_log_evalrule.o: $(srcsrc)/sh_log_evalrule.c Makefile config_xor.h $(srcinc)/samhain.h $(srcinc)/sh_pthread.h $(srcinc)/sh_utils.h $(srcinc)/sh_string.h $(srcinc)/sh_log_check.h $(srcinc)/sh_log_evalrule.h $(srcinc)/sh_log_correlate.h $(srcinc)/sh_log_mark.h $(srcinc)/sh_log_repeat.h $(srcinc)/zAVLTree.h 
+sh_log_check.o: $(srcsrc)/sh_log_check.c Makefile config_xor.h $(srcinc)/samhain.h $(srcinc)/sh_pthread.h $(srcinc)/sh_utils.h $(srcinc)/sh_unix.h $(srcinc)/sh_string.h $(srcinc)/sh_log_check.h $(srcinc)/sh_log_evalrule.h $(srcinc)/sh_log_correlate.h $(srcinc)/sh_log_mark.h $(srcinc)/sh_log_repeat.h $(srcinc)/sh_extern.h $(srcinc)/sh_modules.h 
+sh_log_parse_samba.o: $(srcsrc)/sh_log_parse_samba.c Makefile config_xor.h $(srcinc)/samhain.h $(srcinc)/sh_pthread.h $(srcinc)/sh_log_check.h $(srcinc)/sh_string.h 
+sh_nmail.o: $(srcsrc)/sh_nmail.c Makefile config_xor.h $(srcinc)/samhain.h $(srcinc)/sh_pthread.h $(srcinc)/sh_mem.h $(srcinc)/sh_mail.h $(srcinc)/sh_tiger.h $(srcinc)/sh_string.h $(srcinc)/sh_utils.h $(srcinc)/sh_fifo.h $(srcinc)/sh_filter.h $(srcinc)/sh_mail_int.h $(srcinc)/zAVLTree.h 
+sh_filter.o: $(srcsrc)/sh_filter.c Makefile config_xor.h $(srcinc)/samhain.h $(srcinc)/sh_utils.h $(srcinc)/sh_mem.h $(srcinc)/sh_filter.h 
+sh_inotify.o: $(srcsrc)/sh_inotify.c Makefile config_xor.h $(srcinc)/samhain.h $(srcinc)/sh_pthread.h $(srcinc)/sh_calls.h $(srcinc)/sh_inotify.h $(srcinc)/sh_mem.h $(srcinc)/sh_utils.h $(srcinc)/slib.h $(srcinc)/zAVLTree.h $(srcinc)/sh_calls.h $(srcinc)/sh_inotify.h $(srcinc)/CuTest.h 
+sh_log_correlate.o: $(srcsrc)/sh_log_correlate.c Makefile config_xor.h $(srcinc)/samhain.h $(srcinc)/sh_pthread.h $(srcinc)/sh_utils.h $(srcinc)/sh_string.h $(srcinc)/sh_log_check.h $(srcinc)/sh_log_evalrule.h 
+sh_log_mark.o: $(srcsrc)/sh_log_mark.c Makefile config_xor.h $(srcinc)/samhain.h $(srcinc)/sh_pthread.h $(srcinc)/sh_mem.h $(srcinc)/sh_string.h $(srcinc)/sh_error_min.h $(srcinc)/sh_log_check.h $(srcinc)/sh_log_evalrule.h $(srcinc)/zAVLTree.h 
+sh_log_repeat.o: $(srcsrc)/sh_log_repeat.c Makefile config_xor.h $(srcinc)/samhain.h $(srcinc)/sh_pthread.h $(srcinc)/sh_utils.h $(srcinc)/sh_string.h $(srcinc)/sh_log_check.h $(srcinc)/sh_log_evalrule.h 
+sh_log_parse_generic.o: $(srcsrc)/sh_log_parse_generic.c Makefile config_xor.h $(srcinc)/samhain.h $(srcinc)/sh_log_check.h $(srcinc)/sh_string.h 
+sh_login_track.o: $(srcsrc)/sh_login_track.c Makefile config_xor.h $(srcinc)/samhain.h $(srcinc)/sh_pthread.h $(srcinc)/sh_utils.h $(srcinc)/sh_unix.h $(srcinc)/sh_string.h $(srcinc)/sh_tools.h $(srcinc)/sh_ipvx.h $(srcinc)/sh_error_min.h $(srcinc)/CuTest.h $(srcinc)/CuTest.h 
+sh_audit.o: $(srcsrc)/sh_audit.c Makefile config_xor.h $(srcinc)/samhain.h $(srcinc)/sh_error.h $(srcinc)/sh_extern.h $(srcinc)/sh_utils.h 
+sh_registry.o: $(srcsrc)/sh_registry.c Makefile config_xor.h $(srcinc)/samhain.h $(srcinc)/sh_pthread.h $(srcinc)/sh_utils.h $(srcinc)/sh_unix.h $(srcinc)/sh_modules.h $(srcinc)/sh_hash.h $(srcinc)/sh_tiger.h 
+sh_ipvx.o: $(srcsrc)/sh_ipvx.c Makefile config_xor.h $(srcinc)/samhain.h $(srcinc)/sh_static.h $(srcinc)/sh_pthread.h $(srcinc)/sh_utils.h $(srcinc)/sh_ipvx.h $(srcinc)/CuTest.h 
+sh_restrict.o: $(srcsrc)/sh_restrict.c Makefile config_xor.h $(srcinc)/samhain.h $(srcinc)/sh_mem.h $(srcinc)/sh_error_min.h $(srcinc)/sh_string.h $(srcinc)/sh_utils.h $(srcinc)/sh_restrict.h $(srcinc)/CuTest.h 
+sh_filetype.o: $(srcsrc)/sh_filetype.c Makefile config_xor.h $(srcinc)/samhain.h $(srcinc)/sh_mem.h $(srcinc)/sh_error_min.h $(srcinc)/sh_utils.h 
+sh_sub.o: $(srcsrc)/sh_sub.c Makefile config_xor.h $(srcinc)/samhain.h $(srcinc)/sh_pthread.h 
+sh_fInotify.o: $(srcsrc)/sh_fInotify.c Makefile config_xor.h $(srcinc)/samhain.h $(srcinc)/sh_utils.h $(srcinc)/sh_modules.h $(srcinc)/sh_pthread.h $(srcinc)/sh_inotify.h $(srcinc)/sh_unix.h $(srcinc)/sh_hash.h $(srcinc)/sh_files.h $(srcinc)/sh_ignore.h 
+sh_checksum.o: $(srcsrc)/sh_checksum.c Makefile config_xor.h $(srcinc)/samhain.h $(srcinc)/sh_checksum.h $(srcinc)/sh_utils.h $(srcinc)/CuTest.h 

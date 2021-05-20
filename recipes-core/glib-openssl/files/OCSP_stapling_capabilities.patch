@@ -1,0 +1,254 @@
+From 15dae017bca73ca254657df105be2b70ae4733f5 Mon Sep 17 00:00:00 2001
+From: Joakim Tosteberg <joakim.tosteberg@zenterio.com>
+Date: Fri, 16 Mar 2018 09:59:02 +0100
+Subject: [PATCH] Add OCSP stapling capabilities
+
+Add environment variables for enabling checking of certificate
+revocation through OCSP. Policy is to allow connection in case of no
+OCSP reply.
+
+https://bugzilla.gnome.org/show_bug.cgi?id=794476
+---
+ tls/openssl/gtlsclientconnection-openssl.c |  12 +++
+ tls/openssl/gtlsconnection-openssl.c       |  38 +++++++
+ tls/openssl/gtlsfiledatabase-openssl.c     | 110 +++++++++++++++++++++
+ tls/openssl/gtlsfiledatabase-openssl.h     |   4 +
+ 4 files changed, 164 insertions(+)
+
+diff --git a/tls/openssl/gtlsclientconnection-openssl.c b/tls/openssl/gtlsclientconnection-openssl.c
+index 7aa47ce..57e72bd 100644
+--- a/tls/openssl/gtlsclientconnection-openssl.c
++++ b/tls/openssl/gtlsclientconnection-openssl.c
+@@ -465,6 +465,12 @@ set_curve_list (GTlsClientConnectionOpenssl *client)
+ }
+ #endif
+ 
++static gboolean
++use_ocsp (void)
++{
++  return g_getenv ("G_TLS_OPENSSL_OCSP_ENABLED") != NULL;
++}
++
+ static gboolean
+ g_tls_client_connection_openssl_initable_init (GInitable       *initable,
+                                                GCancellable    *cancellable,
+@@ -551,6 +557,12 @@ g_tls_client_connection_openssl_initable_init (GInitable       *initable,
+ 
+   SSL_set_connect_state (priv->ssl);
+ 
++#if (OPENSSL_VERSION_NUMBER >= 0x0090808fL) && !defined(OPENSSL_NO_TLSEXT) && \
++    !defined(OPENSSL_NO_OCSP)
++  if (use_ocsp())
++    SSL_set_tlsext_status_type (priv->ssl, TLSEXT_STATUSTYPE_ocsp);
++#endif
++
+   if (!g_tls_client_connection_openssl_parent_initable_iface->
+       init (initable, cancellable, error))
+     return FALSE;
+diff --git a/tls/openssl/gtlsconnection-openssl.c b/tls/openssl/gtlsconnection-openssl.c
+index acc12b6..f3ecf4c 100644
+--- a/tls/openssl/gtlsconnection-openssl.c
++++ b/tls/openssl/gtlsconnection-openssl.c
+@@ -29,10 +29,15 @@
+ #include <stdarg.h>
+ #include <openssl/ssl.h>
+ #include <openssl/err.h>
++#if (OPENSSL_VERSION_NUMBER >= 0x0090808fL) && !defined(OPENSSL_NO_OCSP)
++#include <openssl/ocsp.h>
++#endif
++
+ 
+ #include "gtlsconnection-openssl.h"
+ #include "gtlsbackend-openssl.h"
+ #include "gtlscertificate-openssl.h"
++#include "gtlsfiledatabase-openssl.h"
+ #include "gtlsbio.h"
+ 
+ #include <glib/gi18n-lib.h>
+@@ -270,6 +275,36 @@ get_peer_certificate (GTlsConnectionOpenssl *openssl)
+   return G_TLS_CERTIFICATE (chain);
+ }
+ 
++static GTlsCertificateFlags
++verify_ocsp_response (GTlsConnectionOpenssl *openssl,
++                      GTlsDatabase          *database,
++                      GTlsCertificate       *peer_certificate)
++{
++#if (OPENSSL_VERSION_NUMBER >= 0x0090808fL) && !defined(OPENSSL_NO_TLSEXT) && \
++  !defined(OPENSSL_NO_OCSP)
++  SSL *ssl = NULL;
++  OCSP_RESPONSE *resp = NULL;
++  long len = 0;
++  const unsigned char *p = NULL;
++
++  ssl = g_tls_connection_openssl_get_ssl (openssl);
++  len = SSL_get_tlsext_status_ocsp_resp (ssl, &p);
++  /* Soft fail in case of no response is the best we can do */
++  if (p == NULL)
++    return 0;
++
++  resp = d2i_OCSP_RESPONSE (NULL, &p, len);
++  if (resp == NULL)
++    return G_TLS_CERTIFICATE_GENERIC_ERROR;
++
++  return g_tls_file_database_openssl_verify_ocsp_response (database,
++                                                           peer_certificate,
++                                                           resp);
++#else
++  return 0;
++#endif
++}
++
+ static GTlsCertificateFlags
+ verify_peer_certificate (GTlsConnectionOpenssl *openssl,
+                          GTlsCertificate       *peer_certificate)
+@@ -315,6 +350,9 @@ verify_peer_certificate (GTlsConnectionOpenssl *openssl,
+         }
+     }
+ 
++  if (is_client && (errors == 0))
++    errors = verify_ocsp_response (openssl, database, peer_certificate);
++
+   return errors;
+ }
+ 
+diff --git a/tls/openssl/gtlsfiledatabase-openssl.c b/tls/openssl/gtlsfiledatabase-openssl.c
+index 10b5df7..b80b169 100644
+--- a/tls/openssl/gtlsfiledatabase-openssl.c
++++ b/tls/openssl/gtlsfiledatabase-openssl.c
+@@ -29,6 +29,9 @@
+ #include <gio/gio.h>
+ #include <glib/gi18n-lib.h>
+ #include <openssl/ssl.h>
++#if (OPENSSL_VERSION_NUMBER >= 0x0090808fL) && !defined(OPENSSL_NO_OCSP)
++#include <openssl/ocsp.h>
++#endif
+ 
+ typedef struct _GTlsFileDatabaseOpensslPrivate
+ {
+@@ -742,3 +745,110 @@ g_tls_file_database_openssl_initable_interface_init (GInitableIface *iface)
+ {
+   iface->init = g_tls_file_database_openssl_initable_init;
+ }
++
++GTlsCertificateFlags
++g_tls_file_database_openssl_verify_ocsp_response (GTlsDatabase    *database,
++                                                  GTlsCertificate *chain,
++                                                  OCSP_RESPONSE   *resp)
++{
++  GTlsCertificateFlags errors = 0;
++#if (OPENSSL_VERSION_NUMBER >= 0x0090808fL) && !defined(OPENSSL_NO_TLSEXT) && \
++  !defined(OPENSSL_NO_OCSP)
++  GTlsFileDatabaseOpenssl *file_database;
++  GTlsFileDatabaseOpensslPrivate *priv;
++  STACK_OF(X509) *chain_openssl = NULL;
++  X509_STORE *store = NULL;
++  OCSP_BASICRESP *basic_resp = NULL;
++  int ocsp_status = 0;
++
++  ocsp_status = OCSP_response_status (resp);
++  if (ocsp_status != OCSP_RESPONSE_STATUS_SUCCESSFUL)
++    {
++      errors = G_TLS_CERTIFICATE_GENERIC_ERROR;
++      goto end;
++    }
++
++  basic_resp = OCSP_response_get1_basic (resp);
++  if (basic_resp == NULL)
++    {
++      errors = G_TLS_CERTIFICATE_GENERIC_ERROR;
++      goto end;
++    }
++
++  chain_openssl = convert_certificate_chain_to_openssl (G_TLS_CERTIFICATE_OPENSSL (chain));
++  file_database = G_TLS_FILE_DATABASE_OPENSSL (database);
++  priv = g_tls_file_database_openssl_get_instance_private (file_database);
++  store = X509_STORE_new ();
++  if ((chain_openssl == NULL) ||
++      (file_database == NULL) ||
++      (priv == NULL) ||
++      (priv->trusted == NULL) ||
++      (store == NULL))
++    {
++      errors = G_TLS_CERTIFICATE_GENERIC_ERROR;
++      goto end;
++    }
++
++  for (int i = 0; i < sk_X509_num (priv->trusted); i++)
++    {
++      X509_STORE_add_cert (store, sk_X509_value (priv->trusted, i));
++    }
++
++  if (OCSP_basic_verify (basic_resp, chain_openssl, store, 0) <= 0)
++    {
++      errors = G_TLS_CERTIFICATE_GENERIC_ERROR;
++      goto end;
++    }
++
++  for (int i = 0; i < OCSP_resp_count (basic_resp); i++)
++    {
++      OCSP_SINGLERESP *single_resp = OCSP_resp_get0 (basic_resp, i);
++      ASN1_GENERALIZEDTIME *revocation_time = NULL;
++      ASN1_GENERALIZEDTIME *this_update_time = NULL;
++      ASN1_GENERALIZEDTIME *next_update_time = NULL;
++      int crl_reason = 0;
++      int cert_status = 0;
++
++      if (single_resp == NULL)
++        continue;
++
++      cert_status = OCSP_single_get0_status (single_resp,
++                                             &crl_reason,
++                                             &revocation_time,
++                                             &this_update_time,
++                                             &next_update_time);
++      if (!OCSP_check_validity (this_update_time,
++                                next_update_time,
++                                300L,
++                                -1L))
++        {
++          errors = G_TLS_CERTIFICATE_GENERIC_ERROR;
++          goto end;
++        }
++
++      switch (cert_status)
++        {
++        case V_OCSP_CERTSTATUS_GOOD:
++          break;
++        case V_OCSP_CERTSTATUS_REVOKED:
++          errors = G_TLS_CERTIFICATE_REVOKED;
++          goto end;
++        case V_OCSP_CERTSTATUS_UNKNOWN:
++          errors = G_TLS_CERTIFICATE_GENERIC_ERROR;
++          goto end;
++        }
++    }
++
++end:
++  if (store != NULL)
++    X509_STORE_free (store);
++
++  if (basic_resp != NULL)
++    OCSP_BASICRESP_free (basic_resp);
++
++  if (resp != NULL)
++    OCSP_RESPONSE_free (resp);
++
++#endif
++  return errors;
++}
+diff --git a/tls/openssl/gtlsfiledatabase-openssl.h b/tls/openssl/gtlsfiledatabase-openssl.h
+index 2d3ccfb..ebb200f 100644
+--- a/tls/openssl/gtlsfiledatabase-openssl.h
++++ b/tls/openssl/gtlsfiledatabase-openssl.h
+@@ -57,6 +57,10 @@ struct _GTlsFileDatabaseOpenssl
+ 
+ GType                        g_tls_file_database_openssl_get_type              (void) G_GNUC_CONST;
+ 
++GTlsCertificateFlags         g_tls_file_database_openssl_verify_ocsp_response  (GTlsDatabase    *database,
++                                                                                GTlsCertificate *chain,
++                                                                                OCSP_RESPONSE   *resp);
++
+ G_END_DECLS
+ 
+ #endif /* __G_TLS_FILE_DATABASE_OPENSSL_H___ */

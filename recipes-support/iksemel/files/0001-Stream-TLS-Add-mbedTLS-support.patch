@@ -1,0 +1,475 @@
+From 2d6e78e00900ffc4798eadfd91dffef35c339d31 Mon Sep 17 00:00:00 2001
+From: Jesse Crews <jesse_crews@comcast.com>
+Date: Fri, 9 Nov 2018 10:36:25 -0600
+Subject: [PATCH 1/3] Stream: TLS: Add mbedTLS support
+
+This change adds support for using mbedTLS as a secure channel provider.
+
+* Add tls-mbedtls integration
+* Set order of precedence: OpenSSL, mbedTLS, gnuTLS
+---
+ configure.ac       |  49 ++++++-
+ include/finetune.h |   5 +
+ src/Makefile.am    |   5 +-
+ src/tls-gnutls.c   |   4 +-
+ src/tls-mbedtls.c  | 311 +++++++++++++++++++++++++++++++++++++++++++++
+ tools/iksroster.c  |   2 +-
+ 6 files changed, 364 insertions(+), 12 deletions(-)
+ create mode 100644 src/tls-mbedtls.c
+
+diff --git a/configure.ac b/configure.ac
+index 82e6d2d..aa22929 100644
+--- a/configure.ac
++++ b/configure.ac
+@@ -59,6 +59,11 @@ AC_ARG_WITH([openssl],
+   [with_openssl=$enableval],
+   [with_openssl=yes]
+ )
++AC_ARG_WITH([mbedtls],
++  AS_HELP_STRING([--without-mbedtls],[disable checking for mbedTLS]),
++  [with_mbedtls=$enableval],
++  [with_mbedtls=yes]
++)
+ AC_ARG_WITH([gnutls],
+   AS_HELP_STRING([--without-gnutls],[disable checking for GNU TLS]),
+   [with_gnutls=$enableval],
+@@ -77,16 +82,46 @@ if test "x$with_openssl" = "xyes"; then
+   fi
+ fi
+ 
++dnl Check mbedTLS
++if test "x$with_mbedtls" = "xyes"; then
++  if test "x$have_openssl" != "xyes"; then
++    AC_SEARCH_LIBS(
++      mbedtls_ssl_init,
++      mbedtls,
++      [have_mbedtls=yes],
++      have_mbedtls=no
++    )
++    AC_CHECK_HEADERS([mbedtls/ssl.h mbedtls/net_sockets.h], [], [have_mbedtls=no])
++    if test "x$have_mbedtls" = "xyes"; then
++      LIBMBEDTLS_CFLAGS="$MBEDTLS_CFLAGS"
++      LIBMBEDTLS_LIBS="$MBEDTLS_LIBS -lmbedtls -lmbedx509 -lmbedcrypto"
++      AC_SUBST(LIBMBEDTLS_CFLAGS)
++      AC_SUBST(LIBMBEDTLS_LIBS)
++      AC_DEFINE(HAVE_MBEDTLS, 1, [whether to use mbedTLS support])
++    fi
++  fi
++fi
++
+ dnl Check GNU TLS
+ if test "x$with_gnutls" = "xyes"; then
+   if test "x$have_openssl" != "xyes"; then
+-    PKG_CHECK_MODULES([GNUTLS], gnutls >= 2.0.0, have_gnutls=yes, have_gnutls=no)
+-    if test "x$have_gnutls" = "xyes"; then
+-      LIBGNUTLS_CFLAGS="$GNUTLS_CFLAGS"
+-      LIBGNUTLS_LIBS="$GNUTLS_LIBS"
+-      AC_SUBST(LIBGNUTLS_CFLAGS)
+-      AC_SUBST(LIBGNUTLS_LIBS)
+-      AC_DEFINE(HAVE_GNUTLS, 1, [whether to use GnuTSL support.])
++    if test  "x$have_mbedtls" != "xyes"; then
++      PKG_CHECK_MODULES([GNUTLS], gnutls >= 2.0.0, have_gnutls=yes, have_gnutls=no)
++      if test "x$have_gnutls" = "xyes"; then
++        LIBGNUTLS_CFLAGS="$GNUTLS_CFLAGS"
++        LIBGNUTLS_LIBS="$GNUTLS_LIBS"
++        AC_SUBST(LIBGNUTLS_CFLAGS)
++        AC_SUBST(LIBGNUTLS_LIBS)
++        AC_DEFINE(HAVE_GNUTLS, 1, [whether to use GnuTSL support.])
++      fi
++    fi
++  fi
++fi
++
++if test "x$have_openssl" != "xyes"; then
++  if test "x$have_mbedtls" != "xyes"; then
++    if test  "x$have_gnutls" != "xyes"; then
++      AC_MSG_ERROR("No TLS provider found", 1)
+     fi
+   fi
+ fi
+diff --git a/include/finetune.h b/include/finetune.h
+index 83644b5..9dfcfbc 100644
+--- a/include/finetune.h
++++ b/include/finetune.h
+@@ -27,3 +27,8 @@
+ 
+ /* network receive buffer */
+ #define NET_IO_BUF_SIZE 4096
++
++/* Path to a PEM CA certificate bundle to be treated as trust anchors */
++#ifndef TLS_ANCHOR_PATH
++#define TLS_ANCHOR_PATH "/etc/ssl/certs/ca-certificates.crt"
++#endif
+diff --git a/src/Makefile.am b/src/Makefile.am
+index 8288734..e77be49 100644
+--- a/src/Makefile.am
++++ b/src/Makefile.am
+@@ -20,6 +20,7 @@ libiksemel_la_SOURCES = \
+ 	stream.c \
+ 	tls-gnutls.c \
+ 	tls-openssl.c \
++	tls-mbedtls.c \
+ 	sha.c \
+ 	jabber.c \
+ 	filter.c \
+@@ -27,5 +28,5 @@ libiksemel_la_SOURCES = \
+ 	base64.c
+ 
+ libiksemel_la_LDFLAGS = -version-info 4:1:1 -no-undefined
+-libiksemel_la_CFLAGS = $(CFLAGS) $(LIBGNUTLS_CFLAGS) $(LIBOPENSSL_CFLAGS)
+-libiksemel_la_LIBADD = $(LIBGNUTLS_LIBS) $(LIBOPENSSL_LIBS)
++libiksemel_la_CFLAGS = $(CFLAGS) $(LIBGNUTLS_CFLAGS) $(LIBOPENSSL_CFLAGS) $(LIBMBEDTLS_CFLAGS)
++libiksemel_la_LIBADD = $(LIBGNUTLS_LIBS) $(LIBOPENSSL_LIBS) $(LIBMBEDTLS_LIBS)
+diff --git a/src/tls-gnutls.c b/src/tls-gnutls.c
+index d7b7c91..659268e 100644
+--- a/src/tls-gnutls.c
++++ b/src/tls-gnutls.c
+@@ -137,13 +137,13 @@ ikstls iks_default_tls = {
+ 
+ #else /* HAVE_GNUTLS */
+ 
+-#ifndef HAVE_OPENSSL
++#if !defined(HAVE_OPENSSL) && !defined(HAVE_MBEDTLS)
+ ikstls iks_default_tls = {
+ 	NULL,
+ 	NULL,
+ 	NULL,
+ 	NULL
+ };
+-#endif /* HAVE_OPENSSL */
++#endif /* !HAVE_OPENSSL && !HAVE_MBEDTLS */
+ 
+ #endif /* HAVE_GNUTLS */
+diff --git a/src/tls-mbedtls.c b/src/tls-mbedtls.c
+new file mode 100644
+index 0000000..a7bbbf5
+--- /dev/null
++++ b/src/tls-mbedtls.c
+@@ -0,0 +1,311 @@
++/**
++ * \brief Support for mbedTLS
++ * SPDX-License-Identifier: LGPL-2.1-only
++ */
++
++#include "common.h"
++#include "iksemel.h"
++
++#ifdef HAVE_MBEDTLS
++
++#include <time.h>
++#include <errno.h>
++#include <mbedtls/ssl.h>
++#include <mbedtls/error.h>
++#include <mbedtls/net_sockets.h>
++#include <mbedtls/ctr_drbg.h>
++#include <mbedtls/entropy.h>
++
++/* Helper macros for getting time, with preference for monotonic clock */
++#if defined(CLOCK_MONOTONIC) || defined(CLOCK_REALTIME)
++#define TIMER timespec
++#define gettime(t) \
++	if (clock_gettime(CLOCK_MONOTONIC, (t))) {								\
++		if (clock_gettime(CLOCK_REALTIME, (t))) {							\
++			fputs("Unable to get clock, timeouts will not work!", stderr);	\
++			(t)->tv_sec = 0;												\
++			(t)->tv_nsec = 0;												\
++		}																	\
++	}
++#define timecmp(a, b, CMP) \
++	(((a)->tv_sec == (b)->tv_sec) ?		\
++	((a)->tv_nsec CMP (b)->tv_nsec) :	\
++	((a)->tv_sec CMP (b)->tv_sec))
++#define time_ok(t) \
++	(t)->tv_sec || (t)->tv_nsec
++#else
++#include <sys/time.h>
++#define TIMER timeval
++#define gettime(t) \
++	gettimeofday((t), NULL)
++#define timecmp(a, b, CMP) \
++	timercmp(a, b, CMP)
++#define time_ok(t) \
++	(t)->tv_sec || (t)->tv_usec
++#endif
++
++static const uint8_t TLS_ERRLEN = 128;
++static char *ebuf;
++
++struct ikstls_data {
++	struct mbedtls_ctx {
++		mbedtls_ssl_context *ssl;
++		mbedtls_ssl_config *config;
++		mbedtls_net_context *net;
++		mbedtls_ctr_drbg_context *drbg;
++		mbedtls_entropy_context *ent;
++		mbedtls_x509_crt *anchors;
++	} mbed;
++	ikstransport *trans;
++	void *sock;
++	int timeout;
++};
++
++static void print_mbederr(int err)
++{
++#ifndef NDEBUG
++	mbedtls_strerror(err, ebuf, TLS_ERRLEN);
++	fputs(ebuf, stderr);
++#endif
++}
++
++static void free_mbedtls(struct ikstls_data *data)
++{
++	if (!data)
++		return;
++
++	if (data->mbed.ssl) {
++		mbedtls_ssl_free(data->mbed.ssl);
++		iks_free(data->mbed.ssl);
++		data->mbed.ssl = NULL;
++	}
++
++	if (data->mbed.config) {
++		mbedtls_ssl_config_free(data->mbed.config);
++		iks_free(data->mbed.config);
++		data->mbed.config = NULL;
++	}
++
++	if (data->mbed.net) {
++		/* This will try to close the socket, which iksemel owns, unless it is unset */
++		data->mbed.net->fd = -1;
++		mbedtls_net_free(data->mbed.net);
++		iks_free(data->mbed.net);
++		data->mbed.net =  NULL;
++	}
++
++	if (data->mbed.drbg) {
++		mbedtls_ctr_drbg_free(data->mbed.drbg);
++		iks_free(data->mbed.drbg);
++		data->mbed.drbg = NULL;
++	}
++
++	if (data->mbed.ent)  {
++		mbedtls_entropy_free(data->mbed.ent);
++		iks_free(data->mbed.ent);
++		data->mbed.ent = NULL;
++	}
++
++	if (data->mbed.anchors) {
++		mbedtls_x509_crt_free(data->mbed.anchors);
++		iks_free(data->mbed.anchors);
++		data->mbed.anchors = NULL;
++	}
++
++	if (ebuf) {
++		iks_free(ebuf);
++		ebuf = NULL;
++	}
++}
++
++static int init_mbedtls(struct ikstls_data *data)
++{
++	ebuf = iks_malloc((size_t) TLS_ERRLEN);
++	data->mbed.ssl = iks_malloc(sizeof(*(data->mbed.ssl)));
++	data->mbed.config = iks_malloc(sizeof(*(data->mbed.config)));
++	data->mbed.net = iks_malloc(sizeof(*(data->mbed.net)));
++	data->mbed.ent = iks_malloc(sizeof(*(data->mbed.ent)));
++	data->mbed.drbg = iks_malloc(sizeof(*(data->mbed.drbg)));
++	data->mbed.anchors = iks_malloc(sizeof(*(data->mbed.anchors)));
++
++	if (
++			!data->mbed.ssl  ||
++			!data->mbed.config ||
++			!data->mbed.net ||
++			!data->mbed.ent ||
++			!data->mbed.drbg ||
++			!data->mbed.anchors ||
++			!ebuf
++	) {
++		free_mbedtls(data);
++		return IKS_NOMEM;
++	}
++
++	mbedtls_ssl_init(data->mbed.ssl);
++	mbedtls_ssl_config_init(data->mbed.config);
++	mbedtls_net_init(data->mbed.net);
++	mbedtls_entropy_init(data->mbed.ent);
++	mbedtls_ctr_drbg_init(data->mbed.drbg);
++	mbedtls_x509_crt_init(data->mbed.anchors);
++
++	return IKS_OK;
++}
++
++static int tls_handshake (struct ikstls_data **datap, ikstransport *trans, void *sock)
++{
++	int tls_err = 0;
++	struct ikstls_data *data;
++
++	*datap = NULL;
++	data = iks_malloc(sizeof(*data));
++	if (!data)
++		return IKS_NOMEM;
++
++	memset(data, 0, sizeof(*data));
++	if (init_mbedtls(data))
++		return IKS_NOMEM;
++
++	data->trans = trans;
++	data->sock = sock;
++	data->mbed.net->fd = (int) sock;
++	data->timeout = -1;
++
++	mbedtls_net_set_nonblock(data->mbed.net);
++
++	mbedtls_ctr_drbg_seed(data->mbed.drbg, mbedtls_entropy_func, data->mbed.ent, NULL, 0);
++	mbedtls_ssl_set_bio(data->mbed.ssl, data->mbed.net, mbedtls_net_send, mbedtls_net_recv, NULL);
++	int parsed = mbedtls_x509_crt_parse_file(data->mbed.anchors, TLS_ANCHOR_PATH);
++	if (parsed < 0) {
++		print_mbederr(parsed);
++	}
++	mbedtls_ssl_conf_ca_chain(data->mbed.config, data->mbed.anchors, NULL);
++
++	if (mbedtls_ssl_config_defaults(
++			data->mbed.config,
++			MBEDTLS_SSL_IS_CLIENT,
++			MBEDTLS_SSL_TRANSPORT_STREAM,
++			MBEDTLS_SSL_PRESET_DEFAULT
++	)) {
++		free_mbedtls(data);
++		iks_free(data);
++		return IKS_NOMEM;
++	}
++
++#ifdef TLS_NO_VFY
++	mbedtls_ssl_conf_authmode(data->mbed.config, MBEDTLS_SSL_VERIFY_NONE);
++#endif
++	mbedtls_ssl_conf_rng(data->mbed.config, mbedtls_ctr_drbg_random, data->mbed.drbg);
++	mbedtls_ssl_setup(data->mbed.ssl, data->mbed.config);
++
++	do {
++		tls_err = mbedtls_ssl_handshake(data->mbed.ssl);
++	} while (tls_err == MBEDTLS_ERR_SSL_WANT_READ || tls_err == MBEDTLS_ERR_SSL_WANT_WRITE);
++	if (tls_err) {
++		print_mbederr(tls_err);
++		free_mbedtls(data);
++		iks_free(data);
++		return IKS_NET_TLSFAIL;
++	};
++
++	*datap = data;
++	return IKS_OK;
++}
++
++static int tls_send (struct ikstls_data *data, const char *buf, size_t size)
++{
++	int sent = 0;
++
++	if(!data || !data->mbed.ssl) {
++		return IKS_NET_NOCONN;
++	}
++
++	do {
++		sent =  mbedtls_ssl_write(data->mbed.ssl, (const unsigned char *)buf + sent, size - sent);
++		if (sent < 0) {
++			if (sent == MBEDTLS_ERR_SSL_WANT_WRITE || sent == MBEDTLS_ERR_SSL_WANT_READ) {
++				continue;
++			}
++			print_mbederr(sent);
++			mbedtls_ssl_session_reset(data->mbed.ssl);
++			return IKS_NET_RWERR;
++		}
++	} while (sent < size);
++
++	return IKS_OK;
++}
++
++static int tls_recv (struct ikstls_data *data, char *buf, size_t size, int timeout)
++{
++	int rcv = 0;
++	struct TIMER
++			now = {0, 0},
++			exp = {0, 0};
++
++	if (timeout > 0) {
++		gettime(&now);
++		exp = now;
++		if (time_ok(&now)) {
++			exp.tv_sec += timeout;
++		} else {
++			timeout = -1;
++		}
++	}
++
++	do {
++		if (timeout > 0) {
++			gettime(&now);
++			if (!timecmp(&now, &exp, <)) {
++				rcv = MBEDTLS_ERR_SSL_TIMEOUT;
++				break;
++			}
++		}
++		if(!data || !data->mbed.ssl) {
++			rcv = -IKS_NET_NOCONN;
++			break;
++		}
++		rcv = mbedtls_ssl_read(data->mbed.ssl, (unsigned char *) buf, size);
++		if (!timeout && (rcv == MBEDTLS_ERR_SSL_WANT_READ || rcv == MBEDTLS_ERR_SSL_WANT_WRITE)) {
++			rcv = 0;
++			break;
++		}
++	} while (rcv == MBEDTLS_ERR_SSL_WANT_READ || rcv == MBEDTLS_ERR_SSL_WANT_WRITE);
++
++	if (rcv < 0) {
++		print_mbederr(rcv);
++		mbedtls_ssl_session_reset(data->mbed.ssl);
++		return -IKS_NET_RWERR;
++	}
++
++	return rcv;
++}
++
++static void tls_terminate(struct ikstls_data *data)
++{
++	int tls_err = 0;
++	do {
++		tls_err = mbedtls_ssl_close_notify(data->mbed.ssl);
++	} while (tls_err == MBEDTLS_ERR_SSL_WANT_WRITE || tls_err == MBEDTLS_ERR_SSL_WANT_READ);
++
++	free_mbedtls(data);
++	iks_free(data);
++}
++
++ikstls iks_default_tls = {
++	tls_handshake,
++	tls_send,
++	tls_recv,
++	tls_terminate
++};
++
++#else /* HAVE_MBEDTLS */
++
++#if !defined(HAVE_OPENSSL) && !defined(HAVE_GNUTLS)
++ikstls iks_default_tls = {
++	NULL,
++	NULL,
++	NULL,
++	NULL
++};
++#endif /* !HAVE_OPENSSL && !HAVE_GNUTLS */
++
++#endif /* HAVE_MBEDTLS */
+diff --git a/tools/iksroster.c b/tools/iksroster.c
+index b3e4312..7d19f34 100644
+--- a/tools/iksroster.c
++++ b/tools/iksroster.c
+@@ -51,7 +51,7 @@ print_usage (void)
+ #ifndef HAVE_GETOPT_LONG
+ 		"(long options are not supported on your system)\n"
+ #endif
+-#ifndef HAVE_GNUTLS
++#if !defined(HAVE_OPENSSL) && !defined(HAVE_MBEDTLS) && !defined(HAVE_GNUTLS)
+ 		"(secure connections are not supported on your system)\n"
+ #endif
+ 		"Report bugs to <iksemel-dev@jabberstudio.org>.");
+-- 
+2.20.1
+

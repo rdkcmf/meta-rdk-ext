@@ -1,0 +1,55 @@
+Date: Dec 13 21:19:59 2015
+
+From: a5bee65d115c83977e720ed4ce39fd865b08e864 Dec 13 21:19:59 2015
+
+Subject: [PATCH] ARRISXB3-3697: uclibc: Fix memory leak in canonicalize_file_name-memory-leak
+
+	Backport glibc patch for letting allocation happen in
+	realpath function and not in canonicalize_file_name as it was not
+	freed after use.
+	
+Source: OPENEMBEDDED 
+
+License: LGPL-2.1-or-later
+
+Upstream-Status: Submitted [ https://patchwork.ozlabs.org/patch/533608/ ]
+
+Signed-off-by: Khem Raj <khem_raj@cable.comcast.com> 
+---
+
+diff --git a/libc/stdlib/canonicalize.c b/libc/stdlib/canonicalize.c
+index 06e710a..da09d58 100644
+--- a/libc/stdlib/canonicalize.c
++++ b/libc/stdlib/canonicalize.c
+@@ -9,30 +9,11 @@
+  */
+ 
+ #include <stdlib.h>
+-#include <limits.h>
+ 
+ #ifdef __USE_GNU
+ 
+-#ifndef PATH_MAX
+-# ifdef _POSIX_VERSION
+-#  define PATH_MAX _POSIX_PATH_MAX
+-# else
+-#  ifdef MAXPATHLEN
+-#   define PATH_MAX MAXPATHLEN
+-#  else
+-#   define PATH_MAX 1024
+-#  endif
+-# endif
+-#endif
+-
+ char * canonicalize_file_name (const char *name)
+ {
+-	char *buf = (char *) malloc(PATH_MAX);
+-
+-	if(unlikely(buf == NULL))
+-		return NULL;
+-
+-	*buf='\0';
+-	return realpath (name, buf);
++	return realpath (name, NULL);
+ }
+ #endif

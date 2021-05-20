@@ -1,0 +1,28 @@
+From 4a33ad1aae35d2c6bf220a8d1e08e3eedef0bf40 Mon Sep 17 00:00:00 2001
+From: "Vivek.A" <Vivek_Arumugam@comcast.com>
+Date: Wed, 24 Feb 2021 17:54:27 +0000
+Subject: [PATCH] Skip forward discontinuity detection by audio decoder
+
+Change-Id: I246f1f7f4e25d3bbc7dc0a84a60e71daf0c05a18
+---
+ .../graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp        | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp b/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp
+index c539e542d5ea..3707db5750e7 100644
+--- a/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp
++++ b/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp
+@@ -2962,6 +2962,10 @@ void MediaPlayerPrivateGStreamer::elementSetupCallback(MediaPlayerPrivateGStream
+     if (g_str_has_prefix(GST_ELEMENT_NAME(element), "brcmaudiosink")) {
+         g_object_set(G_OBJECT(element), "async", TRUE, nullptr);
+     }
++    else if (g_str_has_prefix(GST_ELEMENT_NAME(element), "brcmaudiodecoder")) {
++        g_object_set(G_OBJECT(element), "audio_pts_disco_threshold", G_MAXUINT, nullptr);
++    }
++
+ #endif
+ 
+ #if USE(WESTEROS_SINK)
+-- 
+2.24.0
+

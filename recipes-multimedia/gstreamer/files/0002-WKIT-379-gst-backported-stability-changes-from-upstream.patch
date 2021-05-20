@@ -1,0 +1,107 @@
+Date: Wed, 24 Feb 2016 16:37:28 +0200
+
+From: 593306d51b84d6048bb86767fcec809b294ccc24 Mon Sep 17 00:00:00 2001
+
+Subject: [PATCH] WKIT-379: backported stability changes from upstream
+
+	bin: Make sure to free all cached messages when going to NULL
+
+	An ASYNC READY->PAUSED might have failed without the bin code noticing during
+	the state change, in which case we will never get PAUSED->READY and would leak
+	messages.
+
+	pad: Unblock blocking pad probes when receiving FLUSH_START in send_event() too
+	Without this, flushing might not unblock the streaming thread and cause deadlocks.
+	basesink: clean up the need_preroll variable
+
+	Based on patch from Song Bing <b06498@freescale.com>
+
+	Don't just set the need_preroll flag to TRUE in all cases. When we
+	are already prerolled it needs to be set to FALSE and when we go to
+	READY we should not touch it. We should only set it to TRUE in other
+	cases, like what the code above does.
+
+
+	Backported commits are mentioned in patch files
+
+	void hang on early destruction
+
+Source: BUGZILLA
+
+License: LGPL-2.1-or-later
+
+Upstream-Status: Submitted [ https://bugzilla.gnome.org/show_bug.cgi?id=757257
+                             https://bugzilla.gnome.org/show_bug.cgi?id=756611
+                             https://bugzilla.gnome.org/show_bug.cgi?id=736655 ]
+
+Signed-off-by: Eugene Mutavchi <emutavchi@productengine.com>
+---
+ gst/gstbin.c                | 5 +++++
+ gst/gstpad.c                | 2 ++
+ libs/gst/base/gstbasesink.c | 7 ++-----
+ 3 files changed, 9 insertions(+), 5 deletions(-)
+
+diff --git a/gst/gstbin.c b/gst/gstbin.c
+index 0adc0e0..9c8358b 100644
+--- a/gst/gstbin.c
++++ b/gst/gstbin.c
+@@ -2601,6 +2601,11 @@ gst_bin_change_state_func (GstElement * element, GstStateChange transition)
+         goto activate_failure;
+       break;
+     case GST_STATE_NULL:
++      /* Clear message list on next NULL */
++      GST_OBJECT_LOCK (bin);
++      GST_DEBUG_OBJECT (element, "clearing all cached messages");
++      bin_remove_messages (bin, NULL, GST_MESSAGE_ANY);
++      GST_OBJECT_UNLOCK (bin);
+       if (current == GST_STATE_READY) {
+         GList *l;
+ 
+diff --git a/gst/gstpad.c b/gst/gstpad.c
+index 97158a0..7ddafea 100644
+--- a/gst/gstpad.c
++++ b/gst/gstpad.c
+@@ -5069,6 +5069,8 @@ gst_pad_send_event_unchecked (GstPad * pad, GstEvent * event,
+ 
+       GST_PAD_SET_FLUSHING (pad);
+       GST_CAT_DEBUG_OBJECT (GST_CAT_EVENT, pad, "set flush flag");
++      GST_PAD_BLOCK_BROADCAST (pad);
++      type |= GST_PAD_PROBE_TYPE_EVENT_FLUSH;
+       break;
+     case GST_EVENT_FLUSH_STOP:
+       if (G_LIKELY (GST_PAD_MODE (pad) != GST_PAD_MODE_NONE)) {
+diff --git a/libs/gst/base/gstbasesink.c b/libs/gst/base/gstbasesink.c
+index 980943b..d941bf6 100644
+--- a/libs/gst/base/gstbasesink.c
++++ b/libs/gst/base/gstbasesink.c
+@@ -5003,11 +5003,6 @@ gst_base_sink_change_state (GstElement * element, GstStateChange transition)
+       if (bclass->unlock_stop)
+         bclass->unlock_stop (basesink);
+ 
+-      /* we need preroll again and we set the flag before unlocking the clockid
+-       * because if the clockid is unlocked before a current buffer expired, we
+-       * can use that buffer to preroll with */
+-      basesink->need_preroll = TRUE;
+-
+       if (basesink->clock_id) {
+         GST_DEBUG_OBJECT (basesink, "unschedule clock");
+         gst_clock_id_unschedule (basesink->clock_id);
+@@ -5018,6 +5013,7 @@ gst_base_sink_change_state (GstElement * element, GstStateChange transition)
+       if (!gst_base_sink_needs_preroll (basesink)) {
+         GST_DEBUG_OBJECT (basesink, "PLAYING to PAUSED, we are prerolled");
+         basesink->playing_async = FALSE;
++        basesink->need_preroll = FALSE;
+       } else {
+         if (GST_STATE_TARGET (GST_ELEMENT (basesink)) <= GST_STATE_READY) {
+           GST_DEBUG_OBJECT (basesink, "element is <= READY");
+@@ -5026,6 +5022,7 @@ gst_base_sink_change_state (GstElement * element, GstStateChange transition)
+           GST_DEBUG_OBJECT (basesink,
+               "PLAYING to PAUSED, we are not prerolled");
+           basesink->playing_async = TRUE;
++          basesink->need_preroll = TRUE;
+           priv->commited = FALSE;
+           priv->call_preroll = TRUE;
+           if (priv->async_enabled) {
+-- 
+2.1.4
+

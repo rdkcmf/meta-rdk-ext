@@ -1,0 +1,110 @@
+Date: Aug 28 06:55:05 2019
+
+From: 725866add362bd24ce2c37b11c35d2693851bb10 Oct 14 04:50:14 2019
+
+Subject: [PATCH] RDKB-23302 : After entering 43rd character line goes into scroll mode
+
+	socat apply remote terminal windows configuration to pseudo pty terminal
+
+Source: COMCAST
+
+License: GPL-2.0-or-later
+
+Upstream-Status: Pending
+
+Signed-off-by: vikas kumar <vikas_kumar@comcast.com>
+---
+
+diff -Naur a/socat.c b/socat.c
+--- a/socat.c	2019-08-27 11:47:09.550486178 +0000
++++ b/socat.c	2019-08-27 11:46:19.462284833 +0000
+@@ -37,6 +37,8 @@
+    bool lefttoright;	/* first addr ro, second addr wo */
+    bool righttoleft;	/* first addr wo, second addr ro */
+    xiolock_t lock;	/* a lock file */
++   int n_rows;
++   int n_columns;
+ } socat_opts = {
+    8192,	/* bufsiz */
+    false,	/* verbose */
+@@ -50,6 +52,8 @@
+    false,	/* lefttoright */
+    false,	/* righttoleft */
+    { NULL, 0 },	/* lock */
++   24, /* default rows */
++   80, /* default columns */
+ };
+ 
+ void socat_usage(FILE *fd);
+@@ -80,6 +84,14 @@
+ 
+ bool havelock;
+ 
++/**
++ * Function use to provide user defined windows configuration to pty
++ */
++void windowsSetting(struct winsize *win)
++{
++    win->ws_row = socat_opts.n_rows;
++    win->ws_col = socat_opts.n_columns;
++}
+ 
+ int main(int argc, const char *argv[]) {
+    const char **arg1, *a;
+@@ -229,6 +241,16 @@
+ 	 socat_opts.lock.intervall.tv_sec  = 1;
+ 	 socat_opts.lock.intervall.tv_nsec = 0;
+ 	 break;
++     case 'w' :
++/* we introduced new option in socat to handle remote terminal window configuration.
++   In case socat is used for revssh, pass remote terminal window configuration as 
++   rows and columns to socat command line args
++*/    
++         socat_opts.n_rows = atoi(((*(++arg1))+strlen("rows=")));
++         socat_opts.n_columns = atoi(((*(++arg1))+strlen("columns=")));
++         Debug2("Windows configuration rows=%d, columns=%d",socat_opts.n_rows,socat_opts.n_columns);
++         argc -= 2;
++         break;
+ #if WITH_IP4 || WITH_IP6
+ #if WITH_IP4
+       case '4':
+@@ -355,6 +377,7 @@
+    fputs("      -g     do not check option groups\n", fd);
+    fputs("      -L <lockfile>  try to obtain lock, or fail\n", fd);
+    fputs("      -W <lockfile>  try to obtain lock, or wait\n", fd);
++   fputs("      -w rows= columns=  set remote terminal rows and column windows configuration\n", fd);
+ #if WITH_IP4
+    fputs("      -4     prefer IPv4 if version is not explicitly specified\n", fd);
+ #endif
+diff -Naur a/xio-progcall.c b/xio-progcall.c
+--- a/xio-progcall.c	2019-08-27 11:47:19.862527621 +0000
++++ b/xio-progcall.c	2019-08-27 11:46:30.918330891 +0000
+@@ -305,7 +305,17 @@
+       applyopts(ptyfd, popts, PH_FD);
+       applyopts(ptyfd, popts, PH_LATE);
+       if (applyopts_single(fd, popts, PH_LATE) < 0)  return -1;
+-
++/**
++ * Here we can apply window configuration settings to pseduo terminal 
++ */
++      struct winsize win;
++      windowsSetting(&win);
++      Debug2("windows configuration rows=%d, columns=%d",win.ws_row, win.ws_col);
++      if(ptyfd) {
++          Debug1("apply windows configuration to pty=%s",ptyname);
++          Ioctl(ptyfd, TIOCSWINSZ, (char *)&win);
++      }
++      
+       fd->fd = ptyfd;
+ 
+       /* this for child, was after fork */
+diff -Naur a/xio-progcall.h b/xio-progcall.h
+--- a/xio-progcall.h	2019-08-27 11:47:23.038540384 +0000
++++ b/xio-progcall.h	2019-08-27 11:46:33.578341584 +0000
+@@ -27,5 +27,5 @@
+ extern int setopt_path(struct opt *opts, char **path);
+ extern
+ int _xioopen_redir_stderr(int fdo);
+-
++extern void windowsSetting(struct winsize *win);
+ #endif /* !defined(__xio_progcall_h_included) */

@@ -1,0 +1,24 @@
+Date: Oct 20 2015
+From: aa5ccadcca3e6018ebd9d2e8b0a0604f7cb0cd59
+From: Fam Zheng <famz@redhat.com>
+Subject: [PATCH] Escape left brace. 
+Source: COMCAST
+License: GPLV2
+Upstream-Status: Backport
+Signed-off-by: Matta Nancharayya <Nancharayya_Matta@comcast.com>
+Latest perl now deprecates "{" literal in regex and print warnings like
+"unescaped left brace in regex is deprecated".  Add escapes to keep it
+happy.
+Index: qemu-1.7.0/scripts/texi2pod.pl
+===================================================================
+--- qemu-1.7.0.orig/scripts/texi2pod.pl
++++ qemu-1.7.0/scripts/texi2pod.pl
+@@ -317,7 +317,7 @@ while(<$inf>) {
+ 	@columns = ();
+ 	for $column (split (/\s*\@tab\s*/, $1)) {
+ 	    # @strong{...} is used a @headitem work-alike
+-	    $column =~ s/^\@strong{(.*)}$/$1/;
++	    $column =~ s/^\@strong\{(.*)\}$/$1/; 
+ 	    push @columns, $column;
+ 	}
+ 	$_ = "\n=item ".join (" : ", @columns)."\n";

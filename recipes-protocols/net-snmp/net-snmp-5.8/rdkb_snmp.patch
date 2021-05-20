@@ -1,0 +1,23 @@
+##########################################
+Date: Mar 02 18:05:10 2019
+From: 6610b7f79333fc70f852bb44bfed9cae9abeba40 Oct 28 07:13:18 2017
+Subject: apply rdkb_snp.patch for netsnmp version 5.8
+Source: COMCAST
+License: BSD-2-Clause
+Upstream-Status: Pending
+Signed-off-by: Uma Kumar <Uma_Kumar@cable.comcast.com>
+##########################################
+Index: net-snmp-5.8/snmplib/snmp_alarm.c
+===================================================================
+--- net-snmp-5.8.orig/snmplib/snmp_alarm.c
++++ net-snmp-5.8/snmplib/snmp_alarm.c
+@@ -215,8 +215,7 @@ run_alarms(void)
+         clientreg = a->clientreg;
+         a->flags |= SA_FIRED;
+         DEBUGMSGTL(("snmp_alarm", "run alarm %d\n", clientreg));
+-        /* Jun-10-2010: COMMENTED: Due to frequent crash triggered// (*(a->thecallback)) (clientreg, a->clientarg);*/
+-
++	(*(a->thecallback)) (clientreg, a->clientarg);
+         DEBUGMSGTL(("snmp_alarm", "alarm %d completed\n", clientreg));
+ 
+         a = sa_find_specific(clientreg);

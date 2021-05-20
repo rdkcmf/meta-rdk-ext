@@ -1,0 +1,42 @@
+From ca0e6e729d887e729e7a571948f86ed559744df4 Mon Sep 17 00:00:00 2001
+From: Eugene Mutavchi <Ievgen_Mutavchi@comcast.com>
+Date: Mon, 3 Dec 2018 11:00:24 -0500
+Subject: [PATCH] Reduce XHR latency
+
+---
+ Source/WebCore/xml/XMLHttpRequest.cpp                     | 5 +++++
+ Source/WebKit/NetworkProcess/soup/NetworkDataTaskSoup.cpp | 2 +-
+ 2 files changed, 6 insertions(+), 1 deletion(-)
+
+diff --git a/Source/WebCore/xml/XMLHttpRequest.cpp b/Source/WebCore/xml/XMLHttpRequest.cpp
+index ec742c6..20c40a2 100644
+--- a/Source/WebCore/xml/XMLHttpRequest.cpp
++++ b/Source/WebCore/xml/XMLHttpRequest.cpp
+@@ -1113,6 +1113,11 @@ void XMLHttpRequest::didReceiveResponse(unsigned long, const ResourceResponse& r
+     m_response = response;
+     if (!m_mimeTypeOverride.isEmpty())
+         m_response.setHTTPHeaderField(HTTPHeaderName::ContentType, m_mimeTypeOverride);
++
++    if (response.tainting() != ResourceResponseBase::Tainting::Opaque &&
++        response.tainting() != ResourceResponseBase::Tainting::Opaqueredirect &&
++        m_state < HEADERS_RECEIVED)
++        changeState(HEADERS_RECEIVED);
+ }
+ 
+ static inline bool shouldDecodeResponse(XMLHttpRequest::ResponseType type)
+diff --git a/Source/WebKit/NetworkProcess/soup/NetworkDataTaskSoup.cpp b/Source/WebKit/NetworkProcess/soup/NetworkDataTaskSoup.cpp
+index 61510f1..f82f076 100644
+--- a/Source/WebKit/NetworkProcess/soup/NetworkDataTaskSoup.cpp
++++ b/Source/WebKit/NetworkProcess/soup/NetworkDataTaskSoup.cpp
+@@ -177,7 +177,7 @@ void NetworkDataTaskSoup::createRequest(ResourceRequest&& request)
+     g_signal_connect(static_cast<NetworkSessionSoup&>(m_session.get()).soupSession(), "request-started", G_CALLBACK(requestStartedCallback), this);
+ #endif
+ 
+-    m_readPriority = (request.priority() >= ResourceLoadPriority::High) ? G_PRIORITY_HIGH : RunLoopSourcePriority::AsyncIONetwork;
++    m_readPriority = (request.priority() >= ResourceLoadPriority::High) ? RunLoopSourcePriority::AsyncIONetwork : G_PRIORITY_DEFAULT;
+ }
+ 
+ void NetworkDataTaskSoup::clearRequest()
+-- 
+2.7.4
+

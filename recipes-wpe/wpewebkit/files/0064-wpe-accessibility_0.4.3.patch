@@ -1,0 +1,375 @@
+From 25a29c672e32646633c7944b2ab0aa84e31c33db Mon Sep 17 00:00:00 2001
+From: Gurdal Oruklu <gurdaloruklu@gmail.com>
+Source: COMCAST
+License: BSD-2-Clause & BSD-3-Clause & LGPL 2.0
+Upstream-Status: None
+Date: Tue, 10 Sep 2019 17:33:50 +0000
+Subject: [PATCH] add accessibility support
+
+Signed-off-by: Gurdal Oruklu <gurdaloruklu@gmail.com>
+---
+ Source/WebCore/PlatformWPE.cmake                   | 34 ++++++++++++++++++++--
+ .../accessibility/AccessibilityNodeObject.cpp      | 10 ++++++-
+ .../WebCore/accessibility/AccessibilityObject.cpp  |  2 +-
+ Source/WebCore/accessibility/AccessibilityObject.h | 14 ++++-----
+ .../WebCore/accessibility/atk/AXObjectCacheAtk.cpp |  5 ++++
+ .../atk/WebKitAccessibleWrapperAtk.cpp             |  4 +--
+ Source/WebKit/PlatformWPE.cmake                    | 11 +++++++
+ Source/WebKit/UIProcess/API/C/WKPreferences.cpp    | 10 +++++++
+ Source/WebKit/UIProcess/API/C/WKPreferencesRef.h   |  4 +++
+ .../WebCoreSupport/WebFrameLoaderClient.cpp        |  2 +-
+ Source/WebKit/WebProcess/WebPage/WebPage.cpp       |  3 +-
+ Source/WebKit/WebProcess/WebPage/WebPage.h         |  7 +++--
+ .../WebKit/WebProcess/WebPage/wpe/WebPageWPE.cpp   | 21 +++++++++++++
+ Source/cmake/OptionsWPE.cmake                      |  8 +++++
+ 15 files changed, 116 insertions(+), 20 deletions(-)
+
+diff --git a/Source/WebCore/PlatformWPE.cmake b/Source/WebCore/PlatformWPE.cmake
+index 61a2aa9..b95b3a7 100644
+--- a/Source/WebCore/PlatformWPE.cmake
++++ b/Source/WebCore/PlatformWPE.cmake
+@@ -75,3 +75,34 @@ list(APPEND WebCore_SYSTEM_INCLUDE_DIRECTORIES
+     ${UPOWERGLIB_INCLUDE_DIRS}
+     ${WPE_INCLUDE_DIRS}
+ )
++
++if (ENABLE_ACCESSIBILITY)
++    list(APPEND WebCore_SOURCES
++        accessibility/atk/AXObjectCacheAtk.cpp
++        accessibility/atk/AccessibilityObjectAtk.cpp
++        accessibility/atk/AccessibilityObjectAtk.cpp
++        accessibility/atk/WebKitAccessibleHyperlink.cpp
++        accessibility/atk/WebKitAccessibleInterfaceAction.cpp
++        accessibility/atk/WebKitAccessibleInterfaceComponent.cpp
++        accessibility/atk/WebKitAccessibleInterfaceDocument.cpp
++        accessibility/atk/WebKitAccessibleInterfaceEditableText.cpp
++        accessibility/atk/WebKitAccessibleInterfaceHyperlinkImpl.cpp
++        accessibility/atk/WebKitAccessibleInterfaceHypertext.cpp
++        accessibility/atk/WebKitAccessibleInterfaceImage.cpp
++        accessibility/atk/WebKitAccessibleInterfaceSelection.cpp
++        accessibility/atk/WebKitAccessibleInterfaceTable.cpp
++        accessibility/atk/WebKitAccessibleInterfaceTableCell.cpp
++        accessibility/atk/WebKitAccessibleInterfaceText.cpp
++        accessibility/atk/WebKitAccessibleInterfaceValue.cpp
++        accessibility/atk/WebKitAccessibleUtil.cpp
++        accessibility/atk/WebKitAccessibleWrapperAtk.cpp
++    )
++
++    list(APPEND WebCore_INCLUDE_DIRECTORIES
++        ${ATK_INCLUDE_DIRS}
++    )
++
++    list(APPEND WebCore_LIBRARIES
++        ${ATK_LIBRARIES}
++    )
++endif ()
+diff --git a/Source/WebCore/accessibility/AccessibilityNodeObject.cpp b/Source/WebCore/accessibility/AccessibilityNodeObject.cpp
+index 696e18d..40df7a4 100644
+--- a/Source/WebCore/accessibility/AccessibilityNodeObject.cpp
++++ b/Source/WebCore/accessibility/AccessibilityNodeObject.cpp
+@@ -1737,7 +1741,11 @@ String AccessibilityNodeObject::textUnderElement(AccessibilityTextUnderElementMo
+     for (AccessibilityObject* child = firstChild(); child; child = child->nextSibling()) {
+         if (mode.ignoredChildNode && child->node() == mode.ignoredChildNode)
+             continue;
+-        
++
++        //to skip invisible node
++        if(child->isHidden())
++            continue;
++
+         bool shouldDeriveNameFromAuthor = (mode.childrenInclusion == AccessibilityTextUnderElementMode::TextUnderElementModeIncludeNameFromContentsChildren && !child->accessibleNameDerivesFromContent());
+         if (shouldDeriveNameFromAuthor) {
+             appendNameToStringBuilder(builder, accessibleNameForNode(child->node()));
+diff --git a/Source/WebCore/accessibility/AccessibilityObject.h b/Source/WebCore/accessibility/AccessibilityObject.h
+index d64df67..7f3bb3a 100644
+--- a/Source/WebCore/accessibility/AccessibilityObject.h
++++ b/Source/WebCore/accessibility/AccessibilityObject.h
+@@ -64,11 +64,11 @@ OBJC_CLASS WebAccessibilityObjectWrapper;
+ 
+ typedef WebAccessibilityObjectWrapper AccessibilityObjectWrapper;
+ 
+-#elif PLATFORM(GTK)
++#elif (PLATFORM(GTK) || PLATFORM(WPE)) && HAVE(ACCESSIBILITY)
+ typedef struct _AtkObject AtkObject;
+ typedef struct _AtkObject AccessibilityObjectWrapper;
+-#elif PLATFORM(WPE)
+-class AccessibilityObjectWrapper : public RefCounted<AccessibilityObjectWrapper> { };
++//#elif PLATFORM(WPE)
++//class AccessibilityObjectWrapper : public RefCounted<AccessibilityObjectWrapper> { };
+ #else
+ class AccessibilityObjectWrapper;
+ #endif
+@@ -1072,7 +1072,7 @@ public:
+     bool isHidden() const { return isARIAHidden() || isDOMHidden(); }
+     
+ #if HAVE(ACCESSIBILITY)
+-#if PLATFORM(GTK)
++#if PLATFORM(GTK) || PLATFORM(WPE)
+     AccessibilityObjectWrapper* wrapper() const;
+     void setWrapper(AccessibilityObjectWrapper*);
+ #else
+@@ -1160,7 +1160,7 @@ protected:
+     void ariaElementsFromAttribute(AccessibilityChildrenVector&, const QualifiedName&) const;
+     void ariaElementsReferencedByAttribute(AccessibilityChildrenVector&, const QualifiedName&) const;
+ 
+-#if PLATFORM(GTK) && HAVE(ACCESSIBILITY)
++#if (PLATFORM(GTK) || PLATFORM(WPE)) && HAVE(ACCESSIBILITY)
+     bool allowsTextRanges() const;
+     unsigned getLengthForTextRange() const;
+ #else
+@@ -1195,10 +1195,8 @@ protected:
+     RetainPtr<WebAccessibilityObjectWrapper> m_wrapper;
+ #elif PLATFORM(WIN)
+     COMPtr<AccessibilityObjectWrapper> m_wrapper;
+-#elif PLATFORM(GTK)
++#elif (PLATFORM(GTK) || PLATFORM(WPE)) && HAVE(ACCESSIBILITY)
+     AtkObject* m_wrapper { nullptr };
+-#elif PLATFORM(WPE)
+-    RefPtr<AccessibilityObjectWrapper> m_wrapper;
+ #endif
+ };
+ 
+diff --git a/Source/WebCore/accessibility/atk/AXObjectCacheAtk.cpp b/Source/WebCore/accessibility/atk/AXObjectCacheAtk.cpp
+index 9cae78e..1de2edc 100644
+--- a/Source/WebCore/accessibility/atk/AXObjectCacheAtk.cpp
++++ b/Source/WebCore/accessibility/atk/AXObjectCacheAtk.cpp
+@@ -247,6 +247,11 @@ void AXObjectCache::postPlatformNotification(AccessibilityObject* coreObject, AX
+         atk_object_notify_state_change(axObject, ATK_STATE_ACTIVE, coreObject->ariaCurrentState() != ARIACurrentFalse);
+         break;
+ 
++    case AXTextChanged:
++        if (coreObject->isFocused())
++            atk_object_notify_state_change(axObject, ATK_STATE_FOCUSED, true);
++        break;
++
+     default:
+         break;
+     }
+diff --git a/Source/WebCore/accessibility/atk/WebKitAccessibleWrapperAtk.cpp b/Source/WebCore/accessibility/atk/WebKitAccessibleWrapperAtk.cpp
+index 8f16127..027d091 100644
+--- a/Source/WebCore/accessibility/atk/WebKitAccessibleWrapperAtk.cpp
++++ b/Source/WebCore/accessibility/atk/WebKitAccessibleWrapperAtk.cpp
+@@ -980,9 +980,6 @@ static void setAtkStateSetFromCoreObject(AccessibilityObject* coreObject, AtkSta
+     else if (coreObject->orientation() == AccessibilityOrientation::Vertical)
+         atk_state_set_add_state(stateSet, ATK_STATE_VERTICAL);
+ 
+-    if (coreObject->hasPopup())
+-        atk_state_set_add_state(stateSet, ATK_STATE_HAS_POPUP);
+-
+     if (coreObject->isIndeterminate())
+         atk_state_set_add_state(stateSet, ATK_STATE_INDETERMINATE);
+     else if (coreObject->isCheckboxOrRadio() || coreObject->isMenuItem() || coreObject->isToggleButton()) {
+diff --git a/Source/WebCore/page/Settings.yaml b/Source/WebCore/page/Settings.yaml
+index 06e1014..76b9c6d 100644
+--- a/Source/WebCore/page/Settings.yaml
++++ b/Source/WebCore/page/Settings.yaml
+@@ -769,3 +769,6 @@ nonCompositedWebGLEnabled:
+ localStorageQuota:
+   type: unsigned
+   initial: 5*1024*1024
++
++accessibilityEnabled:
++  initial: false
+diff --git a/Source/WebKit/PlatformWPE.cmake b/Source/WebKit/PlatformWPE.cmake
+index a7f746b..3ff358c 100644
+--- a/Source/WebKit/PlatformWPE.cmake
++++ b/Source/WebKit/PlatformWPE.cmake
+@@ -326,6 +326,17 @@ if (ENABLE_BREAKPAD)
+     )
+ endif ()
+ 
++if (ENABLE_ACCESSIBILITY)
++    list(APPEND WebKit_SOURCES
++        WebProcess/WebPage/atk/WebPageAccessibilityObjectAtk.cpp
++        )
++
++    list(APPEND WebKit_INCLUDE_DIRECTORIES
++        "${WEBKIT_DIR}/WebProcess/WebPage/atk"
++        ${ATK_INCLUDE_DIRS}
++        )
++endif ()
++
+ add_custom_command(
+     OUTPUT ${DERIVED_SOURCES_WEBINSPECTORUI_DIR}/WebKit2InspectorGResourceBundle.c
+     DEPENDS ${WEBKIT_DIR}/UIProcess/API/wpe/WebKit2InspectorGResourceBundle.xml
+diff --git a/Source/WebKit/Shared/WebPreferences.yaml b/Source/WebKit/Shared/WebPreferences.yaml
+index c41120b..1e55227 100644
+--- a/Source/WebKit/Shared/WebPreferences.yaml
++++ b/Source/WebKit/Shared/WebPreferences.yaml
+@@ -1332,3 +1332,7 @@ AllowScriptsToCloseWindows:
+ ScrollToFocusedElementEnabled:
+   type: bool
+   defaultValue: false
++
++AccessibilityEnabled:
++  type: bool
++  defaultValue: false
+diff --git a/Source/WebKit/UIProcess/API/C/WKPreferences.cpp b/Source/WebKit/UIProcess/API/C/WKPreferences.cpp
+index 1e151d8..ec27306 100644
+--- a/Source/WebKit/UIProcess/API/C/WKPreferences.cpp
++++ b/Source/WebKit/UIProcess/API/C/WKPreferences.cpp
+@@ -2127,3 +2127,13 @@ bool WKPreferencesGetNonCompositedWebGLEnabled(WKPreferencesRef preferencesRef)
+ {
+     return toImpl(preferencesRef)->nonCompositedWebGLEnabled();
+ }
++
++void WKPreferencesSetAccessibilityEnabled(WKPreferencesRef preferencesRef, bool accessibilityEnabled)
++{
++    toImpl(preferencesRef)->setAccessibilityEnabled(accessibilityEnabled);
++}
++
++bool WKPreferencesGetAccessibilityEnabled(WKPreferencesRef preferencesRef)
++{
++    return toImpl(preferencesRef)->accessibilityEnabled();
++}
+diff --git a/Source/WebKit/UIProcess/API/C/WKPreferencesRef.h b/Source/WebKit/UIProcess/API/C/WKPreferencesRef.h
+index 647a8f2..33ceda6 100644
+--- a/Source/WebKit/UIProcess/API/C/WKPreferencesRef.h
++++ b/Source/WebKit/UIProcess/API/C/WKPreferencesRef.h
+@@ -383,6 +383,10 @@ WK_EXPORT bool WKPreferencesGetCookieEnabled(WKPreferencesRef preferences);
+ WK_EXPORT void WKPreferencesSetWebGLEnabled(WKPreferencesRef, bool);
+ WK_EXPORT bool WKPreferencesGetWebGLEnabled(WKPreferencesRef);
+ 
++// Defaults to false.
++WK_EXPORT void WKPreferencesSetAccessibilityEnabled(WKPreferencesRef preferences, bool accessibilityEnabled);
++WK_EXPORT bool WKPreferencesGetAccessibilityEnabled(WKPreferencesRef preferences);
++
+ #ifdef __cplusplus
+ }
+ #endif
+diff --git a/Source/WebKit/WebProcess/WebCoreSupport/WebFrameLoaderClient.cpp b/Source/WebKit/WebProcess/WebCoreSupport/WebFrameLoaderClient.cpp
+index 925557f..6306788 100644
+--- a/Source/WebKit/WebProcess/WebCoreSupport/WebFrameLoaderClient.cpp
++++ b/Source/WebKit/WebProcess/WebCoreSupport/WebFrameLoaderClient.cpp
+@@ -1687,7 +1687,7 @@ void WebFrameLoaderClient::dispatchDidClearWindowObjectInWorld(DOMWrapperWorld&
+     if (automationSessionProxy && world.isNormal())
+         automationSessionProxy->didClearWindowObjectForFrame(*m_frame);
+ 
+-#if HAVE(ACCESSIBILITY) && PLATFORM(GTK)
++#if HAVE(ACCESSIBILITY) && (PLATFORM(GTK) || PLATFORM(WPE))
+     // Ensure the accessibility hierarchy is updated.
+     webPage->updateAccessibilityTree();
+ #endif
+diff --git a/Source/WebKit/WebProcess/WebPage/WebPage.cpp b/Source/WebKit/WebProcess/WebPage/WebPage.cpp
+index c803595..209e58e 100644
+--- a/Source/WebKit/WebProcess/WebPage/WebPage.cpp
++++ b/Source/WebKit/WebProcess/WebPage/WebPage.cpp
+@@ -319,7 +319,7 @@ WebPage::WebPage(uint64_t pageID, WebPageCreationParameters&& parameters)
+     , m_layerHostingMode(parameters.layerHostingMode)
+ #if PLATFORM(COCOA)
+     , m_viewGestureGeometryCollector(makeUniqueRef<ViewGestureGeometryCollector>(*this))
+-#elif HAVE(ACCESSIBILITY) && PLATFORM(GTK)
++#elif HAVE(ACCESSIBILITY) && (PLATFORM(GTK) || PLATFORM(WPE))
+     , m_accessibilityObject(nullptr)
+ #endif
+     , m_setCanStartMediaTimer(RunLoop::main(), this, &WebPage::setCanStartMediaTimerFired)
+@@ -3173,6 +3173,7 @@ void WebPage::updatePreferences(const WebPreferencesStore& store)
+     m_artificialPluginInitializationDelayEnabled = store.getBoolValueForKey(WebPreferencesKey::artificialPluginInitializationDelayEnabledKey());
+ 
+     m_scrollingPerformanceLoggingEnabled = store.getBoolValueForKey(WebPreferencesKey::scrollingPerformanceLoggingEnabledKey());
++    m_accessibilityEnabled = store.getBoolValueForKey(WebPreferencesKey::accessibilityEnabledKey());
+     settings.setScrollingPerformanceLoggingEnabled(m_scrollingPerformanceLoggingEnabled);
+ 
+     if (store.getBoolValueForKey(WebPreferencesKey::privateBrowsingEnabledKey()) && !usesEphemeralSession())
+diff --git a/Source/WebKit/WebProcess/WebPage/WebPage.h b/Source/WebKit/WebProcess/WebPage/WebPage.h
+index 6cb1b8b..5214e48 100644
+--- a/Source/WebKit/WebProcess/WebPage/WebPage.h
++++ b/Source/WebKit/WebProcess/WebPage/WebPage.h
+@@ -69,7 +69,7 @@
+ #include <wtf/WallTime.h>
+ #include <wtf/text/WTFString.h>
+ 
+-#if HAVE(ACCESSIBILITY) && PLATFORM(GTK)
++#if HAVE(ACCESSIBILITY) && (PLATFORM(GTK) || PLATFORM(WPE))
+ #include "WebPageAccessibilityObject.h"
+ #include <wtf/glib/GRefPtr.h>
+ #endif
+@@ -707,7 +707,7 @@ public:
+ #endif
+ #endif
+ 
+-#if HAVE(ACCESSIBILITY) && PLATFORM(GTK)
++#if HAVE(ACCESSIBILITY) && (PLATFORM(GTK) || PLATFORM(WPE))
+     void updateAccessibilityTree();
+ #endif
+
+@@ -1500,7 +1500,7 @@ private:
+     RetainPtr<NSDictionary> m_dataDetectionContext;
+ #endif
+ 
+-#if HAVE(ACCESSIBILITY) && PLATFORM(GTK)
++#if HAVE(ACCESSIBILITY) && (PLATFORM(GTK) || PLATFORM(WPE))
+     GRefPtr<WebPageAccessibilityObject> m_accessibilityObject;
+ #endif
+  
+@@ -1566,6 +1566,7 @@ private:
+     bool m_shouldDispatchFakeMouseMoveEvents { true };
+     bool m_isEditorStateMissingPostLayoutData { false };
+     bool m_isSelectingTextWhileInsertingAsynchronously { false };
++    bool m_accessibilityEnabled { false };
+ 
+     enum class EditorStateIsContentEditable { No, Yes, Unset };
+     mutable EditorStateIsContentEditable m_lastEditorStateWasContentEditable { EditorStateIsContentEditable::Unset };
+diff --git a/Source/WebKit/WebProcess/WebPage/wpe/WebPageWPE.cpp b/Source/WebKit/WebProcess/WebPage/wpe/WebPageWPE.cpp
+index 0678350..c6085a1 100644
+--- a/Source/WebKit/WebProcess/WebPage/wpe/WebPageWPE.cpp
++++ b/Source/WebKit/WebProcess/WebPage/wpe/WebPageWPE.cpp
+@@ -40,8 +40,29 @@ namespace WebKit {
+ 
+ void WebPage::platformInitialize()
+ {
++#if HAVE(ACCESSIBILITY)
++    // Create the accessible object (the plug) that will serve as the
++    // entry point to the Web process, and send a message to the UI
++    // process to connect the two worlds through the accessibility
++    // object there specifically placed for that purpose (the socket).
++    if(m_accessibilityEnabled) {
++        m_accessibilityObject = adoptGRef(webPageAccessibilityObjectNew(this));
++        GUniquePtr<gchar> plugID(atk_plug_get_id(ATK_PLUG(m_accessibilityObject.get())));
++        // send(Messages::WebPageProxy::BindAccessibilityTree(String(plugID.get())));
++    }
++#endif
+ }
+ 
++#if HAVE(ACCESSIBILITY)
++void WebPage::updateAccessibilityTree()
++{
++    if (!m_accessibilityObject)
++        return;
++
++    webPageAccessibilityObjectRefresh(m_accessibilityObject.get());
++}
++#endif
++
+ void WebPage::platformDetach()
+ {
+ }
+diff --git a/Source/cmake/OptionsWPE.cmake b/Source/cmake/OptionsWPE.cmake
+index e3aa382..6b366c7 100644
+--- a/Source/cmake/OptionsWPE.cmake
++++ b/Source/cmake/OptionsWPE.cmake
+@@ -47,6 +47,7 @@ WEBKIT_OPTION_DEFAULT_PORT_VALUE(ENABLE_WEBGL2 PRIVATE ${ENABLE_EXPERIMENTAL_FEA
+ WEBKIT_OPTION_DEFAULT_PORT_VALUE(ENABLE_MEDIA_STREAM PRIVATE ${ENABLE_EXPERIMENTAL_FEATURES})
+ WEBKIT_OPTION_DEFAULT_PORT_VALUE(ENABLE_WEB_RTC PRIVATE ${ENABLE_EXPERIMENTAL_FEATURES})
+ WEBKIT_OPTION_DEFAULT_PORT_VALUE(ENABLE_MEMORY_SAMPLER PUBLIC ON)
++WEBKIT_OPTION_DEFAULT_PORT_VALUE(ENABLE_ACCESSIBILITY PUBLIC ON)
+ 
+ # Public options specific to the WPE port. Do not add any options here unless
+ # there is a strong reason we should support changing the value of the option,
+@@ -61,6 +62,13 @@ include(GStreamerDependencies)
+ 
+ WEBKIT_OPTION_END()
+ 
++if (ENABLE_ACCESSIBILITY)
++    add_definitions(-DHAVE_ACCESSIBILITY=1)
++    find_package(ATK 2.10.0 REQUIRED)
++else ()
++    add_definitions(-DHAVE_ACCESSIBILITY=0)
++endif ()
++
+ SET_AND_EXPOSE_TO_BUILD(ENABLE_DEVELOPER_MODE ${DEVELOPER_MODE})
+ 
+ # Enable the legacy inspector server.
+-- 
+1.9.1
+

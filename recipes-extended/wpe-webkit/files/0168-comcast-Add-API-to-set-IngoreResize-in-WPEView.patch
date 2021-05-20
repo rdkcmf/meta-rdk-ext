@@ -1,0 +1,108 @@
+From de231aa447acca58587a4f53e7401a5957326560 Mon Sep 17 00:00:00 2001
+From: Ievgen Mutavchi <Ievgen_Mutavchi@comcast.com>
+License: GPLV2
+Date: Mon, 11 Nov 2019 14:27:58 -0500
+From: ebecd56aaa2727b6305d39c69951fbdc8740f800 Oct 31, 2018 11:56 PM
+Source: COMCAST
+Upstream-Status: None
+Signed-off-by: Eugene Mutavchi <Ievgen_Mutavchi@comcast.com>
+Subject: [PATCH] Add API to set IngoreResize in WPEView
+
+---
+ Source/WebKit/UIProcess/API/C/wpe/WKView.cpp | 10 ++++++++++
+ Source/WebKit/UIProcess/API/C/wpe/WKView.h   |  2 ++
+ Source/WebKit/UIProcess/API/wpe/WPEView.cpp  | 14 ++++++++++++--
+ Source/WebKit/UIProcess/API/wpe/WPEView.h    |  3 +++
+ 4 files changed, 27 insertions(+), 2 deletions(-)
+
+diff --git a/Source/WebKit/UIProcess/API/C/wpe/WKView.cpp b/Source/WebKit/UIProcess/API/C/wpe/WKView.cpp
+index 13efcbc..f75cbfc 100644
+--- a/Source/WebKit/UIProcess/API/C/wpe/WKView.cpp
++++ b/Source/WebKit/UIProcess/API/C/wpe/WKView.cpp
+@@ -65,6 +65,16 @@ void WKViewSetViewState(WKViewRef view, WKViewState viewState)
+     toImpl(view)->setViewState(toViewStateFlags(viewState));
+ }
+ 
++void WKViewSetIgnoreResize(WKViewRef view, bool ignoreResize)
++{
++    toImpl(view)->setIgnoreResize(ignoreResize);
++}
++
++bool WKViewGetIgnoreResize(WKViewRef view)
++{
++    return toImpl(view)->ignoreResize();
++}
++
+ void WKViewSetViewClient(WKViewRef view, const WKViewClientBase* client)
+ {
+     class ViewClient final : public API::Client<WKViewClientBase>, public API::ViewClient {
+diff --git a/Source/WebKit/UIProcess/API/C/wpe/WKView.h b/Source/WebKit/UIProcess/API/C/wpe/WKView.h
+index 34d378c..1a3ac54 100644
+--- a/Source/WebKit/UIProcess/API/C/wpe/WKView.h
++++ b/Source/WebKit/UIProcess/API/C/wpe/WKView.h
+@@ -49,6 +49,8 @@ enum {
+ typedef uint32_t WKViewState;
+ 
+ WK_EXPORT void WKViewSetViewState(WKViewRef, WKViewState);
++WK_EXPORT void WKViewSetIgnoreResize(WKViewRef, bool);
++WK_EXPORT bool WKViewGetIgnoreResize(WKViewRef);
+ 
+ typedef void (*WKViewFrameDisplayed)(WKViewRef view, const void* clientInfo);
+ 
+diff --git a/Source/WebKit/UIProcess/API/wpe/WPEView.cpp b/Source/WebKit/UIProcess/API/wpe/WPEView.cpp
+index e9739c3..521950f 100644
+--- a/Source/WebKit/UIProcess/API/wpe/WPEView.cpp
++++ b/Source/WebKit/UIProcess/API/wpe/WPEView.cpp
+@@ -188,9 +188,13 @@ JSGlobalContextRef View::javascriptGlobalContext()
+ 
+ void View::setSize(const WebCore::IntSize& size)
+ {
+-    m_size = size;
++    if (m_ignoreResize)
++        m_size = WebCore::IntSize(1280, 720);
++    else
++        m_size = size;
++
+     if (m_pageProxy->drawingArea())
+-        m_pageProxy->drawingArea()->setSize(size, WebCore::IntSize(), WebCore::IntSize());
++        m_pageProxy->drawingArea()->setSize(m_size, WebCore::IntSize(), WebCore::IntSize());
+ }
+ 
+ void View::setViewState(WebCore::ActivityState::Flags flags)
+@@ -204,6 +208,12 @@ void View::setViewState(WebCore::ActivityState::Flags flags)
+         m_pageProxy->activityStateDidChange(changedFlags);
+ }
+ 
++void View::setIgnoreResize(bool ignoreResize)
++{
++    m_ignoreResize = ignoreResize;
++    fprintf(stderr, "WPEView will %s view port resize\n", ignoreResize ? "ignore" : "respect");
++}
++
+ void View::close()
+ {
+     m_pageProxy->close();
+diff --git a/Source/WebKit/UIProcess/API/wpe/WPEView.h b/Source/WebKit/UIProcess/API/wpe/WPEView.h
+index ff82fbe..e5df4f5 100644
+--- a/Source/WebKit/UIProcess/API/wpe/WPEView.h
++++ b/Source/WebKit/UIProcess/API/wpe/WPEView.h
+@@ -70,6 +70,8 @@ public:
+ 
+     WebCore::ActivityState::Flags viewState() const { return m_viewStateFlags; }
+     void setViewState(WebCore::ActivityState::Flags);
++    bool ignoreResize() const { return m_ignoreResize; }
++    void setIgnoreResize(bool);
+ 
+     void close();
+ 
+@@ -83,6 +85,7 @@ private:
+     std::unique_ptr<WebKit::PageClientImpl> m_pageClient;
+     RefPtr<WebKit::WebPageProxy> m_pageProxy;
+     WebCore::IntSize m_size;
++    bool m_ignoreResize { false };
+     WebCore::ActivityState::Flags m_viewStateFlags;
+ 
+     WebKit::CompositingManagerProxy m_compositingManagerProxy;
+-- 
+2.7.4
+

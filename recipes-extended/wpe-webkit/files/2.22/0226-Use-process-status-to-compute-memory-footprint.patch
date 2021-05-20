@@ -1,0 +1,56 @@
+From 1d7f048559cfeb671ec7093c0485e52fc5c15c47 Mon Sep 17 00:00:00 2001
+From: Eugene Mutavchi <Ievgen_Mutavchi@comcast.com>
+Date: Thu, 4 Feb 2021 19:05:26 +0000
+Subject: [PATCH 2/4] Use process status to compute memory footprint
+
+---
+ Source/WTF/wtf/linux/MemoryFootprintLinux.cpp      |  3 ++-
+ .../WTF/wtf/linux/MemoryPressureHandlerLinux.cpp   | 14 ++++++++++++++
+ 2 files changed, 16 insertions(+), 1 deletion(-)
+
+diff --git a/Source/WTF/wtf/linux/MemoryFootprintLinux.cpp b/Source/WTF/wtf/linux/MemoryFootprintLinux.cpp
+index 7bc9d7c77e4d..804a0fb0cc8f 100644
+--- a/Source/WTF/wtf/linux/MemoryFootprintLinux.cpp
++++ b/Source/WTF/wtf/linux/MemoryFootprintLinux.cpp
+@@ -22,7 +22,7 @@
+  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+  */
+-
++#if 0
+ #include "config.h"
+ #include "MemoryFootprint.h"
+ 
+@@ -107,3 +107,4 @@ size_t memoryFootprint()
+ }
+ 
+ }
++#endif
+diff --git a/Source/WTF/wtf/linux/MemoryPressureHandlerLinux.cpp b/Source/WTF/wtf/linux/MemoryPressureHandlerLinux.cpp
+index 72befd272497..bb499a7f1210 100644
+--- a/Source/WTF/wtf/linux/MemoryPressureHandlerLinux.cpp
++++ b/Source/WTF/wtf/linux/MemoryPressureHandlerLinux.cpp
+@@ -304,6 +304,20 @@ std::optional<MemoryPressureHandler::ReliefLogger::MemoryUsage> MemoryPressureHa
+     return MemoryUsage {processMemoryUsage(), memoryFootprint()};
+ }
+ 
++size_t memoryFootprint()
++{
++    static const Seconds s_memoryFootprintUpdateInterval = 1_s;
++    static size_t footprint = 0;
++    static MonotonicTime previousUpdateTime = { };
++    Seconds elapsed = MonotonicTime::now() - previousUpdateTime;
++    if (elapsed >= s_memoryFootprintUpdateInterval) {
++        size_t vmRSS = readToken(s_processStatus, "VmRSS:", KB);
++        if (vmRSS != static_cast<size_t>(-1))
++           footprint = vmRSS;
++        previousUpdateTime = MonotonicTime::now();
++    }
++    return footprint;
++}
+ 
+ } // namespace WTF
+ 
+-- 
+2.17.1
+

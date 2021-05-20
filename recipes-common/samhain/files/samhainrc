@@ -1,0 +1,307 @@
+
+[ReadOnly]
+## for these files, only access time is ignored
+    dir = 99/bin
+    dir = 99/usr/bin
+    dir = 99/sbin
+    dir = 99/usr/sbin
+    dir = 99/lib
+    dir = 99/usr/lib
+
+[Inotify]
+    InotifyActive = yes
+    InotifyWatches = 1048576
+
+[ProcessCheck]
+    ProcessCheckActive = yes
+    SeverityProcessCheck = crit
+    ProcessCheckMinPID = 1
+    ProcessCheckMaxPID = 25
+    ProcessCheckInterval = 900
+
+    ProcessCheckWhiteList = agetty
+    ProcessCheckWhiteList = ata_sff
+    ProcessCheckWhiteList = authservice
+    ProcessCheckWhiteList = bdi-default
+    ProcessCheckWhiteList = cat
+    ProcessCheckWhiteList = crond
+    ProcessCheckWhiteList = crypto
+    ProcessCheckWhiteList = curl
+    ProcessCheckWhiteList = dbus-daemon
+    ProcessCheckWhiteList = dbus-daemon-launch-helper
+    ProcessCheckWhiteList = deviceUpdateMgrMain
+    ProcessCheckWhiteList = dnsmasq
+    ProcessCheckWhiteList = dropbear
+    ProcessCheckWhiteList = dsMgrMain
+    ProcessCheckWhiteList = flush
+    ProcessCheckWhiteList = fsnotify
+    ProcessCheckWhiteList = IARMDaemonMain
+    ProcessCheckWhiteList = ipMgrMain
+    ProcessCheckWhiteList = irMgrMain
+    ProcessCheckWhiteList = kblockd
+    ProcessCheckWhiteList = kdevtmpfs
+    ProcessCheckWhiteList = khelper
+    ProcessCheckWhiteList = khubd
+    ProcessCheckWhiteList = klogd
+    ProcessCheckWhiteList = ksoftirqd
+    ProcessCheckWhiteList = kswapd
+    ProcessCheckWhiteList = kthreadd
+    ProcessCheckWhiteList = kworker
+    ProcessCheckWhiteList = lighttpd
+    ProcessCheckWhiteList = login
+    ProcessCheckWhiteList = netns
+    ProcessCheckWhiteList = nfsiod
+    ProcessCheckWhiteList = ps
+    ProcessCheckWhiteList = pwr-state-monitor
+    ProcessCheckWhiteList = pwrMgrMain
+    ProcessCheckWhiteList = Receiver
+    ProcessCheckWhiteList = rf4ceMgr
+    ProcessCheckWhiteList = rmfStreamer
+    ProcessCheckWhiteList = rpciod
+    ProcessCheckWhiteList = runPod
+    ProcessCheckWhiteList = runSnmp
+    ProcessCheckWhiteList = runXRE
+    ProcessCheckWhiteList = samhain
+    ProcessCheckWhiteList = scsi_eh
+    ProcessCheckWhiteList = sh
+    ProcessCheckWhiteList = sleep
+    ProcessCheckWhiteList = snmpd
+    ProcessCheckWhiteList = srv
+    ProcessCheckWhiteList = storageMgrMain
+    ProcessCheckWhiteList = syslogd
+    ProcessCheckWhiteList = sysMgrMain
+    ProcessCheckWhiteList = syssnmpagent
+    ProcessCheckWhiteList = systemd
+    ProcessCheckWhiteList = systemd-journald
+    ProcessCheckWhiteList = systemd-logind
+    ProcessCheckWhiteList = systemd-udevd
+    ProcessCheckWhiteList = tr69BusMain
+    ProcessCheckWhiteList = TRMMgr
+    ProcessCheckWhiteList = udhcpc
+    ProcessCheckWhiteList = udpsvd
+    ProcessCheckWhiteList = upload2splunk
+    ProcessCheckWhiteList = vodClientApp
+    ProcessCheckWhiteList = websocket-trm-proxy
+    ProcessCheckWhiteList = xcal-device
+    ProcessCheckWhiteList = xdiscovery
+    ProcessCheckWhiteList = xfs_mru_cache
+    ProcessCheckWhiteList = xfslogd
+    ProcessCheckWhiteList = fogcli
+    ProcessCheckWhiteList = tenableHDCP
+    ProcessCheckWhiteList = busybox.nosuid
+    ProcessCheckWhiteList = busybox.suid
+    ProcessCheckWhiteList = mke2fs
+    ProcessCheckWhiteList = journalctl
+    ProcessCheckWhiteList = mfrMgrMain
+    ProcessCheckWhiteList = nxserver
+    ProcessCheckWhiteList = socprovisioning
+    ProcessCheckWhiteList = mocad
+    ProcessCheckWhiteList = lxc-autostart
+    ProcessCheckWhiteList = dibbler-client
+    ProcessCheckWhiteList = ntpd
+    ProcessCheckWhiteList = rbiDaemon
+    ProcessCheckWhiteList = arping
+    ProcessCheckWhiteList = tcpdump
+    ProcessCheckWhiteList = nrdPluginApp
+    ProcessCheckWhiteList = sdvAgent
+    ProcessCheckWhiteList = ecryptfsd
+    ProcessCheckWhiteList = tr69hostif
+    ProcessCheckWhiteList = webpavideo
+    ProcessCheckWhiteList = audiocapturemgr
+    ProcessCheckWhiteList = rtrmfplayer
+    ProcessCheckWhiteList = rdkbrowser2
+    ProcessCheckWhiteList = hwselftest
+    ProcessCheckWhiteList = wpa_supplicant
+    ProcessCheckWhiteList = stunnel
+    ProcessCheckWhiteList = controlMgr
+    ProcessCheckWhiteList = parodus
+    ProcessCheckWhiteList = rpcbind
+    ProcessCheckWhiteList = playreadyCDMiService
+    ProcessCheckWhiteList = WPEWebProcess
+    ProcessCheckWhiteList = WPENetworkProcess
+    ProcessCheckWhiteList = nlmon
+    ProcessCheckWhiteList = rdnssd
+
+[PortCheck]
+    PortCheckActive = yes
+    SeverityPortCheck = crit
+    PortCheckInterval = 1024
+
+    PortCheckMinPort = 1
+    PortCheckMaxPort = 40
+
+    PortCheckInterface = 0.0.0.0
+    PortCheckSkip = 0.0.0.0:22/tcp
+
+[Mounts]
+    MountCheckActive=1
+    MountCheckInterval=900
+
+    SeverityMountMissing=crit
+    SeverityOptionMissing=crit
+
+    checkmount=/
+    checkmount=/dev
+    checkmount=/sys
+    checkmount=/proc
+    checkmount=/mnt/memory
+    checkmount=/etc/xupnp
+    checkmount=/etc/hosts
+    checkmount=/etc/resolv.dnsmasq
+    checkmount=/etc/resolv.conf
+    checkmount=/var/spool/cron
+    checkmount=/etc/hostname
+    checkmount=/var/volatile
+    checkmount=/sys/fs/fuse/connections
+    checkmount=/etc/snmp/snmpd.conf
+    checkmount=/etc/udhcpc.vendor_specific
+    checkmount=/tmp
+    checkmount=/etc/samhainrc
+    checkmount=/var/samhain
+    checkmount=/sys/kernel/debug
+    checkmount=/dev/mqueue
+    checkmount=/etc/machine-id
+    checkmount=/sys/fs/cgroup/blkio
+    checkmount=/sys/fs/cgroup/freezer
+    checkmount=/sys/fs/cgroup/memory
+    checkmount=/sys/fs/cgroup/devices
+    checkmount=/sys/fs/cgroup/cpu,cpuacct
+    checkmount=/sys/fs/cgroup/debug
+    checkmount=/sys/fs/cgroup/cpuset
+    checkmount=/sys/fs/cgroup/systemd
+    checkmount=/run
+    checkmount=/sys/fs/cgroup
+    checkmount=/dev/shm
+    checkmount=/dev/pts
+    checkmount=/www
+
+
+[EventSeverity]
+    SeverityReadOnly=crit
+    SeverityLogFiles=warn
+    SeverityGrowingLogs=info
+    SeverityIgnoreNone=crit
+    SeverityAttributes=crit
+
+[IgnoreAll]
+    dir=-1/usr/lib/opkg/alternatives
+    dir=-1/usr/lib/perl/
+    dir=-1/lib/modules
+    file=/lib/systemd/system/lxc.service.d/xre.conf
+    file=/usr/lib/dbus/dbus-daemon-launch-helper
+    file=/usr/sbin/vgimportclone
+    file=/usr/lib/libdevmapper.so.1.02
+    file=/usr/lib/libperl.so.5.14.3
+    file=/usr/lib/libb_dtcp_ip.so
+    file=/bin/ps.procps
+    file=/bin/kill.procps
+    file=/lib/libproc-3.2.8.so
+    file=/usr/bin/killer.sh
+    file=/usr/sbin/lvmdump
+    file=/usr/sbin/fsadm
+    file=/usr/bin/watch.procps
+    file=/sbin/sysctl.procps
+    file=/usr/sbin/lvmconf
+    file=/usr/sbin/lvm
+    file=/usr/bin/bashbug
+    file=/usr/bin/w
+    file=/usr/bin/uptime.procps
+    file=/usr/bin/vmstat
+    file=/usr/bin/top.procps
+    file=/usr/bin/tload
+    file=/usr/bin/snice
+    file=/usr/bin/slabtop
+    file=/usr/bin/skill
+    file=/usr/bin/rltraceroute6
+    file=/usr/bin/pwdx.procps
+    file=/usr/bin/pkill.procps
+    file=/usr/bin/pmap.procps
+    file=/usr/bin/pgrep.procps
+    file=/usr/bin/nexus.install
+    file=/usr/bin/free.procps
+    file=/usr/sbin/dmsetup
+    file=/usr/bin/uncompress
+    file=/bin/gunzip.gzip
+    file=/lib/rdk/xreInterfaceCalls.sh
+    file=/lib/rdk/runXRE
+    file=/usr/lib/libIARMBus.so.0
+
+[Log]
+
+PrintSeverity=crit
+LogSeverity=crit
+ExternalSeverity=crit
+
+[Logmon]
+LogmonActive = yes
+LogmonSaveDir = /tmp/samhain
+LogmonQueue = q1:10:report:crit
+LogmonInterval = 60
+LogmonBurstThreshold = 2
+
+LogmonWatch = APACHE:/opt/logs/dropbear.log:RE{^(\S+\s*\S+)*}
+LogmonRule = q1:.*Pubkey auth succeeded.*
+LogmonRule = q1:Started SSH Per-Connection Server
+LogmonRule = q1:Stopped SSH Per-Connection Server
+
+LogmonWatch = APACHE:/opt/logs/messages.txt:RE{^(\S+\s*\S+)*}
+LogmonRule = q1:.*SNMP ACCEPT CONNECTION.*|.*DROP.*
+
+LogmonWatch = APACHE:/opt/logs/snmpd.log:RE{^(\S+\s*\S+)*}
+LogmonRule = q1:^(?=.*Received SNMP packet.*)(?!.*127\.0\.0\.1).*
+LogmonRule = q1:Started Simple Network Management Protocol (SNMP) Daemon
+LogmonRule = q1:Stopped Simple Network Management Protocol (SNMP) Daemon
+
+LogmonWatch = APACHE:/opt/logs/tr69hostif.log:RE{^(\S+\s*\S+)*}
+LogmonRule = q1:.*Request:.*
+LogmonRule = q1:Started webpa video Daemon
+LogmonRule = q1:Stopped webpa video Daemon
+
+LogmonWatch = APACHE:/opt/logs/tr69agent_SoapDebug.log:RE{^(\S+\s*\S+)*}
+LogmonRule = q1:.*Accept socket.*
+LogmonRule = q1:Started TR69 Host Interface Daemon
+LogmonRule = q1:Stopped TR69 Host Interface Daemon
+LogmonRule = trash:.*
+
+[External]
+OpenCommand = /usr/sbin/upload2splunk.sh
+SetType = log
+SetEnviron = PATH=/usr/local/bin:/usr/bin:/bin:/usr/local/sbin:/usr/sbin:/sbin
+CloseCommand
+
+[Misc]
+Daemon = no
+
+## whether to test signature of files (init/check/none)
+ChecksumTest=check
+SetNiceLevel = 19
+SetLoopTime = 600
+SetFileCheckTime = 3600
+# kilobytes per second
+SetIOLimit=1000
+LooseDirCheck = True
+AvoidBlock=true
+ReportOnlyOnce = true
+SetReverseLookup = false
+ReportCheckflags = false
+UseHardlinkCheck = false
+IgnoreAdded = /usr/*
+IgnoreAdded = /lib/*
+IgnoreAdded = /bin/*
+IgnoreAdded = /sbin/*
+IgnoreMissing = /usr/*
+IgnoreMissing = /lib/*
+IgnoreMissing = /bin/*
+IgnoreMissing = /sbin/*
+
+SetDatabasePath = /opt/samhain_file
+SetLogfilePath = /dev/null
+
+MessageHeader="%F"
+
+SyslogFacility=LOG_LOCAL2
+
+MACType = SHA-256
+
+
+[EOF]

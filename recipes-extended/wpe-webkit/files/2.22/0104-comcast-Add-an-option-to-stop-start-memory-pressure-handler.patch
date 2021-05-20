@@ -1,0 +1,102 @@
+From 49c84a24fcc39180eb97a265cdf3fcc7bad220e7 Mon Sep 17 00:00:00 2001
+From: Ievgen Mutavchi <Ievgen_Mutavchi@comcast.com>
+Date: Sun, 26 Apr 2020 14:40:43 -0400
+Subject: [PATCH 93/93] comcast Add an option to stop start memory pressure
+ handler
+Source: COMCAST
+License: GPLV2
+Upstream-Status: None
+Signed-off-by: Eugene Mutavchi <Ievgen_Mutavchi@comcast.com>
+
+---
+ Source/WTF/wtf/MemoryPressureHandler.cpp              |  1 +
+ Source/WTF/wtf/MemoryPressureHandler.h                |  5 ++---
+ .../WebProcess/InjectedBundle/API/c/WKBundle.cpp      | 11 +++++++++++
+ .../WebKit/WebProcess/InjectedBundle/API/c/WKBundle.h |  3 +++
+ 4 files changed, 17 insertions(+), 3 deletions(-)
+
+Index: git/Source/WTF/wtf/MemoryPressureHandler.cpp
+===================================================================
+--- git.orig/Source/WTF/wtf/MemoryPressureHandler.cpp
++++ git/Source/WTF/wtf/MemoryPressureHandler.cpp
+@@ -55,6 +55,7 @@ MemoryPressureHandler::MemoryPressureHan
+     : m_windowsMeasurementTimer(RunLoop::main(), this, &MemoryPressureHandler::windowsMeasurementTimerFired)
+ #endif
+ {
++    m_installed = false;
+ }
+ 
+ void MemoryPressureHandler::setShouldUsePeriodicMemoryMonitor(bool use)
+Index: git/Source/WTF/wtf/MemoryPressureHandler.h
+===================================================================
+--- git.orig/Source/WTF/wtf/MemoryPressureHandler.h
++++ git/Source/WTF/wtf/MemoryPressureHandler.h
+@@ -66,6 +66,7 @@ public:
+     WTF_EXPORT_PRIVATE static MemoryPressureHandler& singleton();
+ 
+     WTF_EXPORT_PRIVATE void install();
++    WTF_EXPORT_PRIVATE void uninstall();
+ 
+     WTF_EXPORT_PRIVATE void setShouldUsePeriodicMemoryMonitor(bool);
+ 
+@@ -154,8 +155,6 @@ private:
+     size_t thresholdForMemoryKill();
+     void memoryPressureStatusChanged();
+ 
+-    void uninstall();
+-
+     void holdOff(Seconds);
+ 
+     MemoryPressureHandler();
+@@ -175,7 +174,7 @@ private:
+ 
+     unsigned m_pageCount { 0 };
+ 
+-    bool m_installed { false };
++    std::atomic<bool> m_installed;
+     LowMemoryHandler m_lowMemoryHandler;
+ 
+     std::atomic<bool> m_underMemoryPressure;
+Index: git/Source/WebKit/WebProcess/InjectedBundle/API/c/WKBundle.cpp
+===================================================================
+--- git.orig/Source/WebKit/WebProcess/InjectedBundle/API/c/WKBundle.cpp
++++ git/Source/WebKit/WebProcess/InjectedBundle/API/c/WKBundle.cpp
+@@ -41,6 +41,7 @@
+ #include <WebCore/DatabaseTracker.h>
+ #include <WebCore/ResourceLoadObserver.h>
+ #include <WebCore/ServiceWorkerThreadProxy.h>
++#include <wtf/MemoryPressureHandler.h>
+ 
+ using namespace WebCore;
+ using namespace WebKit;
+@@ -218,6 +219,16 @@ void WKBundleReportException(JSContextRe
+     InjectedBundle::reportException(context, exception);
+ }
+ 
++void WKBundleMemoryPressureHandlerStop()
++{
++    MemoryPressureHandler::singleton().uninstall();
++}
++
++void WKBundleMemoryPressureHandlerStart()
++{
++    MemoryPressureHandler::singleton().install();
++}
++
+ void WKBundleClearAllDatabases(WKBundleRef)
+ {
+     DatabaseTracker::singleton().deleteAllDatabasesImmediately();
+Index: git/Source/WebKit/WebProcess/InjectedBundle/API/c/WKBundle.h
+===================================================================
+--- git.orig/Source/WebKit/WebProcess/InjectedBundle/API/c/WKBundle.h
++++ git/Source/WebKit/WebProcess/InjectedBundle/API/c/WKBundle.h
+@@ -82,6 +82,9 @@ WK_EXPORT WKConnectionRef WKBundleGetApp
+ 
+ WK_EXPORT void WKBundleReportException(JSContextRef, JSValueRef exception);
+ 
++WK_EXPORT void WKBundleMemoryPressureHandlerStop();
++WK_EXPORT void WKBundleMemoryPressureHandlerStart();
++
+ #ifdef __cplusplus
+ }
+ #endif

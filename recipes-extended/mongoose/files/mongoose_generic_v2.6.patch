@@ -1,0 +1,114 @@
+Date: Sep 15 17:53:28 2014
+
+From: db5601340f2cb3ae77e2b0809adda9fa0a8f2e63 Sep 15 17:53:28 2014 
+
+Subject: [PATCH] RDKRIDP-301: mongoose 2.6 and apply comcast generic patch
+
+	Corrected the mongoose webserver version used in RDK.
+	Corrected also the license information to be MIT.
+	
+Source: COMCAST
+
+License: GPL-2.0-or-later
+
+Upstream-Status: Pending
+
+Signed-off-by: Ridish Aravindan <ridish.ra@lnttechservices.com> 
+---
+
+diff -aNurd --binary mongoose/Makefile mongoose_generic/Makefile
+--- mongoose/Makefile	2009-05-05 14:34:32.000000000 +0000
++++ mongoose_generic/Makefile	2014-04-24 10:27:27.000000000 +0000
+@@ -95,3 +95,10 @@
+ 
+ clean:
+ 	rm -rf *.o *.core $(PROG) *.obj $(PROG).1.txt *.dSYM *.tgz
++install:
++	mkdir -p ${prefix}/bin
++	mkdir -p ${prefix}/lib
++	mkdir -p ${prefix}/include/mongoose
++	cp mongoose.h ${prefix}/include/mongoose
++	cp $(PROG) ${prefix}/bin
++	cp $(LIB) ${prefix}/lib/lib$(PROG).so
+diff -aNurd --binary mongoose/mongoose.c mongoose_generic/mongoose.c
+--- mongoose/mongoose.c	2009-05-05 14:34:32.000000000 +0000
++++ mongoose_generic/mongoose.c	2014-04-24 10:27:27.000000000 +0000
+@@ -176,6 +176,7 @@
+ #define	MAX_CALLBACKS		20
+ #define	ARRAY_SIZE(array)	(sizeof(array) / sizeof(array[0]))
+ #define	UNKNOWN_CONTENT_LENGTH	((uint64_t) ~0ULL)
++#define  MONGOOSE_WEB_ROOT "/mnt/nfs/bin/rstreamer/usr/bin/lighttpd/wwwroot"
+ 
+ #if defined(DEBUG)
+ #define DEBUG_TRACE(...) fprintf(stderr, "***Mongoose debug*** " __VA_ARGS__)
+@@ -1407,9 +1408,11 @@
+ 		/* IP address to bind to is specified */
+ 		sa.u.sin.sin_addr.s_addr =
+ 		    htonl((a << 24) | (b << 16) | (c << 8) | d);
++		printf("Mongoose: Binding to IP Addr:Port %s\n", str); 
+ 	} else if (sscanf(str, "%d", &port) == 1) {
+ 		/* Only port number is specified. Bind to all addresses */
+ 		sa.u.sin.sin_addr.s_addr = htonl(INADDR_ANY);
++		printf("Mongoose: Binding to Port %s on all interfaces\n", str); 
+ 	} else {
+ 		return (INVALID_SOCKET);
+ 	}
+@@ -3604,7 +3607,7 @@
+ }
+ 
+ static const struct mg_option known_options[] = {
+-	{"root", "\tWeb root directory", NULL},
++	{"root", "\tWeb root directory", MONGOOSE_WEB_ROOT},
+ 	{"index_files",	"Index files", "index.html,index.htm,index.cgi"},
+ #if !defined(NO_SSL)
+ 	{"ssl_cert", "SSL certificate file", NULL},
+@@ -4113,3 +4116,9 @@
+ 
+ 	return (ctx);
+ }
++
++int vl_mg_getSocket(const struct mg_connection *conn)
++{
++	        return conn->client.sock;
++}
++
+diff -aNurd --binary mongoose/mongoose.h mongoose_generic/mongoose.h
+--- mongoose/mongoose.h	2009-05-05 14:34:32.000000000 +0000
++++ mongoose_generic/mongoose.h	2014-04-24 10:27:27.000000000 +0000
+@@ -133,6 +133,9 @@
+ const char *mg_version(void);
+ void mg_md5(char *buf, ...);
+ 
++/*****Helper function for getting mg_connection's socked ID**************/
++int vl_mg_getSocket(const struct mg_connection *conn);
++
+ #ifdef __cplusplus
+ }
+ #endif /* __cplusplus */
+diff -aNurd --binary mongoose/RDK_README mongoose_generic/RDK_README
+--- mongoose/RDK_README	1970-01-01 00:00:00.000000000 +0000
++++ mongoose_generic/RDK_README	2014-04-24 10:27:27.000000000 +0000
+@@ -0,0 +1,23 @@
++
++ Copyright (c) 2004-2009 Sergey Lyubka
++
++ Permission is hereby granted, free of charge, to any person obtaining a copy
++ of this software and associated documentation files (the "Software"), to deal
++ in the Software without restriction, including without limitation the rights
++ to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
++ copies of the Software, and to permit persons to whom the Software is
++ furnished to do so, subject to the following conditions:
++
++ The above copyright notice and this permission notice shall be included in
++ all copies or substantial portions of the Software.
++
++ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
++ IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
++ FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
++ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
++ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
++ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
++  THE SOFTWARE.
++ 
++  $Id: mongoose.c 327 2009-05-05 14:11:04Z valenok $
++ 

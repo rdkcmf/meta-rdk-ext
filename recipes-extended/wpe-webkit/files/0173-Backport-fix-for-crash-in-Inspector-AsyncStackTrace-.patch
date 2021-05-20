@@ -1,0 +1,54 @@
+From 7e99e84439cd3b4869b866f0067de0af84b17b47 Mon Sep 17 00:00:00 2001
+From: Ievgen Mutavchi <Ievgen_Mutavchi@comcast.com>
+License: GPLV2
+Date: Fri, 22 Nov 2019 08:29:34 -0500
+From: ebecd56aaa2727b6305d39c69951fbdc8740f800 Oct 31, 2018 11:56 PM
+Source: COMCAST
+Upstream-Status: None
+Signed-off-by: Eugene Mutavchi <Ievgen_Mutavchi@comcast.com>
+Subject: [PATCH] Backport fix for crash in
+ Inspector::AsyncStackTrace::truncate
+
+Web Inspector: Crashes seen under
+Inspector::ScriptCallFrame::~ScriptCallFrame
+ https://bugs.webkit.org/show_bug.cgi?id=180373
+ <rdar://problem/33894170>
+
+* inspector/AsyncStackTrace.cpp:
+(Inspector::AsyncStackTrace::truncate):
+The `lastUnlockedAncestor->remove()` may release the only reference to it's
+parent which we intend to use later but don't hold a RefPtr to. Keep the
+parent alive explicitly by protecting it.
+---
+ Source/JavaScriptCore/inspector/AsyncStackTrace.cpp | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/Source/JavaScriptCore/inspector/AsyncStackTrace.cpp b/Source/JavaScriptCore/inspector/AsyncStackTrace.cpp
+index 9e68b49..f41a4b5 100644
+--- a/Source/JavaScriptCore/inspector/AsyncStackTrace.cpp
++++ b/Source/JavaScriptCore/inspector/AsyncStackTrace.cpp
+@@ -166,7 +166,7 @@ void AsyncStackTrace::truncate(size_t maxDepth)
+ 
+     // The subtree being truncated must be removed from it's parent before
+     // updating its parent pointer chain.
+-    auto* sourceNode = lastUnlockedAncestor->m_parent.get();
++    RefPtr<AsyncStackTrace> sourceNode = lastUnlockedAncestor->m_parent;
+     lastUnlockedAncestor->remove();
+ 
+     while (sourceNode) {
+@@ -174,10 +174,10 @@ void AsyncStackTrace::truncate(size_t maxDepth)
+         previousNode->m_parent->m_childCount = 1;
+         previousNode = previousNode->m_parent.get();
+ 
+-        if (sourceNode == newStackTraceRoot)
++        if (sourceNode.get() == newStackTraceRoot)
+             break;
+ 
+-        sourceNode = sourceNode->m_parent.get();
++        sourceNode = sourceNode->m_parent;
+     }
+ 
+     previousNode->m_truncated = true;
+-- 
+2.7.4
+

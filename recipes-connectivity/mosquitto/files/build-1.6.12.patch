@@ -1,0 +1,35 @@
+db277abcfb6e4ada343b0cb1931a Mon Sep 17 00:00:00 2001
+From: Micah Koch <micah_koch@comcast.com>
+Date: Wed, 21 Oct 2020 14:50:28 -0500
+Subject: [PATCH] build
+
+Signed-off-by: Micah Koch <micah_koch@comcast.com>
+---
+ config.mk | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/config.mk b/config.mk
+index 80e02f9..ed6bbe6 100644
+--- a/config.mk
++++ b/config.mk
+@@ -80,7 +80,7 @@ WITH_SOCKS:=yes
+ WITH_STRIP:=no
+ 
+ # Build static libraries
+-WITH_STATIC_LIBRARIES:=no
++WITH_STATIC_LIBRARIES:=yes
+ 
+ # Use this variable to add extra library dependencies when building the clients
+ # with the static libmosquitto library. This may be required on some systems
+@@ -293,7 +293,7 @@ ifeq ($(WITH_WEBSOCKETS),static)
+ endif
+ 
+ INSTALL?=install
+-prefix?=/usr/local
++prefix?=/usr
+ incdir?=${prefix}/include
+ libdir?=${prefix}/lib${LIB_SUFFIX}
+ localedir?=${prefix}/share/locale
+-- 
+2.7.4
+

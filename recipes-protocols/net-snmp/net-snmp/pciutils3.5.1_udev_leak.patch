@@ -1,0 +1,29 @@
+#######################################################################
+Date: Nov 25, 2020 16:39 PM
+From: net-snmp source
+Subject: pciutils 3.5.1 version supports querying HWDB to get interface
+         details which uses libudev. Adding flag to exclude HWDB lookup
+         in pci_lookup_name() call to avoid memory leak
+Source: None
+License: "BSD & MIT"
+Upstream-Status: Pending
+Signed-off-by: Uma Kumar <Uma_Kumar@cable.comcast.com>
+##########################################
+Index: net-snmp-5.8/agent/mibgroup/if-mib/data_access/interface_linux.c
+===================================================================
+--- net-snmp-5.8.orig/agent/mibgroup/if-mib/data_access/interface_linux.c
++++ net-snmp-5.8/agent/mibgroup/if-mib/data_access/interface_linux.c
+@@ -368,8 +368,12 @@ _arch_interface_description_get(netsnmp_
+     if (!sysfs_get_id(buf, &device_id))
+ 	return;
+ 
++    /* In latest pciutils, new option added to lookup dev info from HWDB which calls
++     * libudev and resulting to memory leak. This cannot be considered as memory leak
++     * as it is only hash dara and can ve freed once the process stops. Hence, adding
++     * flag to not lookup in HWDB */
+     descr = pci_lookup_name(pci_access, buf, sizeof(buf),
+-			    PCI_LOOKUP_VENDOR | PCI_LOOKUP_DEVICE,
++			    PCI_LOOKUP_VENDOR | PCI_LOOKUP_DEVICE | PCI_LOOKUP_NO_HWDB,
+ 			    vendor_id, device_id, 0, 0);
+     if (descr) {
+ 	free(entry->descr);

@@ -1,0 +1,30 @@
+Date: Jul 22 00:03:21 2017
+
+From: 7ebb166f61cd19e0ff0b764c2312752ee32e2146 Aug 01 21:21:20 2017
+
+Subject: [PATCH] CISCOXB3-2265 : SNMP RDKB mibs not accessible.
+
+	SNMP RDKB mibs not accessible.
+
+Source: COMCAST
+
+License: BSD-2-Clause
+
+Upstream-Status: Pending
+
+Signed-off-by: Santosh Nayak <Santosh_Nayak03@infosys.com>
+---
+
+Index: net-snmp-5.7.2/snmplib/snmp_alarm.c
+===================================================================
+--- net-snmp-5.7.2.orig/snmplib/snmp_alarm.c
++++ net-snmp-5.7.2/snmplib/snmp_alarm.c
+@@ -215,7 +215,7 @@ run_alarms(void)
+         clientreg = a->clientreg;
+         a->flags |= SA_FIRED;
+         DEBUGMSGTL(("snmp_alarm", "run alarm %d\n", clientreg));
+-        /* Jun-10-2010: COMMENTED: Due to frequent crash triggered// (*(a->thecallback)) (clientreg, a->clientarg);*/
++        (*(a->thecallback)) (clientreg, a->clientarg);
+         DEBUGMSGTL(("snmp_alarm", "alarm %d completed\n", clientreg));
+ 
+         a = sa_find_specific(clientreg);

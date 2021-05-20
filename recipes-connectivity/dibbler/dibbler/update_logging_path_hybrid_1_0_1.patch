@@ -1,0 +1,64 @@
+Date: Jun 05 19:03:24 2017
+
+From: e827d42ef62a3f0533fbd082d9674038b6de6f03 Jun 08 17:07:20 2017
+
+Subject: [PATCH] DELIA-15649 : DELIA-19972, DELIA-21113 : Upgrading dibbler to latest version
+
+        1] Adding guards to fix random crashes from rack
+                Buffer clean up is taken from latest upstream changes -
+                https://github.com/tomaszmrugalski/dibbler/commit/032a43a23ad830eda65a16e6661094a151434b34
+        2] Added additional debug logs to degug the crash further if reproduced
+
+Source: GITHUB
+
+License: GPL-2.0-or-later
+
+Upstream-Status: Submitted [ https://github.com/tomaszmrugalski/dibbler/commit/032a43a23ad830eda65a16e6661094a151434b34 ]
+
+Signed-off-by: skv01 <Shibu_KV@cable.comcast.com>
+---
+
+diff --git a/Misc/Portable.h b/Misc/Portable.h
+index 854b725..f8159e0 100644
+--- a/Misc/Portable.h
++++ b/Misc/Portable.h
+@@ -133,7 +133,7 @@ struct link_state_notify_t
+ #define DEFAULT_CLNTCONF_FILE "client.conf"
+ #define SRVCONF_FILE          "server.conf"
+ #define RELCONF_FILE          "relay.conf"
+-#define DEFAULT_CLNTLOG_FILE  "dibbler-client.log"
++#define DEFAULT_CLNTLOG_FILE  "dibbler.log"
+ #define SRVLOG_FILE           "dibbler-server.log"
+ #define RELLOG_FILE           "dibbler-relay.log"
+ #define CLNT_AAASPI_FILE      "AAA-SPI"
+@@ -149,7 +149,7 @@ struct link_state_notify_t
+ #define DEFAULT_WORKDIR       "/tmp/dibbler"
+ #define DEFAULT_CLNTCONF_FILE "/etc/dibbler/client.conf"
+ #define DEFAULT_CLNTPID_FILE  "/tmp/dibbler/client.pid"
+-#define DEFAULT_CLNTLOG_FILE  "/var/log/dibbler/dibbler-client.log"
++#define DEFAULT_CLNTLOG_FILE  "/opt/logs/dibbler-client.log"
+ 
+ #define DEFAULT_SCRIPT     ""
+ #define SRVCONF_FILE       "/etc/dibbler/server.conf"
+diff --git a/Misc/Portable.h.in b/Misc/Portable.h.in
+index 0397afc..8cec525 100644
+--- a/Misc/Portable.h.in
++++ b/Misc/Portable.h.in
+@@ -133,7 +133,7 @@ struct link_state_notify_t
+ #define DEFAULT_CLNTCONF_FILE "client.conf"
+ #define SRVCONF_FILE          "server.conf"
+ #define RELCONF_FILE          "relay.conf"
+-#define DEFAULT_CLNTLOG_FILE  "dibbler-client.log"
++#define DEFAULT_CLNTLOG_FILE  "dibbler.log"
+ #define SRVLOG_FILE           "dibbler-server.log"
+ #define RELLOG_FILE           "dibbler-relay.log"
+ #define CLNT_AAASPI_FILE      "AAA-SPI"
+@@ -149,7 +149,7 @@ struct link_state_notify_t
+ #define DEFAULT_WORKDIR       "/tmp/dibbler"
+ #define DEFAULT_CLNTCONF_FILE "/etc/dibbler/client.conf"
+ #define DEFAULT_CLNTPID_FILE  "/tmp/dibbler/client.pid"
+-#define DEFAULT_CLNTLOG_FILE  "/var/log/dibbler/dibbler-client.log"
++#define DEFAULT_CLNTLOG_FILE  "/opt/logs/dibbler.log"
+ 
+ #define DEFAULT_SCRIPT     ""
+ #define SRVCONF_FILE       "/etc/dibbler/server.conf"

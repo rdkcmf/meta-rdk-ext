@@ -1,0 +1,37 @@
+From 19bef27baebd63228e1c4267eda8e572dc88293d Mon Sep 17 00:00:00 2001
+From: Gurdal Oruklu <Gurdal_Oruklu@comcast.com>
+Date: Thu, 25 Jan 2018 18:25:44 -0800
+Subject: [PATCH] increase default audio video buffer sizes in the case of SVP
+
+---
+ Source/WebCore/Modules/mediasource/SourceBuffer.cpp | 8 +++++++-
+ 1 file changed, 7 insertions(+), 1 deletion(-)
+
+diff --git a/Source/WebCore/Modules/mediasource/SourceBuffer.cpp b/Source/WebCore/Modules/mediasource/SourceBuffer.cpp
+index 276bc01c8c7..9d7bfe64bac 100644
+--- a/Source/WebCore/Modules/mediasource/SourceBuffer.cpp
++++ b/Source/WebCore/Modules/mediasource/SourceBuffer.cpp
+@@ -1098,13 +1098,19 @@ static void maximumBufferSizeDefaults(size_t& maxBufferSizeVideo, size_t& maxBuf
+                 maxBufferSizeText = size * units;
+         }
+     }
+-
++#if USE(SVP)
++    if (maxBufferSizeAudio == 0)
++        maxBufferSizeAudio = 6 * 1024 * 1024;
++    if (maxBufferSizeVideo == 0)
++        maxBufferSizeVideo = 45 * 1024 * 1024;
++#else
+     if (!maxBufferSizeAudio)
+         maxBufferSizeAudio = 2 * 1024 * 1024;
+     if (!maxBufferSizeVideo)
+         maxBufferSizeVideo = 15 * 1024 * 1024;
+     if (!maxBufferSizeText)
+         maxBufferSizeText = 1 * 1024 * 1024;
++#endif
+ }
+ 
+ size_t SourceBuffer::maximumBufferSize() const
+-- 
+2.15.1
+

@@ -1,0 +1,42 @@
+Date: Jan 26 22:41:47 2018
+
+From: e818107baa6cf896841beb7aec48ff7ed5ed99ea Feb 22 22:26:43 2018
+
+Subject: [PATCH] RDKB-15604, XF3-2909 : Fix stable2 'dnsmasq block proxy dns requests'
+
+	Incase of some devices, the local host DNS requests
+        are blocked. This is due to syslog overriding the
+        value of 'errno' in case of syslog failure is some
+        devices. This is a fix for that in stable2 branch.
+
+Source: COMCAST
+
+License: GPL-2.0-or-later
+
+Upstream-Status: Pending
+
+Signed-off-by: Murugan Viswanathan <murugan.viswanathan2@cognizant.com>
+---
+
+Index: dnsmasq-2.76/src/forward.c
+===================================================================
+--- dnsmasq-2.76.orig/src/forward.c
++++ dnsmasq-2.76/src/forward.c
+@@ -570,7 +570,7 @@ static int forward_query(int udpfd, unio
+ 		  {
+ 			  char strprn[64] = {0}; memset(strprn, 0, 64);
+ 			  inet_ntop(AF_INET, &start->addr.in.sin_addr, strprn, 64);
+-			  my_syslog(LOG_WARNING, _("#### XDNS - original dns before modification is IPv4 addr: %s"), strprn);
++                          my_syslog(LOG_WARNING, _("#### XDNS - original dns before modification is IPv4 addr: %s"), strprn);
+ 		  }
+ 		  else if(start->addr.sa.sa_family == AF_INET6)
+ 		  {
+@@ -627,8 +627,6 @@ static int forward_query(int udpfd, unio
+  	    	  continue;
+ 	      }
+ 	    
+-		  my_syslog(LOG_WARNING, _("#### XDNS : sendto() errno: %d [0x%x]"), errno, errno);
+-
+ 		  if (errno == 0) //succeeded
+ 		{
+ 		  /* Keep info in case we want to re-send this packet */

@@ -1,0 +1,51 @@
+
+Date: Nov 10 13:10:24 2016
+
+From: a4f48fb07ea44bba99b96c22155137ee9a310385 Nov 22 16:46:35 2016
+
+Subject: [PATCH] RDK-16690: Adding verbose output.
+
+        This is to debug the connection when needed.
+
+Source: COMCAST
+
+Upstream-Status: Pending
+
+Signed-off-by: Balaji Punnuru <balaji_punnuru@cable.comcast.com>
+
+Index: dropbear-2019.78/options.h
+===================================================================
+--- dropbear-2019.78.orig/options.h
++++ dropbear-2019.78/options.h
+@@ -1,5 +1,6 @@
+ #ifndef DROPBEAR_OPTIONS_H
+ #define DROPBEAR_OPTIONS_H
++#define DEBUG_TRACE 1
+
+ /*
+             > > > Don't edit this file any more! < < <
+Index: dropbear-2019.78/cli-session.c
+===================================================================
+--- dropbear-2019.78.orig/cli-session.c
++++ dropbear-2019.78/cli-session.c
+@@ -182,6 +182,7 @@ static void recv_msg_service_accept(void
+  * service, userauth and channel requests */
+ static void cli_sessionloop() {
+ 
++	FILE *pidfile = NULL;
+ 	TRACE2(("enter cli_sessionloop"))
+ 
+ 	if (ses.lastpacket == 0) {
+@@ -265,6 +266,12 @@ static void cli_sessionloop() {
+ 					dropbear_exit("Backgrounding failed: %d %s", 
+ 							errno, strerror(errno));
+ 				}
++                              
++                                pidfile = fopen("/var/tmp/rssh.pid", "w");
++                                if (pidfile) {
++                                   fprintf(pidfile, "%d\n", getpid());
++                                   fclose(pidfile);
++                                }
+ 			}
+ 			
+ #ifdef ENABLE_CLI_NETCAT

@@ -1,0 +1,51 @@
+lxc: linux Container library
+
+Authors:
+Daniel Lezcano <daniel.lezcano@free.fr>
+
+This library is free software; you can redistribute it and/or
+modify it under the terms of the GNU Lesser General Public
+License as published by the Free Software Foundation; either
+version 2.1 of the License, or (at your option) any later version.
+
+This library is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+Lesser General Public License for more details.
+
+ou should have received a copy of the GNU Lesser General Public
+License along with this library; if not, write to the Free Software
+Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
+
+Date: Jan 25 14:17:41 2018
+
+From: 6e44910fe12976c64b0df445d17213a81788c09a Feb 20 05:38:47 2018
+
+Subject: [PATCH] RDK-20793: 'readdir_r' is deprecated
+
+        replaced readdir_r with readdir in source code.
+        Since readdir_r is depricated in gcc6.x. Refer to link
+        https://womble.decadent.org.uk/readdir_r-advisory.html
+        lxc_%.bbappend is divided into version specific bbappend file.
+
+Source: COMCAST
+
+Upstream-Status: Pending
+
+Signed-off-by: bchaitanya <Billa_Chaithanya@comcast.com>
+---
+
+Index: lxc-1.1.2/src/lxc/Makefile.am
+===================================================================
+--- lxc-1.1.2.orig/src/lxc/Makefile.am
++++ lxc-1.1.2/src/lxc/Makefile.am
+@@ -263,7 +263,8 @@ install-exec-hook:
+ 	chmod u+s $(DESTDIR)$(libexecdir)/lxc/lxc-user-nic
+ 
+ install-data-local:
+-	install -c -m 755 lxc-restore-net $(DESTDIR)$(datadir)/lxc
++	mkdir -p $(DESTDIR)$(datadir)/lxc
++	install -c -m 755 $(srcdir)/lxc-restore-net $(DESTDIR)$(datadir)/lxc
+ 
+ uninstall-local:
+ 	$(RM) $(DESTDIR)$(libdir)/liblxc.so*

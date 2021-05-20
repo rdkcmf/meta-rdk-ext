@@ -1,0 +1,34 @@
+Date: Jun 27 11:48:49 2018
+
+From: f2c4cf4daee146075686bfebf4897bd6d9ba48fd Jun 27 11:48:49 2018
+
+Subject: [PATCH] TCXB6-4211: If timestamp diff is very large, don't sleep
+
+	When ntpd syncs the date/time, igmpproxy may sleep very long because of the diff in timestamps.
+	Because of this, igmpproxy will not process multicast packets causing queue full messages and EP resets.
+
+Source: COMCAST
+
+License: GPL-2.0-or-later
+
+Upstream-Status: Pending
+
+Signed-off-by: rmaddali <rajesh.maddali@broadcom.com>
+---
+
+diff --git a/src/igmpproxy.c b/src/igmpproxy.c
+index fba83d7..1e45834 100644
+--- a/src/igmpproxy.c
++++ b/src/igmpproxy.c
+@@ -344,6 +344,11 @@ void igmpProxyRun() {
+             }
+             lasttime = curtime;
+             if (secs == 0 || difftime.tv_sec > 0)
++                /* TCXB6-4211: When there is a date/time change, the diff can be very large. To avoid sleeping for long time, set difftime to 0 */
++                if (difftime.tv_sec > 1000) {
++			fprintf(stderr, "igmpProxyRun: difftime is > 1000 secs, resetting to 0\n");
++			difftime.tv_sec = 0;
++		}
+                 age_callout_queue(difftime.tv_sec);
+             secs = -1;
+         } while (difftime.tv_sec > 0);

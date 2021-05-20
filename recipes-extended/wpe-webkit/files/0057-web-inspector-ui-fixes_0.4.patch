@@ -1,0 +1,47 @@
+Date: Apr 17, 2018 10:38 PM 
+From: ba72fc3ad5b0208f36f1ba7c0c53d8b371e83762 Apr 17, 2018 10:38 PM
+Subject: [PATCH] make web inspector usable again
+
+	Debug web apps
+
+Source: COMCAST
+License: BSD-2-Clause & BSD-3-Clause & LGPL-2.0 & LGPL-2.1
+Upstream-Status: Pending
+Signed-off-by: Eugene Mutavchi <Ievgen_Mutavchi@comcast.com> 
+---
+Index: git/Source/WebKit/UIProcess/wpe/WebProcessPoolWPE.cpp
+===================================================================
+--- git.orig/Source/WebKit/UIProcess/wpe/WebProcessPoolWPE.cpp
++++ git/Source/WebKit/UIProcess/wpe/WebProcessPoolWPE.cpp
+@@ -83,14 +83,13 @@ static void initializeLegacyInspectorSer
+         String bindAddress = "127.0.0.1";
+         unsigned short port = 2999;
+ 
+-        Vector<String> result;
+-        serverAddress.split(':', result);
++        size_t ColonIndex = serverAddress.reverseFind(':');
+ 
+-        if (result.size() == 2) {
+-            bindAddress = result[0];
++        if (ColonIndex != notFound) {
++            bindAddress = serverAddress.substring(0,ColonIndex);
+             bool ok = false;
+-            port = result[1].toInt(&ok);
+-            if (!ok) {
++            port = (serverAddress.substring(ColonIndex+1)).toInt(&ok);
++	    if (!ok) {
+                 port = 2999;
+                 WTFLogAlways("Couldn't parse the port. Use 2999 instead.");
+             }
+@@ -107,9 +106,8 @@ void WebProcessPool::platformInitialize(
+ {
+ #if ENABLE(REMOTE_INSPECTOR)
+     if (const char* address = g_getenv("WEBKIT_INSPECTOR_SERVER")) {
+-        if (initializeRemoteInspectorServer(address))
+-            return;
+-        g_unsetenv("WEBKIT_INSPECTOR_SERVER");
++        if (!initializeRemoteInspectorServer(address))
++            g_unsetenv("WEBKIT_INSPECTOR_SERVER");
+     }
+ #endif
+ #if ENABLE(INSPECTOR_SERVER)

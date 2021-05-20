@@ -1,0 +1,45 @@
+Date: Nov 9, 2018 1:13 AM
+From: 78c981fbb2ee05db95742ce81e093403175a09cb Nov 9, 2018 1:13 AM
+Subject: [PATCH] Fix touchstone in morty
+	The rdk.conf in morty prefers iksemel 1.5, which needs to be patched for touchstone and zilker to build correctly.
+Source: GITHUB
+License: Apache-2.0
+Upstream-Status: Downloaded [ https://github.com/rancher/buildroot/blob/master/package/mbedtls/0001-bn_mul.h-fix-x86-PIC-inline-ASM-compilation-with-GCC.patch ]
+Signed-off-by: Peter Korsgaard <peter@korsgaard.com>  
+---
+diff --git a/include/mbedtls/bn_mul.h b/include/mbedtls/bn_mul.h
+index 0af694c7c..127ebd911 100644
+--- a/include/mbedtls/bn_mul.h
++++ b/include/mbedtls/bn_mul.h
+@@ -50,13 +50,29 @@
+ #if defined(__GNUC__) && \
+     ( !defined(__ARMCC_VERSION) || __ARMCC_VERSION >= 6000000 )
+
++/*
++ * GCC < 5.0 treated the x86 ebx (which is used for the GOT) as a
++ * fixed reserved register when building as PIC, leading to errors
++ * like: bn_mul.h:46:13: error: PIC register clobbered by ‘ebx’ in ‘asm’
++ *
++ * This is fixed by an improved register allocator in GCC 5+. From the
++ * release notes:
++ * Register allocation improvements: Reuse of the PIC hard register,
++ * instead of using a fixed register, was implemented on x86/x86-64
++ * targets. This improves generated PIC code performance as more hard
++ * registers can be used.
++ */
++#if defined(__GNUC__) && __GNUC__ < 5 && defined(__PIC__)
++#define MULADDC_CANNOT_USE_EBX
++#endif
++
+ /*
+  * Disable use of the i386 assembly code below if option -O0, to disable all
+  * compiler optimisations, is passed, detected with __OPTIMIZE__
+  * This is done as the number of registers used in the assembly code doesn't
+  * work with the -O0 option.
+  */
+-#if defined(__i386__) && defined(__OPTIMIZE__)
++#if defined(__i386__) && defined(__OPTIMIZE__) && !defined(MULADDC_CANNOT_USE_EBX)
+
+ #define MULADDC_INIT                        \
+     asm(                                    \
+

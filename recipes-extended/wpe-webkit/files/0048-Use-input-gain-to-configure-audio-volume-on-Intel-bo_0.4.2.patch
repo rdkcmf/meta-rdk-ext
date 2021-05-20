@@ -1,0 +1,94 @@
+From f085cca6f58da748b3c7c9cd7d8300b99d41e161 Mon Sep 17 00:00:00 2001
+From: Gurdal Oruklu <gurdal_oruklu@comcast.com>
+Date: Fri, 26 Apr 2019 18:57:39 +0000
+Subject: [PATCH] Use 'input-gain' to configure audio volume on Intel box
+
+Signed-off-by: Gurdal Oruklu <gurdal_oruklu@comcast.com>
+---
+ .../gstreamer/MediaPlayerPrivateGStreamer.cpp      |  8 ++++++-
+ .../gstreamer/MediaPlayerPrivateGStreamerBase.cpp  | 25 ++++++++++++++++++++++
+ 2 files changed, 32 insertions(+), 1 deletion(-)
+
+diff --git a/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp b/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp
+index abecb5c8b5b..00846fdb6f4 100644
+--- a/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp
++++ b/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp
+@@ -2373,6 +2373,12 @@ void MediaPlayerPrivateGStreamer::createGSTPlayBin()
+     // gst_element_factory_make() returns a floating reference so
+     // we should not adopt.
+     setPipeline(gst_element_factory_make("playbin", "play"));
++
++#if PLATFORM(INTEL_CE)
++    GRefPtr<GstElement> audioSink = gst_element_factory_make("ismd_audio_sink", 0);
++    g_object_set(m_pipeline.get(), "audio-sink", audioSink.get(), nullptr);
++#endif
++
+     setStreamVolumeElement(GST_STREAM_VOLUME(m_pipeline.get()));
+ 
+ #if ENABLE(TEXT_SINK)
+@@ -2495,7 +2501,7 @@ void MediaPlayerPrivateGStreamer::createGSTPlayBin()
+ 
+ #endif
+ 
+-#if !USE(WESTEROS_SINK) && !USE(FUSION_SINK) && !PLATFORM(BCM_NEXUS)
++#if !USE(WESTEROS_SINK) && !USE(FUSION_SINK) && !PLATFORM(BCM_NEXUS) && !PLATFORM(INTEL_CE)
+ 
+     g_object_set(m_pipeline.get(), "audio-sink", createAudioSink(), nullptr);
+ #endif
+diff --git a/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamerBase.cpp b/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamerBase.cpp
+index ce585728f72..09c3ead4955 100644
+--- a/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamerBase.cpp
++++ b/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamerBase.cpp
+@@ -555,8 +555,19 @@ void MediaPlayerPrivateGStreamerBase::setVolume(float volume)
+     if (!m_volumeElement)
+         return;
+ 
++#if PLATFORM(INTEL_CE)
++    GRefPtr<GstElement> audioSink;
++    g_object_get(m_pipeline.get(), "audio-sink", &audioSink, nullptr);
++    if (!audioSink)
++        return;
++
++    gdouble gain = gst_stream_volume_convert_volume(volumeFormat, GST_STREAM_VOLUME_FORMAT_DB, volume);
++    GST_DEBUG("Setting gain: %f (volume=%f)", gain, volume);
++    g_object_set(audioSink.get(), "input-gain", gain, NULL);
++#else
+     GST_DEBUG("Setting volume: %f", volume);
+     gst_stream_volume_set_volume(m_volumeElement.get(), volumeFormat, static_cast<double>(volume));
++#endif
+ }
+ 
+ float MediaPlayerPrivateGStreamerBase::volume() const
+@@ -564,7 +575,17 @@ float MediaPlayerPrivateGStreamerBase::volume() const
+     if (!m_volumeElement)
+         return 0;
+ 
++#if PLATFORM(INTEL_CE)
++    GRefPtr<GstElement> audioSink;
++    g_object_get(m_pipeline.get(), "audio-sink", &audioSink, nullptr);
++    if (!audioSink)
++        return 0.0;
++    gdouble gain;
++    g_object_get(audioSink.get(), "input-gain", &gain, NULL);
++    return gst_stream_volume_convert_volume(GST_STREAM_VOLUME_FORMAT_DB, volumeFormat, gain);
++#else
+     return gst_stream_volume_get_volume(m_volumeElement.get(), volumeFormat);
++#endif
+ }
+ 
+ 
+@@ -573,7 +594,11 @@ void MediaPlayerPrivateGStreamerBase::notifyPlayerOfVolumeChange()
+     if (!m_player || !m_volumeElement)
+         return;
+     double volume;
++    #if PLATFORM(WPE)
++    volume = this->volume();
++    #else
+     volume = gst_stream_volume_get_volume(m_volumeElement.get(), volumeFormat);
++    #endif
+     // get_volume() can return values superior to 1.0 if the user
+     // applies software user gain via third party application (GNOME
+     // volume control for instance).
+-- 
+2.16.2
+

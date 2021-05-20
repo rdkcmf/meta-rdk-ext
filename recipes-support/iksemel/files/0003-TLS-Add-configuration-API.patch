@@ -1,0 +1,536 @@
+From 661a0d8dad6607b940bd995eac782ee05d177340 Mon Sep 17 00:00:00 2001
+From: Jesse Crews <jesse_crews@comcast.com>
+Date: Fri, 7 Feb 2020 15:09:21 -0600
+Subject: [PATCH 3/3] TLS: Add configuration API
+
+ * Add public functions to set the root CA bundle and server verfification
+   mode
+ * Add TLS configuration support to mbedTLS driver
+ * Add basic CMake for development. It does not yet fully replicate the
+   original Automake build.
+
+Signed-off-by: Jesse Crews <jesse_crews@comcast.com>
+Change-Id: I89fc9eee91ac46cb0ec99f20d1a6a2c3455a8c6a
+---
+ .gitignore         |  3 ++
+ CMakeLists.txt     | 55 ++++++++++++++++++++++++++++++++++
+ doc/iksemel.texi   | 31 +++++++++++++++++--
+ include/finetune.h |  5 ----
+ include/iksemel.h  | 48 +++++++++++++++++++++++++++++-
+ src/base64.c       |  2 +-
+ src/ikstls.h       | 26 ++++++++++++++++
+ src/stream.c       | 74 +++++++++++++++++++++++++++++++++++++++++++++-
+ src/tls-mbedtls.c  | 63 +++++++++++++++++++++++++++++----------
+ 9 files changed, 282 insertions(+), 25 deletions(-)
+ create mode 100644 .gitignore
+ create mode 100644 CMakeLists.txt
+ create mode 100644 src/ikstls.h
+
+diff --git a/.gitignore b/.gitignore
+new file mode 100644
+index 0000000..3954c15
+--- /dev/null
++++ b/.gitignore
+@@ -0,0 +1,3 @@
++cmake-build-debug
++.idea
++build
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+new file mode 100644
+index 0000000..bfa8d02
+--- /dev/null
++++ b/CMakeLists.txt
+@@ -0,0 +1,55 @@
++include(CheckLibraryExists)
++
++#Allow VERSION in project()
++cmake_policy(SET CMP0048 NEW)
++set(CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/cmake")
++
++# This project is semantically versioned.
++# For simplicity, the ABI version (soname) is tied to MAJOR.MINOR. When any binary incompatible changes are made,
++# MAJOR MUST be incremented.
++# Increment MAJOR when introducing API/ABI breaking changes (i.e., not compatible with previous version)
++# Increment MINOR when API/ABI is backward compatible but different (e.g., new features added)
++# Increment PATCH when API is unchanged (bug/internal fixes)
++set(MAJOR 1)
++set(MINOR 6)
++set(PATCH 0)
++set(VERSION ${MAJOR}.${MINOR}.${PATCH})
++
++project(iksemel-project VERSION ${VERSION} LANGUAGES C)
++cmake_minimum_required(VERSION 3.8)
++
++option(USE_DEFAULT_IO "Build with default I/O layer instead of POSIX IO" OFF)
++
++file(GLOB SOURCES "src/*.c")
++
++add_library(iksemel SHARED ${SOURCES})
++set_property(TARGET iksemel PROPERTY VERSION ${MAJOR}.${MINOR})
++
++check_library_exists(mbedtls mbedtls_ssl_init "" HAVE_MBEDTLS)
++
++if (HAVE_MBEDTLS)
++    message(STATUS "TLS: using mbedTLS")
++    add_definitions("-DHAVE_MBEDTLS")
++    list(APPEND iksemel_LIBS mbedtls mbedcrypto mbedx509)
++endif()
++
++add_definitions("-DSTDC_HEADERS -DHAVE_UNISTD_H -DHAVE_ERRNO_H")
++
++target_include_directories(iksemel PUBLIC include)
++target_link_libraries(iksemel ${iksemel_LIBS})
++
++set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall ${DISABLE_WARNINGS}\
++    -std=gnu99\
++    -Wno-int-to-pointer-cast\
++    -Wno-pointer-to-int-cast\
++    -Wl,--build-id=sha1")
++set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -O0")
++
++if (NOT GENERATOR_IS_MULTI_CONFIG)
++    message(STATUS "buildType: ${CMAKE_BUILD_TYPE}")
++endif()
++
++message(STATUS "extra cflags: ${CMAKE_C_FLAGS}")
++
++install(TARGETS iksemel LIBRARY DESTINATION lib)
++install(DIRECTORY include/iksemel DESTINATION include)
+diff --git a/doc/iksemel.texi b/doc/iksemel.texi
+index fd683e2..27f10fe 100644
+--- a/doc/iksemel.texi
++++ b/doc/iksemel.texi
+@@ -994,13 +994,40 @@ server.
+ @subsection Security
+ 
+ iksemel supports TLS protocol for encrypted communication and SASL
+-protocol for authentication. TLS is handled by gnutls library.
++protocol for authentication.
+ 
+ @deftypefun int iks_has_tls (void);
+-If iksemel is compiled with gnutls library, this function returns a non-zero
++If iksemel is compiled with a TLS library, this function returns a non-zero
+ value indicating you can try encrypted connection with the server.
+ @end deftypefun
+ 
++@deftypefun int iks_tls_set_verify (iksparser *@var{prs}, enum ikstls_verify @var{vfy});
++Sets the server validation method. @footnote{This function must be called prior to @code{iks_start_tls}.}
++
++@tindex vfy
++@code{vfy} can be one of:
++
++@table @code
++@item IKS_TLS_VERIFY_NONE
++Do not validate the server at all.
++
++@item IKS_TLS_VERIFY_PEER
++Validate the server cerificate without checking the CN against the hostname
++
++@item IKS_TLS_VERIFY_HOST
++Validate only the CN without checking the server certificate
++
++@item IKS_TLS_VERIFY_BOTH
++Validate both the server certificate and the CN against the hostname
++@end table
++@end deftypefun
++
++@deftypefun int iks_tls_set_ca_bundle (iksparser *@var{prs}, const char *@var{bundle});
++Set the path to a trusted CA bundle in PEM format. @footnote{This function must be called prior to @code{iks_start_tls}.}
++The certificates will be used when the @code{vfy} mode is
++set to @code{IKS_TLS_VERIFY_PEER} or @code {IKS_TLS_VERIFY_BOTH} by @code{iks_tls_set_verify}.
++@end deftypefun
++
+ @deftypefun int iks_start_tls (iksparser* @var{prs});
+ Starts a TLS handshake over already connected parser. Returns IKS_OK or
+ one of the IKS_NET_ errors. If handshake succeeds you'll get another
+diff --git a/include/finetune.h b/include/finetune.h
+index 9dfcfbc..83644b5 100644
+--- a/include/finetune.h
++++ b/include/finetune.h
+@@ -27,8 +27,3 @@
+ 
+ /* network receive buffer */
+ #define NET_IO_BUF_SIZE 4096
+-
+-/* Path to a PEM CA certificate bundle to be treated as trust anchors */
+-#ifndef TLS_ANCHOR_PATH
+-#define TLS_ANCHOR_PATH "/etc/ssl/certs/ca-certificates.crt"
+-#endif
+diff --git a/include/iksemel.h b/include/iksemel.h
+index 996b9b7..228ba55 100644
+--- a/include/iksemel.h
++++ b/include/iksemel.h
+@@ -12,6 +12,7 @@
+ extern "C" {
+ #else
+ #include <stddef.h>	/* size_t for C */
++
+ #endif
+ 
+ /*****  object stack  *****/
+@@ -180,7 +181,50 @@ extern ikstransport iks_default_transport;
+ 
+ struct ikstls_data;
+ 
+-typedef int (iksTlsHandshake)(struct ikstls_data **datap, ikstransport *trans, void *sock);
++struct ikstls_config;
++
++enum ikstls_verify
++{
++	/**
++	 * Do not validate the server at all.
++	 * @warning This is insecure and should never be used outside of
++	 * development against a local server.
++	 */
++	IKS_TLS_VERIFY_NONE = 0,
++
++	/**
++	 * Validate the server's certificate chain of trust.
++	 * The server name is NOT checked against the CN.
++	 * To enable CN validation, use IKS_TLS_VERIFY_BOTH.
++	 *
++	 * @note This is the recommended minimum setting.
++	 *
++	 * @warning The server certificate need only be issued by a trusted CA.
++	 * This will not prevent connecting to an evil server with a valid certificate.
++	 * ILS_TLS_VERIFY_BOTH is recommended to assure the CA has at least validated
++	 * the domain name is owned by a genuine actor.
++	 */
++	IKS_TLS_VERIFY_PEER,
++
++	/**
++	 * Validate only the server name against the CN.
++	 * @warning This does not check the peer certificate validity
++	 * and should only be used for testing.
++	 * Use IKS_TLS_VERITY_BOTH to check if the server also presents
++	 * a trusted certificate.
++	 */
++	IKS_TLS_VERIFY_HOST,
++
++	/**
++	 * Validate both the hostname and peer chain
++	 * @note Unless the server certificate has an IP-address SubjectAltName,
++	 * peer validation will fail for CN mismatch when connecting to a bare
++	 * IP address.
++	 */
++	IKS_TLS_VERIFY_BOTH
++};
++
++typedef int (iksTlsHandshake)(struct ikstls_data **datap, ikstransport *trans, void *sock, const struct ikstls_config *config);
+ typedef int (iksTlsSend)(struct ikstls_data *data, const char *buf, size_t size);
+ typedef int (iksTlsRecv)(struct ikstls_data *data, char *buf, size_t size, int timeout);
+ typedef void (iksTlsTerminate)(struct ikstls_data *data);
+@@ -243,6 +287,8 @@ int iks_has_tls (void);
+ int iks_is_secure (iksparser *prs);
+ int iks_start_tls (iksparser *prs);
+ int iks_start_sasl (iksparser *prs, enum ikssasltype type, char *username, char *pass);
++int iks_tls_set_verify (iksparser *prs, enum ikstls_verify vfy);
++int iks_tls_set_ca_bundle (iksparser *prs, const char *bundle);
+ 
+ /*****  jabber  *****/
+ 
+diff --git a/src/base64.c b/src/base64.c
+index 8e6f48a..2f05320 100644
+--- a/src/base64.c
++++ b/src/base64.c
+@@ -15,7 +15,7 @@ char *iks_base64_decode(const char *buf)
+ {
+ 	char *res, *save;
+ 	char val;
+-        const char *foo; 
++	const char *foo; 
+ 	const char *end;
+ 	int index;
+ 	size_t len;
+diff --git a/src/ikstls.h b/src/ikstls.h
+new file mode 100644
+index 0000000..c0f6ff6
+--- /dev/null
++++ b/src/ikstls.h
+@@ -0,0 +1,35 @@
++/*
++ * Copyright 2020 RDK Management
++ *
++ * This library is free software; you can redistribute it and/or
++ * modify it under the terms of the GNU Lesser General Public
++ * License as published by the Free Software Foundation, version 2.1
++ * of the license.
++ *
++ * This library is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++ * Lesser General Public License for more details.
++ *
++ * You should have received a copy of the GNU Lesser General Public
++ * License along with this library; if not, write to the
++ * Free Software Foundation, Inc., 51 Franklin St, Fifth Floor,
++ * Boston, MA 02110-1301, USA.
++ */
++
++#ifndef IKSEMEL_PROJECT_IKSTLS_H
++#define IKSEMEL_PROJECT_IKSTLS_H
++
++#include "iksemel.h"
++
++#define TLS_VERIFY_NONE 0
++#define TLS_VERIFY_PEER 1U << 1U
++#define TLS_VERIFY_HOST 1U << 2U
++
++struct ikstls_config {
++	int tls_verify;
++	char *ca_bundle_path;
++	const char *hostname;
++};
++
++#endif //IKSEMEL_PROJECT_IKSTLS_H
+diff --git a/src/stream.c b/src/stream.c
+index 12fc114..aaa3fe3 100644
+--- a/src/stream.c
++++ b/src/stream.c
+@@ -6,6 +6,7 @@
+ 
+ #include "common.h"
+ #include "iksemel.h"
++#include "ikstls.h"
+ 
+ #define SF_FOREIGN 1
+ #define SF_TRY_SECURE 2
+@@ -26,6 +27,7 @@ struct stream_data {
+ 	unsigned int flags;
+ 	char *auth_username;
+ 	char *auth_pass;
++	struct ikstls_config tlsconfig;
+ 	struct ikstls_data *tlsdata;
+ };
+ 
+@@ -195,7 +197,7 @@ tagHook (struct stream_data *data, char *name, char **atts, int type)
+ 			if (data->flags & SF_TRY_SECURE) {
+ 				if (strcmp (name, "proceed") == 0) {
+ 					err = iks_default_tls.handshake (&data->tlsdata,
+-						data->trans, data->sock);
++						data->trans, data->sock, &data->tlsconfig);
+ 					if (err == IKS_OK) {
+ 						data->flags &= (~SF_TRY_SECURE);
+ 						data->flags |= SF_SECURE;
+@@ -253,6 +255,14 @@ cdataHook (struct stream_data *data, char *cdata, size_t len)
+ 	return IKS_OK;
+ }
+ 
++static void
++reset_tls_config(struct ikstls_config *config)
++{
++	iks_free(config->ca_bundle_path);
++	memset (config, 0, sizeof(*config));
++	config->tls_verify = TLS_VERIFY_HOST | TLS_VERIFY_PEER;
++}
++
+ static void
+ deleteHook (struct stream_data *data)
+ {
+@@ -260,6 +270,8 @@ deleteHook (struct stream_data *data)
+ 		iks_default_tls.terminate(data->tlsdata);
+ 		data->tlsdata = NULL;
+ 	}
++
++	reset_tls_config(&data->tlsconfig);
+ 	if (data->trans) data->trans->close (data->sock);
+ 	data->trans = NULL;
+ 	if (data->current) iks_delete (data->current);
+@@ -282,6 +294,7 @@ iks_stream_new (char *name_space, void *user_data, iksStreamHook *streamHook)
+ 	data->name_space = name_space;
+ 	data->user_data = user_data;
+ 	data->streamHook = streamHook;
++	reset_tls_config(&data->tlsconfig);
+ 	return data->prs;
+ }
+ 
+@@ -509,6 +522,65 @@ iks_start_tls (iksparser *prs)
+ 	ret = iks_send_raw (prs, "<starttls xmlns='urn:ietf:params:xml:ns:xmpp-tls'/>");
+ 	if (ret) return ret;
+ 	data->flags |= SF_TRY_SECURE;
++	data->tlsconfig.hostname = data->server;
++	return IKS_OK;
++}
++
++static int
++stream_not_configurable(struct stream_data *data)
++{
++	return (data->flags & SF_TRY_SECURE) != 0 || (data->flags & SF_SECURE) != 0;
++}
++
++int
++iks_tls_set_verify (iksparser *prs, enum ikstls_verify vfy)
++{
++	struct stream_data *data = iks_user_data (prs);
++	if (stream_not_configurable (data) != 0)
++	{
++		return IKS_NET_NOTSUPP;
++	}
++
++	data->tlsconfig.tls_verify =  TLS_VERIFY_PEER | TLS_VERIFY_HOST;
++	switch (vfy)
++	{
++		case IKS_TLS_VERIFY_NONE:
++			data->tlsconfig.tls_verify = TLS_VERIFY_NONE;
++			break;
++
++		case IKS_TLS_VERIFY_PEER:
++			data->tlsconfig.tls_verify = TLS_VERIFY_PEER;
++			break;
++
++		case IKS_TLS_VERIFY_HOST:
++			data->tlsconfig.tls_verify = TLS_VERIFY_HOST;
++			break;
++
++		case IKS_TLS_VERIFY_BOTH:
++			data->tlsconfig.tls_verify = TLS_VERIFY_PEER | TLS_VERIFY_HOST;
++			break;
++
++		default:
++			return IKS_NET_NOTSUPP;
++	}
++
++	return IKS_OK;
++}
++
++int
++iks_tls_set_ca_bundle (iksparser *prs, const char *bundle)
++{
++	struct stream_data *data = iks_user_data (prs);
++	if (stream_not_configurable (data) != 0)
++	{
++		return IKS_NET_NOTSUPP;
++	}
++
++	if (bundle != NULL)
++	{
++		data->tlsconfig.ca_bundle_path = iks_strdup(bundle);
++	}
++
+ 	return IKS_OK;
+ }
+ 
+diff --git a/src/tls-mbedtls.c b/src/tls-mbedtls.c
+index a7bbbf5..38245e1 100644
+--- a/src/tls-mbedtls.c
++++ b/src/tls-mbedtls.c
+@@ -5,6 +5,7 @@
+ 
+ #include "common.h"
+ #include "iksemel.h"
++#include "ikstls.h"
+ 
+ #ifdef HAVE_MBEDTLS
+ 
+@@ -19,7 +20,7 @@
+ /* Helper macros for getting time, with preference for monotonic clock */
+ #if defined(CLOCK_MONOTONIC) || defined(CLOCK_REALTIME)
+ #define TIMER timespec
+-#define gettime(t) \
++#define gettime(t)                                                          \
+ 	if (clock_gettime(CLOCK_MONOTONIC, (t))) {								\
+ 		if (clock_gettime(CLOCK_REALTIME, (t))) {							\
+ 			fputs("Unable to get clock, timeouts will not work!", stderr);	\
+@@ -27,7 +28,7 @@
+ 			(t)->tv_nsec = 0;												\
+ 		}																	\
+ 	}
+-#define timecmp(a, b, CMP) \
++#define timecmp(a, b, CMP)              \
+ 	(((a)->tv_sec == (b)->tv_sec) ?		\
+ 	((a)->tv_nsec CMP (b)->tv_nsec) :	\
+ 	((a)->tv_sec CMP (b)->tv_sec))
+@@ -151,7 +152,7 @@ static int init_mbedtls(struct ikstls_data *data)
+ 	return IKS_OK;
+ }
+ 
+-static int tls_handshake (struct ikstls_data **datap, ikstransport *trans, void *sock)
++static int tls_handshake (struct ikstls_data **datap, ikstransport *trans, void *sock, const struct ikstls_config *config)
+ {
+ 	int tls_err = 0;
+ 	struct ikstls_data *data;
+@@ -174,26 +175,30 @@ static int tls_handshake (struct ikstls_data **datap, ikstransport *trans, void
+ 
+ 	mbedtls_ctr_drbg_seed(data->mbed.drbg, mbedtls_entropy_func, data->mbed.ent, NULL, 0);
+ 	mbedtls_ssl_set_bio(data->mbed.ssl, data->mbed.net, mbedtls_net_send, mbedtls_net_recv, NULL);
+-	int parsed = mbedtls_x509_crt_parse_file(data->mbed.anchors, TLS_ANCHOR_PATH);
+-	if (parsed < 0) {
+-		print_mbederr(parsed);
++
++	if (config->ca_bundle_path != NULL)
++	{
++		int parsed = mbedtls_x509_crt_parse_file(data->mbed.anchors, config->ca_bundle_path);
++		if (parsed < 0)
++		{
++			print_mbederr(parsed);
++		}
++		mbedtls_ssl_conf_ca_chain(data->mbed.config, data->mbed.anchors, NULL);
+ 	}
+-	mbedtls_ssl_conf_ca_chain(data->mbed.config, data->mbed.anchors, NULL);
+ 
+ 	if (mbedtls_ssl_config_defaults(
+ 			data->mbed.config,
+ 			MBEDTLS_SSL_IS_CLIENT,
+ 			MBEDTLS_SSL_TRANSPORT_STREAM,
+-			MBEDTLS_SSL_PRESET_DEFAULT
+-	)) {
++			MBEDTLS_SSL_PRESET_DEFAULT) != 0 ||
++		mbedtls_ssl_set_hostname(data->mbed.ssl, config->hostname) != 0)
++	{
+ 		free_mbedtls(data);
+ 		iks_free(data);
+ 		return IKS_NOMEM;
+ 	}
+ 
+-#ifdef TLS_NO_VFY
+-	mbedtls_ssl_conf_authmode(data->mbed.config, MBEDTLS_SSL_VERIFY_NONE);
+-#endif
++	mbedtls_ssl_conf_authmode(data->mbed.config, MBEDTLS_SSL_VERIFY_OPTIONAL);
+ 	mbedtls_ssl_conf_rng(data->mbed.config, mbedtls_ctr_drbg_random, data->mbed.drbg);
+ 	mbedtls_ssl_setup(data->mbed.ssl, data->mbed.config);
+ 
+@@ -205,10 +210,38 @@ static int tls_handshake (struct ikstls_data **datap, ikstransport *trans, void
+ 		free_mbedtls(data);
+ 		iks_free(data);
+ 		return IKS_NET_TLSFAIL;
+-	};
++	}
+ 
+-	*datap = data;
+-	return IKS_OK;
++	uint32_t verifyResult = mbedtls_ssl_get_verify_result(data->mbed.ssl);
++	int verifyError = 0;
++	if ((config->tls_verify & TLS_VERIFY_HOST) != 0)
++	{
++		if ((verifyResult & MBEDTLS_X509_BADCERT_CN_MISMATCH) != 0)
++		{
++			verifyError = verifyResult;
++		}
++	}
++	else
++	{
++		verifyResult &= ~MBEDTLS_X509_BADCERT_CN_MISMATCH;
++	}
++
++	if (verifyResult != 0 && (config->tls_verify & TLS_VERIFY_PEER) != 0)
++	{
++		verifyError = verifyResult;
++	}
++
++	if (verifyError == 0)
++	{
++		*datap = data;
++		return IKS_OK;
++	}
++	else
++	{
++		free_mbedtls(data);
++		iks_free(data);
++		return IKS_NET_TLSFAIL;
++	}
+ }
+ 
+ static int tls_send (struct ikstls_data *data, const char *buf, size_t size)
+-- 
+2.20.1
+

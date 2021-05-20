@@ -1,0 +1,169 @@
+From 06b85679e5d1d305dfef00eebc361f256319dc21 Mon Sep 17 00:00:00 2001
+From: Balaji Selvam <balaji_selvam@comcast.com>
+Source: COMCAST
+License: LICENSE-LGPL-2.1
+Upstream-Status: Pending
+Signed-off-by: Siva Sankar Raja <sivasankar_raja@comcast.com>
+Date: Tue, 12 May 2020 19:00:19 +0000
+Subject: [PATCH] Increase clear SB limits for 4K devices
+
+---
+ .../Modules/mediasource/SourceBuffer.cpp      | 23 +++++++++++++++++--
+ .../Modules/mediasource/SourceBuffer.h        |  2 ++
+ .../graphics/SourceBufferPrivateClient.h      |  1 +
+ .../graphics/gstreamer/mse/AppendPipeline.cpp |  1 +
+ .../gstreamer/mse/PlaybackPipeline.cpp        |  4 ++++
+ .../mse/SourceBufferPrivateGStreamer.cpp      |  6 +++++
+ .../mse/SourceBufferPrivateGStreamer.h        |  1 +
+ 7 files changed, 36 insertions(+), 2 deletions(-)
+
+diff --git a/Source/WebCore/Modules/mediasource/SourceBuffer.cpp b/Source/WebCore/Modules/mediasource/SourceBuffer.cpp
+index 9303b1323b6d..585c2cd579ab 100644
+--- a/Source/WebCore/Modules/mediasource/SourceBuffer.cpp
++++ b/Source/WebCore/Modules/mediasource/SourceBuffer.cpp
+@@ -564,9 +564,14 @@ ExceptionOr<void> SourceBuffer::appendBufferInternal(const unsigned char* data,
+ #if USE(GSTREAMER)
+     // 5. If the buffer full flag equals true, then throw a QuotaExceededError exception and abort these step.
+     if (m_bufferFull) {
+-        LOG(MediaSource, "SourceBuffer::appendBufferInternal(%p) -  buffer full, failing with QuotaExceededError error", this);
++        if (!m_didLogQuotaErrorOnce) {
++            LOG_ERROR("SourceBuffer::appendBufferInternal(%p, %s) -  buffer full, failing with QuotaExceededError error", this,
++                    (hasVideo() ? "video" : (hasAudio() ? "audio" : "unknown")));
++            m_didLogQuotaErrorOnce = true;
++        }
+         return Exception { QuotaExceededError };
+     }
++    m_didLogQuotaErrorOnce = false;
+ #endif
+ 
+     // NOTE: Return to 3.2 appendBuffer()
+@@ -1146,9 +1151,9 @@ static void maximumBufferSizeDefaults(size_t& maxBufferSizeVideo, size_t& maxBuf
+         maxBufferSizeAudio = 2 * 1024 * 1024;
+     if (!maxBufferSizeVideo)
+         maxBufferSizeVideo = 15 * 1024 * 1024;
++#endif
+     if (!maxBufferSizeText)
+         maxBufferSizeText = 1 * 1024 * 1024;
+-#endif
+ }
+ 
+ size_t SourceBuffer::maximumBufferSize() const
+@@ -1162,6 +1167,15 @@ size_t SourceBuffer::maximumBufferSize() const
+     if (m_source && m_source->sourceBuffers() && m_source->sourceBuffers()->length() == 1)
+         return maxBufferSizeVideo;
+ 
++#if USE(SVP)
++    if (m_useClearContentLimits) {
++        if (m_videoTracks && m_videoTracks->length() > 0)
++            return 2 * maxBufferSizeVideo;
++        if (m_audioTracks && m_audioTracks->length() > 0)
++            return 2 * maxBufferSizeAudio;
++    }
++#endif
++
+     if (m_videoTracks && m_videoTracks->length() > 0)
+         return maxBufferSizeVideo;
+     if (m_audioTracks && m_audioTracks->length() > 0)
+@@ -2404,6 +2418,11 @@ size_t SourceBuffer::memoryCost() const
+     return sizeof(SourceBuffer) + m_reportedExtraMemoryCost;
+ }
+ 
++void SourceBuffer::useEncryptedContentSizeLimits()
++{
++    m_useClearContentLimits = false;
++}
++
+ } // namespace WebCore
+ 
+ #endif
+diff --git a/Source/WebCore/Modules/mediasource/SourceBuffer.h b/Source/WebCore/Modules/mediasource/SourceBuffer.h
+index bf98b736c4d6..838d845c9ee2 100644
+--- a/Source/WebCore/Modules/mediasource/SourceBuffer.h
++++ b/Source/WebCore/Modules/mediasource/SourceBuffer.h
+@@ -142,6 +142,7 @@ private:
+     MediaTime sourceBufferPrivateFastSeekTimeForMediaTime(const MediaTime&, const MediaTime& negativeThreshold, const MediaTime& positiveThreshold) final;
+     void sourceBufferPrivateAppendComplete(AppendResult) final;
+     void sourceBufferPrivateDidReceiveRenderingError(int errorCode) final;
++    void useEncryptedContentSizeLimits() final;
+ 
+     void audioTrackEnabledChanged(AudioTrack&) final;
+     void videoTrackSelectedChanged(VideoTrack&) final;
+@@ -237,6 +239,8 @@ private:
+     bool m_active { false };
+     bool m_bufferFull { false };
+     bool m_shouldGenerateTimestamps { false };
++    bool m_useClearContentLimits { true };
++    bool m_didLogQuotaErrorOnce { false };
+ 
+     static size_t maxBufferSizeVideo;
+     static size_t maxBufferSizeAudio;
+diff --git a/Source/WebCore/platform/graphics/SourceBufferPrivateClient.h b/Source/WebCore/platform/graphics/SourceBufferPrivateClient.h
+index 661c44cbea7c..d83062f2e411 100644
+--- a/Source/WebCore/platform/graphics/SourceBufferPrivateClient.h
++++ b/Source/WebCore/platform/graphics/SourceBufferPrivateClient.h
+@@ -84,6 +84,7 @@ public:
+     virtual void sourceBufferPrivateDidReceiveRenderingError(int errorCode) = 0;
+ 
+     virtual double timestampOffset() const = 0;
++    virtual void useEncryptedContentSizeLimits() = 0;
+ };
+ 
+ }
+diff --git a/Source/WebCore/platform/graphics/gstreamer/mse/AppendPipeline.cpp b/Source/WebCore/platform/graphics/gstreamer/mse/AppendPipeline.cpp
+index a49287fbe030..58e404ec2040 100644
+--- a/Source/WebCore/platform/graphics/gstreamer/mse/AppendPipeline.cpp
++++ b/Source/WebCore/platform/graphics/gstreamer/mse/AppendPipeline.cpp
+@@ -1374,6 +1374,7 @@ void AppendPipeline::demuxerIsDoneSendingProtectionEvents(const GstStructure* st
+     for (unsigned i = 0; i < streamEncryptionEventsListSize; ++i)
+         protectionEvents.uncheckedAppend(static_cast<GstEvent*>(g_value_get_boxed(gst_value_list_get_value(streamEncryptionEventsList, i))));
+     m_playerPrivate->handleProtectionEvents(protectionEvents);
++    m_sourceBufferPrivate->useEncryptedContentSizeLimits();
+ }
+ #endif
+ 
+diff --git a/Source/WebCore/platform/graphics/gstreamer/mse/PlaybackPipeline.cpp b/Source/WebCore/platform/graphics/gstreamer/mse/PlaybackPipeline.cpp
+index 619fa07c66d9..e71348b47a4c 100644
+--- a/Source/WebCore/platform/graphics/gstreamer/mse/PlaybackPipeline.cpp
++++ b/Source/WebCore/platform/graphics/gstreamer/mse/PlaybackPipeline.cpp
+@@ -320,6 +320,10 @@ void PlaybackPipeline::flush(AtomicString trackId)
+         GST_OBJECT_UNLOCK(m_webKitMediaSrc.get());
+         return;
+     }
++    if (!stream->lastEnqueuedTime.isValid()) {
++        GST_OBJECT_UNLOCK(m_webKitMediaSrc.get());
++        return;
++    }
+ 
+     stream->lastEnqueuedTime = MediaTime::invalidTime();
+     stream->firstEnqueuedTime = MediaTime::invalidTime();
+diff --git a/Source/WebCore/platform/graphics/gstreamer/mse/SourceBufferPrivateGStreamer.cpp b/Source/WebCore/platform/graphics/gstreamer/mse/SourceBufferPrivateGStreamer.cpp
+index 0f1c4e6c93a2..ede225c8995a 100644
+--- a/Source/WebCore/platform/graphics/gstreamer/mse/SourceBufferPrivateGStreamer.cpp
++++ b/Source/WebCore/platform/graphics/gstreamer/mse/SourceBufferPrivateGStreamer.cpp
+@@ -178,5 +178,11 @@ void SourceBufferPrivateGStreamer::didReceiveAllPendingSamples()
+         m_sourceBufferPrivateClient->sourceBufferPrivateAppendComplete(SourceBufferPrivateClient::AppendSucceeded);
+ }
+ 
++void SourceBufferPrivateGStreamer::useEncryptedContentSizeLimits()
++{
++    if (m_sourceBufferPrivateClient)
++        m_sourceBufferPrivateClient->useEncryptedContentSizeLimits();
++}
++
+ }
+ #endif
+diff --git a/Source/WebCore/platform/graphics/gstreamer/mse/SourceBufferPrivateGStreamer.h b/Source/WebCore/platform/graphics/gstreamer/mse/SourceBufferPrivateGStreamer.h
+index b07c2b02718a..d3e7666e18a6 100644
+--- a/Source/WebCore/platform/graphics/gstreamer/mse/SourceBufferPrivateGStreamer.h
++++ b/Source/WebCore/platform/graphics/gstreamer/mse/SourceBufferPrivateGStreamer.h
+@@ -76,6 +76,7 @@ public:
+     void didReceiveInitializationSegment(const SourceBufferPrivateClient::InitializationSegment&);
+     void didReceiveSample(MediaSample&);
+     void didReceiveAllPendingSamples();
++    void useEncryptedContentSizeLimits();
+ 
+     ContentType type() const { return m_type; }
+ 
+-- 
+2.24.0
+

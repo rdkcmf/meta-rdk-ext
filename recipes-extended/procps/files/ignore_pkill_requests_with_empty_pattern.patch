@@ -1,0 +1,62 @@
+Copyright 2014 Thorsten Lorenz. 
+All rights reserved.
+
+Permission is hereby granted, free of charge, to any person
+obtaining a copy of this software and associated documentation
+files (the "Software"), to deal in the Software without
+restriction, including without limitation the rights to use,
+copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the
+Software is furnished to do so, subject to the following
+conditions:
+
+The above copyright notice and this permission notice shall be
+included in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
+OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
+HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+OTHER DEALINGS IN THE SOFTWARE.
+
+Date: Nov 20 17:56:57 2018
+
+From: cc115ed5b0db830f7c6bc73081825207084ff3e0 Dec 17 21:58:08 2018
+
+Subject: [PATCH] DELIA-30340 : Ignore pkill request with empty pattern
+
+	Suspecting some race condition from DS module is initiating pkill with empty pattern
+	This could be probable cause for systemwide shutdown after deepsleep wakeup.
+	
+Source: COMCAST
+
+Upstream-Status: Pending
+
+Signed-off-by: skv01 <Shibu_KV@cable.comcast.com> 
+---
+
+diff --git a/pgrep.c b/pgrep.c
+index bbb7cd1..f8c52dd 100644
+--- a/pgrep.c
++++ b/pgrep.c
+@@ -703,6 +703,17 @@ static void parse_opts (int argc, char **argv)
+ 			 progname);
+ 		usage (0);
+ 	}
++
++        if (1 == i_am_pkill) { 
++               while(isspace(*opt_pattern)) opt_pattern++ ; 
++               if ( 0 == strncmp(opt_pattern, "", 1)) {
++                   fprintf (stderr, "pkill invoked from process with pid :  %d\n",(int) getppid());
++	           fprintf (stderr, "%s: matching criteria cannot be specified as empty\n",
++			 progname);
++	           usage (0);
++               }
++
++        }
+ }
+ 
+ 

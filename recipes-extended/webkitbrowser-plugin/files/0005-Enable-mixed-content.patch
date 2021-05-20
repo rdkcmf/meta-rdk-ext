@@ -1,0 +1,28 @@
+From 5104c3a53610285864dc618b0a848efb6c64ad69 Mon Sep 17 00:00:00 2001
+From: Eugene Mutavchi <Ievgen_Mutavchi@comcast.com>
+Date: Fri, 16 Apr 2021 21:41:34 +0000
+Subject: [PATCH] Enable mixed content
+
+---
+ WebKitBrowser/WebKitImplementation.cpp | 5 +++--
+ 1 file changed, 3 insertions(+), 2 deletions(-)
+
+diff --git a/WebKitBrowser/WebKitImplementation.cpp b/WebKitBrowser/WebKitImplementation.cpp
+index 68769d00..cfd1d93a 100644
+--- a/WebKitBrowser/WebKitImplementation.cpp
++++ b/WebKitBrowser/WebKitImplementation.cpp
+@@ -2098,8 +2098,9 @@ static GSourceFuncs _handlerIntervention =
+ 
+             // Allow mixed content.
+             bool allowMixedContent = _config.Secure.Value();
+-            WKPreferencesSetAllowRunningOfInsecureContent(preferences, !allowMixedContent);
+-            WKPreferencesSetAllowDisplayOfInsecureContent(preferences, !allowMixedContent);
++	    // Temporary enabled until APV migrated to HTTPS
++            WKPreferencesSetAllowRunningOfInsecureContent(preferences, true);
++            WKPreferencesSetAllowDisplayOfInsecureContent(preferences, true);
+ 
+             // WebSecurity
+             WKPreferencesSetWebSecurityEnabled(preferences, allowMixedContent);
+-- 
+2.29.0
+

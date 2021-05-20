@@ -1,0 +1,42 @@
+From 405564d67c5bcbb187be2447eea84df24cc44a94 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Enrique=20Oca=C3=B1a=20Gonz=C3=A1lez?= <eocanha@igalia.com>
+Date: Mon, 8 Jun 2020 12:22:50 +0000
+Subject: [PATCH] Expose
+ WKPreferences{Get,Set}MediaContentTypesRequiringHardwareSupport() in the
+ public header
+
+---
+ Source/WebKit/UIProcess/API/C/WKPreferencesRef.h        | 4 ++++
+ Source/WebKit/UIProcess/API/C/WKPreferencesRefPrivate.h | 4 ----
+ 2 files changed, 4 insertions(+), 4 deletions(-)
+
+diff --git a/Source/WebKit/UIProcess/API/C/WKPreferencesRef.h b/Source/WebKit/UIProcess/API/C/WKPreferencesRef.h
+index 647a8f2dbd14b..806515c78520a 100644
+--- a/Source/WebKit/UIProcess/API/C/WKPreferencesRef.h
++++ b/Source/WebKit/UIProcess/API/C/WKPreferencesRef.h
+@@ -355,6 +355,10 @@ WK_EXPORT bool WKPreferencesGetCookieEnabled(WKPreferencesRef preferences);
+ WK_EXPORT void WKPreferencesSetWebGLEnabled(WKPreferencesRef, bool);
+ WK_EXPORT bool WKPreferencesGetWebGLEnabled(WKPreferencesRef);
+ 
++// Defaults to an empty string
++WK_EXPORT void WKPreferencesSetMediaContentTypesRequiringHardwareSupport(WKPreferencesRef, WKStringRef);
++WK_EXPORT WKStringRef WKPreferencesCopyMediaContentTypesRequiringHardwareSupport(WKPreferencesRef);
++
+ #ifdef __cplusplus
+ }
+ #endif
+diff --git a/Source/WebKit/UIProcess/API/C/WKPreferencesRefPrivate.h b/Source/WebKit/UIProcess/API/C/WKPreferencesRefPrivate.h
+index 628a60f2b144a..68f70156afca8 100644
+--- a/Source/WebKit/UIProcess/API/C/WKPreferencesRefPrivate.h
++++ b/Source/WebKit/UIProcess/API/C/WKPreferencesRefPrivate.h
+@@ -493,10 +493,6 @@ WK_EXPORT bool WKPreferencesGetInvisibleMediaAutoplayPermitted(WKPreferencesRef)
+ WK_EXPORT void WKPreferencesSetMediaUserGestureInheritsFromDocument(WKPreferencesRef, bool flag);
+ WK_EXPORT bool WKPreferencesGetMediaUserGestureInheritsFromDocument(WKPreferencesRef);
+ 
+-// Defaults to an empty string
+-WK_EXPORT void WKPreferencesSetMediaContentTypesRequiringHardwareSupport(WKPreferencesRef, WKStringRef);
+-WK_EXPORT WKStringRef WKPreferencesCopyMediaContentTypesRequiringHardwareSupport(WKPreferencesRef);
+-
+ // Defaults to false.
+ WK_EXPORT void WKPreferencesSetIsSecureContextAttributeEnabled(WKPreferencesRef, bool flag);
+ WK_EXPORT bool WKPreferencesGetIsSecureContextAttributeEnabled(WKPreferencesRef);

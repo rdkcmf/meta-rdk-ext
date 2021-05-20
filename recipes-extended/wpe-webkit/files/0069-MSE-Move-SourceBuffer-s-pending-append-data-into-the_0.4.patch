@@ -1,0 +1,207 @@
+Date: Wed, 20 Jun 2018 15:05:05 -0400
+
+From: a83fa048e814ec35d8aa3b94b286b16d5f4462a1 Mon Sep 17 00:00:00 2001
+
+Subject: [PATCH] [MSE] Move SourceBuffer's pending append data into the
+
+	platform implementations https://bugs.webkit.org/show_bug.cgi?id=178003
+
+Source: WEBKIT
+
+License: BSD-2-Clause
+
+Upstream-Status: Submitted [ https://bugs.webkit.org/show_bug.cgi?id=178003 ]
+
+Signed-off-by:  Eugene Mutavchi <Ievgen_Mutavchi@comcast.com>
+
+---
+ Source/WebCore/Modules/mediasource/SourceBuffer.cpp       |  6 +++++-
+ Source/WebCore/platform/graphics/SourceBufferPrivate.h    |  2 +-
+ .../avfoundation/objc/SourceBufferPrivateAVFObjC.h        |  2 +-
+ .../avfoundation/objc/SourceBufferPrivateAVFObjC.mm       |  7 ++++---
+ .../gstreamer/mse/MediaSourceClientGStreamerMSE.cpp       | 15 ++++++++++-----
+ .../gstreamer/mse/MediaSourceClientGStreamerMSE.h         |  2 +-
+ .../gstreamer/mse/SourceBufferPrivateGStreamer.cpp        |  4 ++--
+ .../graphics/gstreamer/mse/SourceBufferPrivateGStreamer.h |  2 +-
+ .../platform/mock/mediasource/MockSourceBufferPrivate.cpp |  4 ++--
+ .../platform/mock/mediasource/MockSourceBufferPrivate.h   |  2 +-
+ 10 files changed, 28 insertions(+), 18 deletions(-)
+
+diff --git a/Source/WebCore/Modules/mediasource/SourceBuffer.cpp b/Source/WebCore/Modules/mediasource/SourceBuffer.cpp
+index 997e4bd..6b7ee37 100644
+--- a/Source/WebCore/Modules/mediasource/SourceBuffer.cpp
++++ b/Source/WebCore/Modules/mediasource/SourceBuffer.cpp
+@@ -593,7 +593,11 @@ void SourceBuffer::appendBufferTimerFired()
+         return;
+     }
+ 
+-    m_private->append(m_pendingAppendData.data(), appendSize);
++    // Manually clear out the m_pendingAppendData Vector, in case the platform implementation
++    // rejects appending the buffer for whatever reason.
++    // FIXME: The implementation should guarantee the move from this Vector, and we should
++    // assert here to confirm that. See https://bugs.webkit.org/show_bug.cgi?id=178003.
++    m_private->append(WTFMove(m_pendingAppendData));
+     m_pendingAppendData.clear();
+ }
+ 
+diff --git a/Source/WebCore/platform/graphics/SourceBufferPrivate.h b/Source/WebCore/platform/graphics/SourceBufferPrivate.h
+index 7ac5dd2..5686e4b 100644
+--- a/Source/WebCore/platform/graphics/SourceBufferPrivate.h
++++ b/Source/WebCore/platform/graphics/SourceBufferPrivate.h
+@@ -46,7 +46,7 @@ public:
+ 
+     virtual void setClient(SourceBufferPrivateClient*) = 0;
+ 
+-    virtual void append(const unsigned char* data, unsigned length) = 0;
++    virtual void append(Vector<unsigned char>&&) = 0;
+     virtual void abort() = 0;
+     virtual void resetParserState() = 0;
+     virtual void removedFromMediaSource() = 0;
+diff --git a/Source/WebCore/platform/graphics/avfoundation/objc/SourceBufferPrivateAVFObjC.h b/Source/WebCore/platform/graphics/avfoundation/objc/SourceBufferPrivateAVFObjC.h
+index ac9dafb..9503c9b 100644
+--- a/Source/WebCore/platform/graphics/avfoundation/objc/SourceBufferPrivateAVFObjC.h
++++ b/Source/WebCore/platform/graphics/avfoundation/objc/SourceBufferPrivateAVFObjC.h
+@@ -129,7 +129,7 @@ private:
+ 
+     // SourceBufferPrivate overrides
+     void setClient(SourceBufferPrivateClient*) final;
+-    void append(const unsigned char* data, unsigned length) final;
++    void append(Vector<unsigned char>&&) final;
+     void abort() final;
+     void resetParserState() final;
+     void removedFromMediaSource() final;
+diff --git a/Source/WebCore/platform/graphics/avfoundation/objc/SourceBufferPrivateAVFObjC.mm b/Source/WebCore/platform/graphics/avfoundation/objc/SourceBufferPrivateAVFObjC.mm
+index aeb943a..213a2a4 100644
+--- a/Source/WebCore/platform/graphics/avfoundation/objc/SourceBufferPrivateAVFObjC.mm
++++ b/Source/WebCore/platform/graphics/avfoundation/objc/SourceBufferPrivateAVFObjC.mm
+@@ -668,11 +668,12 @@ static dispatch_queue_t globalDataParserQueue()
+     return globalQueue;
+ }
+ 
+-void SourceBufferPrivateAVFObjC::append(const unsigned char* data, unsigned length)
++void SourceBufferPrivateAVFObjC::append(Vector<unsigned char>&& data)
+ {
+-    LOG(MediaSource, "SourceBufferPrivateAVFObjC::append(%p) - data:%p, length:%d", this, data, length);
++    LOG(MediaSource, "SourceBufferPrivateAVFObjC::append(%p) - data:%p, length:%d", this, data.data(), data.size());
+ 
+-    RetainPtr<NSData> nsData = adoptNS([[NSData alloc] initWithBytes:data length:length]);
++    // FIXME: Avoid the data copy by wrapping around the Vector<> object.
++    RetainPtr<NSData> nsData = adoptNS([[NSData alloc] initWithBytes:data.data() length:data.size()]);
+     WeakPtr<SourceBufferPrivateAVFObjC> weakThis = m_appendWeakFactory.createWeakPtr(*this);
+     RetainPtr<AVStreamDataParser> parser = m_parser;
+     RetainPtr<WebAVStreamDataParserListener> delegate = m_delegate;
+diff --git a/Source/WebCore/platform/graphics/gstreamer/mse/MediaSourceClientGStreamerMSE.cpp b/Source/WebCore/platform/graphics/gstreamer/mse/MediaSourceClientGStreamerMSE.cpp
+index 2f4de80..470a182 100644
+--- a/Source/WebCore/platform/graphics/gstreamer/mse/MediaSourceClientGStreamerMSE.cpp
++++ b/Source/WebCore/platform/graphics/gstreamer/mse/MediaSourceClientGStreamerMSE.cpp
+@@ -124,11 +124,11 @@ void MediaSourceClientGStreamerMSE::resetParserState(RefPtr<SourceBufferPrivateG
+     appendPipeline->abort();
+ }
+ 
+-bool MediaSourceClientGStreamerMSE::append(RefPtr<SourceBufferPrivateGStreamer> sourceBufferPrivate, const unsigned char* data, unsigned length)
++bool MediaSourceClientGStreamerMSE::append(RefPtr<SourceBufferPrivateGStreamer> sourceBufferPrivate, Vector<unsigned char>&& data)
+ {
+     ASSERT(WTF::isMainThread());
+ 
+-    GST_DEBUG("Appending %u bytes", length);
++    GST_DEBUG("Appending %u bytes", data.size());
+ 
+     if (!m_playerPrivate)
+         return false;
+@@ -137,9 +137,14 @@ bool MediaSourceClientGStreamerMSE::append(RefPtr<SourceBufferPrivateGStreamer>
+ 
+     ASSERT(appendPipeline);
+ 
+-    void* bufferData = fastMalloc(length);
+-    GstBuffer* buffer = gst_buffer_new_wrapped_full(static_cast<GstMemoryFlags>(0), bufferData, length, 0, length, bufferData, fastFree);
+-    gst_buffer_fill(buffer, 0, data, length);
++    // Wrap the whole Vector object in case the data is stored in the inlined buffer.
++    auto* bufferData = data.data();
++    auto bufferLength = data.size();
++    GstBuffer* buffer = gst_buffer_new_wrapped_full(static_cast<GstMemoryFlags>(0), bufferData, bufferLength, 0, bufferLength, new Vector<unsigned char>(WTFMove(data)),
++        [](gpointer data)
++        {
++            delete static_cast<Vector<unsigned char>*>(data);
++        });
+ 
+     return appendPipeline->pushNewBuffer(buffer) == GST_FLOW_OK;
+ }
+diff --git a/Source/WebCore/platform/graphics/gstreamer/mse/MediaSourceClientGStreamerMSE.h b/Source/WebCore/platform/graphics/gstreamer/mse/MediaSourceClientGStreamerMSE.h
+index 7b66b84..52e3809 100644
+--- a/Source/WebCore/platform/graphics/gstreamer/mse/MediaSourceClientGStreamerMSE.h
++++ b/Source/WebCore/platform/graphics/gstreamer/mse/MediaSourceClientGStreamerMSE.h
+@@ -49,7 +49,7 @@ public:
+     // From SourceBufferPrivateGStreamer.
+     void abort(RefPtr<SourceBufferPrivateGStreamer>);
+     void resetParserState(RefPtr<SourceBufferPrivateGStreamer>);
+-    bool append(RefPtr<SourceBufferPrivateGStreamer>, const unsigned char*, unsigned);
++    bool append(RefPtr<SourceBufferPrivateGStreamer>, Vector<unsigned char>&&);
+     void removedFromMediaSource(RefPtr<SourceBufferPrivateGStreamer>);
+     void flush(AtomicString);
+     void enqueueSample(Ref<MediaSample>&&);
+diff --git a/Source/WebCore/platform/graphics/gstreamer/mse/SourceBufferPrivateGStreamer.cpp b/Source/WebCore/platform/graphics/gstreamer/mse/SourceBufferPrivateGStreamer.cpp
+index 65231ae..d409241 100644
+--- a/Source/WebCore/platform/graphics/gstreamer/mse/SourceBufferPrivateGStreamer.cpp
++++ b/Source/WebCore/platform/graphics/gstreamer/mse/SourceBufferPrivateGStreamer.cpp
+@@ -66,14 +66,14 @@ void SourceBufferPrivateGStreamer::setClient(SourceBufferPrivateClient* client)
+     m_sourceBufferPrivateClient = client;
+ }
+ 
+-void SourceBufferPrivateGStreamer::append(const unsigned char* data, unsigned length)
++void SourceBufferPrivateGStreamer::append(Vector<unsigned char>&& data)
+ {
+     ASSERT(m_mediaSource);
+ 
+     if (!m_sourceBufferPrivateClient)
+         return;
+ 
+-    if (m_client->append(this, data, length))
++    if (m_client->append(this, WTFMove(data)))
+         return;
+ 
+     m_sourceBufferPrivateClient->sourceBufferPrivateAppendComplete(SourceBufferPrivateClient::ReadStreamFailed);
+diff --git a/Source/WebCore/platform/graphics/gstreamer/mse/SourceBufferPrivateGStreamer.h b/Source/WebCore/platform/graphics/gstreamer/mse/SourceBufferPrivateGStreamer.h
+index 33ed914..55026c1 100644
+--- a/Source/WebCore/platform/graphics/gstreamer/mse/SourceBufferPrivateGStreamer.h
++++ b/Source/WebCore/platform/graphics/gstreamer/mse/SourceBufferPrivateGStreamer.h
+@@ -55,7 +55,7 @@ public:
+     void clearMediaSource() { m_mediaSource = nullptr; }
+ 
+     void setClient(SourceBufferPrivateClient*) final;
+-    void append(const unsigned char*, unsigned) final;
++    void append(Vector<unsigned char>&&) final;
+     void abort() final;
+     void resetParserState() final;
+     void removedFromMediaSource() final;
+diff --git a/Source/WebCore/platform/mock/mediasource/MockSourceBufferPrivate.cpp b/Source/WebCore/platform/mock/mediasource/MockSourceBufferPrivate.cpp
+index e031a9b..cbb82b6 100644
+--- a/Source/WebCore/platform/mock/mediasource/MockSourceBufferPrivate.cpp
++++ b/Source/WebCore/platform/mock/mediasource/MockSourceBufferPrivate.cpp
+@@ -139,9 +139,9 @@ void MockSourceBufferPrivate::setClient(SourceBufferPrivateClient* client)
+     m_client = client;
+ }
+ 
+-void MockSourceBufferPrivate::append(const unsigned char* data, unsigned length)
++void MockSourceBufferPrivate::append(Vector<unsigned char>&& data)
+ {
+-    m_inputBuffer.append(data, length);
++    m_inputBuffer.appendVector(data);
+     SourceBufferPrivateClient::AppendResult result = SourceBufferPrivateClient::AppendSucceeded;
+ 
+     while (m_inputBuffer.size() && result == SourceBufferPrivateClient::AppendSucceeded) {
+diff --git a/Source/WebCore/platform/mock/mediasource/MockSourceBufferPrivate.h b/Source/WebCore/platform/mock/mediasource/MockSourceBufferPrivate.h
+index 4965055..f31892b 100644
+--- a/Source/WebCore/platform/mock/mediasource/MockSourceBufferPrivate.h
++++ b/Source/WebCore/platform/mock/mediasource/MockSourceBufferPrivate.h
+@@ -57,7 +57,7 @@ private:
+ 
+     // SourceBufferPrivate overrides
+     void setClient(SourceBufferPrivateClient*) final;
+-    void append(const unsigned char* data, unsigned length) final;
++    void append(Vector<unsigned char>&&) final;
+     void abort() final;
+     void resetParserState() final;
+     void removedFromMediaSource() final;
+-- 
+2.7.4
+

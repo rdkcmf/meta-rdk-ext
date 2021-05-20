@@ -1,0 +1,30 @@
+Date: Sep 20 10:19:01 2018
+
+From: 7d543d7b2531ad6d036eb872a107b289ee10262c Oct 31 13:09:16 2018
+
+Subject: [PATCH] RDK-22546 : add main.conf to set AutoEnable=true
+
+        It is learned that the BlueZ is Not turning on the Controller but the HCITool.
+	When bluetoothctl is used to pair the HID devices, the first time always fails.
+	Figured that Power off and power On using bluetoothctl will fix this as it is originally not turned on by BlueZ.
+	So, Implemented main.conf with 'AutoEnable=true' to let the BlueZ to take control over the adapter and turn on when it finds it..
+
+Source: COMCAST
+License: GPL-2.0-or-later
+Upstream-Status: Pending
+Signed-off-by: Karunakaran A <Karunakaran_Amirthalingam@cable.comcast.com>
+---
+
+Index: bluez-5.48/src/main.conf
+===================================================================
+--- bluez-5.48.orig/src/main.conf
++++ bluez-5.48/src/main.conf
+@@ -99,7 +99,7 @@
+ # AutoEnable defines option to enable all controllers when they are found.
+ # This includes adapters present on start as well as adapters that are plugged
+ # in later on. Defaults to 'false'.
+-#AutoEnable=false
++AutoEnable=true
+
+ [sky]
+ # KernelConnectionControl defines option to enable / disable the kernel side

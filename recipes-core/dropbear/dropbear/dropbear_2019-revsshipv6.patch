@@ -1,0 +1,92 @@
+Date: Mar 02 19:34:43 2017
+
+From: b27c25cf22e70ff1b04bbac4e14dd2f52f93082a Mar 03 09:03:32 2017
+
+Subject: [PATCH] DELIA-19655: Added support to handle ipv6 address
+
+        Dropbear is failing to parse ipv6 address if
+        it was given in the hostname. Added support to
+        parse ipv4 as well as ipv6.
+
+Source: COMCAST
+
+Upstream-Status: Pending
+
+Signed-off-by: Balaji Punnuru <balaji_punnuru@cable.comcast.com>
+
+Index: dropbear-2019.78/cli-runopts.c
+===================================================================
+--- dropbear-2019.78/cli-runopts.c
++++ dropbear-2019.78/cli-runopts.c
+@@ -74,10 +74,12 @@
+ #endif
+ #if DROPBEAR_CLI_LOCALTCPFWD
+ 					"-L <[listenaddress:]listenport:remotehost:remoteport> Local port forwarding\n"
++                                        "-L <[[listenaddress]:]listenport:[remotehost]:remoteport> Local port forwarding using ipv6 Address\n"
+ 					"-g    Allow remote hosts to connect to forwarded ports\n"
+ #endif
+ #if DROPBEAR_CLI_REMOTETCPFWD
+ 					"-R <[listenaddress:]listenport:remotehost:remoteport> Remote port forwarding\n"
++                                        "-R <[[listenaddress]:]listenport:[remotehost]:remoteport> Local port forwarding using ipv6 Address\n"
+ #endif
+ 					"-W <receive_window_buffer> (default %d, larger may be faster, max 1MB)\n"
+ 					"-K <keepalive>  (0 is never, default %d)\n"
+@@ -769,6 +771,17 @@
+ 		TRACE(("part2 == NULL"))
+ 		goto fail;
+ 	}
++        if (*part1 == '[') {
++               part1++;//skip first character
++               part2 = strstr(part1,"]:");
++               if (part2 == NULL) {
++                       TRACE(("part2 == NULL"))
++                       goto fail;
++               }
++                *part2 = '\0';
++               part2++;
++        }
++
+ 	*part2 = '\0';
+ 	part2++;
+ 
+@@ -777,14 +790,34 @@
+ 		TRACE(("part3 == NULL"))
+ 		goto fail;
+ 	}
++        if (*part2 == '[') {
++               part2++;//skip first character
++               part3 = strstr(part2,"]:");
++               if (part3 == NULL) {
++                       TRACE(("part3 == NULL"))
++                       goto fail;
++               }
++                *part3 = '\0';
++               part3++;
++        }
+ 	*part3 = '\0';
+ 	part3++;
+ 
+-	part4 = strchr(part3, ':');
+-	if (part4) {
+-		*part4 = '\0';
+-		part4++;
+-	}
++        if (*part3 == '[') {
++               part3++;//skip first character
++               part4 = strstr(part3,"]:");
++               if (part4 != NULL) {
++                       *part4 = '\0';
++                       part4 += 2;
++               }
++        }
++        else {
++               part4 = strchr(part3, ':');
++               if (part4) {
++                       *part4 = '\0';
++                       part4++;
++               }
++        }
+ 
+ 	if (part4) {
+ 		listenaddr = part1;
+

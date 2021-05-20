@@ -1,0 +1,67 @@
+Date: Mar 13 09:45:56 2019
+ 
+From: 0fb9f1e5d6242769bb1c6d57f8e86484857fcab0 May 17 16:30:44 2019
+
+Subject: [PATCH] RDKALL-1627 : Security Vulnerability for glibc, zlib and libtasn1
+
+	For Zlib: 1.2.11 version
+	Direct upgrade the package zlib from version 1.2.8 to 1.2.11 with necessary patches.
+
+	Drop remove.ldconfig.call.patch, as it's easier to just set LDCONFIG=true.
+
+	Pass uname=GNU via the documented configure option instead of undocumented
+	environment variable.
+	
+Source: OPENEMBEDDED
+
+License: Zlib
+
+Upstream-Status: Submitted [ http://cgit.openembedded.org/openembedded-core/commit/meta/recipes-core/zlib/zlib/ldflags-tests.patch?id=344090a549284d0a1af065ff4cc3038bff8ecfea ] 
+
+Signed-off-by: Ross Burton <ross.burton@intel.com>
+Signed-off-by: Richard Purdie <richard.purdie@linuxfoundation.org> 
+---
+
+Index: zlib-1.2.11/Makefile.in
+===================================================================
+--- zlib-1.2.11.orig/Makefile.in
++++ zlib-1.2.11/Makefile.in
+@@ -26,7 +26,7 @@ CFLAGS=-O
+ 
+ SFLAGS=-O
+ LDFLAGS=
+-TEST_LDFLAGS=-L. libz.a
++T_LDFLAGS=-L. $(LDFLAGS)
+ LDSHARED=$(CC)
+ CPP=$(CC) -E
+ 
+@@ -295,22 +295,22 @@ placebo $(SHAREDLIBV): $(PIC_OBJS) libz.
+ 	-@rmdir objs
+ 
+ example$(EXE): example.o $(STATICLIB)
+-	$(CC) $(CFLAGS) -o $@ example.o $(TEST_LDFLAGS)
++	$(CC) $(CFLAGS) -o $@ example.o $(TEST_LDFLAGS) $(STATICLIB)
+ 
+ minigzip$(EXE): minigzip.o $(STATICLIB)
+-	$(CC) $(CFLAGS) -o $@ minigzip.o $(TEST_LDFLAGS)
++	$(CC) $(CFLAGS) -o $@ minigzip.o $(TEST_LDFLAGS) $(STATICLIB)
+ 
+ examplesh$(EXE): example.o $(SHAREDLIBV)
+-	$(CC) $(CFLAGS) -o $@ example.o -L. $(SHAREDLIBV)
++	$(CC) $(CFLAGS) -o $@ example.o $(TEST_LDFLAGS) $(SHAREDLIBV)
+ 
+ minigzipsh$(EXE): minigzip.o $(SHAREDLIBV)
+-	$(CC) $(CFLAGS) -o $@ minigzip.o -L. $(SHAREDLIBV)
++	$(CC) $(CFLAGS) -o $@ minigzip.o $(TEST_LDFLAGS) $(SHAREDLIBV)
+ 
+ example64$(EXE): example64.o $(STATICLIB)
+-	$(CC) $(CFLAGS) -o $@ example64.o $(TEST_LDFLAGS)
++	$(CC) $(CFLAGS) -o $@ example64.o $(TEST_LDFLAGS) $(STATICLIB)
+ 
+ minigzip64$(EXE): minigzip64.o $(STATICLIB)
+-	$(CC) $(CFLAGS) -o $@ minigzip64.o $(TEST_LDFLAGS)
++	$(CC) $(CFLAGS) -o $@ minigzip64.o $(TEST_LDFLAGS) $(STATICLIB)
+ 
+ install-libs: $(LIBS)
+ 	-@if [ ! -d $(DESTDIR)$(exec_prefix)  ]; then mkdir -p $(DESTDIR)$(exec_prefix); fi
+

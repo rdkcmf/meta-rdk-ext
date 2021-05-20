@@ -1,0 +1,100 @@
+From e10c2c8d4c85cccc0ae03414d6a67e89b4b23053 Mon Sep 17 00:00:00 2001
+From: Ievgen Mutavchi <emutavchi@gmail.com>
+Date: Mon, 12 Aug 2019 10:45:58 -0400
+Subject: [PATCH] Propagate parsing errors to MSE SourceBuffer
+
+---
+ .../graphics/gstreamer/mse/AppendPipeline.cpp         | 19 +++++++++++++++++++
+ .../platform/graphics/gstreamer/mse/AppendPipeline.h  |  1 +
+ .../gstreamer/mse/SourceBufferPrivateGStreamer.cpp    |  6 ++++++
+ .../gstreamer/mse/SourceBufferPrivateGStreamer.h      |  1 +
+ 4 files changed, 27 insertions(+)
+
+diff --git a/Source/WebCore/platform/graphics/gstreamer/mse/AppendPipeline.cpp b/Source/WebCore/platform/graphics/gstreamer/mse/AppendPipeline.cpp
+index 9fd3fe7..57cfe69 100644
+--- a/Source/WebCore/platform/graphics/gstreamer/mse/AppendPipeline.cpp
++++ b/Source/WebCore/platform/graphics/gstreamer/mse/AppendPipeline.cpp
+@@ -108,6 +108,11 @@ static void appendPipelineStateChangeMessageCallback(GstBus*, GstMessage* messag
+     appendPipeline->handleStateChangeMessage(message);
+ }
+ 
++static void appendPipelineErrorMessageCallback(GstBus*, GstMessage* message, AppendPipeline* appendPipeline)
++{
++    appendPipeline->handleErrorMessage(message);
++}
++
+ // Auxiliary class to compute the sample duration when GStreamer provides an invalid one.
+ class BufferMetadataCompleter {
+ public:
+@@ -207,6 +212,7 @@ AppendPipeline::AppendPipeline(Ref<MediaSourceClientGStreamerMSE> mediaSourceCli
+     g_signal_connect(m_bus.get(), "sync-message::need-context", G_CALLBACK(appendPipelineNeedContextMessageCallback), this);
+     g_signal_connect(m_bus.get(), "message::application", G_CALLBACK(appendPipelineApplicationMessageCallback), this);
+     g_signal_connect(m_bus.get(), "message::state-changed", G_CALLBACK(appendPipelineStateChangeMessageCallback), this);
++    g_signal_connect(m_bus.get(), "message::error", G_CALLBACK(appendPipelineErrorMessageCallback), this);
+ 
+     // We assign the created instances here instead of adoptRef() because gst_bin_add_many()
+     // below will already take the initial reference and we need an additional one for us.
+@@ -472,6 +478,19 @@ void AppendPipeline::handleStateChangeMessage(GstMessage* message)
+     }
+ }
+ 
++void AppendPipeline::handleErrorMessage(GstMessage* message)
++{
++    ASSERT(WTF::isMainThread());
++    GUniqueOutPtr<GError> err;
++    GUniqueOutPtr<gchar> debug;
++    gst_message_parse_error(message, &err.outPtr(), &debug.outPtr());
++    GST_ERROR("Error %d: %s", err->code, err->message);
++    if (m_appendState != AppendState::Invalid) {
++        setAppendState(AppendState::Invalid);
++        m_sourceBufferPrivate->didFailParsing();
++    }
++}
++
+ void AppendPipeline::handleAppsrcNeedDataReceived()
+ {
+     if (!m_appsrcAtLeastABufferLeft) {
+diff --git a/Source/WebCore/platform/graphics/gstreamer/mse/AppendPipeline.h b/Source/WebCore/platform/graphics/gstreamer/mse/AppendPipeline.h
+index 8496d00..b6fa3a3 100644
+--- a/Source/WebCore/platform/graphics/gstreamer/mse/AppendPipeline.h
++++ b/Source/WebCore/platform/graphics/gstreamer/mse/AppendPipeline.h
+@@ -54,6 +54,7 @@ public:
+     void handleNeedContextSyncMessage(GstMessage*);
+     void handleApplicationMessage(GstMessage*);
+     void handleStateChangeMessage(GstMessage*);
++    void handleErrorMessage(GstMessage*);
+ 
+     gint id();
+     AppendState appendState() { return m_appendState; }
+diff --git a/Source/WebCore/platform/graphics/gstreamer/mse/SourceBufferPrivateGStreamer.cpp b/Source/WebCore/platform/graphics/gstreamer/mse/SourceBufferPrivateGStreamer.cpp
+index 80e40d2..efc6e15 100644
+--- a/Source/WebCore/platform/graphics/gstreamer/mse/SourceBufferPrivateGStreamer.cpp
++++ b/Source/WebCore/platform/graphics/gstreamer/mse/SourceBufferPrivateGStreamer.cpp
+@@ -173,6 +173,12 @@ void SourceBufferPrivateGStreamer::didReceiveAllPendingSamples()
+         m_sourceBufferPrivateClient->sourceBufferPrivateAppendComplete(SourceBufferPrivateClient::AppendSucceeded);
+ }
+ 
++void SourceBufferPrivateGStreamer::didFailParsing()
++{
++    if (m_sourceBufferPrivateClient)
++        m_sourceBufferPrivateClient->sourceBufferPrivateAppendComplete(SourceBufferPrivateClient::ParsingFailed);
++}
++
+ void SourceBufferPrivateGStreamer::useEncryptedContentSizeLimits()
+ {
+     if (m_sourceBufferPrivateClient)
+diff --git a/Source/WebCore/platform/graphics/gstreamer/mse/SourceBufferPrivateGStreamer.h b/Source/WebCore/platform/graphics/gstreamer/mse/SourceBufferPrivateGStreamer.h
+index 3570757..dad6082 100644
+--- a/Source/WebCore/platform/graphics/gstreamer/mse/SourceBufferPrivateGStreamer.h
++++ b/Source/WebCore/platform/graphics/gstreamer/mse/SourceBufferPrivateGStreamer.h
+@@ -75,6 +75,7 @@ public:
+     void didReceiveInitializationSegment(const SourceBufferPrivateClient::InitializationSegment&);
+     void didReceiveSample(MediaSample&);
+     void didReceiveAllPendingSamples();
++    void didFailParsing();
+     void useEncryptedContentSizeLimits();
+ 
+     ContentType type() const { return m_type; }
+-- 
+2.7.4
+

@@ -1,0 +1,29 @@
+Date: Nov 19 06:36:17 2019
+From: 5de85391dd04ce47134db89c8f0ec305df7ae1da Nov 19 06:36:17 2019
+Subject: [PATCH] APPS-04036 due to WebProcess crash
+
+Crash with signature wl_proxy_marshal_array_constructor.
+WebKit Media player tries to update the video rectangle (westeros-sink)
+on every elements NULL-READY transition. At some point on some other
+element's NULL-READY transition player tries to update the rectangle
+when the sink is being terminated by another thread. Now adding a
+condition to update the video rect only on video-sink's NULL-READY
+
+Source: COMCAST
+License: BSD-2-Clause & BSD-3-Clause & LGPL-2.0 & LGPL-2.1
+Upstream-Status: Pending
+Signed-off-by: Vivek.A <Vivek_Arumugam@Comcast.Com>
+---
+diff --git a/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp b/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp
+index 02ee823ca33..76c2804e957 100644
+--- a/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp
++++ b/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp
+@@ -1207,7 +1207,7 @@ void MediaPlayerPrivateGStreamer::handleMessage(GstMessage* message)
+ #if USE(HOLE_PUNCH_GSTREAMER)
+         // Ensure that the video rectangle is set to the videoSink once we are sure that the
+         // videoSink was created.
+-        if (currentState == GST_STATE_NULL && newState == GST_STATE_READY)
++        if (currentState == GST_STATE_NULL && newState == GST_STATE_READY && GST_MESSAGE_SRC(message) == reinterpret_cast<GstObject*>(m_videoSink.get()))
+             updateVideoRectangle();
+ #endif
+ 

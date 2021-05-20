@@ -1,0 +1,29 @@
+From 7ddbbbac2b2448a4a285df2ccaaf483a0c840be3 Mon Sep 17 00:00:00 2001
+From: mselva006c <mani_selvaraj@comcast.com>
+Date: Tue, 14 Jul 2020 21:22:18 +0000
+Subject: [PATCH] DELIA-44564 : fix journal log format to match daisy/morty    
+    Added Year field to log format
+
+Source: COMCAST
+License: LGPL-2.1-or-later
+Upstream-Status: Pending
+
+
+Signed-off-by: mselva006c <mani_selvaraj@comcast.com>
+---
+ src/shared/logs-show.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/shared/logs-show.c b/src/shared/logs-show.c
+index 95b2e3376e..3106bca008 100644
+--- a/src/shared/logs-show.c
++++ b/src/shared/logs-show.c
+@@ -335,7 +335,7 @@ static int output_timestamp_realtime(FILE *f, sd_journal *j, OutputMode mode, Ou
+                 case OUTPUT_SHORT:
+                 case OUTPUT_SHORT_PRECISE:
+ 
+-                        if (strftime(buf, sizeof(buf), "%b %d %H:%M:%S", gettime_r(&t, &tm)) <= 0)
++                        if (strftime(buf, sizeof(buf), "%Y %b %d %H:%M:%S", gettime_r(&t, &tm)) <= 0)
+                                 return log_error_errno(SYNTHETIC_ERRNO(EINVAL),
+                                                        "Failed to format syslog time");
+ 

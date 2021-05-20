@@ -1,0 +1,272 @@
+Date: Tue, 19 Sep 2017 22:48:30 -0400
+From: bddcc58860f522a0d4cbaa7e9d04058caee0db9d Mon Sep 17 00:00:00 2001
+Subject: [PATCH] Replace remaining references to 'struct ucontext' with
+ 'ucontext_t'
+Source: CHROMIUM
+License: GPLV2
+Upstream-Status: Backport
+Signed-off-by: Mark Mentovai <mark@chromium.org>
+Index: trunk/src/client/linux/dump_writer_common/ucontext_reader.cc
+===================================================================
+--- trunk.orig/src/client/linux/dump_writer_common/ucontext_reader.cc
++++ trunk/src/client/linux/dump_writer_common/ucontext_reader.cc
+@@ -40,6 +40,7 @@ namespace google_breakpad {
+ 
+ #if defined(__i386__)
+ 
++#if __GLIBC__ == 2 && __GLIBC_MINOR__ < 26
+ uintptr_t UContextReader::GetStackPointer(const struct ucontext* uc) {
+   return uc->uc_mcontext.gregs[REG_ESP];
+ }
+@@ -49,6 +50,17 @@ uintptr_t UContextReader::GetInstruction
+ }
+ 
+ void UContextReader::FillCPUContext(RawContextCPU *out, const ucontext *uc,
++#else
++uintptr_t UContextReader::GetStackPointer(const struct ucontext_t* uc) {
++  return uc->uc_mcontext.gregs[REG_ESP];
++}
++
++uintptr_t UContextReader::GetInstructionPointer(const struct ucontext_t* uc) {
++  return uc->uc_mcontext.gregs[REG_EIP];
++}
++
++void UContextReader::FillCPUContext(RawContextCPU *out, const ucontext_t *uc,
++#endif		
+                                     const struct _libc_fpstate* fp) {
+   const greg_t* regs = uc->uc_mcontext.gregs;
+ 
+@@ -88,6 +100,7 @@ void UContextReader::FillCPUContext(RawC
+ 
+ #elif defined(__x86_64)
+ 
++#if __GLIBC__ == 2 && __GLIBC_MINOR__ < 26
+ uintptr_t UContextReader::GetStackPointer(const struct ucontext* uc) {
+   return uc->uc_mcontext.gregs[REG_RSP];
+ }
+@@ -97,6 +110,17 @@ uintptr_t UContextReader::GetInstruction
+ }
+ 
+ void UContextReader::FillCPUContext(RawContextCPU *out, const ucontext *uc,
++#else
++uintptr_t UContextReader::GetStackPointer(const struct ucontext_t* uc) {
++  return uc->uc_mcontext.gregs[REG_RSP];
++}
++
++uintptr_t UContextReader::GetInstructionPointer(const struct ucontext_t* uc) {
++  return uc->uc_mcontext.gregs[REG_RIP];
++}
++
++void UContextReader::FillCPUContext(RawContextCPU *out, const ucontext_t *uc,
++#endif		
+                                     const struct _libc_fpstate* fpregs) {
+   const greg_t* regs = uc->uc_mcontext.gregs;
+ 
+@@ -145,6 +169,7 @@ void UContextReader::FillCPUContext(RawC
+ 
+ #elif defined(__ARM_EABI__)
+ 
++#if __GLIBC__ == 2 && __GLIBC_MINOR__ < 26
+ uintptr_t UContextReader::GetStackPointer(const struct ucontext* uc) {
+   return uc->uc_mcontext.arm_sp;
+ }
+@@ -154,6 +179,17 @@ uintptr_t UContextReader::GetInstruction
+ }
+ 
+ void UContextReader::FillCPUContext(RawContextCPU *out, const ucontext *uc) {
++#else
++uintptr_t UContextReader::GetStackPointer(const struct ucontext_t* uc) {
++  return uc->uc_mcontext.arm_sp;
++}
++
++uintptr_t UContextReader::GetInstructionPointer(const struct ucontext_t* uc) {
++  return uc->uc_mcontext.arm_pc;
++}
++
++void UContextReader::FillCPUContext(RawContextCPU *out, const ucontext_t *uc) {
++#endif	
+   out->context_flags = MD_CONTEXT_ARM_FULL;
+ 
+   out->iregs[0] = uc->uc_mcontext.arm_r0;
+@@ -184,6 +220,7 @@ void UContextReader::FillCPUContext(RawC
+ 
+ #elif defined(__aarch64__)
+ 
++#if __GLIBC__ == 2 && __GLIBC_MINOR__ < 26
+ uintptr_t UContextReader::GetStackPointer(const struct ucontext* uc) {
+   return uc->uc_mcontext.sp;
+ }
+@@ -193,6 +230,17 @@ uintptr_t UContextReader::GetInstruction
+ }
+ 
+ void UContextReader::FillCPUContext(RawContextCPU *out, const ucontext *uc,
++#else
++uintptr_t UContextReader::GetStackPointer(const struct ucontext_t* uc) {
++  return uc->uc_mcontext.sp;
++}
++
++uintptr_t UContextReader::GetInstructionPointer(const struct ucontext_t* uc) {
++  return uc->uc_mcontext.pc;
++}
++
++void UContextReader::FillCPUContext(RawContextCPU *out, const ucontext_t *uc,
++#endif		
+                                     const struct fpsimd_context* fpregs) {
+   out->context_flags = MD_CONTEXT_ARM64_FULL;
+ 
+@@ -210,6 +258,7 @@ void UContextReader::FillCPUContext(RawC
+ 
+ #elif defined(__mips__)
+ 
++#if __GLIBC__ == 2 && __GLIBC_MINOR__ < 26
+ uintptr_t UContextReader::GetStackPointer(const struct ucontext* uc) {
+   return uc->uc_mcontext.gregs[MD_CONTEXT_MIPS_REG_SP];
+ }
+@@ -219,6 +268,17 @@ uintptr_t UContextReader::GetInstruction
+ }
+ 
+ void UContextReader::FillCPUContext(RawContextCPU *out, const ucontext *uc) {
++#else
++uintptr_t UContextReader::GetStackPointer(const struct ucontext_t* uc) {
++  return uc->uc_mcontext.gregs[MD_CONTEXT_MIPS_REG_SP];
++}
++
++uintptr_t UContextReader::GetInstructionPointer(const struct ucontext_t* uc) {
++  return uc->uc_mcontext.pc;
++}
++
++void UContextReader::FillCPUContext(RawContextCPU *out, const ucontext_t *uc) {
++#endif	
+   out->context_flags = MD_CONTEXT_MIPS_FULL;
+ 
+   for (int i = 0; i < MD_CONTEXT_MIPS_GPR_COUNT; ++i)
+Index: trunk/src/client/linux/dump_writer_common/ucontext_reader.h
+===================================================================
+--- trunk.orig/src/client/linux/dump_writer_common/ucontext_reader.h
++++ trunk/src/client/linux/dump_writer_common/ucontext_reader.h
+@@ -41,6 +41,7 @@ namespace google_breakpad {
+ 
+ // Wraps platform-dependent implementations of accessors to ucontext structs.
+ struct UContextReader {
++#if __GLIBC__ == 2 && __GLIBC_MINOR__ < 26	
+   static uintptr_t GetStackPointer(const struct ucontext* uc);
+ 
+   static uintptr_t GetInstructionPointer(const struct ucontext* uc);
+@@ -57,6 +58,23 @@ struct UContextReader {
+ #else
+   static void FillCPUContext(RawContextCPU *out, const ucontext *uc);
+ #endif
++#else
++  static uintptr_t GetStackPointer(const struct ucontext_t* uc);
++
++  static uintptr_t GetInstructionPointer(const struct ucontext_t* uc);
++  // Juggle a arch-specific ucontext into a minidump format
++  //   out: the minidump structure
++  //   info: the collection of register structures.
++#if defined(__i386__) || defined(__x86_64)
++  static void FillCPUContext(RawContextCPU *out, const ucontext_t *uc,
++                             const struct _libc_fpstate* fp);
++#elif defined(__aarch64__)
++  static void FillCPUContext(RawContextCPU *out, const ucontext_t *uc,
++                             const struct fpsimd_context* fpregs);
++#else
++  static void FillCPUContext(RawContextCPU *out, const ucontext_t *uc);
++#endif
++#endif
+ };
+ 
+ }  // namespace google_breakpad
+Index: trunk/src/client/linux/handler/exception_handler.cc
+===================================================================
+--- trunk.orig/src/client/linux/handler/exception_handler.cc
++++ trunk/src/client/linux/handler/exception_handler.cc
+@@ -404,9 +404,17 @@ bool ExceptionHandler::HandleSignal(int
+   // Fill in all the holes in the struct to make Valgrind happy.
+   memset(&context, 0, sizeof(context));
+   memcpy(&context.siginfo, info, sizeof(siginfo_t));
++#if __GLIBC__ == 2 && __GLIBC_MINOR__ < 26
+   memcpy(&context.context, uc, sizeof(struct ucontext));
++#else
++  memcpy(&context.context, uc, sizeof(struct ucontext_t));
++#endif
+ #if defined(__aarch64__)
++#if __GLIBC__ == 2 && __GLIBC_MINOR__ < 26  
+   struct ucontext *uc_ptr = (struct ucontext*)uc;
++#else
++  struct ucontext_t* uc_ptr = (struct ucontext_t*)uc;
++#endif  
+   struct fpsimd_context *fp_ptr =
+       (struct fpsimd_context*)&uc_ptr->uc_mcontext.__reserved;
+   if (fp_ptr->head.magic == FPSIMD_MAGIC) {
+@@ -416,7 +424,11 @@ bool ExceptionHandler::HandleSignal(int
+   // FP state is not part of user ABI on ARM Linux.
+   // In case of MIPS Linux FP state is already part of struct ucontext
+   // and 'float_state' is not a member of CrashContext.
++#if __GLIBC__ == 2 && __GLIBC_MINOR__ < 26  
+   struct ucontext *uc_ptr = (struct ucontext*)uc;
++#else
++  struct ucontext_t* uc_ptr = (struct ucontext_t*)uc;
++#endif  
+   if (uc_ptr->uc_mcontext.fpregs) {
+     memcpy(&context.float_state,
+            uc_ptr->uc_mcontext.fpregs,
+@@ -440,7 +452,11 @@ bool ExceptionHandler::SimulateSignalDel
+   // ExceptionHandler::HandleSignal().
+   siginfo.si_code = SI_USER;
+   siginfo.si_pid = getpid();
++#if __GLIBC__ == 2 && __GLIBC_MINOR__ < 26  
+   struct ucontext context;
++#else
++  struct ucontext_t context;
++#endif  
+   getcontext(&context);
+   return HandleSignal(sig, &siginfo, &context);
+ }
+Index: trunk/src/client/linux/handler/exception_handler.h
+===================================================================
+--- trunk.orig/src/client/linux/handler/exception_handler.h
++++ trunk/src/client/linux/handler/exception_handler.h
+@@ -191,7 +191,11 @@ class ExceptionHandler {
+   struct CrashContext {
+     siginfo_t siginfo;
+     pid_t tid;  // the crashing thread.
++#if __GLIBC__ == 2 && __GLIBC_MINOR__ < 26    
+     struct ucontext context;
++#else
++    struct ucontext_t context;
++#endif    
+ #if !defined(__ARM_EABI__) && !defined(__mips__)
+     // #ifdef this out because FP state is not part of user ABI for Linux ARM.
+     // In case of MIPS Linux FP state is already part of struct
+Index: trunk/src/client/linux/microdump_writer/microdump_writer.cc
+===================================================================
+--- trunk.orig/src/client/linux/microdump_writer/microdump_writer.cc
++++ trunk/src/client/linux/microdump_writer/microdump_writer.cc
+@@ -361,7 +361,11 @@ class MicrodumpWriter {
+ 
+   void* Alloc(unsigned bytes) { return dumper_->allocator()->Alloc(bytes); }
+ 
++#if __GLIBC__ == 2 && __GLIBC_MINOR__ < 26  
+   const struct ucontext* const ucontext_;
++#else
++  const struct ucontext_t* const ucontext_;
++#endif  
+ #if !defined(__ARM_EABI__) && !defined(__mips__)
+   const google_breakpad::fpstate_t* const float_state_;
+ #endif
+Index: trunk/src/client/linux/minidump_writer/minidump_writer.cc
+===================================================================
+--- trunk.orig/src/client/linux/minidump_writer/minidump_writer.cc
++++ trunk/src/client/linux/minidump_writer/minidump_writer.cc
+@@ -1236,7 +1236,11 @@ class MinidumpWriter {
+   const int fd_;  // File descriptor where the minidum should be written.
+   const char* path_;  // Path to the file where the minidum should be written.
+ 
++#if __GLIBC__ == 2 && __GLIBC_MINOR__ < 26  
+   const struct ucontext* const ucontext_;  // also from the signal handler
++#else
++  const struct ucontext_t* const ucontext_;  // also from the signal handler
++#endif  
+ #if !defined(__ARM_EABI__) && !defined(__mips__)
+   const google_breakpad::fpstate_t* const float_state_;  // ditto
+ #endif

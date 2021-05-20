@@ -1,0 +1,166 @@
+
+lxc: linux Container library
+
+Authors:
+Daniel Lezcano <daniel.lezcano@free.fr>
+
+This library is free software; you can redistribute it and/or
+modify it under the terms of the GNU Lesser General Public
+License as published by the Free Software Foundation; either
+version 2.1 of the License, or (at your option) any later version.
+
+This library is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+Lesser General Public License for more details.
+
+ou should have received a copy of the GNU Lesser General Public
+License along with this library; if not, write to the Free Software
+Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
+
+Date: Dec 19 18:37:57 2016
+
+From: 283132bc261f00d1256f96abf547a618b5e95ebb Apr 10 15:04:21 2017
+
+Subject: [PATCH] RDKB-9208: Changed PREFERRED_VERSION_libmtp to 1.1.5.
+
+	Since we have changed the layer priority for soc
+        intel layer, Without this it was picking older
+        version which breaks the build.
+
+        The change in layer priority was needed to make
+        sure we follow layer structure as rdk, comcast,soc
+        and oem.
+                   
+        Added Container patches needed for broadband devices.
+
+Source: COMCAST
+
+Upstream-Status: Pending
+
+Signed-off-by: glakshman <Guru_Lakshman@comcast.com>
+---
+Index: lxc-1.1.2/hooks/Makefile.am
+===================================================================
+--- lxc-1.1.2.orig/hooks/Makefile.am
++++ lxc-1.1.2/hooks/Makefile.am
+@@ -5,6 +5,7 @@ hooks_SCRIPTS = \
+ 	mountecryptfsroot \
+ 	ubuntu-cloud-prep \
+ 	squid-deb-proxy-client \
+-	rdksystemdhook
++	rdksystemdhook \
++	lighttpd_systemdhook
+ 
+ EXTRA_DIST=$(hooks_SCRIPTS)
+Index: lxc-1.1.2/hooks/lighttpd_systemdhook
+===================================================================
+--- /dev/null
++++ lxc-1.1.2/hooks/lighttpd_systemdhook
+@@ -0,0 +1,106 @@
++#!/bin/sh
++#
++tmpdir="/tmp"
++rm -rf  $tmpdir/etc/systemd
++rm -rf  $tmpdir/lib/systemd
++mkdir -p $tmpdir/etc/systemd
++mkdir -p $tmpdir/lib/systemd
++cp -r /etc/systemd/* $tmpdir/etc/systemd
++cp -r /lib/systemd/* $tmpdir/lib/systemd
++
++## Cleanup files under /etc/systemd
++rm -f $tmpdir/etc/systemd/syslog.service
++rm -f $tmpdir/etc/systemd/serial-getty@ttyS0.service
++rm -rf $tmpdir/etc/systemd/system/halt.*
++rm -f $tmpdir/etc/systemd/system/local-fs.target.wants/*
++rm -f $tmpdir/etc/systemd/system/default.target
++rm -f $tmpdir/lib/systemd/system/dbus.service
++
++#set default gw in container
++route add default gw 10.0.3.1
++
++#modify the lighttpd.conf
++sed -i -e 's/eth0.4090/eth0/g' /tmp/lighttpd.conf
++
++ln -s /lib/systemd/system/dbusmount.service $tmpdir/etc/systemd/system/local-fs.target.wants/
++ln -s /lib/systemd/system/networkmount.service $tmpdir/etc/systemd/system/local-fs.target.wants/
++
++for i in  `ls $tmpdir/etc/systemd/system/multi-user.target.wants | grep -v remote-fs.target | grep -v lighttpd`
++do
++    rm -f $tmpdir/etc/systemd/system/multi-user.target.wants/$i
++done
++
++
++for i in  `ls $tmpdir/etc/systemd/system/multi-user.target.wants | grep -v remote-fs.target | grep -v container-dhcp`
++do
++    rm -f $tmpdir/etc/systemd/system/multi-user.target.wants/$i
++done
++
++for i in  `ls $tmpdir/etc/systemd/system/sysinit.target.wants | grep -v systemd-timesync`
++do
++    rm -f $tmpdir/etc/systemd/system/sysinit.target.wants/$i
++done
++
++ln -sf /lib/systemd/system/container-dhcp.service $tmpdir/etc/systemd/system/multi-user.target.wants/
++ln -sf /lib/systemd/system/lighttpd.service $tmpdir/etc/systemd/system/multi-user.target.wants/
++ln -sf /lib/systemd/system/$LXC_NAME-dump-log.timer $tmpdir/etc/systemd/system/multi-user.target.wants/
++rm -rf $tmpdir/etc/systemd/reboot.target.wants
++rm -rf $tmpdir/etc/systemd/sockets.target.wants
++
++
++for i in `ls $tmpdir/etc/systemd/system | grep -v getty.target.wants | grep -v multi-user.target.wants | grep -v local-fs.target.wants | grep -v sysinit.target.wants`
++do
++   rm -rf $tmdir/etc/systemd/system/$i
++done
++
++cat<<EOF >$tmpdir/lib/systemd/system/container-dhcp.service
++[Unit]
++Description=A container DHCP process
++
++
++[Service]
++Type=oneshot
++RemainAfterExit=Yes
++ExecStart=/sbin/udhcpc -i eth0
++ExecStartPost=/lib/rdk/getip_file.sh
++
++[Install]
++WantedBy=multi-user.target
++EOF
++
++
++cat<<EOF >$tmpdir/lib/systemd/system/lighttpd.service
++[Unit]
++Description=A container Lighttpd process
++
++
++[Service]
++Type=oneshot
++RemainAfterExit=Yes
++ExecStart=/usr/sbin/lighttpd -f /tmp/lighttpd.conf
++
++[Install]
++WantedBy=multi-user.target
++EOF
++
++
++cat<<EOF > /tmp/etc/fstab
++# stock fstab - you probably want to override this with a machine specific one
++
++/dev/root            /                    auto       defaults              1  1
++proc                 /proc                proc       defaults              0  0
++devpts               /dev/pts             devpts     mode=0620,gid=5       0  0
++usbdevfs             /proc/bus/usb        usbdevfs   noauto                0  0
++tmpfs                /run                 tmpfs      mode=0755,nodev,nosuid,strictatime 0  0
++tmpfs                /var/volatile        tmpfs      defaults              0  0
++
++# uncomment this if your device has a SD/MMC/Transflash slot
++EOF
++
++mount -o bind /tmp/etc/systemd /etc/systemd
++mount -o bind /tmp/lib/systemd /lib/systemd
++mount -o bind /tmp/etc/fstab /etc/fstab
++
++
++echo "End of Hook" 
++

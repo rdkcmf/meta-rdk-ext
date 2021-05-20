@@ -1,0 +1,36 @@
+From: Eugene Mutavchi <Ievgen_Mutavchi@comcast.com>
+Date: Thu May 28 12:36:47 EDT 2020
+Subject: [PATCH] Fix dates check
+Source: COMCAST
+License: GPLV2
+Upstream-Status: None
+Signed-off-by: Eugene Mutavchi <Ievgen_Mutavchi@comcast.com>
+
+---
+Index: glib-openssl-2.50.3/tls/openssl/gtlsfiledatabase-openssl.c
+===================================================================
+--- glib-openssl-2.50.3.orig/tls/openssl/gtlsfiledatabase-openssl.c
++++ glib-openssl-2.50.3/tls/openssl/gtlsfiledatabase-openssl.c
+@@ -629,7 +629,8 @@ g_tls_file_database_openssl_verify_chain
+   /* We have to check these ourselves since openssl
+    * does not give us flags and UNKNOWN_CA will take priority.
+    */
+-  result |= double_check_before_after_dates (G_TLS_CERTIFICATE_OPENSSL (chain));
++  if (result)
++    result |= double_check_before_after_dates (G_TLS_CERTIFICATE_OPENSSL (chain));
+ 
+   if (identity)
+     result |= g_tls_certificate_openssl_verify_identity (G_TLS_CERTIFICATE_OPENSSL (chain),
+Index: glib-openssl-2.50.3/tls/openssl/gtlscertificate-openssl.c
+===================================================================
+--- glib-openssl-2.50.3.orig/tls/openssl/gtlscertificate-openssl.c
++++ glib-openssl-2.50.3/tls/openssl/gtlscertificate-openssl.c
+@@ -341,6 +341,7 @@ g_tls_certificate_openssl_verify (GTlsCe
+   /* We have to check these ourselves since openssl
+    * does not give us flags and UNKNOWN_CA will take priority.
+    */
++if (gtls_flags)
+   for (i = 0; i < sk_X509_num (untrusted); i++)
+     {
+       X509 *c = sk_X509_value (untrusted, i);
+

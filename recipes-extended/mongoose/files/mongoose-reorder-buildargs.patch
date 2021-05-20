@@ -1,0 +1,34 @@
+Date: Jun 06 18:37:05 2017
+
+From: 4a10ee10115dce83955e77a5aac8df895637f852 Jun 12 15:26:58 2017
+
+Subject: [PATCH] RDK-18485,RDK-18835: mongoose fails build and package_qa
+
+	The following commit ammends build failure issues found
+	at mongoose, as with newer toolchain gcc-6, it fails to resolve
+	symbols at linking time, as the ordering does not appear to be
+	correct. Then it also solves ldflags issue that QA checks
+	triggers.
+
+Source: COMCAST
+
+License: GPL-2-or-later
+
+Upstream-Status: Pending
+
+Signed-off-by: Héctor Orón Martínez <hector.oron@collabora.co.uk>
+---
+
+Index: mongoose/Makefile
+===================================================================
+--- mongoose.orig/Makefile	2017-06-08 17:35:01.292834101 +0000
++++ mongoose/Makefile	2017-06-08 17:36:51.592906175 +0000
+@@ -29,7 +29,7 @@
+ 
+ linux:
+ 	$(CC) $(LINFLAGS) mongoose.c -shared -fPIC -fpic -o $(LIB)
+-	$(CC) $(LINFLAGS) mongoose.c main.c -o $(PROG)
++	$(CC) mongoose.c main.c $(LINFLAGS) -o $(PROG)
+ bsd:
+ 	$(CC) $(CFLAGS) mongoose.c -shared -lpthread -s -fpic -fPIC -o $(LIB)
+ 	$(CC) $(CFLAGS) mongoose.c main.c -lpthread -s -o $(PROG)

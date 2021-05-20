@@ -1,0 +1,43 @@
+Date: Sat, 30 Aug 2014 05:58:06 -0700
+
+From 20f8d3cf1be4ad76234ffb85eeae7f9892ee72cd Mon Sep 17 00:00:00 2001
+
+Subject: [PATCH] DELIA-13453 PACEXI5-646: systemd-timesyncd crash
+
+	timesyncd-manager: don't clear current_server_name if ServerAddress is NULL
+
+	Took the generic patch which came in systemd to avoid the segmentation
+        fault while flushing the server address name
+
+Source: CGIT
+
+License: LGPL-2.1-or-later
+
+Upstream-Status: Submitted [ https://cgit.freedesktop.org/systemd/systemd/commit/?id=20f8d3cf1b ]
+
+Signed-off-by: Steven Noonan <steven@uplinklabs.net>
+Signed-off-by: Vinu Palackal <Vinu_P@cable.comcast.com>
+---
+ src/timesync/timesyncd-manager.c | 5 ++++-
+ 1 file changed, 4 insertions(+), 1 deletion(-)
+
+diff --git a/src/timesync/timesyncd-manager.c b/src/timesync/timesyncd-manager.c
+index 9b8b7d3..696dd10 100644
+--- a/src/timesync/timesyncd-manager.c
++++ b/src/timesync/timesyncd-manager.c
+@@ -766,8 +766,11 @@ void manager_set_server_address(Manager *m, ServerAddress *a) {
+         if (m->current_server_address == a)
+                 return;
+ 
+-        m->current_server_name = a ? a->name : NULL;
+         m->current_server_address = a;
++        /* If a is NULL, we are just clearing the address, without
++         * changing the name. Keep the existing name in that case. */
++        if (a)
++                m->current_server_name = a->name;
+ 
+         manager_disconnect(m);
+ 
+-- 
+1.9.1
+

@@ -1,0 +1,44 @@
+Date: Aug 17, 2017 8:34 PM
+
+From: adf155c23f291ba0c22f6287cc7b2ef8ea758f38 Aug 18, 2017 12:16 AM
+
+Subject: [PATCH] RDK-20234 : gstreamer1.0_1.10.4 compilation error in Yocto 2.2 build
+	
+	Fix introspection related issues and issues with macro definition of M4 file.
+	We can't use our tweaked introspection.m4 from gobject-introspection tarball
+	because gstreamer also defines INTROSPECTION_INIT in its introspection.m4, which
+	is later supplied to g-ir-scanner.
+
+Source: OPENEMBEDDED 
+
+License: LGPL-2.1-or-later
+
+Upstream-Status: Submitted [ https://github.com/openembedded/openembedded-core/commit/e70ed487b0f489e4d62b69476d364d7de54b79e2#diff-e667d2ab0246af099e5a4f52ef4d85ee ]
+
+Signed-off-by: Alexander Kanavin <alex.kanavin@gmail.com>
+
+---
+
+Index: gstreamer-1.10.4/common/m4/introspection.m4
+===================================================================
+--- gstreamer-1.10.4.orig/common/m4/introspection.m4
++++ gstreamer-1.10.4/common/m4/introspection.m4
+@@ -54,14 +54,14 @@ m4_define([_GOBJECT_INTROSPECTION_CHECK_
+     INTROSPECTION_GIRDIR=
+     INTROSPECTION_TYPELIBDIR=
+     if test "x$found_introspection" = "xyes"; then
+-       INTROSPECTION_SCANNER=`$PKG_CONFIG --variable=g_ir_scanner gobject-introspection-1.0`
+-       INTROSPECTION_COMPILER=`$PKG_CONFIG --variable=g_ir_compiler gobject-introspection-1.0`
+-       INTROSPECTION_GENERATE=`$PKG_CONFIG --variable=g_ir_generate gobject-introspection-1.0`
++       INTROSPECTION_SCANNER=$PKG_CONFIG_SYSROOT_DIR`$PKG_CONFIG --variable=g_ir_scanner gobject-introspection-1.0`
++       INTROSPECTION_COMPILER=$PKG_CONFIG_SYSROOT_DIR`$PKG_CONFIG --variable=g_ir_compiler gobject-introspection-1.0`
++       INTROSPECTION_GENERATE=$PKG_CONFIG_SYSROOT_DIR`$PKG_CONFIG --variable=g_ir_generate gobject-introspection-1.0`
+        INTROSPECTION_GIRDIR=`$PKG_CONFIG --variable=girdir gobject-introspection-1.0`
+        INTROSPECTION_TYPELIBDIR="$($PKG_CONFIG --variable=typelibdir gobject-introspection-1.0)"
+        INTROSPECTION_CFLAGS=`$PKG_CONFIG --cflags gobject-introspection-1.0`
+        INTROSPECTION_LIBS=`$PKG_CONFIG --libs gobject-introspection-1.0`
+-       INTROSPECTION_MAKEFILE=`$PKG_CONFIG --variable=datadir gobject-introspection-1.0`/gobject-introspection-1.0/Makefile.introspection
++       INTROSPECTION_MAKEFILE=$PKG_CONFIG_SYSROOT_DIR`$PKG_CONFIG --variable=datadir gobject-introspection-1.0`/gobject-introspection-1.0/Makefile.introspection
+        INTROSPECTION_INIT="extern void gst_init(gint*,gchar**); gst_init(NULL,NULL);"
+     fi
+     AC_SUBST(INTROSPECTION_SCANNER)

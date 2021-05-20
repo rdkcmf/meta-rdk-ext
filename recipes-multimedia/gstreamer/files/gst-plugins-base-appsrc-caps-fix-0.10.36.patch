@@ -1,0 +1,37 @@
+Date: Tue Oct 27 00:04:31 2015
+
+From: 9de307bbb26d57d22c00a3e969c34933c3290b87 Tue Oct 27 14:26:41 2015
+
+Subject: [PATCH] DELIA-10278 : Added Patch to GstAppSrc for Comcast Release
+
+	webkitsrc is not correctly connecting to icydemux to play audio only streams. 
+	This patch is provided by Broadcom but this is useful and can be used for Intel as well. 
+	so added the patch under meta-rdk-comcast
+
+Source: COMCAST
+
+License: LGPL-2.1-or-later
+
+Upstream-Status: Pending
+
+Signed-off-by: Karunakaran A <Karunakaran_Amirthalingam@cable.comcast.com>
+---
+
+--- a/gst-libs/gst/app/gstappsrc.c
++++ b/gst-libs/gst/app/gstappsrc.c
+@@ -992,6 +992,15 @@ gst_app_src_create (GstBaseSrc * bsrc, g
+       /* only update the offset when in random_access mode */
+       if (priv->stream_type == GST_APP_STREAM_TYPE_RANDOM_ACCESS)
+         priv->offset += buf_size;
++
++      /* COMCAST MODIFICATION BEGIN */
++      if (priv->caps && !caps) {
++        /* Caps may have been set since we entered the loop (XONE-13260). */
++        GST_DEBUG_OBJECT (appsrc, "caps set (%s), refreshing", gst_structure_get_name(gst_caps_get_structure(priv->caps, 0)));
++        caps = gst_caps_ref (priv->caps);
++      }
++      /* COMCAST MODIFICATION END */
++
+       if (caps) {
+         *buf = gst_buffer_make_metadata_writable (*buf);
+         gst_buffer_set_caps (*buf, caps);

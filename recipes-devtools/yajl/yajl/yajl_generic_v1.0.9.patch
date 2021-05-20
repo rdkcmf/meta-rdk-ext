@@ -1,0 +1,198 @@
+Copyright (c) 2007-2014, Lloyd Hilaiel <me@lloyd.io>
+
+Permission to use, copy, modify, and/or distribute this software for any
+purpose with or without fee is hereby granted, provided that the above
+copyright notice and this permission notice appear in all copies.
+
+THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+
+Date: Nov 05 20:32:36 2013
+
+From: 17844352594138c13cac432ec66263cc1949ebce Nov 22 14:28:13 2013
+
+Subject: [PATCH] yajl: import RDK generic patch for yajl 1.0.9
+
+	Added from the "http://lloyd.github.com/yajl/"
+	
+Source: OPENSOURCE
+
+Upstream-Status: Submitted 
+
+Signed-off-by: Nicolas Dechesne <nicolas.dechesne@linaro.org>
+---
+
+diff -aNurd --binary yajl-1.0.9/BUILDING.mingw yajl/BUILDING.mingw
+--- yajl-1.0.9/BUILDING.mingw	1969-12-31 19:00:00.000000000 -0500
++++ yajl/BUILDING.mingw	2013-07-14 23:42:37.297871789 -0400
+@@ -0,0 +1,3 @@
++mkdir build
++cd build
++cmake -G "MinGW Makefiles" ..
+\ No newline at end of file
+diff -aNurd --binary yajl-1.0.9/CMakeLists.txt yajl/CMakeLists.txt
+--- yajl-1.0.9/CMakeLists.txt	2013-07-14 23:42:25.654018172 -0400
++++ yajl/CMakeLists.txt	2013-07-14 23:42:37.297871789 -0400
+@@ -44,25 +44,30 @@
+ 
+ SET(CMAKE_C_FLAGS "-Wall")
+ IF (WIN32) 
+-  ADD_DEFINITIONS(-DWIN32)
+-  SET(linkFlags "/PDB:NONE /INCREMENTAL:NO /OPT:NOREF /OPT:NOICF")
+-  SET(CMAKE_EXE_LINKER_FLAGS    "${linkFlags}"
+-      CACHE STRING "YAJL linker flags" FORCE)
+-  SET(CMAKE_EXE_LINKER_FLAGS_DEBUG ""
+-      CACHE STRING "YAJL debug linker flags" FORCE)
+-  SET(CMAKE_EXE_LINKER_FLAGS_RELEASE
+-      CACHE STRING "YAJL release linker flags" FORCE)
+-  SET(CMAKE_SHARED_LINKER_FLAGS "${linkFlags}"
+-      CACHE STRING "YAJL shared linker flags" FORCE)
+-  SET(CMAKE_MODULE_LINKER_FLAGS "${linkFlags}"
+-      CACHE STRING "YAJL module linker flags" FORCE)
++	IF (MINGW)
++	  SET(CMAKE_C_FLAGS_DEBUG "-DDEBUG -g")
++	  SET(CMAKE_C_FLAGS_RELEASE "-DNDEBUG -O2 -Wuninitialized")
++	ELSE (MINGW)
++	  ADD_DEFINITIONS(-DWIN32)
++	  SET(linkFlags "/PDB:NONE /INCREMENTAL:NO /OPT:NOREF /OPT:NOICF")
++	  SET(CMAKE_EXE_LINKER_FLAGS    "${linkFlags}"
++		  CACHE STRING "YAJL linker flags" FORCE)
++	  SET(CMAKE_EXE_LINKER_FLAGS_DEBUG ""
++		  CACHE STRING "YAJL debug linker flags" FORCE)
++	  SET(CMAKE_EXE_LINKER_FLAGS_RELEASE
++		  CACHE STRING "YAJL release linker flags" FORCE)
++	  SET(CMAKE_SHARED_LINKER_FLAGS "${linkFlags}"
++		  CACHE STRING "YAJL shared linker flags" FORCE)
++	  SET(CMAKE_MODULE_LINKER_FLAGS "${linkFlags}"
++		  CACHE STRING "YAJL module linker flags" FORCE)
+ 
+-  SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /wd4996 /wd4255 /wd4130 /wd4100 /wd4711")
+-  SET(CMAKE_C_FLAGS_DEBUG "/D DEBUG /Od /Z7")
+-  SET(CMAKE_C_FLAGS_RELEASE "/D NDEBUG /O2")
++	  SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /wd4996 /wd4255 /wd4130 /wd4100 /wd4711")
++	  SET(CMAKE_C_FLAGS_DEBUG "/D DEBUG /Od /Z7")
++	  SET(CMAKE_C_FLAGS_RELEASE "/D NDEBUG /O2")
++	ENDIF(MINGW)
+ ELSE (WIN32)
+   SET(CMAKE_C_FLAGS
+-      "${CMAKE_C_FLAGS} -fPIC -ansi -pedantic -Wpointer-arith -Wno-format-y2k -Wstrict-prototypes -Wmissing-declarations -Wnested-externs -Wextra	-Wundef -Wwrite-strings -Wold-style-definition -Wno-missing-field-initializers -Wredundant-decls -Wno-unused-parameter -Wno-sign-compare -Wmissing-prototypes")
++      "${CMAKE_C_FLAGS} -fPIC -std=c99 -pedantic -Wpointer-arith -Wno-format-y2k -Wstrict-prototypes -Wmissing-declarations -Wnested-externs -Wextra	-Wundef -Wwrite-strings -Wold-style-definition -Wno-missing-field-initializers -Wredundant-decls -Wno-unused-parameter -Wno-sign-compare -Wmissing-prototypes")
+ 
+   SET(CMAKE_C_FLAGS_DEBUG "-DDEBUG -g")
+   SET(CMAKE_C_FLAGS_RELEASE "-DNDEBUG -O2 -Wuninitialized")
+diff -aNurd --binary yajl-1.0.9/configure yajl/configure
+--- yajl-1.0.9/configure	2013-07-14 23:42:25.654018172 -0400
++++ yajl/configure	2013-07-14 23:42:37.297871789 -0400
+@@ -64,7 +64,7 @@
+ puts "== Generating Makefile"
+ File.open("Makefile", "w+") do |f| 
+   f.puts ".PHONY: all clean distclean install package test distro"
+-  f.puts "all: distro doc test"
++  f.puts "all: distro "
+   f.puts
+   f.puts "distro:"
+   f.puts "	@cd build && make"
+diff -aNurd --binary yajl-1.0.9/.gitignore yajl/.gitignore
+--- yajl-1.0.9/.gitignore	2013-07-14 23:42:25.654018172 -0400
++++ yajl/.gitignore	1969-12-31 19:00:00.000000000 -0500
+@@ -1,2 +0,0 @@
+-Makefile
+-/build/
+diff -aNurd --binary yajl-1.0.9/src/api/yajl_gen.h yajl/src/api/yajl_gen.h
+--- yajl-1.0.9/src/api/yajl_gen.h	2013-07-14 23:42:25.654018172 -0400
++++ yajl/src/api/yajl_gen.h	2013-07-14 23:42:37.297871789 -0400
+@@ -123,6 +123,7 @@
+     YAJL_API void yajl_gen_free(yajl_gen handle);
+ 
+     YAJL_API yajl_gen_status yajl_gen_integer(yajl_gen hand, long int number);
++    YAJL_API yajl_gen_status yajl_gen_longlong(yajl_gen hand, long long int number);
+     /** generate a floating point number.  number may not be infinity or
+      *  NaN, as these have no representation in JSON.  In these cases the
+      *  generator will return 'yajl_gen_invalid_number' */
+diff -aNurd --binary yajl-1.0.9/src/api/yajl_parse.h yajl/src/api/yajl_parse.h
+--- yajl-1.0.9/src/api/yajl_parse.h	2013-07-14 23:42:25.654018172 -0400
++++ yajl/src/api/yajl_parse.h	2013-07-14 23:42:37.297871789 -0400
+@@ -88,7 +88,7 @@
+     typedef struct {
+         int (* yajl_null)(void * ctx);
+         int (* yajl_boolean)(void * ctx, int boolVal);
+-        int (* yajl_integer)(void * ctx, long integerVal);
++        int (* yajl_integer)(void * ctx, long long int integerVal);
+         int (* yajl_double)(void * ctx, double doubleVal);
+         /** A callback which passes the string representation of the number
+          *  back to the client.  Will be used for all numbers when present */
+diff -aNurd --binary yajl-1.0.9/src/yajl_gen.c yajl/src/yajl_gen.c
+--- yajl-1.0.9/src/yajl_gen.c	2013-07-14 23:42:25.654018172 -0400
++++ yajl/src/yajl_gen.c	2013-07-14 23:42:37.297871789 -0400
+@@ -189,6 +189,18 @@
+     return yajl_gen_status_ok;
+ }
+ 
++yajl_gen_status
++yajl_gen_longlong(yajl_gen g, long long int number)
++{
++    char i[64];
++    ENSURE_VALID_STATE; ENSURE_NOT_KEY; INSERT_SEP; INSERT_WHITESPACE;
++    sprintf(i, "%lld", number);
++    g->print(g->ctx, i, strlen(i));
++    APPENDED_ATOM;
++    FINAL_NEWLINE;
++    return yajl_gen_status_ok;
++}
++
+ #ifdef WIN32
+ #include <float.h>
+ #define isnan _isnan
+diff -aNurd --binary yajl-1.0.9/src/yajl_parser.c yajl/src/yajl_parser.c
+--- yajl-1.0.9/src/yajl_parser.c	2013-07-14 23:42:25.654018172 -0400
++++ yajl/src/yajl_parser.c	2013-07-14 23:42:37.297871789 -0400
+@@ -231,21 +231,22 @@
+                             _CC_CHK(hand->callbacks->yajl_number(
+                                         hand->ctx,(const char *) buf, bufLen));
+                         } else if (hand->callbacks->yajl_integer) {
+-                            long int i = 0;
++                            long long int i = 0;
+                             yajl_buf_clear(hand->decodeBuf);
+                             yajl_buf_append(hand->decodeBuf, buf, bufLen);
+                             buf = yajl_buf_data(hand->decodeBuf);
+-                            i = strtol((const char *) buf, NULL, 10);
+-                            if ((i == LONG_MIN || i == LONG_MAX) &&
++                            i = strtoll((const char *) buf, NULL, 10);
++                            if ((i == LLONG_MIN || i == LLONG_MAX) &&
+                                 errno == ERANGE)
+                             {
+-                                yajl_bs_set(hand->stateStack,
++                                /*yajl_bs_set(hand->stateStack,
+                                             yajl_state_parse_error);
+-                                hand->parseError = "integer overflow" ;
++                                hand->parseError = "integer overflow" ;*/
+                                 /* try to restore error offset */
+-                                if (*offset >= bufLen) *offset -= bufLen;
++                                /*if (*offset >= bufLen) *offset -= bufLen;
+                                 else *offset = 0;
+-                                goto around_again;
++                                goto around_again;*/
++                                errno = 0; /* IN: Clear errno and ignore */
+                             }
+                             _CC_CHK(hand->callbacks->yajl_integer(hand->ctx,
+                                                                   i));
+diff -aNurd --binary yajl-1.0.9/test/yajl_test.c yajl/test/yajl_test.c
+--- yajl-1.0.9/test/yajl_test.c	2013-07-14 23:42:25.654018172 -0400
++++ yajl/test/yajl_test.c	2013-07-14 23:42:37.297871789 -0400
+@@ -93,9 +93,9 @@
+     return 1;
+ }
+ 
+-static int test_yajl_integer(void *ctx, long integerVal)
++static int test_yajl_integer(void *ctx, long long int integerVal)
+ {
+-    printf("integer: %ld\n", integerVal);
++    printf("integer: %lld\n", integerVal);
+     return 1;
+ }
+ 

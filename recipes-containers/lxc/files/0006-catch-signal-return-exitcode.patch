@@ -1,0 +1,67 @@
+lxc: linux Container library
+
+This library is free software; you can redistribute it and/or
+modify it under the terms of the GNU Lesser General Public
+License as published by the Free Software Foundation; either
+version 2.1 of the License, or (at your option) any later version.
+
+This library is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+Lesser General Public License for more details.
+
+ou should have received a copy of the GNU Lesser General Public
+License along with this library; if not, write to the Free Software
+Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
+
+Date: Mar 29 10:17:37 2018
+
+From: 4c6a7646b7ff92f932a9b5dd71f71aa98b911435 Jun 06 21:22:24 2018
+
+Subject: [PATCH] ONEM-5261 systemd is not receiving proper exit code from process started in LXC
+
+	Added support to catch the exit signals from LXC on systemd.
+
+Source: LGI
+
+Upstream-Status: Submitted
+
+Signed-off-by: Daniel Lezcano <daniel.lezcano@free.fr>
+---
+
+diff --git a/lxc-2.0.6/src/lxc/error.c b/lxc-2.0.6_patched/src/lxc/error.c
+index b7fb687..c76f62f 100644
+--- lxc-2.0.6/src/lxc/error.c
++++ lxc-2.0.6_patched/src/lxc/error.c
+@@ -52,6 +52,14 @@ extern int  lxc_error_set_and_log(int pid, int status)
+ 	if (WIFSIGNALED(status)) {
+ 		int signal = WTERMSIG(status);
+ 		INFO("Child <%d> ended on signal (%d).", pid, signal);
++		if (signal != SIGTERM)
++			ret = EXIT_FAILURE;
++	}
++
++	if (WIFSTOPPED(status)) {
++		int signal = WSTOPSIG(status);
++		INFO("Child <%d> stopped (%d).", pid, signal);
++		ret = EXIT_FAILURE;
+ 	}
+ 
+ 	return ret;
+diff --git a/lxc-2.0.6/src/lxc/tools/lxc_attach.c b/lxc-2.0.6_patched/src/lxc/tools/lxc_attach.c
+index 4dd3883..100154e 100644
+--- lxc-2.0.6/src/lxc/tools/lxc_attach.c
++++ lxc-2.0.6_patched/src/lxc/tools/lxc_attach.c
+@@ -480,6 +515,12 @@ int main(int argc, char *argv[])
+ 
+ 	if (WIFEXITED(ret))
+ 		wexit = WEXITSTATUS(ret);
++	else if (WIFSIGNALED(ret)) {
++		if (WTERMSIG(ret) != SIGTERM)
++			wexit = EXIT_FAILURE;
++	}
++	else if (WIFSTOPPED(ret))
++		wexit = EXIT_FAILURE;
+ out:
+ 	lxc_container_put(c);
+ 	if (ret >= 0)

@@ -1,0 +1,27 @@
+From bd8c4db0249dd3636acb50f026404e9d65495946 Mon Sep 17 00:00:00 2001
+From: Amadeusz Skrzypczak <amadeusz.skrzypczak@redembedded.com>
+Date: Tue, 12 Jan 2021 10:03:42 +0100
+Subject: [PATCH] Fix sprite rendering issue
+
+Fix from wpewebkit 2.28
+
+---
+ Source/WebCore/platform/graphics/cairo/ImageBufferCairo.cpp | 3 ---
+ 1 file changed, 3 deletions(-)
+
+diff --git a/Source/WebCore/platform/graphics/cairo/ImageBufferCairo.cpp b/Source/WebCore/platform/graphics/cairo/ImageBufferCairo.cpp
+index 2ac15eb0..2d382aab 100644
+--- a/Source/WebCore/platform/graphics/cairo/ImageBufferCairo.cpp
++++ b/Source/WebCore/platform/graphics/cairo/ImageBufferCairo.cpp
+@@ -173,9 +173,6 @@ void ImageBufferData::swapBuffersIfNeeded()
+ {
+     ASSERT(m_renderingMode == RenderingMode::Accelerated);
+ 
+-    if (!m_bufferChanged)
+-        return;
+-
+     GLContext* previousActiveContext = GLContext::current();
+     cairo_surface_flush(m_surface.get());
+ 
+-- 
+2.17.1

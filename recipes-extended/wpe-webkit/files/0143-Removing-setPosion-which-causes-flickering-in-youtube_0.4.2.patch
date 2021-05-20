@@ -1,0 +1,33 @@
+From 83e241b1759acc1da3679b593a63e3e2c5546fc2 Mon Sep 17 00:00:00 2001
+From: nrajan002c <nambi_rajang@cable.comcast.com>
+Date: Fri, 4 Oct 2019 19:10:11 +0000
+Subject: [PATCH] Removing setPosion which causes flickering in youtube
+
+Signed-off-by: nrajan002c <nambi_rajang@cable.comcast.com>
+---
+ Source/WebCore/html/HTMLMediaElement.cpp | 9 ---------
+ 1 file changed, 9 deletions(-)
+
+diff --git a/Source/WebCore/html/HTMLMediaElement.cpp b/Source/WebCore/html/HTMLMediaElement.cpp
+index 4487fd58d9b..bb568e13f18 100644
+--- a/Source/WebCore/html/HTMLMediaElement.cpp
++++ b/Source/WebCore/html/HTMLMediaElement.cpp
+@@ -4857,15 +4857,6 @@ void HTMLMediaElement::mediaPlayerSizeChanged(MediaPlayer*)
+     if (m_readyState > HAVE_NOTHING)
+         scheduleResizeEventIfSizeChanged();
+     updateRenderer();
+-
+-#if USE(HOLE_PUNCH_GSTREAMER) || USE(HOLE_PUNCH_EXTERNAL)
+-    if (renderer()) {
+-        IntRect windowRect = document().view()->contentsToScreen(renderer()->absoluteBoundingBoxRect(true));
+-        //style() is having relative values w.r.t immediate container. Hence we need to substract left,top values from immediate container to get correct x,y values.
+-        player()->setPosition(IntPoint(windowRect.x() - renderer()->style().left().intValue(),windowRect.y() -renderer()->style().top().intValue()));
+-    }
+-#endif
+-
+     endProcessingMediaPlayerCallback();
+ }
+ 
+-- 
+2.16.2
+

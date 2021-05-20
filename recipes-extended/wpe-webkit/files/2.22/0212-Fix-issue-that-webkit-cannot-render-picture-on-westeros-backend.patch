@@ -1,0 +1,25 @@
+Date: Nov 10 19:22:01 2020
+From: 5980a365a79a333e211912052d246472acf53837 Nov 10 19:22:01 
+Subject: [PATCH] Black screen shown with webapps when it uses westeros wpe backend
+
+	Mali driver requires CAP_SYS_ADMIN for some IOCTLs.
+	so, we can either patch libgcrypt to enable admin caps, or disable privilege drop altogether. 
+
+Source: COMCAST
+License: BSD-2-Clause & BSD-3-Clause & LGPL-2.0 & LGPL-2.1
+Upstream-Status: Pending
+Signed-off-by: nrajan002c <nambi_rajang@cable.comcast.com>
+---
+Index: git/Source/WebCore/PAL/pal/crypto/gcrypt/Initialization.h
+===================================================================
+--- git.orig/Source/WebCore/PAL/pal/crypto/gcrypt/Initialization.h	2018-05-25 15:05:41.439865920 +0800
++++ git/Source/WebCore/PAL/pal/crypto/gcrypt/Initialization.h	2018-05-25 15:06:08.651866430 +0800
+@@ -37,6 +37,8 @@
+     // returned version string.
+     gcry_check_version(nullptr);
+ 
++    // Set GCRY_SECMEM_FLAG_NO_PRIV_DROP to make sure no privileges loss
++    gcry_control(GCRYCTL_DISABLE_PRIV_DROP, nullptr);
+     // Pre-allocate 16kB of secure memory and finish the initialization.
+     gcry_control(GCRYCTL_INIT_SECMEM, 16384, nullptr);
+     gcry_control(GCRYCTL_INITIALIZATION_FINISHED, nullptr);

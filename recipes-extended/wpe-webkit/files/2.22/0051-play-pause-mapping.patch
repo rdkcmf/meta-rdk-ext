@@ -1,0 +1,35 @@
+From 9ca2b35ea7cf5e18bd6ca864d290741a1c67b5db Mon Sep 17 00:00:00 2001
+From: Siva Sankar Raja <sivasankar_raja@comcast.com>
+Source: COMCAST
+License: LICENSE-LGPL-2.1
+Upstream-Status: Pending
+Signed-off-by: Siva Sankar Raja <sivasankar_raja@comcast.com>
+Date: Sat, 6 Jul 2019 15:08:28 +0000
+Subject: [PATCH] play-pause-mapping
+
+---
+ Source/WebCore/platform/wpe/PlatformKeyboardEventWPE.cpp | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+Index: git/Source/WebCore/platform/wpe/PlatformKeyboardEventWPE.cpp
+===================================================================
+--- git.orig/Source/WebCore/platform/wpe/PlatformKeyboardEventWPE.cpp
++++ git/Source/WebCore/platform/wpe/PlatformKeyboardEventWPE.cpp
+@@ -949,7 +949,7 @@ int PlatformKeyboardEvent::windowsKeyCod
+ 
+     case WPE_KEY_Pause:
+     case WPE_KEY_AudioPause:
+-        return VK_PAUSE; // (13) PAUSE key
++        return VK_MEDIA_PLAY_PAUSE; // (B3) Windows 2000/XP: Play/Pause Media key
+     case WPE_KEY_Caps_Lock:
+         return VK_CAPITAL; // (14) CAPS LOCK key
+     case WPE_KEY_Kana_Lock:
+@@ -1230,7 +1230,7 @@ int PlatformKeyboardEvent::windowsKeyCod
+         // VK_EXSEL (F8) ExSel key
+         // VK_EREOF (F9) Erase EOF key
+     case WPE_KEY_AudioPlay:
+-        return VK_PLAY; // VK_PLAY (FA) Play key
++        return VK_MEDIA_PLAY_PAUSE; // (B3) Windows 2000/XP: Play/Pause Media key
+         // VK_ZOOM (FB) Zoom key
+         // VK_NONAME (FC) Reserved for future use
+         // VK_PA1 (FD) PA1 key

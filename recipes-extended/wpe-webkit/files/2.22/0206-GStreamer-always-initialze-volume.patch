@@ -1,0 +1,37 @@
+From 62410d0ef3b282856a38aec3e4e4afb99734ca56 Mon Sep 17 00:00:00 2001
+From: Eugene Mutavchi <Ievgen_Mutavchi@comcast.com>
+Date: Fri, 28 Aug 2020 16:12:21 +0000
+Subject: [PATCH] [GStreamer] always initialze volume
+
+And default to linar volume control
+
+Signed-off-by: Eugene Mutavchi <Ievgen_Mutavchi@comcast.com>
+---
+ .../graphics/gstreamer/MediaPlayerPrivateGStreamerBase.cpp    | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamerBase.cpp b/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamerBase.cpp
+index 78ed4821d8a5..6ffc695896ef 100644
+--- a/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamerBase.cpp
++++ b/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamerBase.cpp
+@@ -155,7 +155,7 @@ using namespace std;
+ static const FloatSize s_holePunchDefaultFrameSize(1280, 720);
+ #endif
+ 
+-#if ENABLE(NATIVE_AUDIO)
++#if 1 // ENABLE(NATIVE_AUDIO)
+ static const GstStreamVolumeFormat volumeFormat = GST_STREAM_VOLUME_FORMAT_LINEAR;
+ #else
+ static const GstStreamVolumeFormat volumeFormat = GST_STREAM_VOLUME_FORMAT_CUBIC;
+@@ -1358,7 +1358,7 @@ void MediaPlayerPrivateGStreamerBase::setStreamVolumeElement(GstStreamVolume* vo
+ 
+     // We don't set the initial volume because we trust the sink to keep it for us. See
+     // https://bugs.webkit.org/show_bug.cgi?id=118974 for more information.
+-    if (!m_player->platformVolumeConfigurationRequired()) {
++    if (!m_player->platformVolumeConfigurationRequired() || true) {
+         GST_DEBUG_OBJECT(pipeline(), "Setting stream volume to %f", m_player->volume());
+         g_object_set(m_volumeElement.get(), "volume", m_player->volume(), nullptr);
+     } else
+-- 
+2.24.0
+

@@ -1,0 +1,102 @@
+From a3ea102dd91b98cda8790a5adc5301be6dbf92b8 Mon Sep 17 00:00:00 2001
+From: Ievgen Mutavchi <Ievgen_Mutavchi@comcast.com>
+Subject: [PATCH] XRE-14265: request client cert support
+License: GPLV2
+Date: Nov 6, 2018 1:41 AM
+From: ebecd56aaa2727b6305d39c69951fbdc8740f800 Oct 31, 2018 11:56 PM
+Subject: request client cert support
+Source: COMCAST
+Upstream-Status: None
+Signed-off-by: Eugene Mutavchi <Ievgen_Mutavchi@comcast.com>
+
+---
+ tls/openssl/gtlsconnection-openssl.c | 58 ++++++++++++++++++++++++++++++++++--
+ 1 file changed, 56 insertions(+), 2 deletions(-)
+
+diff --git a/tls/openssl/gtlsconnection-openssl.c b/tls/openssl/gtlsconnection-openssl.c
+index dc92e7e..e417f36 100644
+--- a/tls/openssl/gtlsconnection-openssl.c
++++ b/tls/openssl/gtlsconnection-openssl.c
+@@ -24,6 +24,7 @@
+ 
+ #include "config.h"
+ #include "glib.h"
++#include <glib/gstdio.h>
+ 
+ #include <errno.h>
+ #include <stdarg.h>
+@@ -53,6 +54,7 @@ typedef struct _GTlsConnectionOpensslPrivate
+ } GTlsConnectionOpensslPrivate;
+ 
+ static void g_tls_connection_openssl_initable_iface_init (GInitableIface *iface);
++static GTlsInteractionResult request_client_certificate(GTlsConnection *conn);
+ 
+ G_DEFINE_ABSTRACT_TYPE_WITH_CODE (GTlsConnectionOpenssl, g_tls_connection_openssl, G_TYPE_TLS_CONNECTION_BASE,
+                                   G_ADD_PRIVATE (GTlsConnectionOpenssl)
+@@ -622,9 +624,61 @@ g_tls_connection_openssl_request_certificate (GTlsConnectionOpenssl  *openssl,
+ 
+   interaction = g_tls_connection_get_interaction (conn);
+   if (!interaction)
+-    return FALSE;
++    goto request_internal;
+ 
+   res = g_tls_interaction_invoke_request_certificate (interaction, conn, 0,
+ 						      tls->read_cancellable, error);
+-  return res != G_TLS_INTERACTION_FAILED;
++
++request_internal:
++  if (res == G_TLS_INTERACTION_UNHANDLED)
++    res = request_client_certificate(conn);
++
++  return res == G_TLS_INTERACTION_HANDLED;
++}
++
++static gpointer
++client_certificate_init (gpointer data)
++{
++  GError *error = NULL;
++  const gchar *certPath = NULL, *keyPath = NULL;
++  GTlsCertificate *cert = NULL;
++
++  certPath = g_getenv ("G_TLS_OPENSSL_CLIENT_CERT_PATH");
++  if (!certPath)
++    return NULL;
++
++  keyPath = g_getenv ("G_TLS_OPENSSL_CLIENT_CERT_KEY_PATH");
++
++  if (keyPath)
++    cert = g_tls_certificate_new_from_files (certPath, keyPath, &error);
++  else
++    cert = g_tls_certificate_new_from_file (certPath, &error);
++
++  if (error)
++    {
++      g_printerr ("Cert load failed. %s\n", error ? error->message : "unknown");
++      g_error_free (error);
++    }
++
++  return cert;
++}
++
++static GTlsInteractionResult
++request_client_certificate(GTlsConnection *conn)
++{
++  static GOnce cpc_cert_inited = G_ONCE_INIT;
++
++  GTlsCertificate *cert;
++
++  g_once (&cpc_cert_inited, client_certificate_init, NULL);
++
++  cert = cpc_cert_inited.retval;
++
++  if (cert && conn)
++    {
++      g_tls_connection_set_certificate (conn, cert);
++      return G_TLS_INTERACTION_HANDLED;
++    }
++
++  return G_TLS_INTERACTION_UNHANDLED;
+ }
+-- 
+2.7.4
+

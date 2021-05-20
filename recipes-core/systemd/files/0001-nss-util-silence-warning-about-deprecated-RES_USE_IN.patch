@@ -1,0 +1,50 @@
+From 6154d33de3f15bbd5d5df718103af9c37ba0a768 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Zbigniew=20J=C4=99drzejewski-Szmek?= <zbyszek@in.waw.pl>
+Date: Tue, 31 Jan 2017 19:55:33 -0500
+Subject: [PATCH] nss-util: silence warning about deprecated RES_USE_INET6
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+src/nss-resolve/nss-resolve.c: In function ‘_nss_resolve_gethostbyname_r’:
+src/nss-resolve/nss-resolve.c:680:13: warning: RES_USE_INET6 is deprecated
+ NSS_GETHOSTBYNAME_FALLBACKS(resolve);
+             ^~~~~~~~~~~~~~~~~~~~~~~~~
+
+In glibc bz #19582, RES_USE_INET6 was deprecated. This might make sense for
+clients, but they didn't take into account nss module implementations which
+*must* continue to support the option. glibc internally defines
+DEPRECATED_RES_USE_INET6 which can be used without emitting a warning, but
+it's not exported publicly. Let's do the same, and just copy the definition
+to our header.
+---
+ src/basic/nss-util.h | 6 +++++-
+ 1 file changed, 5 insertions(+), 1 deletion(-)
+
+diff --git a/src/basic/nss-util.h b/src/basic/nss-util.h
+index e7844fff96..9d927a8227 100644
+--- a/src/basic/nss-util.h
++++ b/src/basic/nss-util.h
+@@ -27,6 +27,10 @@
+ 
+ #define NSS_SIGNALS_BLOCK SIGALRM,SIGVTALRM,SIGPIPE,SIGCHLD,SIGTSTP,SIGIO,SIGHUP,SIGUSR1,SIGUSR2,SIGPROF,SIGURG,SIGWINCH
+ 
++#ifndef DEPRECATED_RES_USE_INET6
++#  define DEPRECATED_RES_USE_INET6 0x00002000
++#endif
++
+ #define NSS_GETHOSTBYNAME_PROTOTYPES(module)            \
+ enum nss_status _nss_##module##_gethostbyname4_r(       \
+                 const char *name,                       \
+@@ -92,7 +96,7 @@ enum nss_status _nss_##module##_gethostbyname_r(        \
+                 int *errnop, int *h_errnop) {           \
+         enum nss_status ret = NSS_STATUS_NOTFOUND;      \
+                                                         \
+-        if (_res.options & RES_USE_INET6)               \
++        if (_res.options & DEPRECATED_RES_USE_INET6)    \
+                 ret = _nss_##module##_gethostbyname3_r( \
+                         name,                           \
+                         AF_INET6,                       \
+-- 
+2.17.1
+

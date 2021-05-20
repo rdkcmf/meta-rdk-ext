@@ -1,0 +1,9 @@
+[Unit]
+Description=RDK Browser Automation
+After=iptables.service dnsmasq.service xre-receiver.service
+
+[Service]
+ExecStart=/usr/bin/WPEWebDriver.sh
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,33 @@
+From 617eb1d45f02b63c6a9f40482ad447340109a123 Mon Sep 17 00:00:00 2001
+From: Gurdal Oruklu <gurdal_oruklu@comcast.com>
+Date: Sat, 4 May 2019 02:44:48 +0000
+Subject: [PATCH] comcast EME add ResetOutputProtection()
+Source: COMCAST
+License: GPLV2
+Upstream-Status: None
+
+Signed-off-by: Gurdal Oruklu <gurdal_oruklu@comcast.com>
+---
+ .../graphics/gstreamer/eme/WebKitOpenCDMDecryptorGStreamer.cpp      | 6 ++++++
+ 1 file changed, 6 insertions(+)
+
+diff --git a/Source/WebCore/platform/graphics/gstreamer/eme/WebKitOpenCDMDecryptorGStreamer.cpp b/Source/WebCore/platform/graphics/gstreamer/eme/WebKitOpenCDMDecryptorGStreamer.cpp
+index a3f5739ef21..31917a0ca10 100644
+--- a/Source/WebCore/platform/graphics/gstreamer/eme/WebKitOpenCDMDecryptorGStreamer.cpp
++++ b/Source/WebCore/platform/graphics/gstreamer/eme/WebKitOpenCDMDecryptorGStreamer.cpp
+@@ -149,6 +149,12 @@ static void webkit_media_opencdm_decrypt_init(WebKitOpenCDMDecrypt* self)
+ static void webKitMediaOpenCDMDecryptorFinalize(GObject* object)
+ {
+     WebKitOpenCDMDecryptPrivate* priv = GST_WEBKIT_OPENCDM_DECRYPT_GET_PRIVATE(WEBKIT_OPENCDM_DECRYPT(object));
++
++    // Let OCDM sessions know playback has stopped
++    // output restrictions can be reset now
++    if(priv->m_openCdmSession)
++        opencdm_session_resetoutputprotection(priv->m_openCdmSession.get());
++
+     priv->~WebKitOpenCDMDecryptPrivate();
+     GST_CALL_PARENT(G_OBJECT_CLASS, finalize, (object));
+ }
+-- 
+2.16.2
+

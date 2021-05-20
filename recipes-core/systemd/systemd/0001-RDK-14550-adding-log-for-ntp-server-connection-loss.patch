@@ -1,0 +1,345 @@
+Copyright (C) 1991, 1999 Free Software Foundation, Inc.
+
+This library is free software; you can redistribute it and/or
+modify it under the terms of the GNU Lesser General Public
+License as published by the Free Software Foundation; either
+version 2.1 of the License, or (at your option) any later version.
+
+This library is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+Lesser General Public License for more details.
+
+You should have received a copy of the GNU Lesser General Public
+License along with this library; if not, write to the Free Software
+Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
+
+Date: Dec 17 09:42:04 2015
+
+From: 21c33dfd8d1fd080f44eb1b740d2dbc46311cde9 Dec 17 10:13:36 2015
+
+Subject: [PATCH] RDK-14550 : Logging for lost connections with NTP server
+
+	Adding patch for logging 'RDK Error codes' in cases of connection loss with NTP server
+
+Source: COMCAST
+
+Upstream-Status: Pending
+
+Signed-off-by: skv01 <shibukv@tataelxsi.co.in>
+---
+
+diff --git a/src/timesync/timesyncd-manager.c b/src/timesync/timesyncd-manager.c
+index d80c72f..c9dface 100644
+--- a/src/timesync/timesyncd-manager.c
++++ b/src/timesync/timesyncd-manager.c
+@@ -153,7 +153,15 @@ static int manager_timeout(sd_event_source *source, usec_t usec, void *userdata)
+         assert(m->current_server_address);
+ 
+         server_address_pretty(m->current_server_address, &pretty);
++
++        
+         log_info("Timed out waiting for reply from %s (%s).", strna(pretty), m->current_server_name->string);
++        if ( rdkNtpRetryCount <= RDK_NTP_CONNECTION_LOG_MAX_RETRY ) 
++            rdkNtpRetryCount++ ;
++
++        if ( rdkNtpRetryCount == RDK_NTP_CONNECTION_LOG_MAX_RETRY ) {
++            log_info("RDK-10038 : Timed out waiting for reply from %s (%s).", strna(pretty), m->current_server_name->string);
++        }
+ 
+         return manager_connect(m);
+ }
+@@ -200,6 +208,12 @@ static int manager_send_request(Manager *m) {
+                 log_debug("Sent NTP request to %s (%s).", strna(pretty), m->current_server_name->string);
+         } else {
+                 log_debug("Sending NTP request to %s (%s) failed: %m", strna(pretty), m->current_server_name->string);
++                if ( rdkNtpRetryCount <= RDK_NTP_CONNECTION_LOG_MAX_RETRY ) 
++                    rdkNtpRetryCount++ ;
++
++                if ( rdkNtpRetryCount == RDK_NTP_CONNECTION_LOG_MAX_RETRY ) {
++                    log_info("RDK-10038 : Sending NTP request to %s (%s) failed: %m", strna(pretty), m->current_server_name->string);
++                }
+                 return manager_connect(m);
+         }
+ 
+@@ -514,6 +528,12 @@ static int manager_receive_response(sd_event_source *source, int fd, uint32_t re
+ 
+         if (revents & (EPOLLHUP|EPOLLERR)) {
+                 log_warning("Server connection returned error.");
++                if ( rdkNtpRetryCount <= RDK_NTP_CONNECTION_LOG_MAX_RETRY ) 
++                    rdkNtpRetryCount++ ;
++
++                if ( rdkNtpRetryCount == RDK_NTP_CONNECTION_LOG_MAX_RETRY ) {
++                    log_info("RDK-10038 : Server connection returned error.");
++                }
+                 return manager_connect(m);
+         }
+ 
+@@ -523,11 +543,23 @@ static int manager_receive_response(sd_event_source *source, int fd, uint32_t re
+                         return 0;
+ 
+                 log_warning("Error receiving message. Disconnecting.");
++                if ( rdkNtpRetryCount <= RDK_NTP_CONNECTION_LOG_MAX_RETRY ) 
++                    rdkNtpRetryCount++ ;
++
++                if ( rdkNtpRetryCount == RDK_NTP_CONNECTION_LOG_MAX_RETRY ) {
++                    log_info("RDK-10038 : Error receiving message. Disconnecting.");
++                }
+                 return manager_connect(m);
+         }
+ 
+         if (iov.iov_len < sizeof(struct ntp_msg)) {
+                 log_warning("Invalid response from server. Disconnecting.");
++                if ( rdkNtpRetryCount <= RDK_NTP_CONNECTION_LOG_MAX_RETRY ) 
++                    rdkNtpRetryCount++ ;
++
++                if ( rdkNtpRetryCount == RDK_NTP_CONNECTION_LOG_MAX_RETRY ) {
++                    log_info("RDK-10038 : Invalid response from server. Disconnecting.");
++                }
+                 return manager_connect(m);
+         }
+ 
+@@ -535,6 +567,12 @@ static int manager_receive_response(sd_event_source *source, int fd, uint32_t re
+             !m->current_server_address ||
+             !sockaddr_equal(&server_addr, &m->current_server_address->sockaddr)) {
+                 log_debug("Response from unknown server.");
++                if ( rdkNtpRetryCount <= RDK_NTP_CONNECTION_LOG_MAX_RETRY ) 
++                    rdkNtpRetryCount++ ;
++
++                if ( rdkNtpRetryCount == RDK_NTP_CONNECTION_LOG_MAX_RETRY ) {
++                    log_info("RDK-10038 : Response from unknown server.");
++                }
+                 return 0;
+         }
+ 
+@@ -551,11 +589,23 @@ static int manager_receive_response(sd_event_source *source, int fd, uint32_t re
+         }
+         if (!recv_time) {
+                 log_error("Invalid packet timestamp.");
++                if ( rdkNtpRetryCount <= RDK_NTP_CONNECTION_LOG_MAX_RETRY ) 
++                    rdkNtpRetryCount++ ;
++
++                if ( rdkNtpRetryCount == RDK_NTP_CONNECTION_LOG_MAX_RETRY ) {
++                    log_info("RDK-10038 : Invalid packet timestamp.");
++                }
+                 return -EINVAL;
+         }
+ 
+         if (!m->pending) {
+                 log_debug("Unexpected reply. Ignoring.");
++                if ( rdkNtpRetryCount <= RDK_NTP_CONNECTION_LOG_MAX_RETRY ) 
++                    rdkNtpRetryCount++ ;
++
++                if ( rdkNtpRetryCount == RDK_NTP_CONNECTION_LOG_MAX_RETRY ) {
++                    log_info("RDK-10038 : Unexpected reply. Ignoring.");
++                }
+                 return 0;
+         }
+ 
+@@ -571,21 +621,45 @@ static int manager_receive_response(sd_event_source *source, int fd, uint32_t re
+         if (be32toh(ntpmsg.recv_time.sec) < TIME_EPOCH + OFFSET_1900_1970 ||
+             be32toh(ntpmsg.trans_time.sec) < TIME_EPOCH + OFFSET_1900_1970) {
+                 log_debug("Invalid reply, returned times before epoch. Ignoring.");
++                if ( rdkNtpRetryCount <= RDK_NTP_CONNECTION_LOG_MAX_RETRY ) 
++                    rdkNtpRetryCount++ ;
++
++                if ( rdkNtpRetryCount == RDK_NTP_CONNECTION_LOG_MAX_RETRY ) {
++                    log_info("RDK-10038 : Invalid reply, returned times before epoch. Ignoring.");
++                }
+                 return manager_connect(m);
+         }
+ 
+         if (NTP_FIELD_LEAP(ntpmsg.field) == NTP_LEAP_NOTINSYNC) {
+                 log_debug("Server is not synchronized. Disconnecting.");
++                if ( rdkNtpRetryCount <= RDK_NTP_CONNECTION_LOG_MAX_RETRY ) 
++                    rdkNtpRetryCount++ ;
++
++                if ( rdkNtpRetryCount == RDK_NTP_CONNECTION_LOG_MAX_RETRY ) {
++                    log_info("RDK-10038 : Server is not synchronized. Disconnecting.");
++                }
+                 return manager_connect(m);
+         }
+ 
+         if (!IN_SET(NTP_FIELD_VERSION(ntpmsg.field), 3, 4)) {
+                 log_debug("Response NTPv%d. Disconnecting.", NTP_FIELD_VERSION(ntpmsg.field));
++                if ( rdkNtpRetryCount <= RDK_NTP_CONNECTION_LOG_MAX_RETRY ) 
++                    rdkNtpRetryCount++ ;
++
++                if ( rdkNtpRetryCount == RDK_NTP_CONNECTION_LOG_MAX_RETRY ) {
++                    log_info("RDK-10038 : Response NTPv%d. Disconnecting.", NTP_FIELD_VERSION(ntpmsg.field));
++                }
+                 return manager_connect(m);
+         }
+ 
+         if (NTP_FIELD_MODE(ntpmsg.field) != NTP_MODE_SERVER) {
+                 log_debug("Unsupported mode %d. Disconnecting.", NTP_FIELD_MODE(ntpmsg.field));
++                if ( rdkNtpRetryCount <= RDK_NTP_CONNECTION_LOG_MAX_RETRY ) 
++                    rdkNtpRetryCount++ ;
++
++                if ( rdkNtpRetryCount == RDK_NTP_CONNECTION_LOG_MAX_RETRY ) {
++                    log_info("RDK-10038 : Unsupported mode %d. Disconnecting.", NTP_FIELD_MODE(ntpmsg.field));
++                }
+                 return manager_connect(m);
+         }
+ 
+@@ -661,6 +735,14 @@ static int manager_receive_response(sd_event_source *source, int fd, uint32_t re
+                 r = manager_adjust_clock(m, offset, leap_sec);
+                 if (r < 0)
+                         log_error("Failed to call clock_adjtime(): %m");
++
++                if ( rdkNtpRetryCount <= RDK_NTP_CONNECTION_LOG_MAX_RETRY ) 
++                    rdkNtpRetryCount++ ;
++
++                if ( rdkNtpRetryCount == RDK_NTP_CONNECTION_LOG_MAX_RETRY ) {
++                    log_info("RDK-10038 : Failed to call clock_adjtime(): %m");
++                }
++
+         }
+ 
+         log_info("interval/delta/delay/jitter/drift " USEC_FMT "s/%+.3fs/%.3fs/%.3fs/%+ippm%s",
+@@ -673,6 +755,10 @@ static int manager_receive_response(sd_event_source *source, int fd, uint32_t re
+                 return r;
+         }
+ 
++        /* RDK patch for logging NTP connection error after few attempts during bootup */
++        /* System time was set successfully. Reseting logging retry counter  */
++        rdkNtpRetryCount = 0 ;
++
+         return 0;
+ }
+ 
+@@ -724,6 +810,12 @@ static int manager_begin(Manager *m) {
+         r = manager_listen_setup(m);
+         if (r < 0) {
+                 log_warning("Failed to setup connection socket: %s", strerror(-r));
++                if ( rdkNtpRetryCount <= RDK_NTP_CONNECTION_LOG_MAX_RETRY ) 
++                    rdkNtpRetryCount++ ;
++
++                if ( rdkNtpRetryCount == RDK_NTP_CONNECTION_LOG_MAX_RETRY ) {
++                    log_info("RDK-10038 : Failed to setup connection socket: %s", strerror(-r));
++                }
+                 return r;
+         }
+ 
+@@ -779,6 +871,12 @@ static int manager_resolve_handler(sd_resolve_query *q, int ret, const struct ad
+ 
+         if (ret != 0) {
+                 log_debug("Failed to resolve %s: %s", m->current_server_name->string, gai_strerror(ret));
++                if ( rdkNtpRetryCount <= RDK_NTP_CONNECTION_LOG_MAX_RETRY ) 
++                    rdkNtpRetryCount++ ;
++
++                if ( rdkNtpRetryCount == RDK_NTP_CONNECTION_LOG_MAX_RETRY ) {
++                   log_info("RDK-10038 : Failed to resolve %s: %s", m->current_server_name->string, gai_strerror(ret));
++                }
+ 
+                 /* Try next host */
+                 return manager_connect(m);
+@@ -793,12 +891,25 @@ static int manager_resolve_handler(sd_resolve_query *q, int ret, const struct ad
+ 
+                 if (!IN_SET(ai->ai_addr->sa_family, AF_INET, AF_INET6)) {
+                         log_warning("Unsuitable address protocol for %s", m->current_server_name->string);
++                        if ( rdkNtpRetryCount <= RDK_NTP_CONNECTION_LOG_MAX_RETRY ) 
++                            rdkNtpRetryCount++ ;
++
++                        if ( rdkNtpRetryCount == RDK_NTP_CONNECTION_LOG_MAX_RETRY ) {
++                            log_info("RDK-10038 : Unsuitable address protocol for %s", m->current_server_name->string);
++                 
++                        }
+                         continue;
+                 }
+ 
+                 r = server_address_new(m->current_server_name, &a, (const union sockaddr_union*) ai->ai_addr, ai->ai_addrlen);
+                 if (r < 0) {
+                         log_error("Failed to add server address: %s", strerror(-r));
++                        if ( rdkNtpRetryCount <= RDK_NTP_CONNECTION_LOG_MAX_RETRY ) 
++                            rdkNtpRetryCount++ ;
++
++                        if ( rdkNtpRetryCount == RDK_NTP_CONNECTION_LOG_MAX_RETRY ) {
++                            log_info("RDK-10038 : Failed to add server address: %s", strerror(-r));
++                        }
+                         return r;
+                 }
+ 
+@@ -808,6 +919,13 @@ static int manager_resolve_handler(sd_resolve_query *q, int ret, const struct ad
+ 
+         if (!m->current_server_name->addresses) {
+                 log_error("Failed to find suitable address for host %s.", m->current_server_name->string);
++                if ( rdkNtpRetryCount <= RDK_NTP_CONNECTION_LOG_MAX_RETRY ) 
++                    rdkNtpRetryCount++ ;
++
++                if ( rdkNtpRetryCount == RDK_NTP_CONNECTION_LOG_MAX_RETRY ) {
++                    log_info("RDK-10038 : Failed to find suitable address for host %s.", m->current_server_name->string);
++                }
++
+ 
+                 /* Try next host */
+                 return manager_connect(m);
+@@ -885,6 +1003,12 @@ int manager_connect(Manager *m) {
+                         if (!f) {
+                                 manager_set_server_name(m, NULL);
+                                 log_debug("No server found.");
++                                if ( rdkNtpRetryCount <= RDK_NTP_CONNECTION_LOG_MAX_RETRY ) 
++                                    rdkNtpRetryCount++ ;
++
++                                if ( rdkNtpRetryCount == RDK_NTP_CONNECTION_LOG_MAX_RETRY ) {
++                                    log_info("RDK-10038 : No server found.");
++                                }
+                                 return 0;
+                         }
+ 
+@@ -903,6 +1027,13 @@ int manager_connect(Manager *m) {
+                 r = sd_resolve_getaddrinfo(m->resolve, &m->resolve_query, m->current_server_name->string, "123", &hints, manager_resolve_handler, m);
+                 if (r < 0) {
+                         log_error("Failed to create resolver: %s", strerror(-r));
++                        if ( rdkNtpRetryCount <= RDK_NTP_CONNECTION_LOG_MAX_RETRY ) 
++                            rdkNtpRetryCount++ ;
++
++                        if ( rdkNtpRetryCount == RDK_NTP_CONNECTION_LOG_MAX_RETRY ) {
++                            log_info("RDK-10038 : Failed to create resolver: %s", strerror(-r));
++                        }
++
+                         return r;
+                 }
+ 
+@@ -1032,6 +1163,12 @@ static int manager_network_event_handler(sd_event_source *s, int fd, uint32_t re
+ 
+         if (connected && !online) {
+                 log_info("No network connectivity, watching for changes.");
++                if ( rdkNtpRetryCount <= RDK_NTP_CONNECTION_LOG_MAX_RETRY ) 
++                    rdkNtpRetryCount++ ;
++
++                if ( rdkNtpRetryCount == RDK_NTP_CONNECTION_LOG_MAX_RETRY ) {
++                    log_info("RDK-10038 : No network connectivity, watching for changes.");
++                }
+                 manager_disconnect(m);
+ 
+         } else if (!connected && online) {
+diff --git a/src/timesync/timesyncd-manager.h b/src/timesync/timesyncd-manager.h
+index 2345bf8..6874ed9 100644
+--- a/src/timesync/timesyncd-manager.h
++++ b/src/timesync/timesyncd-manager.h
+@@ -32,6 +32,9 @@ typedef struct Manager Manager;
+ 
+ #include "timesyncd-server.h"
+ 
++extern const short int RDK_NTP_CONNECTION_LOG_MAX_RETRY ;
++extern int rdkNtpRetryCount;
++
+ struct Manager {
+         sd_event *event;
+         sd_resolve *resolve;
+diff --git a/src/timesync/timesyncd.c b/src/timesync/timesyncd.c
+index 351bfd0..2f06e8b 100644
+--- a/src/timesync/timesyncd.c
++++ b/src/timesync/timesyncd.c
+@@ -29,6 +29,10 @@
+ #include "timesyncd-manager.h"
+ #include "timesyncd-conf.h"
+ 
++/* RDK patch for logging NTP connection error after few attempts during bootup */
++const short int RDK_NTP_CONNECTION_LOG_MAX_RETRY = 25;
++int rdkNtpRetryCount = 0 ;
++
+ static int load_clock_timestamp(uid_t uid, gid_t gid) {
+         _cleanup_close_ int fd = -1;
+         usec_t min = TIME_EPOCH * USEC_PER_SEC;

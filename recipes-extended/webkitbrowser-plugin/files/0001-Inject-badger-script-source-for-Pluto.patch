@@ -1,0 +1,255 @@
+From 7e65e6eed753cfdb4b4c231d8affab91881f220a Mon Sep 17 00:00:00 2001
+From: Ievgen Mutavchi <Ievgen_Mutavchi@comcast.com>
+Date: Fri, 14 Aug 2020 14:10:26 -0400
+Subject: [PATCH 1/2] Inject $badger script source for Pluto
+
+---
+ WebKitBrowser/HtmlApp.config                  |  12 ++
+ WebKitBrowser/InjectedBundle/BridgeObject.cpp | 155 +++++++++++++++++++++++++-
+ WebKitBrowser/InjectedBundle/BridgeObject.h   |   1 +
+ WebKitBrowser/InjectedBundle/main.cpp         |   4 +
+ 4 files changed, 170 insertions(+), 2 deletions(-)
+
+Index: git/WebKitBrowser/HtmlApp.config
+===================================================================
+--- git.orig/WebKitBrowser/HtmlApp.config
++++ git/WebKitBrowser/HtmlApp.config
+@@ -67,6 +67,18 @@ map()
+     kv(watchdogchecktimeoutinseconds 30)
+     kv(watchdoghangthresholdtinseconds 180)
+     kv(loadblankpageonsuspendenabled true)
++    if(PLUGIN_WEBKITBROWSER_BADGER_BRIDGE)
++    key(bundle)
++    map()
++         key(badger)
++         map()
++              kv(scripturl "https://cdn.thor.comcast.com/sdk/money-badger.min.js")
++              key(injectfor)
++              val(___array___)
++              val("https://xfinity.pluto.tv*")
++         end()
++    end()
++    endif()
+ end()
+ ans(configuration)
+ 
+Index: git/WebKitBrowser/InjectedBundle/BridgeObject.cpp
+===================================================================
+--- git.orig/WebKitBrowser/InjectedBundle/BridgeObject.cpp
++++ git/WebKitBrowser/InjectedBundle/BridgeObject.cpp
+@@ -21,6 +21,11 @@
+ 
+ #include "Utils.h"
+ 
++#include <vector>
++#include <string>
++#include <utility>
++#include <glib.h>
++
+ // Global handle to this bundle.
+ extern WKBundleRef g_Bundle;
+ 
+@@ -52,7 +57,18 @@ const char kBadgerEventSrc[] = R"jssrc(
+   window.$badger.event(obj.handlerId, obj.json)
+ )jssrc";
+ 
+-static string JSStringToString(JSStringRef str)
++const char kInjectBadgerSrc[] = R"jssrc(
++var scriptUrl = url;
++window.addEventListener('load', (event) => {
++  if (typeof $badger === 'undefined') {
++    var script = document.createElement('script');
++    script.src = scriptUrl;
++    document.getElementsByTagName('head')[0].appendChild(script);
++  }
++});
++)jssrc";
++
++static std::string JSStringToString(JSStringRef str)
+ {
+   if (!str)
+     return string();
+@@ -65,7 +81,7 @@ static string JSStringToString(JSStringR
+ static void LogException(JSContextRef ctx, JSValueRef exception)
+ {
+     JSStringRef exceptStr = JSValueToStringCopy(ctx, exception, nullptr);
+-    string errorStr = JSStringToString(exceptStr);
++    std::string errorStr = JSStringToString(exceptStr);
+     JSStringRelease(exceptStr);
+     TRACE_GLOBAL(Trace::Error, (_T("Got Exception: %s"), errorStr.c_str()));
+ }
+@@ -119,6 +135,95 @@ static void CallBridge(WKBundlePageRef p
+     }
+ }
+ 
++struct PatternSpec
++{
++    PatternSpec() = delete;
++    PatternSpec(const PatternSpec&) = delete;
++    PatternSpec & operator=(const PatternSpec&) = delete;
++    PatternSpec & operator=(PatternSpec&&) = delete;
++
++    PatternSpec(const std::string& pattern)
++        : _text(pattern)
++    {
++        _spec = g_pattern_spec_new(_text.c_str());
++    }
++    PatternSpec(PatternSpec&& o)
++        : _text(std::move(o._text))
++        , _spec(o._spec)
++    {
++        o._spec = nullptr;
++    }
++    ~PatternSpec()
++    {
++        if (_spec)
++            g_pattern_spec_free(_spec);
++    }
++    std::string _text;
++    GPatternSpec* _spec {nullptr};
++};
++
++static std::string g_badgerScriptUrl;
++static std::vector<PatternSpec> g_injectBadgerFor;
++
++void Initialize()
++{
++    auto requestConfig = []() -> std::string
++    {
++        std::string utf8MessageName(std::string(Tags::Config) + "badger");
++        WKStringRef jsMessageName = WKStringCreateWithUTF8CString(utf8MessageName.c_str());
++        WKMutableArrayRef messageBody = WKMutableArrayCreate();
++        WKTypeRef returnData;
++        WKBundlePostSynchronousMessage(WebKit::Utils::GetBundle(), jsMessageName, messageBody, &returnData);
++        std::string json (WebKit::Utils::WKStringToString(static_cast<WKStringRef>(returnData)));
++        WKRelease(returnData);
++        WKRelease(messageBody);
++        WKRelease(jsMessageName);
++        return json;
++    };
++
++    auto parseConfig = [](const string& json)
++    {
++        struct BadgerConfig : public Core::JSON::Container
++        {
++            BadgerConfig()
++                : Core::JSON::Container()
++            {
++                Add(_T("scripturl"), &ScriptUrl);
++                Add(_T("injectfor"), &InjectFor);
++            }
++            Core::JSON::String ScriptUrl;
++            Core::JSON::ArrayType<Core::JSON::String> InjectFor;
++        };
++
++        Core::OptionalType<Core::JSON::Error> error;
++        BadgerConfig config;
++        if (!config.FromString(json, error))
++        {
++            SYSLOG(Trace::Error,
++                   (_T("Failed to parse $badger config, error='%s', json='%s'\n"),
++                    (error.IsSet() ? error.Value().Message().c_str() : "unknown"), json.c_str()));
++            return false;
++        }
++
++        g_badgerScriptUrl = config.ScriptUrl.Value();
++        for (auto it = config.InjectFor.Elements(); it.Next();) {
++            if (!it.IsValid())
++                continue;
++            const auto &data  = it.Current();
++            g_injectBadgerFor.push_back(data.Value());
++        }
++        return true;
++    };
++
++    std::string json = requestConfig();
++    if (parseConfig(json)) {
++        SYSLOG(Trace::Information, (_T("Configured $badger script url: '%s'\n"), g_badgerScriptUrl.c_str()));
++        for (const auto& p : g_injectBadgerFor) {
++            SYSLOG(Trace::Information, (_T("Enable $badger script injection for: '%s'\n"), p._text.c_str()));
++        }
++    }
++}
++
+ void InjectJS(WKBundleFrameRef frame)
+ {
+     if (!WKBundleFrameIsMainFrame(frame))
+@@ -152,6 +257,52 @@ void InjectJS(WKBundleFrameRef frame)
+         LogException(context, exception);
+         return;
+     }
++
++    auto getProvisionalUrl = [](WKBundleFrameRef frame) {
++        std::string result;
++        auto frameUrl = WKBundleFrameCopyURL(frame);
++        if (frameUrl) {
++            auto urlString = WKURLCopyString(frameUrl);
++            result = WebKit::Utils::WKStringToString(urlString);
++            WKRelease(urlString);
++            WKRelease(frameUrl);
++        }
++        return result;
++    };
++
++    auto shouldInjectBadgerScript = [](const std::string url) {
++        for (const auto& p : g_injectBadgerFor) {
++            if (g_pattern_match_string(p._spec, url.c_str()))
++                return true;
++        }
++        return false;
++    };
++
++    std::string frameUrl = getProvisionalUrl(frame);
++    if ( shouldInjectBadgerScript(frameUrl) ) {
++        SYSLOG(Trace::Information, (_T("Injecting $badger script for: '%s'\n"), frameUrl.c_str()));
++
++        JSStringRef mbScriptStr = JSStringCreateWithUTF8CString(kInjectBadgerSrc);
++        JSStringRef paramNameStr = JSStringCreateWithUTF8CString("url");
++
++        JSObjectRef fun = JSObjectMakeFunction(context, nullptr, 1, &paramNameStr, mbScriptStr, nullptr, 1, &exception);
++
++        JSStringRelease(mbScriptStr);
++        JSStringRelease(paramNameStr);
++        if (exception) {
++            LogException(context, exception);
++            return;
++        }
++
++        JSStringRef scriptSrcStr = JSStringCreateWithUTF8CString(g_badgerScriptUrl.c_str());
++        JSValueRef argValue = JSValueMakeString(context, scriptSrcStr);
++        JSObjectCallAsFunction(context, fun, nullptr, 1, &argValue, &exception);
++        JSStringRelease(scriptSrcStr);
++        if (exception) {
++            LogException(context, exception);
++            return;
++        }
++    }
+ }
+ 
+ bool HandleMessageToPage(WKBundlePageRef page, WKStringRef messageName, WKTypeRef messageBody)
+Index: git/WebKitBrowser/InjectedBundle/BridgeObject.h
+===================================================================
+--- git.orig/WebKitBrowser/InjectedBundle/BridgeObject.h
++++ git/WebKitBrowser/InjectedBundle/BridgeObject.h
+@@ -26,6 +26,7 @@ namespace WPEFramework {
+ namespace JavaScript {
+ namespace BridgeObject {
+ 
++void Initialize();
+ bool HandleMessageToPage(WKBundlePageRef page, WKStringRef messageName, WKTypeRef messageBody);
+ void InjectJS(WKBundleFrameRef frame);
+ 
+Index: git/WebKitBrowser/InjectedBundle/main.cpp
+===================================================================
+--- git.orig/WebKitBrowser/InjectedBundle/main.cpp
++++ git/WebKitBrowser/InjectedBundle/main.cpp
+@@ -142,6 +142,9 @@ public:
+         }
+ #else
+         _whiteListedOriginDomainPairs = WhiteListedOriginDomainsList::RequestFromWPEFramework();
++        #if defined(ENABLE_BADGER_BRIDGE)
++        JavaScript::BridgeObject::Initialize();
++        #endif
+ #endif
+ 
+     }

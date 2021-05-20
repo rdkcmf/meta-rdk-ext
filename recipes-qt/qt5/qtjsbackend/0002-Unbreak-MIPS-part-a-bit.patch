@@ -1,0 +1,157 @@
+Date: Wed, 14 Nov 2012 07:33:16 +0000
+
+From: 4dcf22faf82ad2fa67814ae0674e0235a62d9ce0 Mon Sep 17 00:00:00 2001
+
+Subject: [PATCH] Unbreak MIPS part a bit.
+
+	Review URL: https://codereview.chromium.org/11293250
+
+Source: GOOGLE
+
+Upstream-Status: Submitted [ https://v8.googlecode.com/svn/branches/bleeding_edge@12955 ce2b1a6d-e550-0410-aec6-3dcde31c8c00 ]
+
+Signed-off-by: svenpanne@chromium.org
+---
+
+
+ src/mips/assembler-mips-inl.h |   11 +++++++++++
+ src/mips/builtins-mips.cc     |   19 +++++++++++++++++++
+ src/mips/codegen-mips.cc      |   24 ++++++++++++++++++++++++
+ src/mips/lithium-mips.cc      |    5 +++++
+ src/mips/stub-cache-mips.cc   |    6 +++---
+ 5 files changed, 62 insertions(+), 3 deletions(-)
+
+Index: qtjsbackend-opensource-src-5.1.1/src/3rdparty/v8/src/mips/assembler-mips-inl.h
+===================================================================
+--- qtjsbackend-opensource-src-5.1.1.orig/src/3rdparty/v8/src/mips/assembler-mips-inl.h	2014-04-18 21:06:22.144748003 +0000
++++ qtjsbackend-opensource-src-5.1.1/src/3rdparty/v8/src/mips/assembler-mips-inl.h	2014-04-18 21:11:46.316748009 +0000
+@@ -292,6 +292,17 @@
+ }
+ 
+ 
++Code* RelocInfo::code_age_stub() {
++  UNIMPLEMENTED();
++  return NULL;
++}
++
++
++void RelocInfo::set_code_age_stub(Code* stub) {
++  UNIMPLEMENTED();
++}
++
++
+ void RelocInfo::Visit(ObjectVisitor* visitor) {
+   RelocInfo::Mode mode = rmode();
+   if (mode == RelocInfo::EMBEDDED_OBJECT) {
+Index: qtjsbackend-opensource-src-5.1.1/src/3rdparty/v8/src/mips/builtins-mips.cc
+===================================================================
+--- qtjsbackend-opensource-src-5.1.1.orig/src/3rdparty/v8/src/mips/builtins-mips.cc	2014-04-18 21:06:22.128748003 +0000
++++ qtjsbackend-opensource-src-5.1.1/src/3rdparty/v8/src/mips/builtins-mips.cc	2014-04-18 21:11:46.320748006 +0000
+@@ -1255,6 +1255,25 @@
+ }
+ 
+ 
++// Just a dummy for now, so snapshot generation works.
++static void GenerateMakeCodeYoungAgainCommon(MacroAssembler* masm) {
++  __ Ret();
++}
++
++
++#define DEFINE_CODE_AGE_BUILTIN_GENERATOR(C)                 \
++void Builtins::Generate_Make##C##CodeYoungAgainEvenMarking(  \
++    MacroAssembler* masm) {                                  \
++  GenerateMakeCodeYoungAgainCommon(masm);                    \
++}                                                            \
++void Builtins::Generate_Make##C##CodeYoungAgainOddMarking(   \
++    MacroAssembler* masm) {                                  \
++  GenerateMakeCodeYoungAgainCommon(masm);                    \
++}
++CODE_AGE_LIST(DEFINE_CODE_AGE_BUILTIN_GENERATOR)
++#undef DEFINE_CODE_AGE_BUILTIN_GENERATOR
++
++
+ static void Generate_NotifyDeoptimizedHelper(MacroAssembler* masm,
+                                              Deoptimizer::BailoutType type) {
+   {
+Index: qtjsbackend-opensource-src-5.1.1/src/3rdparty/v8/src/mips/codegen-mips.cc
+===================================================================
+--- qtjsbackend-opensource-src-5.1.1.orig/src/3rdparty/v8/src/mips/codegen-mips.cc	2014-04-18 21:06:22.164748001 +0000
++++ qtjsbackend-opensource-src-5.1.1/src/3rdparty/v8/src/mips/codegen-mips.cc	2014-04-18 21:11:46.320748006 +0000
+@@ -448,6 +448,30 @@
+ 
+ #undef __
+ 
++
++byte* Code::FindPlatformCodeAgeSequence() {
++  UNIMPLEMENTED();
++  return NULL;
++}
++
++
++bool Code::IsYoungSequence(byte* sequence) {
++  UNIMPLEMENTED();
++  return false;
++}
++
++
++void Code::GetCodeAgeAndParity(byte* sequence, Age* age,
++                               MarkingParity* parity) {
++}
++
++
++void Code::PatchPlatformCodeAge(byte* sequence,
++                                Code::Age age,
++                                MarkingParity parity) {
++  UNIMPLEMENTED();
++}
++
+ } }  // namespace v8::internal
+ 
+ #endif  // V8_TARGET_ARCH_MIPS
+Index: qtjsbackend-opensource-src-5.1.1/src/3rdparty/v8/src/mips/lithium-mips.cc
+===================================================================
+--- qtjsbackend-opensource-src-5.1.1.orig/src/3rdparty/v8/src/mips/lithium-mips.cc	2014-04-18 21:06:22.184748002 +0000
++++ qtjsbackend-opensource-src-5.1.1/src/3rdparty/v8/src/mips/lithium-mips.cc	2014-04-18 21:11:46.320748006 +0000
+@@ -1099,6 +1099,11 @@
+ }
+ 
+ 
++LInstruction* LChunkBuilder::DoRor(HRor* instr) {
++  return DoShift(Token::ROR, instr);
++}
++
++
+ LInstruction* LChunkBuilder::DoShr(HShr* instr) {
+   return DoShift(Token::SHR, instr);
+ }
+Index: qtjsbackend-opensource-src-5.1.1/src/3rdparty/v8/src/mips/stub-cache-mips.cc
+===================================================================
+--- qtjsbackend-opensource-src-5.1.1.orig/src/3rdparty/v8/src/mips/stub-cache-mips.cc	2014-04-18 21:09:17.748748007 +0000
++++ qtjsbackend-opensource-src-5.1.1/src/3rdparty/v8/src/mips/stub-cache-mips.cc	2014-04-18 21:11:46.324748000 +0000
+@@ -1554,7 +1554,7 @@
+ 
+ Handle<Code> CallStubCompiler::CompileCallField(Handle<JSObject> object,
+                                                 Handle<JSObject> holder,
+-                                                int index,
++                                                PropertyIndex index,
+                                                 Handle<String> name) {
+   // ----------- S t a t e -------------
+   //  -- a2    : name
+@@ -2920,7 +2920,7 @@
+ 
+ Handle<Code> LoadStubCompiler::CompileLoadField(Handle<JSObject> object,
+                                                 Handle<JSObject> holder,
+-                                                int index,
++                                                PropertyIndex index,
+                                                 Handle<String> name) {
+   // ----------- S t a t e -------------
+   //  -- a0    : receiver
+@@ -3111,7 +3111,7 @@
+ Handle<Code> KeyedLoadStubCompiler::CompileLoadField(Handle<String> name,
+                                                      Handle<JSObject> receiver,
+                                                      Handle<JSObject> holder,
+-                                                     int index) {
++                                                     PropertyIndex index) {
+   // ----------- S t a t e -------------
+   //  -- ra    : return address
+   //  -- a0    : key

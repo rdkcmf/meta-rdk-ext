@@ -1,0 +1,36 @@
+From c060f3cf854ed98b6b5af11c89e69ac591273055 Mon Sep 17 00:00:00 2001
+From: mselva006c <mani_selvaraj@comcast.com>
+Date: Sat, 29 Aug 2020 00:28:45 +0000
+Subject: [PATCH] busybox ar is not able to handle deterministic archives
+ produced with  binutils archiver since it alters the archive headers by
+ shunting certain fields, busybox ar operates on fixed bytes which gets then
+ confused in parsing the file header.
+
+This is a workaround until busybox is fixed for
+
+https://bugs.busybox.net/show_bug.cgi?id=13036
+Source: COMCAST
+License: GPLV2+
+Upstream-Status: Inappropriate
+
+Signed-off-by: mselva006c <mani_selvaraj@comcast.com>
+---
+ opkg-build | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/opkg-build b/opkg-build
+index ebbf5a3..8fd04da 100755
+--- a/opkg-build
++++ b/opkg-build
+@@ -272,7 +272,7 @@ fi
+ 
+ rm -f $pkg_file
+ if [ "$outer" = "ar" ] ; then
+-  ( cd $tmp_dir && ar -crf $pkg_file ./debian-binary ./control.tar.gz ./data.tar.gz )
++  ( cd $tmp_dir && ar -crfU $pkg_file ./debian-binary ./control.tar.gz ./data.tar.gz )
+ else
+   ( cd $tmp_dir && tar -cz $tarformat -f $pkg_file ./debian-binary ./control.tar.gz ./data.tar.gz )
+ fi
+-- 
+2.17.1
+

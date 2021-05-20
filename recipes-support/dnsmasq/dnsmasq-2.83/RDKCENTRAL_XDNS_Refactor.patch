@@ -1,0 +1,700 @@
+Index: dnsmasq-2.83/src/arp.c
+===================================================================
+--- dnsmasq-2.83.orig/src/arp.c
++++ dnsmasq-2.83/src/arp.c
+@@ -366,6 +366,31 @@ int find_dnsoverride_defaultserver(union
+ 	return retval;
+ }
+ 
++int find_mac_tag(char* macaddr)
++{
++       if(!macaddr)
++       {
++               my_syslog(LOG_INFO, _("#### XDNS : find_mac_tag() Error Param!!"));
++               return -1; //fail
++       }
++
++       //my_syslog(LOG_WARNING, _("#### XDNS : find_dnsoverride_server(%s)"), macaddr);
++
++       struct dnsoverride_record *p = dnsrecs;
++       while(p)
++       {
++               if(strcmp(p->macaddr, macaddr) == 0)
++               {
++                                return p->list_tag; //success
++               }
++                p = p->next;
++       }
++
++       my_syslog(LOG_INFO, _("#### XDNS : find_mac_tag(%s) list tag not found!"), macaddr);
++
++       return -1; // not found
++}
++
+ /* </XDNS> */
+ 
+ 
+Index: dnsmasq-2.83/src/dnsmasq.h
+===================================================================
+--- dnsmasq-2.83.orig/src/dnsmasq.h
++++ dnsmasq-2.83/src/dnsmasq.h
+@@ -522,6 +522,7 @@ struct dnsoverride_record {
+ #ifdef HAVE_IPV6
+   union all_addr dnsaddr6;
+ #endif
++  int list_tag;
+   //int family;
+   struct dnsoverride_record *next;
+ };
+@@ -577,6 +578,12 @@ struct server {
+   struct server *next; 
+ };
+ 
++struct server_lists {
++  struct server* level_list;
++  int level_tag;
++  struct server_lists* next;
++};
++
+ struct ipsets {
+   char **sets;
+   char *domain;
+@@ -1060,6 +1067,12 @@ extern struct daemon {
+   struct server *dns_override_server; /* for XDNS */
+   struct server *dns_override_server2; /* for Secondary XDNS */
+   int protected_browsing_enable;
++  int use_xdns_refactor_code;
++  struct server_lists *xdns_server_lists; /*level of XDNS services list*/
++  int xdns_server_lists_count;
++  int xdns_default_list_no;
++  int xdns_forward_list_no;
++  int ip_type;
+   struct ipsets *ipsets;
+   int log_fac; /* log facility */
+   char *log_file; /* optional log file */
+@@ -1736,6 +1749,7 @@ struct dnsoverride_record* get_dnsoverri
+ struct dnsoverride_record* get_dnsoverride_defaultrecord();
+ int find_dnsoverride_server(char* macaddr, union all_addr* serv, int iptype,int count);
+ int find_dnsoverride_defaultserver(union all_addr* serv1,union all_addr* serv2, int iptype,int* primary);
++int find_mac_tag(char* macaddr);
+ int do_arp_script_run(void);
+ 
+ /* dump.c */
+Index: dnsmasq-2.83/src/edns0.c
+===================================================================
+--- dnsmasq-2.83.orig/src/edns0.c
++++ dnsmasq-2.83/src/edns0.c
+@@ -362,6 +362,52 @@ static size_t add_xdns_server(struct dns
+    int maclen = 0;
+    unsigned char mac[DHCP_CHADDR_MAX];
+ 
++   if(daemon->use_xdns_refactor_code)
++   {
++       // find mac from socket addr
++     if ((maclen = find_mac(l3, mac, 1, now)) != 0)
++     {
++       // get mac in string format
++       char strmac[REC_ADDR_MAX] = {0};
++       memset(strmac, 0, REC_ADDR_MAX);
++       print_mac(strmac, mac, maclen);
++
++               my_syslog(LOG_INFO, _("### XDNS - add_xdns_server() for mac [%s]"), strmac);
++
++               // find family type from socket addr
++               daemon->ip_type = 4;
++               if(l3->sa.sa_family == AF_INET)
++               {
++                       daemon->ip_type = 4;
++               }
++#ifdef HAVE_IPV6
++               else if(l3->sa.sa_family == AF_INET6)
++               {
++                       daemon->ip_type = 6;
++               }
++#endif
++
++                daemon->xdns_forward_list_no=find_mac_tag(strmac);
++                if(daemon->xdns_forward_list_no == -1)
++                        daemon->xdns_forward_list_no=daemon->xdns_default_list_no;
++
++
++        my_syslog(LOG_INFO, _("### XDNS- add_xdns_server() for mac [%s] send list tag is:\"%d\""), strmac,daemon->xdns_forward_list_no);
++
++
++                   // Trigger overriding of upstream server
++                   set_option_dnsoverride();
++    }
++        else
++        {
++                daemon->xdns_forward_list_no=daemon->xdns_default_list_no;
++                reset_option_dnsoverride();
++                my_syslog(LOG_INFO, _("#### XDNS : could not find MAC from l3 sockaddr so default fprward list is:\"%d\" !"),daemon->xdns_forward_list_no);
++        }
++
++   }
++   else
++   {
+        // find mac from socket addr
+    if ((maclen = find_mac(l3, mac, 1, now)) != 0)
+    {
+@@ -500,7 +546,7 @@ static size_t add_xdns_server(struct dns
+ 		reset_option_dnsoverride();
+ 		my_syslog(LOG_INFO, _("#### XDNS : could not find MAC from l3 sockaddr !"));
+ 	}
+-
++   }
+        return plen;
+ }
+ 
+Index: dnsmasq-2.83/src/forward.c
+===================================================================
+--- dnsmasq-2.83.orig/src/forward.c
++++ dnsmasq-2.83/src/forward.c
+@@ -456,7 +456,10 @@ static int forward_query(int udpfd, unio
+   
+   if (!flags && forward)
+     {
+-      struct server *firstsentto = start;
++      struct server *firstsentto = NULL;
++      if(!daemon->use_xdns_refactor_code)
++      	       firstsentto = start;
++
+       int subnet, cacheable, forwarded = 0;
+       size_t edns0_len;
+       unsigned char *pheader;
+@@ -472,6 +475,26 @@ static int forward_query(int udpfd, unio
+       if (!cacheable)
+ 	forward->flags |= FREC_NO_CACHE;
+ 
++      if(daemon->use_xdns_refactor_code)
++      {
++          struct server_lists *temp_server_lists = daemon->xdns_server_lists;
++          while(temp_server_lists != NULL)
++          {
++                //my_syslog(LOG_ERR, _("### XDNS # forward.c temp_server_lists->level_tag :\"%d\",daemon->xdns_forward_list_no:\"%d\""), temp_server_lists->level_tag,daemon->xdns_forward_list_no);
++                if(temp_server_lists->level_tag == daemon->xdns_forward_list_no)
++                {
++                        daemon->servers=temp_server_lists->level_list;
++                        break;
++                }
++                temp_server_lists=temp_server_lists->next;
++
++          }
++        start = daemon->servers;
++        firstsentto = start;
++        //forward->forwardall = 1;
++
++      }
++
+ #ifdef HAVE_DNSSEC
+       if (option_bool(OPT_DNSSEC_VALID) && do_dnssec)
+ 	{
+@@ -500,13 +523,42 @@ static int forward_query(int udpfd, unio
+ 	    PUTSHORT(SAFE_PKTSZ, pheader);
+ 	}
+ 
++      if(daemon->use_xdns_refactor_code)
++      {
++          my_syslog(LOG_INFO, _("#### XDNS - List of nameservers: "));
++          struct server *indx;
++          for (indx = daemon->servers; indx; indx = indx->next)
++          {
++            char strprn[64] = {0}; memset(strprn, 0, 64);
++            if(indx->addr.sa.sa_family == AF_INET)
++            {
++               inet_ntop(AF_INET, &(indx->addr.in.sin_addr), strprn, 64);
++               my_syslog(LOG_INFO, _("            [%s]     port: 0x%x, family: %d"), strprn, indx->addr.in.sin_port, indx->addr.in.sin_family);
++            }
++            else if(indx->addr.sa.sa_family == AF_INET6)
++            {
++               inet_ntop(AF_INET6, &(indx->addr.in6.sin6_addr), strprn, 64);
++               my_syslog(LOG_INFO, _("            [%s]     port: 0x%x, family: %d"), strprn, indx->addr.in6.sin6_port,indx->addr.in6.sin6_family);
++            }
++         }
++         my_syslog(LOG_INFO, _("#### XDNS - DNS request is ip_type:%d"),daemon->ip_type);
++      }
++
+       int primaryxdns=0;
+       while (1)
+ 	{ 
+ 	  /* only send to servers dealing with our domain.
+ 	     domain may be NULL, in which case server->domain 
+ 	     must be NULL also. */
+-	  
++
++           if((daemon->use_xdns_refactor_code) && (daemon->ip_type == 4 && start->addr.sa.sa_family != AF_INET) || (daemon->ip_type == 6 && start->addr.sa.sa_family != AF_INET6)){
++                if(start->next == NULL){
++                        break;
++                }else{
++                        start = start->next;
++                        continue;
++                }
++          }
+ 	  if (type == (start->flags & SERV_TYPE) &&
+ 	      (type != SERV_HAS_DOMAIN || hostname_isequal(domain, start->domain)) &&
+ 	      !(start->flags & (SERV_LITERAL_ADDRESS | SERV_LOOP)))
+@@ -514,6 +566,10 @@ static int forward_query(int udpfd, unio
+ 	      int fd;
+ 
+ // < XDNS for IPv6>
++              if(daemon->use_xdns_refactor_code)
++              {
++                daemon->dns_override_server = start;
++              }
+                  if(option_bool(OPT_DNS_OVERRIDE) && daemon->dns_override_server)
+                  {
+                                  my_syslog(LOG_INFO, _("#### XDNS - finding server socket to use based on dns_override_server family "));
+@@ -608,6 +664,8 @@ static int forward_query(int udpfd, unio
+ 		    PUTSHORT(start->edns_pktsz, pheader);
+ 		}
+ #endif
++             if(!daemon->use_xdns_refactor_code)
++	     {
+                  //<XDNS>
+                        //=====
+                  //my_syslog(LOG_INFO, _("#### XDNS - List of nameservers: "));
+@@ -683,6 +741,7 @@ static int forward_query(int udpfd, unio
+ 			{
+ 			  //my_syslog(LOG_WARNING, _("#### XDNS - Did not modify upstream addr!"));
+ 			}
++                 }
+                  // Print where udp send is sending to:
+                  char strprn[64] = {0}; memset(strprn, 0, 64);
+                  if(start->addr.sa.sa_family == AF_INET)
+@@ -732,13 +791,16 @@ static int forward_query(int udpfd, unio
+ 		  start->queries++;
+ 		  forwarded = 1;
+ 		  forward->sentto = start;
+-                  if(!primaryxdns)
++                  if(!daemon->use_xdns_refactor_code)
+                   {
++                     if(!primaryxdns)
++                     {
+                         primaryxdns= 1;
+-                  }
+-                  else
+-                  {
++                     }
++                     else
++                     {
+                         primaryxdns=0;
++                     }
+                   }
+ 		  if (!forward->forwardall) 
+ 		    break;
+Index: dnsmasq-2.83/src/network.c
+===================================================================
+--- dnsmasq-2.83.orig/src/network.c
++++ dnsmasq-2.83/src/network.c
+@@ -16,6 +16,7 @@
+ 
+ #include "dnsmasq.h"
+ 
++#define XDNS_NULL_MAC "00:00:00:00:00:00"
+ #ifdef HAVE_LINUX_NETWORK
+ 
+ int indextoname(int fd, int index, char *name)
+@@ -1722,6 +1723,9 @@ void print_dnsoverride_servers(struct dn
+ 
+         struct dnsoverride_record* p= pprec;
+ 	int i=0;
++        if(daemon->use_xdns_refactor_code)
++                my_syslog(LOG_ERR, _("#############   MAC_list with respective Level_tag    #############"));
++
+         while(p != NULL)
+         {
+ 		char ipv4add[64] = {0};
+@@ -1737,6 +1741,9 @@ void print_dnsoverride_servers(struct dn
+ #endif
+ 
+      		my_syslog(LOG_ERR, _("### XDNS # cpetag[%d] : \"%s\""), i, p->cpetag);
++
++                if(daemon->use_xdns_refactor_code)
++                        my_syslog(LOG_ERR, _("### XDNS # list_tag[%d] : \"%d\""), i, p->list_tag);
+                 p=p->next;
+ 		i++;
+ 
+@@ -1744,6 +1751,268 @@ void print_dnsoverride_servers(struct dn
+ 
+ }
+ 
++void print_xdns_servers_list(struct server_lists *xdns_server_lists)
++{
++        struct server_lists* temp_list=xdns_server_lists;
++        int j=1;
++        my_syslog(LOG_ERR, _("#############   Lists with respective level_tag    #############"));
++        while(temp_list !=NULL)
++        {
++                struct server* temp_server=NULL;
++                int i=0;
++                temp_server=temp_list->level_list;
++                my_syslog(LOG_ERR, _("### XDNS # list[%d] with level_tag :\"%d\""), j, temp_list->level_tag);
++                while(temp_server != NULL)
++                {
++                        char strprn[64] = {0}; memset(strprn, 0, 64);
++                        if(temp_server->addr.sa.sa_family == AF_INET)
++                        {
++                                inet_ntop(AF_INET, &(temp_server->addr.in.sin_addr), strprn, 64);
++                                my_syslog(LOG_ERR, _("### XDNS # port: 0x%x,XDNSSERVERV4[%d][%d] : \"%s\""),temp_server->addr.in.sin_port,temp_list->level_tag,i, strprn);
++                        }
++                        else if(temp_server->addr.sa.sa_family == AF_INET6)
++                        {
++                                inet_ntop(AF_INET6, &(temp_server->addr.in6.sin6_addr), strprn, 64);
++                                my_syslog(LOG_ERR, _("### XDNS # port: 0x%x,XDNSSERVERV6[%d][%d] : \"%s\""),temp_server->addr.in6.sin6_port,temp_list->level_tag,i, strprn);
++                        }
++                        i++;
++                        temp_server=temp_server->next;
++
++                }
++                j++;
++                temp_list=temp_list->next;
++        }
++        my_syslog(LOG_ERR, _("### XDNS # default level_tag :\"%d\""), daemon->xdns_default_list_no);
++
++}
++
++static int find_mac_list(struct dnsoverride_record *pprec,char *mac)
++{
++        if( pprec == NULL || !mac)
++        {
++               my_syslog(LOG_ERR, _("### XDNS # pprec or mac address EMPTY find_mac_list failed  !!"));
++               return 0; //fail
++        }
++        int ret=0;
++        struct dnsoverride_record *temp = pprec;
++        while(temp != NULL)
++        {
++                if(strcmp(temp->macaddr,mac)==0)
++                {
++                        ret=temp->list_tag;
++                        break;
++                }
++                temp=temp->next;
++        }
++
++        return ret;
++
++}
++
++static int find_ip_list(char *srvaddr4, char *srvaddr6,struct dnsoverride_record *pprec)
++{
++       if(!srvaddr4)
++       {
++               my_syslog(LOG_ERR, _("### XDNS # srvaddr4 NULL, skipping find_ip_list !!"));
++               return 0;
++       }
++#ifdef HAVE_IPV6
++       if(srvaddr6 == NULL)
++       {
++               my_syslog(LOG_ERR, _("### XDNS # srvaddr6 NULL, skipping find_ip_list !!"));
++               return 0; //fail
++       }
++
++#endif
++
++       if(pprec == NULL)
++       {
++               my_syslog(LOG_ERR, _("### XDNS # pprec NULL, skipping find_ip_list !!"));
++               return 0; //fail
++       }
++
++
++        struct dnsoverride_record *temp = pprec;
++        int ret=0;
++
++        while(temp != NULL )
++        {
++                int got_ipv4=0;
++                int got_ipv6=0;
++                if(strcmp(temp->macaddr,XDNS_NULL_MAC)!=0)
++                {
++                        char strprn[64] = {0}; memset(strprn, 0, 64);
++                        inet_ntop(AF_INET, &(temp->dnsaddr4.addr4), strprn, 64);
++                        if(strcmp(strprn,srvaddr4)==0)
++                        {
++                                got_ipv4=1;
++                        }
++#ifdef HAVE_IPV6
++                        memset(strprn, 0, 64);
++                        inet_ntop(AF_INET6, &(temp->dnsaddr6.addr6), strprn, 64);
++                        if(strcmp(strprn,srvaddr6)==0)
++                        {
++                                got_ipv6=1;
++                        }
++#endif
++
++                }
++
++                if(got_ipv4
++#ifdef HAVE_IPV6
++                        && got_ipv6
++#endif
++                                )
++                {
++                        ret=temp->list_tag;
++                        break;
++                }
++                temp=temp->next;
++        }
++
++        return ret;
++
++}
++
++static int add_xdns_servers_list(char *srvaddr4, char *srvaddr6,struct server_lists *xdns_servers,int listno)
++{
++
++        if(xdns_servers == NULL)
++        {
++               my_syslog(LOG_ERR, _("### XDNS # xdns_servers_list EMPTY add_xdns_servers_list failed  !!"));
++               return 0; //fail
++        }
++
++        struct server **fill_server=NULL;
++        int list_found=0;
++        struct server_lists *traverse = xdns_servers;
++                while(traverse!=NULL)
++                {
++                        if(traverse->level_tag==listno)
++                        {
++                                fill_server=&(traverse->level_list);
++                                list_found=1;
++                                break;
++                        }
++                        traverse=traverse->next;
++                }
++
++                if(!list_found)
++                {
++                        my_syslog(LOG_ERR, _("### XDNS # %d listno is not found in xdns_servers_list, add_xdns_servers_list failed  !!"),listno);
++                        return 0; //fail
++
++                }
++
++
++
++                struct server *ipv4_node=NULL;
++                        if(ipv4_node=whine_malloc(sizeof(struct server)))
++                        {
++                                memset(ipv4_node, 0, sizeof(struct server));
++                                if (inet_pton(AF_INET, srvaddr4, &(ipv4_node->addr.in.sin_addr)) != 1)
++                                {
++                                        my_syslog(LOG_ERR, _("### XDNS # Error converting IP4 addr!"));
++                                        free(ipv4_node);
++                                        return 0;
++                                }
++#ifdef HAVE_SOCKADDR_SA_LEN
++                                ipv4_node->addr.in.sin_len=sizeof(ipv4_node->addr.in);
++#endif
++                                ipv4_node->addr.in.sin_family= AF_INET;
++                                ipv4_node->addr.sa.sa_family= AF_INET;
++                                ipv4_node->addr.in.sin_port=htons(NAMESERVER_PORT);
++                                ipv4_node->next=NULL;
++                        }
++
++
++#ifdef HAVE_IPV6
++                struct server *ipv6_node=NULL;
++                        if(ipv6_node=whine_malloc(sizeof(struct server)))
++                        {
++                                memset(ipv6_node, 0, sizeof(struct server));
++                                if (inet_pton(AF_INET6, srvaddr6, &(ipv6_node->addr.in6.sin6_addr)) != 1)
++                                {
++                                        my_syslog(LOG_ERR, _("### XDNS # Error converting IP6 addr!"));
++                                        free(ipv6_node);
++                                        return 0;
++                                }
++#ifdef HAVE_SOCKADDR_SA_LEN
++                                ipv6_node->addr.in6.sin6_len=sizeof(ipv4_node->addr.in6);
++#endif
++                                ipv6_node->addr.in6.sin6_family= AF_INET6;
++                                ipv6_node->addr.sa.sa_family= AF_INET6;
++                                ipv6_node->addr.in6.sin6_port=htons(NAMESERVER_PORT);
++                                ipv6_node->next=NULL;
++                                ipv4_node->next=ipv6_node;
++                        }
++#endif
++
++                        if(*fill_server==NULL)
++                        {
++
++                                *fill_server=ipv4_node;
++                        }
++                        else
++                        {
++                                struct server *temp=*fill_server;
++                                while(temp->next !=NULL)
++                                {
++                                        temp=temp->next;
++                                }
++                                temp->next=ipv4_node;
++
++                        }
++
++                        return 1;
++}
++
++static int create_xdns_servers_list(char *srvaddr4, char *srvaddr6,struct server_lists **xdns_servers,int listno)
++{
++       if(!srvaddr4) //MAC and Serv addr are must. cpetag is optional
++       {
++               my_syslog(LOG_ERR, _("### XDNS # mandatory fields ipv4addr missing, skipping create_xdns_servers_list !!"));
++               return 0; //fail
++       }
++#ifdef HAVE_IPV6
++       if(srvaddr6 == NULL)
++       {
++               my_syslog(LOG_ERR, _("### XDNS # mandatory fields ipv4addr missing, skipping create_xdns_servers_list !!"));
++               return 0; //fail
++       }
++
++#endif
++        struct server_lists* new_list = NULL;
++
++
++        if(new_list = whine_malloc(sizeof(struct server_lists)))
++        {
++                memset(new_list, 0, sizeof(struct server_lists));
++                new_list->level_tag=listno;
++                new_list->next=NULL;
++
++        }
++
++        if(*xdns_servers == NULL)
++        {
++                *xdns_servers=new_list;
++        }
++        else
++        {
++                struct server_lists* temp = *xdns_servers;
++                while(temp->next != NULL)
++                {
++                        temp=temp->next;
++                }
++
++                temp->next=new_list;
++        }
++
++        add_xdns_servers_list(srvaddr4, srvaddr6,*xdns_servers,listno);
++
++        return 1;
++}
++
+ /* XDNS - Helper to create override server entries in record. Builds pprec list and returns the head. */
+ static int create_dnsoverride_servers(struct dnsoverride_record **pprec, char* macaddr, char *srvaddr4, char *srvaddr6, char *cpetag)
+ {
+@@ -1804,9 +2073,54 @@ static int create_dnsoverride_servers(st
+                }
+ 
+                entry->next = NULL;
+-               if(*pprec == NULL)
+-               {
+-			*pprec = entry;
++			   if(daemon->use_xdns_refactor_code)
++			   {
++				   if(*pprec == NULL)
++				   {
++					   daemon->xdns_server_lists_count=1;
++					   entry->list_tag=daemon->xdns_server_lists_count;
++					   create_xdns_servers_list(srvaddr4,srvaddr6,&(daemon->xdns_server_lists),daemon->xdns_server_lists_count);
++					   if(strcmp(macaddr,XDNS_NULL_MAC)==0)
++						   daemon->xdns_default_list_no=daemon->xdns_server_lists_count;
++				   }
++				   else
++				   {
++					   int index=0;
++					   if(strcmp(macaddr,XDNS_NULL_MAC)==0)
++					   {
++						   index=find_mac_list(*pprec,XDNS_NULL_MAC);
++						   if(!index)
++						   {
++							   daemon->xdns_server_lists_count++;
++							   entry->list_tag=daemon->xdns_server_lists_count;
++							   create_xdns_servers_list(srvaddr4,srvaddr6,&(daemon->xdns_server_lists),daemon->xdns_server_lists_count);
++								   daemon->xdns_default_list_no=daemon->xdns_server_lists_count;
++						   }
++						   else
++						   {
++							   entry->list_tag=index;
++							   add_xdns_servers_list(srvaddr4, srvaddr6,daemon->xdns_server_lists,index);
++						   }
++					   }
++					   else
++					   {
++						   index=find_ip_list(srvaddr4,srvaddr6,*pprec);
++						   if(!index)
++						   {
++							   daemon->xdns_server_lists_count++;
++							   entry->list_tag=daemon->xdns_server_lists_count;
++							   create_xdns_servers_list(srvaddr4,srvaddr6,&(daemon->xdns_server_lists),daemon->xdns_server_lists_count);
++						   }
++						   else
++						   {
++							   entry->list_tag=index;
++						   }
++					   }
++				   }
++			   }
++           if(*pprec == NULL)
++           {
++   			  *pprec = entry;
+ 	       }
+ 	       else
+ 	       {
+@@ -1830,6 +2144,7 @@ int reload_servers(char *fname)
+   int gotone = 0;
+   /* XDNS - dns override servers record */
+   struct dnsoverride_record *prec = NULL;
++  daemon->xdns_server_lists = NULL;
+ 
+   /* buff happens to be MAXDNAME long... */
+   if (!(f = fopen(fname, "r")))
+@@ -1841,7 +2156,7 @@ int reload_servers(char *fname)
+     {
+       my_syslog(LOG_ERR, _("#############   XDNS : reload_servers()     read file :   %s    #############"), fname);
+     }
+-   
++  my_syslog(LOG_ERR, _("#############   XDNS : reload_servers() using XDNS Refactor code :%d    #############"),daemon->use_xdns_refactor_code);
+   mark_servers(SERV_FROM_RESOLV);
+     
+   while ((line = fgets(daemon->namebuff, MAXDNAME, f)))
+@@ -1943,6 +2258,8 @@ int reload_servers(char *fname)
+     }
+   /* XDNS - Call to update the records in arp dnsoverride records*/
+   print_dnsoverride_servers(prec);
++  if(daemon->use_xdns_refactor_code)
++     print_xdns_servers_list(daemon->xdns_server_lists);
+   update_dnsoverride_records(prec);
+ 
+   fclose(f);
+Index: dnsmasq-2.83/src/option.c
+===================================================================
+--- dnsmasq-2.83.orig/src/option.c
++++ dnsmasq-2.83/src/option.c
+@@ -169,6 +169,7 @@ struct myoption {
+ #define LOPT_SCRIPT_TIME   360
+ #define LOPT_PXE_VENDOR    361
+ #define LOPT_DNSOVERRIDE   362
++#define LOPT_REFAC_CODE    363
+  
+ #ifdef HAVE_GETOPT_LONG
+ static const struct option opts[] =  
+@@ -305,6 +306,7 @@ static const struct myoption opts[] =
+     { "dhcp-generate-names", 2, 0, LOPT_GEN_NAMES },
+     { "rebind-localhost-ok", 0, 0,  LOPT_LOC_REBND },
+     { "add-mac", 2, 0, LOPT_ADD_MAC },
++    { "xdns-refac-code", 2, 0, LOPT_REFAC_CODE },
+     { "add-subnet", 2, 0, LOPT_ADD_SBNET },
+     { "add-cpe-id", 1, 0 , LOPT_CPE_ID },
+     { "proxy-dnssec", 0, 0, LOPT_DNSSEC },
+@@ -2422,6 +2424,10 @@ static int one_opt(int option, char *arg
+ 	}
+       break;
+ 
++    case LOPT_REFAC_CODE:
++      daemon->use_xdns_refactor_code = 1;
++      break;
++
+     case 'u':  /* --user */
+       daemon->username = opt_string_alloc(arg);
+       break;

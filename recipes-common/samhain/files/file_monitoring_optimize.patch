@@ -1,0 +1,56 @@
+Copyright (C) 1989, 1991 Free Software Foundation, Inc.
+
+This program is free software; you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation; either version 2 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program; if not, write to the Free Software
+Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+
+Date: Jun 16, 2017 6:01 PM
+
+From: be8b3d877420cb932819a9dab69888416eb30162 Dec 9, 2017 12:12 AM
+
+Subject: [PATCH] RDKB-3293, RDKB-14901 : Poring samhain on RDK Broadband
+
+        Ignoring obscure file name check to reduce time for processing.
+
+Source: COMCAST
+
+Upstream-Status: Pending
+
+Signed-off-by: gkrishnansubramanian <Gopi_KrishnanSubramanian@comcast.com>
+---
+
+diff --git a/src/sh_utils.c b/src/sh_utils.c
+index 95d4b0f..fc0fbe4 100644
+--- a/src/sh_utils.c
++++ b/src/sh_utils.c
+@@ -115,6 +115,9 @@ static char * sh_update_file = NULL;
+ 
+ int sh_util_update_file (const char * str)
+ {
++
++
++
+   if (str)
+     {
+       if (0 == access(str, R_OK)) /* flawfinder: ignore */
+@@ -1834,6 +1837,10 @@ int sh_util_obscurename (ShErrLevel level, const char * name_orig, int flag)
+   size_t len = 0;
+ 
+   SL_ENTER(_("sh_util_obscurename"));
++  /* Ignore obscure file name check to reduce time for processing */
++  SL_RETURN((0),_("sh_util_obscurename"));
++
++  printf("#### CPE Debug - check for obscure file names \n");
+ 
+   ASSERT_RET((name != NULL), _("name != NULL"), (0))
+ 

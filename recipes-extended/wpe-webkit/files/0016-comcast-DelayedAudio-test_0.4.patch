@@ -1,0 +1,43 @@
+From 046fab5004b9e06d42aff8407d9f0e73073e1ba6 Mon Sep 17 00:00:00 2001
+From: mgopalakirshnan <manigandan.gopalakrishnan@lnttechservices.com>
+Date: Fri, 5 Jan 2018 11:47:44 +0000
+Subject: [PATCH] 0016-comcast-DelayedAudio-test
+
+---
+ .../platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp      | 5 +++++
+ .../graphics/gstreamer/mse/MediaPlayerPrivateGStreamerMSE.cpp        | 3 +++
+ 2 files changed, 8 insertions(+)
+
+diff --git a/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp b/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp
+index 13359318ab8..f756c560b16 100644
+--- a/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp
++++ b/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp
+@@ -467,6 +467,11 @@ bool MediaPlayerPrivateGStreamer::changePipelineState(GstState newState)
+         return true;
+     }
+ 
++    if (m_readyState <= MediaPlayer::HaveMetadata && newState == GST_STATE_PLAYING) {
++        GST_DEBUG("Rejected state change to playing, buffers are not ready yet");
++        return true;
++    }
++
+     GST_DEBUG("Changing state change to %s from %s with %s pending", gst_element_state_get_name(newState),
+         gst_element_state_get_name(currentState), gst_element_state_get_name(pending));
+ 
+diff --git a/Source/WebCore/platform/graphics/gstreamer/mse/MediaPlayerPrivateGStreamerMSE.cpp b/Source/WebCore/platform/graphics/gstreamer/mse/MediaPlayerPrivateGStreamerMSE.cpp
+index c52a0dd2bb2..af42d4f80cf 100644
+--- a/Source/WebCore/platform/graphics/gstreamer/mse/MediaPlayerPrivateGStreamerMSE.cpp
++++ b/Source/WebCore/platform/graphics/gstreamer/mse/MediaPlayerPrivateGStreamerMSE.cpp
+@@ -583,6 +583,9 @@ void MediaPlayerPrivateGStreamerMSE::updateStates()
+                 GST_DEBUG("m_readyState=%s", dumpReadyState(m_readyState));
+                 m_networkState = MediaPlayer::Loaded;
+             } else {
++                if (m_mediaSource)
++                    m_mediaSource->monitorSourceBuffers();
++
+                 m_readyState = MediaPlayer::HaveFutureData;
+                 GST_DEBUG("m_readyState=%s", dumpReadyState(m_readyState));
+                 m_networkState = MediaPlayer::Loading;
+-- 
+2.14.2
+

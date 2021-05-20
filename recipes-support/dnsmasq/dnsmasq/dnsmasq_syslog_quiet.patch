@@ -1,0 +1,13 @@
+--- dnsmasq-2.83_orig/src/log.c	2021-03-31 13:34:07.806381135 +0000
++++ dnsmasq-2.83/src/log.c	2021-03-31 13:35:57.406138866 +0000
+@@ -307,6 +307,10 @@
+       fputc('\n', stderr);
+     }
+ 
++   /* quiet the debug/info level logs if we are not in debug mode*/
++  if(!option_bool(OPT_DEBUG) && priority > LOG_WARNING)
++      return;
++
+   if (log_fd == -1)
+     {
+ #ifdef __ANDROID__

@@ -1,0 +1,72 @@
+Copyright 2014 The Chromium Authors. All rights reserved.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are
+met:
+
+    * Redistributions of source code must retain the above copyright
+notice, this list of conditions and the following disclaimer.
+    * Redistributions in binary form must reproduce the above
+copyright notice, this list of conditions and the following disclaimer
+in the documentation and/or other materials provided with the
+distribution.
+    * Neither the name of Google Inc. nor the names of its
+contributors may be used to endorse or promote products derived from
+this software without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+"AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+ATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+Date: Aug 07 17:09:26 2017
+
+From: 7b63a1f0857bcaacf6e78b736afe3ccbc4dce9f6 Aug 07 17:09:26 2017
+
+Subject: [PATCH] RDK-20100 : opencdm build error with Yocto Morty version
+	
+	Make file changes to build opencdm in Morty version.
+
+Source: COMCAST
+
+Upstream-Status: Pending
+
+Signed-off-by: Vargheese Baby <vargheesebaby@tataelxsi.com>
+---
+
+Index: git/src/browser/wpe/test/Makefile
+===================================================================
+--- git.orig/src/browser/wpe/test/Makefile
++++ git/src/browser/wpe/test/Makefile
+@@ -42,20 +42,19 @@ OCDM_INCLUDES = -I $(OCDM_ROOT_PATH) \
+ 
+ CXFLAGS := -std=c++11 -g $(OCDM_INCLUDES) -pthread $(CXXFLAGS)
+ 
+-all: ocdm_client ocdm_decryptor
++all:
+ 	@echo "Building ocdm client"
+ 
+-ocdm_client: ocdm_client.cpp
+ 	$(MAKE) -C $(OCDM_CLIENT_DIR)/../opencdm all
+ 	@mkdir -p $(OCDM_WPE_ROOT_PATH)/bin
+-	$(CXX) $< $(CXFLAGS) $(LD_FLAGS) -Wall -o  $(OCDM_WPE_ROOT_PATH)/bin/ocdm_client
++	$(CXX) ocdm_client.cpp $(CXFLAGS) $(LD_FLAGS) -Wall -o  $(OCDM_WPE_ROOT_PATH)/bin/ocdm_client
+ 
+ 	@echo "Building ocdm decryptor"
+ 
+-ocdm_decryptor: ocdm_decryptor.cpp
+ 	$(MAKE) -C $(OCDM_CLIENT_DIR)/../opencdm all
+ 	@cd $(OCDM_WPE_ROOT_PATH)/bin
+-	$(CXX) $< $(CXFLAGS) $(LD_FLAGS) -Wall -o  $(OCDM_WPE_ROOT_PATH)/bin/ocdm_decryptor
++	$(CXX) ocdm_decryptor.cpp $(CXFLAGS) $(LD_FLAGS) -Wall -o  $(OCDM_WPE_ROOT_PATH)/bin/ocdm_decryptor
++	@echo "BUILT ocdm decryptor"
+ 
+ .PHONY: clean ocdm_client ocdm_decryptor
+ clean:

@@ -1,0 +1,30 @@
+From 8265209144fdec373cbd74366c7799dffc34b5f6 Mon Sep 17 00:00:00 2001
+From: "Vivek.A" <Vivek_Arumugam@comcast.com>
+Date: Mon, 28 Dec 2020 21:04:39 +0000
+Subject: [PATCH] Update CDMInstance on attempt to decrypt
+
+Change-Id: I4c89b4c4ad53f031bc730e5023fbc7f11d67f43b
+---
+ .../graphics/gstreamer/MediaPlayerPrivateGStreamerBase.cpp  | 6 ++++++
+ 1 file changed, 6 insertions(+)
+
+diff --git a/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamerBase.cpp b/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamerBase.cpp
+index 6ffc695896ef..8f322fb89755 100644
+--- a/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamerBase.cpp
++++ b/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamerBase.cpp
+@@ -1534,6 +1534,12 @@ void MediaPlayerPrivateGStreamerBase::cdmInstanceDetached(CDMInstance& instance)
+ void MediaPlayerPrivateGStreamerBase::attemptToDecryptWithInstance(CDMInstance& instance)
+ {
+     ASSERT(isMainThread());
++
++    if(!m_cdmInstance) {
++        cdmInstanceAttached(instance);
++        return;
++    }
++
+     ASSERT(m_cdmInstance.get() == &instance);
+     GST_TRACE("instance %p, current stored %p", &instance, m_cdmInstance.get());
+     attemptToDecryptWithLocalInstance();
+-- 
+2.24.0
+

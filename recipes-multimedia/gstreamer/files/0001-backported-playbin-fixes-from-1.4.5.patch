@@ -1,0 +1,118 @@
+Date: Wed, 21 Oct 2015 15:32:40 +0300
+
+From: 5b2ca0379810791b9cfdc343ba765c314d431339 Mon Sep 17 00:00:00 2001
+
+Subject: [PATCH] WKIT-365: Backported playbin fixes from 1.4.5
+
+	Backported playbin fixes from 1.4.5
+
+	commit b9cbfcdeb45f39998cd46ee0c9154fc0af704db2 - do not mix up stream type when getting stream combiner element
+	commit 7e801a5f26f5a297b795f83d18d178c5ace42cf7 - always unref the combiner sinkpad when removing the srcpad
+	commit 1ed192abb034b50126807b940c94d00992d617d0 - fix 'attempt to unlock mutex that was not locked' in error code path
+
+Source: COMCAST
+
+License: LGPL-2.1-or-later
+
+Upstream-Status: Pending
+
+Signed-off-by: Eugene Mutavchi <emutavchi@productengine.com>
+---
+
+ gst/playback/gstplaybin2.c | 41 ++++++++++++++++++++++-------------------
+ 1 file changed, 22 insertions(+), 19 deletions(-)
+
+diff --git a/gst/playback/gstplaybin2.c b/gst/playback/gstplaybin2.c
+index 5583de1..2b7416e 100644
+--- a/gst/playback/gstplaybin2.c
++++ b/gst/playback/gstplaybin2.c
+@@ -2032,6 +2032,22 @@ gst_play_bin_suburidecodebin_seek_to_start (GstSourceGroup * group)
+     gst_iterator_free (it);
+ }
+ 
++static void
++source_combine_remove_pads (GstPlayBin * playbin, GstSourceCombine * combine)
++{
++  if (combine->sinkpad) {
++    GST_LOG_OBJECT (playbin, "unlinking from sink");
++    gst_pad_unlink (combine->srcpad, combine->sinkpad);
++
++    /* release back */
++    GST_LOG_OBJECT (playbin, "release sink pad");
++    gst_play_sink_release_pad (playbin->playsink, combine->sinkpad);
++    gst_object_unref (combine->sinkpad);
++    combine->sinkpad = NULL;
++  }
++  gst_object_unref (combine->srcpad);
++  combine->srcpad = NULL;
++}
+ 
+ static GstPadProbeReturn
+ block_serialized_data_cb (GstPad * pad, GstPadProbeInfo * info,
+@@ -2552,12 +2568,12 @@ gst_play_bin_get_property (GObject * object, guint prop_id, GValue * value,
+     case PROP_AUDIO_STREAM_COMBINER:
+       g_value_take_object (value,
+           gst_play_bin_get_current_stream_combiner (playbin,
+-              &playbin->audio_stream_combiner, "audio", PLAYBIN_STREAM_VIDEO));
++              &playbin->audio_stream_combiner, "audio", PLAYBIN_STREAM_AUDIO));
+       break;
+     case PROP_TEXT_STREAM_COMBINER:
+       g_value_take_object (value,
+           gst_play_bin_get_current_stream_combiner (playbin,
+-              &playbin->text_stream_combiner, "text", PLAYBIN_STREAM_VIDEO));
++              &playbin->text_stream_combiner, "text", PLAYBIN_STREAM_TEXT));
+       break;
+     case PROP_VOLUME:
+       g_value_set_double (value, gst_play_sink_get_volume (playbin->playsink));
+@@ -3353,8 +3369,7 @@ pad_removed_cb (GstElement * decodebin, GstPad * pad, GstSourceGroup * group)
+   if ((combine = g_object_get_data (G_OBJECT (pad), "playbin.combine"))) {
+     g_assert (combine->combiner == NULL);
+     g_assert (combine->srcpad == pad);
+-    gst_object_unref (pad);
+-    combine->srcpad = NULL;
++    source_combine_remove_pads (playbin, combine);
+     goto exit;
+   }
+ 
+@@ -3405,8 +3420,7 @@ pad_removed_cb (GstElement * decodebin, GstPad * pad, GstSourceGroup * group)
+     if (!combine->channels->len && combine->combiner) {
+       GST_DEBUG_OBJECT (playbin, "all combiner sinkpads removed");
+       GST_DEBUG_OBJECT (playbin, "removing combiner %p", combine->combiner);
+-      gst_object_unref (combine->srcpad);
+-      combine->srcpad = NULL;
++      source_combine_remove_pads (playbin, combine);
+       gst_element_set_state (combine->combiner, GST_STATE_NULL);
+       gst_bin_remove (GST_BIN_CAST (playbin), combine->combiner);
+       combine->combiner = NULL;
+@@ -5219,6 +5233,7 @@ no_decodebin:
+ uridecodebin_failure:
+   {
+     GST_DEBUG_OBJECT (playbin, "failed state change of uridecodebin");
++    GST_SOURCE_GROUP_LOCK (group);
+     goto error_cleanup;
+   }
+ sink_failure:
+@@ -5285,19 +5300,7 @@ deactivate_group (GstPlayBin * playbin, GstSourceGroup * group)
+     GST_DEBUG_OBJECT (playbin, "unlinking combiner %s", combine->media_list[0]);
+ 
+     if (combine->srcpad) {
+-      if (combine->sinkpad) {
+-        GST_LOG_OBJECT (playbin, "unlinking from sink");
+-        gst_pad_unlink (combine->srcpad, combine->sinkpad);
+-
+-        /* release back */
+-        GST_LOG_OBJECT (playbin, "release sink pad");
+-        gst_play_sink_release_pad (playbin->playsink, combine->sinkpad);
+-        gst_object_unref (combine->sinkpad);
+-        combine->sinkpad = NULL;
+-      }
+-
+-      gst_object_unref (combine->srcpad);
+-      combine->srcpad = NULL;
++      source_combine_remove_pads (playbin, combine);
+     }
+ 
+     if (combine->combiner) {
+-- 
+2.1.4
+

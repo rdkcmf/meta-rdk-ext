@@ -1,0 +1,88 @@
+Date: Sep 09 07:59:42 2019
+
+From: f0723b79c31a6dc149641deb6129815627df88d8 Sep 24 01:25:11 2019
+
+Subject: [PATCH] XRE-14256: Send "voiceGuidanceMode" property from rdkbrowser to RDK-AT
+
+	Expose a Bundle API to enable / disable accessibility
+	based on voiceGuidanceMode property from chariot
+
+Source: COMCAST
+
+License: BSD-2-Clause
+
+Upstream-Status: Pending
+
+Signed-off-by:  Vivek.A <Vivek_Arumugam@Comcast.Com>
+---
+
+diff --git a/Source/WebKit/WebProcess/InjectedBundle/API/c/WKBundlePage.cpp b/Source/WebKit/WebProcess/InjectedBundle/API/c/WKBundlePage.cpp
+index bb949f68dd1..7e273d74470 100644
+--- a/Source/WebKit/WebProcess/InjectedBundle/API/c/WKBundlePage.cpp
++++ b/Source/WebKit/WebProcess/InjectedBundle/API/c/WKBundlePage.cpp
+@@ -277,6 +277,32 @@ void* WKAccessibilityFocusedObject(WKBundlePageRef pageRef)
+ #endif
+ }
+ 
++void WKAccessibilityEnableAccessibility(WKBundlePageRef pageRef, bool enable)
++{
++#if HAVE(ACCESSIBILITY)
++    if (!pageRef)
++        return;
++
++    WebCore::Page* page = toImpl(pageRef)->corePage();
++    if (!page)
++        return;
++
++    WebCore::Frame& core = page->mainFrame();
++    if (!core.document())
++        return;
++
++    if(enable) {
++        WebCore::AXObjectCache::enableAccessibility();
++    } else {
++        WebCore::AXObjectCache::disableAccessibility();
++        core.document()->clearAXObjectCache();
++    }
++#else
++    UNUSED_PARAM(pageRef);
++    UNUSED_PARAM(enable);
++#endif
++}
++
+ void WKAccessibilityEnableEnhancedAccessibility(bool enable)
+ {
+ #if HAVE(ACCESSIBILITY)
+diff --git a/Source/WebKit/WebProcess/InjectedBundle/API/c/WKBundlePagePrivate.h b/Source/WebKit/WebProcess/InjectedBundle/API/c/WKBundlePagePrivate.h
+index 0458d966ac5..bf659351399 100644
+--- a/Source/WebKit/WebProcess/InjectedBundle/API/c/WKBundlePagePrivate.h
++++ b/Source/WebKit/WebProcess/InjectedBundle/API/c/WKBundlePagePrivate.h
+@@ -82,6 +82,7 @@ WK_EXPORT bool WKBundlePageCanShowMIMEType(WKBundlePageRef, WKStringRef mimeType
+ WK_EXPORT void* WKAccessibilityRootObject(WKBundlePageRef);
+ WK_EXPORT void* WKAccessibilityFocusedObject(WKBundlePageRef);
+ 
++WK_EXPORT void WKAccessibilityEnableAccessibility(WKBundlePageRef page, bool enable);
+ WK_EXPORT void WKAccessibilityEnableEnhancedAccessibility(bool);
+ WK_EXPORT bool WKAccessibilityEnhancedAccessibilityEnabled();
+ 
+diff --git a/Source/WebKit/WebProcess/WebPage/wpe/WebPageWPE.cpp b/Source/WebKit/WebProcess/WebPage/wpe/WebPageWPE.cpp
+index c6085a189fc..26a931ce7f0 100644
+--- a/Source/WebKit/WebProcess/WebPage/wpe/WebPageWPE.cpp
++++ b/Source/WebKit/WebProcess/WebPage/wpe/WebPageWPE.cpp
+@@ -31,6 +31,7 @@
+ #include "WebPreferencesKeys.h"
+ #include "WebPreferencesStore.h"
+ #include "WindowsKeyboardCodes.h"
++#include "AXObjectCache.h"
+ #include <WebCore/Settings.h>
+ #include <WebCore/SharedBuffer.h>
+ 
+@@ -56,7 +57,7 @@ void WebPage::platformInitialize()
+ #if HAVE(ACCESSIBILITY)
+ void WebPage::updateAccessibilityTree()
+ {
+-    if (!m_accessibilityObject)
++    if (!m_accessibilityObject || !AXObjectCache::accessibilityEnabled())
+         return;
+ 
+     webPageAccessibilityObjectRefresh(m_accessibilityObject.get());

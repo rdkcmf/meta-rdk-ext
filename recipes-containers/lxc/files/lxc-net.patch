@@ -1,0 +1,146 @@
+lxc: linux Container library
+
+Authors:
+Daniel Lezcano <daniel.lezcano@free.fr>
+
+This library is free software; you can redistribute it and/or
+modify it under the terms of the GNU Lesser General Public
+License as published by the Free Software Foundation; either
+version 2.1 of the License, or (at your option) any later version.
+
+This library is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+Lesser General Public License for more details.
+
+ou should have received a copy of the GNU Lesser General Public
+License along with this library; if not, write to the Free Software
+Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
+
+Date: Dec 19 18:37:57 2016
+
+From: 283132bc261f00d1256f96abf547a618b5e95ebb Apr 10 15:04:21 2017
+
+Subject: [PATCH] RDKB-9208: Changed PREFERRED_VERSION_libmtp to 1.1.5.
+
+        Since we have changed the layer priority for soc
+        intel layer, Without this it was picking older
+        version which breaks the build.
+
+        The change in layer priority was needed to make
+        sure we follow layer structure as rdk, comcast,soc
+        and oem.
+
+        Added Container patches needed for broadband devices.
+
+Source: COMCAST
+
+Upstream-Status: Pending
+
+Signed-off-by: glakshman <Guru_Lakshman@comcast.com>
+---
+
+Index: lxc-1.1.2/config/init/common/lxc-net.in
+===================================================================
+--- lxc-1.1.2.orig/config/init/common/lxc-net.in
++++ lxc-1.1.2/config/init/common/lxc-net.in
+@@ -1,4 +1,5 @@
+ #!/bin/sh -
++. /etc/device.properties
+ 
+ distrosysconfdir="@LXC_DISTRO_SYSCONF@"
+ localstatedir="@LOCALSTATEDIR@"
+@@ -7,14 +8,16 @@ varrun="@RUNTIME_PATH@/lxc"
+ # These can be overridden in @LXC_DISTRO_SYSCONF@/lxc
+ #   or in @LXC_DISTRO_SYSCONF@/lxc-net
+ 
+-USE_LXC_BRIDGE="true"
+-LXC_BRIDGE="lxcbr0"
++USE_LXC_BRIDGE="false"
++LXC_BRIDGE=$LXC_BRIDGE_NAME
++LXC_IPV6_ADDR="2301:db8:1::1/64"
++LXC_IPV6_NETWORK="2301:db8:1::/64"
+-LXC_ADDR="10.0.3.1"
++LXC_ADDR="147.0.3.1"
+ LXC_NETMASK="255.255.255.0"
+-LXC_NETWORK="10.0.3.0/24"
++LXC_NETWORK="147.0.3.0/24"
+-LXC_DHCP_RANGE="10.0.3.2,10.0.3.254"
++LXC_DHCP_RANGE="147.0.3.2,147.0.3.254"
+ LXC_DHCP_MAX="253"
+-LXC_DHCP_CONFILE=""
++LXC_DHCP_CONFILE="/etc/dnsmasq.conf"
+ LXC_DOMAIN=""
+ 
+ [ ! -f $distrosysconfdir/lxc ] || . $distrosysconfdir/lxc
+@@ -53,7 +56,9 @@ ifup() {
+         MASK=`_netmask2cidr ${LXC_NETMASK}`
+         CIDR_ADDR="${LXC_ADDR}/${MASK}"
+         ip addr add ${CIDR_ADDR} dev $1
++        ip addr add ${LXC_IPV6_ADDR} dev $1
+         ip link set dev $1 up
++        ip route add ${LXC_IPV6_NETWORK} dev $1
+         return
+     fi
+     which ifconfig >/dev/null 2>&1
+@@ -64,9 +69,9 @@ ifup() {
+ }
+ 
+ start() {
+-    [ ! -f "${lockdir}"/lxc-net ] || { exit 0; }
++#    [ ! -f "${lockdir}"/lxc-net ] || { exit 0; }
+ 
+-    [ "x$USE_LXC_BRIDGE" = "xtrue" ] || { exit 0; }
++#    [ "x$USE_LXC_BRIDGE" = "xtrue" ] || { exit 0; }
+ 
+     use_iptables_lock="-w"
+     iptables -w -L -n > /dev/null 2>&1 || use_iptables_lock=""
+@@ -80,6 +85,10 @@ start() {
+         iptables $use_iptables_lock -D FORWARD -o ${LXC_BRIDGE} -j ACCEPT
+         iptables $use_iptables_lock -t nat -D POSTROUTING -s ${LXC_NETWORK} ! -d ${LXC_NETWORK} -j MASQUERADE || true
+         iptables $use_iptables_lock -t mangle -D POSTROUTING -o ${LXC_BRIDGE} -p udp -m udp --dport 68 -j CHECKSUM --checksum-fill
++        #IPv6 rules
++        ip6tables $use_iptables_lock -D FORWARD -i ${LXC_BRIDGE} -j ACCEPT
++        ip6tables $use_iptables_lock -D FORWARD -o ${LXC_BRIDGE} -j ACCEPT
++        ip6tables $use_iptables_lock -t nat -D POSTROUTING -s ${LXC_IPV6_NETWORK} ! -d ${LXC_IPV6_NETWORK} -j MASQUERADE || true
+         ifdown ${LXC_BRIDGE}
+         brctl delbr ${LXC_BRIDGE} || true
+     }
+@@ -112,6 +121,10 @@ start() {
+     iptables $use_iptables_lock -I FORWARD -o ${LXC_BRIDGE} -j ACCEPT
+     iptables $use_iptables_lock -t nat -A POSTROUTING -s ${LXC_NETWORK} ! -d ${LXC_NETWORK} -j MASQUERADE
+     iptables $use_iptables_lock -t mangle -A POSTROUTING -o ${LXC_BRIDGE} -p udp -m udp --dport 68 -j CHECKSUM --checksum-fill
++    #IPv6 rules
++    ip6tables $use_iptables_lock -I FORWARD -i ${LXC_BRIDGE} -j ACCEPT
++    ip6tables $use_iptables_lock -I FORWARD -o ${LXC_BRIDGE} -j ACCEPT
++    ip6tables $use_iptables_lock -t nat -I POSTROUTING -s ${LXC_IPV6_NETWORK} ! -d ${LXC_IPV6_NETWORK} -j MASQUERADE || true
+
+     LXC_DOMAIN_ARG=""
+     if [ -n "$LXC_DOMAIN" ]; then
+@@ -125,13 +138,13 @@ start() {
+             break
+         fi
+     done
+-    dnsmasq $LXC_DOMAIN_ARG -u ${DNSMASQ_USER} --strict-order --bind-interfaces --pid-file="${varrun}"/dnsmasq.pid --conf-file=${LXC_DHCP_CONFILE} --listen-address ${LXC_ADDR} --dhcp-range ${LXC_DHCP_RANGE} --dhcp-lease-max=${LXC_DHCP_MAX} --dhcp-no-override --except-interface=lo --interface=${LXC_BRIDGE} --dhcp-leasefile=/var/lib/misc/dnsmasq.${LXC_BRIDGE}.leases --dhcp-authoritative || cleanup
++    dnsmasq $LXC_DOMAIN_ARG -u ${DNSMASQ_USER} --strict-order --bind-interfaces --pid-file="${varrun}"/dnsmasq.pid --conf-file=${LXC_DHCP_CONFILE} --listen-address ${LXC_ADDR} --dhcp-range ${LXC_DHCP_RANGE} --dhcp-lease-max=${LXC_DHCP_MAX} --dhcp-no-override --except-interface=lo --interface=${LXC_BRIDGE} --dhcp-leasefile=/tmp/dnsmasq.${LXC_BRIDGE}.leases --dhcp-authoritative || cleanup
+     touch "${varrun}"/network_up
+     touch "${lockdir}"/lxc-net
+ }
+ 
+ stop() {
+-    [ "x$USE_LXC_BRIDGE" = "xtrue" ] || { exit 0; }
++#    [ "x$USE_LXC_BRIDGE" = "xtrue" ] || { exit 0; }
+ 
+     [ -f "${varrun}/network_up" ] || { exit 0; }
+     # if $LXC_BRIDGE has attached interfaces, don't shut it down
+@@ -149,6 +162,10 @@ stop() {
+         iptables $use_iptables_lock -D FORWARD -o ${LXC_BRIDGE} -j ACCEPT
+         iptables $use_iptables_lock -t nat -D POSTROUTING -s ${LXC_NETWORK} ! -d ${LXC_NETWORK} -j MASQUERADE || true
+         iptables $use_iptables_lock -t mangle -D POSTROUTING -o ${LXC_BRIDGE} -p udp -m udp --dport 68 -j CHECKSUM --checksum-fill
++        #IPv6 rules
++        ip6tables $use_iptables_lock -D FORWARD -i ${LXC_BRIDGE} -j ACCEPT
++        ip6tables $use_iptables_lock -D FORWARD -o ${LXC_BRIDGE} -j ACCEPT
++        ip6tables $use_iptables_lock -t nat -D POSTROUTING -s ${LXC_IPV6_NETWORK} ! -d ${LXC_IPV6_NETWORK} -j MASQUERADE || true
+         pid=`cat "${varrun}"/dnsmasq.pid 2>/dev/null` && kill -9 $pid || true
+         rm -f "${varrun}"/dnsmasq.pid
+         brctl delbr ${LXC_BRIDGE}

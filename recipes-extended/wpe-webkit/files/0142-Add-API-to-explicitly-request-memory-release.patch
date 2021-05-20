@@ -1,0 +1,165 @@
+From 0ab9824981c6b3973549a88bf5dd15473bd3e093 Mon Sep 17 00:00:00 2001
+From: Eugene Mutavchi <Ievgen_Mutavchi@comcast.com>
+Date: Wed, 29 May 2019 10:42:02 -0400
+Subject: [PATCH] Add API to explicitly request memory release
+
+---
+ Source/WebCore/page/MemoryRelease.cpp         |  2 +-
+ Source/WebKit/Shared/ChildProcess.cpp         |  6 ++++++
+ Source/WebKit/Shared/ChildProcess.h           |  1 +
+ Source/WebKit/Shared/ChildProcess.messages.in |  1 +
+ Source/WebKit/UIProcess/API/C/WKContext.cpp   |  5 +++++
+ Source/WebKit/UIProcess/API/C/WKContext.h     |  2 ++
+ Source/WebKit/UIProcess/ChildProcessProxy.cpp |  7 +++++++
+ Source/WebKit/UIProcess/ChildProcessProxy.h   |  1 +
+ Source/WebKit/UIProcess/WebProcessPool.cpp    | 11 +++++++++++
+ Source/WebKit/UIProcess/WebProcessPool.h      |  1 +
+ 10 files changed, 36 insertions(+), 1 deletion(-)
+
+Index: git/Source/WebCore/page/MemoryRelease.cpp
+===================================================================
+--- git.orig/Source/WebCore/page/MemoryRelease.cpp
++++ git/Source/WebCore/page/MemoryRelease.cpp
+@@ -94,7 +94,7 @@ static void releaseCriticalMemory(Synchr
+         document->fontSelector().emptyCaches();
+     }
+ 
+-    static bool enableCodeDeltion = !!getenv("WPE_ENABLE_JIT_CODE_DELETION");
++    static bool enableCodeDeltion = !getenv("WPE_DISABLE_JIT_CODE_DELETION");
+     if (enableCodeDeltion)
+     {
+         GCController::singleton().deleteAllCode(JSC::DeleteAllCodeIfNotCollecting);
+Index: git/Source/WebKit/Shared/ChildProcess.cpp
+===================================================================
+--- git.orig/Source/WebKit/Shared/ChildProcess.cpp
++++ git/Source/WebKit/Shared/ChildProcess.cpp
+@@ -28,6 +28,7 @@
+ 
+ #include "Logging.h"
+ #include "SandboxInitializationParameters.h"
++#include <wtf/MemoryPressureHandler.h>
+ #include <pal/SessionID.h>
+ #include <unistd.h>
+ 
+@@ -191,6 +192,11 @@ void ChildProcess::shutDown()
+     terminate();
+ }
+ 
++void ChildProcess::releaseMemory()
++{
++    MemoryPressureHandler::singleton().releaseMemory(Critical::Yes, Synchronous::Yes);
++}
++
+ #if !PLATFORM(COCOA)
+ void ChildProcess::platformInitialize()
+ {
+Index: git/Source/WebKit/Shared/ChildProcess.h
+===================================================================
+--- git.orig/Source/WebKit/Shared/ChildProcess.h
++++ git/Source/WebKit/Shared/ChildProcess.h
+@@ -112,6 +112,7 @@ private:
+     void didReceiveInvalidMessage(IPC::Connection&, IPC::StringReference messageReceiverName, IPC::StringReference messageName) final;
+ 
+     void shutDown();
++    void releaseMemory();
+ 
+     void terminationTimerFired();
+ 
+Index: git/Source/WebKit/Shared/ChildProcess.messages.in
+===================================================================
+--- git.orig/Source/WebKit/Shared/ChildProcess.messages.in
++++ git/Source/WebKit/Shared/ChildProcess.messages.in
+@@ -22,4 +22,5 @@
+ 
+ messages -> ChildProcess {
+     ShutDown()
++    ReleaseMemory()
+ }
+Index: git/Source/WebKit/UIProcess/API/C/WKContext.cpp
+===================================================================
+--- git.orig/Source/WebKit/UIProcess/API/C/WKContext.cpp
++++ git/Source/WebKit/UIProcess/API/C/WKContext.cpp
+@@ -661,3 +661,8 @@ void WKContextSetAutomationSession(WKCon
+ {
+     toImpl(contextRef)->setAutomationSession(toImpl(session));
+ }
++
++void WKContextReleaseMemory(WKContextRef contextRef)
++{
++    toImpl(contextRef)->releaseMemory();
++}
+Index: git/Source/WebKit/UIProcess/API/C/WKContext.h
+===================================================================
+--- git.orig/Source/WebKit/UIProcess/API/C/WKContext.h
++++ git/Source/WebKit/UIProcess/API/C/WKContext.h
+@@ -169,6 +169,8 @@ WK_EXPORT void WKContextRefreshPlugIns(W
+ WK_EXPORT void WKContextSetAutomationClient(WKContextRef contextRef, const WKContextAutomationClientBase* wkClient);
+ WK_EXPORT void WKContextSetAutomationSession(WKContextRef contextRef, WKWebAutomationSessionRef sessionRef);
+ 
++WK_EXPORT void WKContextReleaseMemory(WKContextRef contextRef);
++
+ #ifdef __cplusplus
+ }
+ #endif
+Index: git/Source/WebKit/UIProcess/ChildProcessProxy.cpp
+===================================================================
+--- git.orig/Source/WebKit/UIProcess/ChildProcessProxy.cpp
++++ git/Source/WebKit/UIProcess/ChildProcessProxy.cpp
+@@ -215,4 +215,11 @@ void ChildProcessProxy::connectionWillOp
+ {
+ }
+ 
++void ChildProcessProxy::releaseMemory()
++{
++    if (canSendMessage()) {
++        send(Messages::ChildProcess::ReleaseMemory(), 0);
++    }
++}
++
+ } // namespace WebKit
+Index: git/Source/WebKit/UIProcess/ChildProcessProxy.h
+===================================================================
+--- git.orig/Source/WebKit/UIProcess/ChildProcessProxy.h
++++ git/Source/WebKit/UIProcess/ChildProcessProxy.h
+@@ -79,6 +79,7 @@ public:
+     bool sendMessage(std::unique_ptr<IPC::Encoder>, OptionSet<IPC::SendOption>);
+ 
+     void shutDownProcess();
++    void releaseMemory();
+ 
+ protected:
+     // ProcessLauncher::Client
+Index: git/Source/WebKit/UIProcess/WebProcessPool.cpp
+===================================================================
+--- git.orig/Source/WebKit/UIProcess/WebProcessPool.cpp
++++ git/Source/WebKit/UIProcess/WebProcessPool.cpp
+@@ -1553,6 +1553,17 @@ void WebProcessPool::setJavaScriptConfig
+     m_javaScriptConfigurationFileEnabled = flag;
+ }
+ 
++void WebProcessPool::releaseMemory()
++{
++    size_t processCount = m_processes.size();
++    for (size_t i = 0; i < processCount; ++i) {
++        WebProcessProxy* process = m_processes[i].get();
++        process->releaseMemory();
++    }
++    if (m_networkProcess)
++        m_networkProcess->releaseMemory();
++}
++
+ void WebProcessPool::garbageCollectJavaScriptObjects()
+ {
+     sendToAllProcesses(Messages::WebProcess::GarbageCollectJavaScriptObjects());
+Index: git/Source/WebKit/UIProcess/WebProcessPool.h
+===================================================================
+--- git.orig/Source/WebKit/UIProcess/WebProcessPool.h
++++ git/Source/WebKit/UIProcess/WebProcessPool.h
+@@ -300,6 +300,7 @@ public:
+     void setJavaScriptConfigurationFileEnabledFromDefaults();
+ #endif
+ 
++    void releaseMemory();
+     void garbageCollectJavaScriptObjects();
+     void setJavaScriptGarbageCollectorTimerEnabled(bool flag);
+ 

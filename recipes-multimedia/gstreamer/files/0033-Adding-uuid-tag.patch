@@ -1,0 +1,26 @@
+Date: Mar 9, 2020 1:41 AM
+From: 651d4e761fdc92d0ca373eeef75a384730b42d88 Sep 17, 2001 11:56 PM
+Subject: [PATCH] Adding uuid tag
+Source: COMCAST
+License: GPLV2
+Upstream-Status: Pending
+Signed-off-by: nrajan002c <nambi_rajang@cable.comcast.com>
+---
+ isomp4/qtdemux_types.c | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/gst/isomp4/qtdemux_types.c b/gst/isomp4/qtdemux_types.c
+index 1bb23b9..836db62 100644
+--- a/gst/isomp4/qtdemux_types.c
++++ b/gst/isomp4/qtdemux_types.c
+@@ -172,6 +172,7 @@ static const QtNodeType qt_node_types[] = {
+   {FOURCC_mvex, "mvex", QT_FLAG_CONTAINER,},
+   {FOURCC_mehd, "movie extends header", 0,
+       qtdemux_dump_mehd},
++  {FOURCC_uuid, "uuid", 0,},
+   {FOURCC_ovc1, "ovc1", 0},
+   {FOURCC_owma, "owma", 0},
+   {FOURCC_avcC, "AV codec configuration container", 0},
+-- 
+2.24.0
+

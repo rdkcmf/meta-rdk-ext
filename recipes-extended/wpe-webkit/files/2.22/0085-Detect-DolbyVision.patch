@@ -1,0 +1,33 @@
+From: 3cc4ded043233498e96d763bab89e706139c2d98 Mon Sep 17 00:00:00 2001
+From: Ievgen Mutavchi <Ievgen_Mutavchi@comcast.com>
+Date: Sun, 26 Apr 2020 11:44:44 -0400
+Subject: Detect DolbyVision
+Source: COMCAST
+License: GPLV2
+Upstream-Status: None
+Signed-off-by: Eugene Mutavchi <Ievgen_Mutavchi@comcast.com>
+
+---
+ .../gstreamer/mse/MediaPlayerPrivateGStreamerMSE.cpp        | 6 ++++++
+ 1 file changed, 6 insertions(+)
+
+diff --git a/Source/WebCore/platform/graphics/gstreamer/mse/MediaPlayerPrivateGStreamerMSE.cpp b/Source/WebCore/platform/graphics/gstreamer/mse/MediaPlayerPrivateGStreamerMSE.cpp
+index cae4231299b9..bb43bf95c644 100644
+--- a/Source/WebCore/platform/graphics/gstreamer/mse/MediaPlayerPrivateGStreamerMSE.cpp
++++ b/Source/WebCore/platform/graphics/gstreamer/mse/MediaPlayerPrivateGStreamerMSE.cpp
+@@ -1048,6 +1048,12 @@ const static HashSet<AtomicString>& codecSet()
+             set.add(AtomicString("vp09.02.*"));
+             set.add(AtomicString("vp9.2"));
+         }
++#endif
++#if PLATFORM(BROADCOM) && USE(SVP)
++        if (gstRegistryHasElementForMediaType(videoDecoderFactories,"video/x-dvav"))
++            set.add(AtomicString("dvav*"));
++        if (gstRegistryHasElementForMediaType(videoDecoderFactories,"video/x-dvhe"))
++            set.add(AtomicString("dvhe*"));
+ #endif
+         gst_plugin_feature_list_free(audioDecoderFactories);
+         gst_plugin_feature_list_free(videoDecoderFactories);
+-- 
+2.24.0
+

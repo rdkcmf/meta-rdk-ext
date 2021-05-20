@@ -1,0 +1,40 @@
+From ccf8b1919b997c960b59e0e0adb2b618911ec988 Mon Sep 17 00:00:00 2001
+From: nrajan002c <nambi_rajang@cable.comcast.com>
+Date: Mon, 30 Nov 2020 15:56:35 +0000
+Subject: [PATCH] Invalidate 3D layer proxy on destruction
+
+Signed-off-by: nrajan002c <nambi_rajang@cable.comcast.com>
+---
+ .../graphics/texmap/TextureMapperGC3DPlatformLayer.cpp      | 6 ++++--
+ 1 file changed, 4 insertions(+), 2 deletions(-)
+
+Index: git/Source/WebCore/platform/graphics/texmap/TextureMapperGC3DPlatformLayer.cpp
+===================================================================
+--- git.orig/Source/WebCore/platform/graphics/texmap/TextureMapperGC3DPlatformLayer.cpp
++++ git/Source/WebCore/platform/graphics/texmap/TextureMapperGC3DPlatformLayer.cpp
+@@ -56,10 +56,10 @@ TextureMapperGC3DPlatformLayer::TextureM
+ 
+ TextureMapperGC3DPlatformLayer::~TextureMapperGC3DPlatformLayer()
+ {
+-#if !USE(COORDINATED_GRAPHICS_THREADED)
++//#if !USE(COORDINATED_GRAPHICS_THREADED)
+     if (client())
+         client()->platformLayerWillBeDestroyed();
+-#endif
++//#endif
+ 
+     if (m_renderStyle == GraphicsContext3D::RenderDirectlyToHostWindow && (s_windowContextRefCount - 1) == 0) {
+         s_windowContextRefCount = 0;
+Index: git/Source/WebCore/platform/graphics/texmap/coordinated/CoordinatedGraphicsLayer.cpp
+===================================================================
+--- git.orig/Source/WebCore/platform/graphics/texmap/coordinated/CoordinatedGraphicsLayer.cpp
++++ git/Source/WebCore/platform/graphics/texmap/coordinated/CoordinatedGraphicsLayer.cpp
+@@ -774,6 +774,8 @@ void CoordinatedGraphicsLayer::syncPlatf
+     m_layerState.platformLayerChanged = true;
+     if (m_platformLayer)
+         m_layerState.platformLayerProxy = m_platformLayer->proxy();
++    else
++        m_layerState.platformLayerProxy = nullptr;
+ #endif
+ #endif
+ }

@@ -1,0 +1,40 @@
+From 41603670ad08f0da18811b7a6c3727abf2590c13 Mon Sep 17 00:00:00 2001
+From: Balaji Selvam <balaji_selvam@comcast.com>
+Date: Fri, 8 May 2020 08:26:18 +0000
+Subject: [PATCH 09/11] 
+ 0174-XRE-14411-RDK-AT-handles-all-types-of-headers.patch
+Source: COMCAST
+License: LICENSE-LGPL-2.1
+Upstream-Status: Pending
+Signed-off-by: Balaji Selvam <balaji_selvam@comcast.com>
+
+---
+ .../accessibility/AccessibilityNodeObject.cpp        | 12 ++++++++++++
+ 1 file changed, 12 insertions(+)
+
+diff --git a/Source/WebCore/accessibility/AccessibilityNodeObject.cpp b/Source/WebCore/accessibility/AccessibilityNodeObject.cpp
+index e612ba79c398..c6b3e3bf504c 100644
+--- a/Source/WebCore/accessibility/AccessibilityNodeObject.cpp
++++ b/Source/WebCore/accessibility/AccessibilityNodeObject.cpp
+@@ -1434,6 +1434,18 @@ void AccessibilityNodeObject::visibleText(Vector<AccessibilityText>& textOrder)
+         if (!text.isEmpty())
+             textOrder.append(AccessibilityText(text, AccessibilityTextSource::Children));
+     }
++
++    if(textOrder.size() == 0 && this->isTableRow()) {
++        AccessibilityObject* axObject = previousSibling();
++        if (axObject && axObject->isHeading()) {
++            AccessibilityTextUnderElementMode mode;
++            mode.includeFocusableContent = true;
++            String text = axObject->textUnderElement(mode);
++            if (!text.isEmpty()) {
++                textOrder.append(AccessibilityText(text, AccessibilityTextSource::Children));
++            }
++        }
++    }
+ }
+ 
+ void AccessibilityNodeObject::helpText(Vector<AccessibilityText>& textOrder) const
+-- 
+2.24.0
+

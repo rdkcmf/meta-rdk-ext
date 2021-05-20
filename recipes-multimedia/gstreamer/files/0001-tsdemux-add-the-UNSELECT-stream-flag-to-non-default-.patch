@@ -1,0 +1,42 @@
+From d84138e0da1c7d201e1dbb483c4ae8f0a23d9f27 Mon Sep 17 00:00:00 2001
+From: Vincent Penquerc'h <vincent.penquerch@collabora.co.uk>
+Date: Tue, 18 Nov 2014 15:08:44 +0000
+Subject: [PATCH] tsdemux: add the UNSELECT stream flag to non default type
+ streams
+
+This allows downstream to select the "main" audio stream, in cases
+where there is a main stream and alternate streams (eg, visually
+impaired commentary).
+---
+ gst/mpegtsdemux/tsdemux.c |   16 ++++++++++++++++
+ 1 file changed, 16 insertions(+)
+
+diff --git a/gst/mpegtsdemux/tsdemux.c b/gst/mpegtsdemux/tsdemux.c
+index 3cfa13d..ab70bb0 100644
+--- a/gst/mpegtsdemux/tsdemux.c
++++ b/gst/mpegtsdemux/tsdemux.c
+@@ -1371,6 +1371,22 @@ done:
+       gst_event_set_stream_flags (event, GST_STREAM_FLAG_SPARSE);
+     stream->sparse = sparse;
+ 
++    /* If the stream has a non-default type, add the UNSELECT flag */
++    desc = mpegts_get_descriptor_from_stream (bstream,
++        GST_MTS_DESC_ISO_639_LANGUAGE);
++    if (desc) {
++      gchar *lang_code;
++      GstMpegtsIso639AudioType type;
++      if (gst_mpegts_descriptor_parse_iso_639_language_idx (desc, 0, &lang_code,
++              &type)) {
++        /* "Main" streams seem to be set to this */
++        if (type != GST_MPEGTS_AUDIO_TYPE_UNDEFINED) {
++          gst_event_set_stream_flags (event, GST_STREAM_FLAG_UNSELECT);
++        }
++      }
++      g_free (lang_code);
++    }
++
+     gst_pad_push_event (pad, event);
+     g_free (stream_id);
+     gst_pad_set_caps (pad, caps);
+-- 
+1.7.9.5

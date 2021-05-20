@@ -1,0 +1,27 @@
+From 6d120a1d13eff592dae2efafac79b6e34bcfa574 Mon Sep 17 00:00:00 2001
+From: Siva Sankar Raja <sivasankar_raja@comcast.com>
+Source: COMCAST
+License: LICENSE-LGPL-2.1
+Upstream-Status: Pending
+Signed-off-by: Siva Sankar Raja <sivasankar_raja@comcast.com>
+Date: Fri, 28 Jun 2019 19:01:00 +0000
+Subject: [PATCH] Revert "Change antialiasing policy on the accelerated
+ canvas." for wpe 0.4.1
+
+---
+ Source/WebCore/platform/graphics/cairo/ImageBufferCairo.cpp | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+Index: git/Source/WebCore/platform/graphics/cairo/ImageBufferCairo.cpp
+===================================================================
+--- git.orig/Source/WebCore/platform/graphics/cairo/ImageBufferCairo.cpp
++++ git/Source/WebCore/platform/graphics/cairo/ImageBufferCairo.cpp
+@@ -339,7 +339,7 @@ ImageBuffer::ImageBuffer(const FloatSize
+     RefPtr<cairo_t> cr = adoptRef(cairo_create(m_data.m_surface.get()));
+     m_data.m_platformContext.setCr(cr.get());
+     // Disable antialiasing if cairo is using the NOAA compositor.
+-    if (cairoIsUsingNOAA())
++    if ((m_data.m_renderingMode == Accelerated) && cairoIsUsingNOAA())
+         cairo_set_antialias(cr.get(), CAIRO_ANTIALIAS_NONE);
+     m_data.m_context = std::make_unique<GraphicsContext>(GraphicsContextImplCairo::createFactory(m_data.m_platformContext));
+     success = true;

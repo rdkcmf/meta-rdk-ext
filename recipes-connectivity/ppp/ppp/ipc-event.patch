@@ -1,0 +1,707 @@
+###########################################################
+Subject: Send ppp session event messages to PPP manager
+License: GPLV2
+Upstream-Status: Pending
+Signed-off-by: Biju Vijayan <biju.vijayanindiradevi@sky.uk>
+###########################################################
+
+Index: ppp-2.4.8/pppd/Makefile.linux
+===================================================================
+--- ppp-2.4.8.orig/pppd/Makefile.linux
++++ ppp-2.4.8/pppd/Makefile.linux
+@@ -13,16 +13,16 @@
+ 
+ PPPDSRCS = main.c magic.c fsm.c lcp.c ipcp.c upap.c chap-new.c md5.c ccp.c \
+ 	   ecp.c ipxcp.c auth.c options.c sys-linux.c md4.c chap_ms.c \
+-	   demand.c utils.c tty.c eap.c chap-md5.c session.c
++	   demand.c utils.c tty.c eap.c chap-md5.c session.c ppp_ipc.c
+ 
+ HEADERS = ccp.h session.h chap-new.h ecp.h fsm.h ipcp.h \
+ 	ipxcp.h lcp.h magic.h md5.h patchlevel.h pathnames.h pppd.h \
+-	upap.h eap.h
++	upap.h eap.h ppp_ipc.h
+ 
+ MANPAGES = pppd.8
+ PPPDOBJS = main.o magic.o fsm.o lcp.o ipcp.o upap.o chap-new.o md5.o ccp.o \
+ 	   ecp.o auth.o options.o demand.o utils.o sys-linux.o ipxcp.o tty.o \
+-	   eap.o chap-md5.o session.o
++	   eap.o chap-md5.o session.o ppp_ipc.o
+ 
+ #
+ # include dependencies if present
+@@ -88,6 +88,10 @@
+ COMPILE_FLAGS= -DHAVE_PATHS_H -DIPX_CHANGE -DHAVE_MMAP
+ 
+ CFLAGS= $(COPTS) $(COMPILE_FLAGS) $(INCLUDE_DIRS) '-DDESTDIR="@DESTDIR@"'
++
++CFLAGS += -DFEATURE_RDKB_WAN_MANAGER -D_USE_NM_MSG_SOCK
++
++LIBS += -lnanomsg
+ 
+ ifdef CHAPMS
+ CFLAGS   += -DCHAPMS=1
+Index: ppp-2.4.8/pppd/auth.c
+===================================================================
+--- ppp-2.4.8.orig/pppd/auth.c
++++ ppp-2.4.8/pppd/auth.c
+@@ -118,6 +118,9 @@
+ #endif
+ #include "pathnames.h"
+ #include "session.h"
++#ifdef FEATURE_RDKB_WAN_MANAGER
++#include "ppp_ipc.h"
++#endif
+ 
+ 
+ /* Bits in scan_authfile return value */
+@@ -767,10 +770,16 @@
+ 	    warn("peer refused to authenticate: terminating link");
+ 	    status = EXIT_PEER_AUTH_FAILED;
+ 	    lcp_close(unit, "peer refused to authenticate");
++#ifdef FEATURE_RDKB_WAN_MANAGER
++    sendPppLcpState(PPP_INTERFACE_AUTH_FAILED, getpid());
++#endif
+ 	    return;
+ 	}
+     }
+ 
++#ifdef FEATURE_RDKB_WAN_MANAGER
++    sendPppLcpState(PPP_INTERFACE_AUTHENTICATING, getpid());
++#endif
+     new_phase(PHASE_AUTHENTICATE);
+     auth = 0;
+     if (go->neg_eap) {
+@@ -930,6 +939,9 @@
+      */
+     status = EXIT_PEER_AUTH_FAILED;
+     lcp_close(unit, "Authentication failed");
++#ifdef FEATURE_RDKB_WAN_MANAGER
++    sendPppLcpState(PPP_INTERFACE_AUTH_FAILED, getpid());
++#endif
+ }
+ 
+ /*
+@@ -1007,6 +1019,9 @@
+      * authentication secrets.
+      */
+     status = EXIT_AUTH_TOPEER_FAILED;
++#ifdef FEATURE_RDKB_WAN_MANAGER
++    sendPppLcpState(PPP_INTERFACE_AUTH_FAILED, getpid());
++#endif
+     lcp_close(unit, "Failed to authenticate ourselves to peer");
+ }
+ 
+@@ -1211,6 +1226,9 @@
+ 	status = EXIT_IDLE_TIMEOUT;
+ 	lcp_close(0, "Link inactive");
+ 	need_holdoff = 0;
++#ifdef FEATURE_RDKB_WAN_MANAGER
++    sendPppLcpState(PPP_INTERFACE_DISCONNECTING, getpid());
++#endif
+     } else {
+ 	TIMEOUT(check_idle, NULL, tlim);
+     }
+@@ -1226,6 +1244,9 @@
+     info("Connect time expired");
+     status = EXIT_CONNECT_TIME;
+     lcp_close(0, "Connect time expired");	/* Close connection */
++#ifdef FEATURE_RDKB_WAN_MANAGER
++    sendPppLcpState(PPP_INTERFACE_DISCONNECTING, getpid());
++#endif
+ }
+ 
+ /*
+Index: ppp-2.4.8/pppd/ipcp.c
+===================================================================
+--- ppp-2.4.8.orig/pppd/ipcp.c
++++ ppp-2.4.8/pppd/ipcp.c
+@@ -61,6 +61,9 @@
+ #include "ipcp.h"
+ #include "pathnames.h"
+ 
++#ifdef FEATURE_RDKB_WAN_MANAGER
++#include "ppp_ipc.h"
++#endif
+ 
+ /* global vars */
+ ipcp_options ipcp_wantoptions[NUM_PPP];	/* Options that we want to request */
+@@ -296,6 +299,11 @@
+     s_up,
+ } ipcp_script_state;
+ static pid_t ipcp_script_pid;
++#ifdef FEATURE_RDKB_WAN_MANAGER
++char ppp_ip_addr[32];
++char ppp_gw_addr[32];
++char ppp_dns_addr[64];
++#endif
+ 
+ /*
+  * Make a string representation of a network IP address.
+@@ -1947,7 +1955,30 @@
+     np_up(f->unit, PPP_IP);
+     ipcp_is_up = 1;
+ 
++    
+     notify(ip_up_notifier, 0);
++#ifdef FEATURE_RDKB_WAN_MANAGER
++	strcpy(ppp_ip_addr, ip_ntoa(go->ouraddr));
++    
++    if (ip_ntoa(ho->hisaddr))
++        strcpy(ppp_gw_addr, ip_ntoa(ho->hisaddr));
++   if (go->dnsaddr[0])
++   {
++      strcpy(ppp_dns_addr, ip_ntoa(go->dnsaddr[0]));
++   }
++   if (go->dnsaddr[1])
++   {
++      if (strlen(ppp_dns_addr) > 0)
++	  {
++	      strcat(ppp_dns_addr, ",");
++          strcat(ppp_dns_addr, ip_ntoa(go->dnsaddr[1]));
++      }
++      else
++      {
++         strcpy(ppp_dns_addr, ip_ntoa(go->dnsaddr[1]));
++      }         
++   }
++#endif
+     if (ip_up_hook)
+ 	ip_up_hook();
+ 
+@@ -1959,6 +1990,10 @@
+ 	ipcp_script_state = s_up;
+ 	ipcp_script(_PATH_IPUP, 0);
+     }
++#ifdef FEATURE_RDKB_WAN_MANAGER
++        sendPppIpcpPParams(PPP_IPCP_COMPLETED, ppp_ip_addr, "255.255.255.255", ppp_gw_addr, ppp_dns_addr, getpid());
++#endif
++    
+ }
+ 
+ 
+@@ -2009,6 +2044,9 @@
+ 	ipcp_script_state = s_down;
+ 	ipcp_script(_PATH_IPDOWN, 0);
+     }
++#ifdef FEATURE_RDKB_WAN_MANAGER
++    sendPppIpcpPParams(PPP_IPCP_FAILED, NULL, NULL, NULL, NULL, getpid());
++#endif
+ }
+ 
+ 
+Index: ppp-2.4.8/pppd/ipv6cp.c
+===================================================================
+--- ppp-2.4.8.orig/pppd/ipv6cp.c
++++ ppp-2.4.8/pppd/ipv6cp.c
+@@ -168,6 +168,9 @@
+ #include "magic.h"
+ #include "pathnames.h"
+ 
++#ifdef FEATURE_RDKB_WAN_MANAGER
++#include "ppp_ipc.h"
++#endif
+ 
+ /* global vars */
+ ipv6cp_options ipv6cp_wantoptions[NUM_PPP];     /* Options that we want to request */
+@@ -1288,6 +1291,9 @@
+     if (ipv6_up_hook)
+        ipv6_up_hook();
+ 
++#ifdef FEATURE_RDKB_WAN_MANAGER
++	sendPppIpv6cpPParams(PPP_IPV6CP_COMPLETED, llv6_ntoa(go->ourid), llv6_ntoa(ho->hisid), getpid());
++#endif
+     /*
+      * Execute the ipv6-up script, like this:
+      *	/etc/ppp/ipv6-up interface tty speed local-LL remote-LL
+@@ -1310,6 +1316,9 @@
+     fsm *f;
+ {
+     IPV6CPDEBUG(("ipv6cp: down"));
++#ifdef FEATURE_RDKB_WAN_MANAGER
++    sendPppIpv6cpPParams(PPP_IPV6CP_FAILED, NULL, NULL, getpid());
++#endif
+     update_link_stats(f->unit);
+     notify(ipv6_down_notifier, 0);
+     if (ipv6_down_hook)
+Index: ppp-2.4.8/pppd/lcp.c
+===================================================================
+--- ppp-2.4.8.orig/pppd/lcp.c
++++ ppp-2.4.8/pppd/lcp.c
+@@ -56,6 +56,9 @@
+ #include "chap-new.h"
+ #include "magic.h"
+ 
++#ifdef FEATURE_RDKB_WAN_MANAGER
++#include "ppp_ipc.h"
++#endif
+ 
+ /*
+  * When the link comes up we want to be able to wait for a short while,
+@@ -1932,6 +1935,9 @@
+     lcp_echo_lowerup(f->unit);  /* Enable echo messages */
+ 
+     link_established(f->unit);
++#ifdef FEATURE_RDKB_WAN_MANAGER
++    sendPppLcpState(PPP_INTERFACE_UP, getpid());
++#endif
+ }
+ 
+ 
+@@ -1955,6 +1961,10 @@
+ 		    (go->neg_asyncmap? go->asyncmap: 0xffffffff),
+ 		    go->neg_pcompression, go->neg_accompression);
+     peer_mru[f->unit] = PPP_MRU;
++#ifdef FEATURE_RDKB_WAN_MANAGER
++	sendPppLcpState(PPP_INTERFACE_DOWN, getpid());
++	sendPppLcpState(PPP_INTERFACE_DISCONNECTED, getpid());
++#endif
+ }
+ 
+ 
+@@ -1965,6 +1975,9 @@
+ lcp_starting(f)
+     fsm *f;
+ {
++#ifdef FEATURE_RDKB_WAN_MANAGER
++	sendPppLcpState(PPP_INTERFACE_CONNECTING, getpid());
++#endif
+     link_required(f->unit);
+ }
+ 
+@@ -2242,6 +2255,9 @@
+         notice("Serial link appears to be disconnected.");
+ 	status = EXIT_PEER_DEAD;
+ 	lcp_close(f->unit, "Peer not responding");
++#ifdef FEATURE_RDKB_WAN_MANAGER
++	sendPppLcpState(PPP_INTERFACE_LCP_ECHO_FAILED, getpid());
++#endif
+     }
+ }
+ 
+Index: ppp-2.4.8/pppd/main.c
+===================================================================
+--- ppp-2.4.8.orig/pppd/main.c
++++ ppp-2.4.8/pppd/main.c
+@@ -120,6 +120,11 @@
+ #include "atcp.h"
+ #endif
+ 
++#ifdef FEATURE_RDKB_WAN_MANAGER
++#include "ppp_ipc.h"
++int ipcSockFd;
++extern IPC_STATUS createSocket(int32_t *sockFd, IPC_MODE sockMode);
++#endif
+ 
+ /* interface vars */
+ char ifname[MAXIFNAMELEN];	/* Interface name */
+@@ -313,6 +318,9 @@
+ 
+     /* Initialize syslog facilities */
+     reopen_log();
++#ifdef FEATURE_RDKB_WAN_MANAGER
++    createSocket(&ipcSockFd, IPC_CLIENT);
++#endif
+ 
+     if (gethostname(hostname, MAXNAMELEN) < 0 ) {
+ 	option_error("Couldn't get hostname: %m");
+@@ -495,6 +503,9 @@
+ 	doing_callback = do_callback;
+ 	do_callback = 0;
+ 
++#ifdef FEATURE_RDKB_WAN_MANAGER
++    sendPppLcpState(PPP_INTERFACE_CONNECTING, getpid());
++#endif
+ 	if (demand && !doing_callback) {
+ 	    /*
+ 	     * Don't do anything until we see some activity.
+Index: ppp-2.4.8/pppd/ppp_ipc.c
+===================================================================
+--- /dev/null
++++ ppp-2.4.8/pppd/ppp_ipc.c
+@@ -0,0 +1,234 @@
++/*
++ * If not stated otherwise in this file or this component's Licenses.txt file the
++ * following copyright and licenses apply:
++ *
++ * Copyright 2020 RDK Management
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ * http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++
++/* ---- Include Files ---------------------------------------- */
++#if defined(_USE_NM_MSG_SOCK)
++#include <nanomsg/nn.h>
++#include <nanomsg/pipeline.h>
++#endif
++#include <errno.h>
++#include "ppp_ipc.h"
++
++/* ---- extern declarations ---------------------------------------- */
++extern int ipcSockFd;
++
++/* ------------------------------------------------------------
++This internal API creates a socket descriptor based on mode. If mode is server,
++it used the NN_PUSH for NM socket . If mode is client it use the NN_PULL
++---------------------------------------------------------------*/
++static IPC_STATUS createSockFd( int32_t  *sockFd, IPC_MODE sockMode )
++{
++#if defined(_USE_NM_MSG_SOCK)
++    if(sockMode == IPC_SERVER)
++    {
++        *sockFd = nn_socket (AF_SP, NN_PULL);
++    }
++    else
++    {
++        *sockFd = nn_socket (AF_SP, NN_PUSH);
++    }
++#else
++    //use normal TCP socket API to create server/client socket
++#endif
++
++    return (*sockFd >= 0 ? IPC_SUCCESS: IPC_FAILURE);
++
++}
++
++/* ------------------------------------------------------------
++This internal API will connect the socket descriptot with a port number
++-------------------------------------------------------------*/
++
++static IPC_STATUS connectSocket( int32_t sockFd)
++{
++
++    char sockFile[BUFLEN_256] = { 0 };
++
++    snprintf(sockFile, sizeof(sockFile), PPP_MANAGER_ADDR);
++
++#if defined(_USE_NM_MSG_SOCK)
++    if(nn_connect (sockFd, sockFile)  < 0)
++    {
++        return IPC_FAILURE;
++    }
++#endif
++
++    return IPC_SUCCESS;
++
++
++}
++
++/* --------------------------------------------------------------------
++Function : createSocket
++
++Decription: This API creates a server or client socket based on mode.
++If mode is server, it will create the socket bind to the the port number
++If mode os client it will create the socket and connected to port number
++
++-----------------------------------------------------------------------*/
++extern IPC_STATUS createSocket(int32_t *sockFd, IPC_MODE sockMode)
++{
++    createSockFd(sockFd, sockMode);
++
++    if(sockMode == IPC_CLIENT)
++    {
++        return connectSocket(*sockFd);
++
++    }
++
++}
++
++/* --------------------------------------------------------------------
++Function : sendSocket
++
++Decription: This API send message to seockt.
++
++-----------------------------------------------------------------------*/
++extern IPC_STATUS sendSocket(int32_t sockFd, char *msg, uint32_t msgLen)
++{
++
++    uint32_t msgSend = 0;
++
++    if(sockFd < 0)
++    {
++        return  IPC_FAILURE;
++    }
++
++#if defined(_USE_NM_MSG_SOCK)
++    msgSend = nn_send (sockFd, msg, msgLen + 1 , 0);
++#endif
++
++    return(msgLen == msgSend ? IPC_SUCCESS: IPC_FAILURE);
++
++}
++
++/* --------------------------------------------------------------------
++Function : closeSocket
++
++Decription: This API will close the socket
++
++-----------------------------------------------------------------------*/
++extern IPC_STATUS closeSocket(int32_t sockFd)
++{
++
++#if defined(_USE_NM_MSG_SOCK)
++    nn_shutdown (sockFd, 0);
++#endif
++
++}
++
++/*-----------------------------------------------------------------------
++This API is used to send LCP status to client 
++-----------------------------------------------------------------------*/
++int sendPppLcpState(uint8_t PppState, pid_t pid)
++{
++    ipc_msg_payload_t ipcMsg = { 0 };
++
++    reopen_log();
++
++    ipcMsg.msg_type = IPC_MSG_PPP_STATE_CHANGE;
++
++    ipcMsg.pppEventMsg.pid = pid;
++
++    ipcMsg.pppEventMsg.pppState = PppState;
++
++    if(sendSocket(ipcSockFd, &ipcMsg, sizeof(ipc_msg_payload_t)))
++    {
++        syslog (LOG_INFO, "pppd: LCP state ID %d has been sent to ppp manager\n", PppState);
++        return 0;
++    }
++    syslog (LOG_CRIT, "pppd: LCP state ID %d send failed on socket %d\n", PppState, ipcSockFd);
++
++    return -1;
++
++}
++
++/*-----------------------------------------------------------------------
++This API is used to send IPCP parameters to ppp manager 
++-----------------------------------------------------------------------*/
++int sendPppIpcpPParams(const int state, const char *ip,
++                                const char *mask,
++                                const char *gateway,
++                                const char *nameserver,
++                                pid_t pid)
++{
++
++    char *dns1 = NULL;
++    char *dns2 = NULL;
++
++    ipc_msg_payload_t ipcMsg;
++
++    ipcMsg.msg_type = IPC_MSG_PPP_STATE_CHANGE;
++
++    ipcMsg.pppEventMsg.pid = pid;
++
++    ipcMsg.pppEventMsg.pppState = state;
++    snprintf(ipcMsg.pppEventMsg.event.pppIpcpMsg.ip, BUFLEN_32, ip);
++    snprintf(ipcMsg.pppEventMsg.event.pppIpcpMsg.mask, BUFLEN_32, mask);
++    snprintf(ipcMsg.pppEventMsg.event.pppIpcpMsg.gateway, BUFLEN_32, gateway);
++
++    snprintf(ipcMsg.pppEventMsg.event.pppIpcpMsg.nameserver, BUFLEN_64, nameserver);
++
++    if(sendSocket(ipcSockFd, &ipcMsg, sizeof(ipc_msg_payload_t)))
++    {
++        syslog (LOG_INFO, "pppd: ipcp state %d has been sent to ppp manager\n", state);
++        return 0;
++
++    }
++
++    return -1;
++}
++
++/*-----------------------------------------------------------------------
++This API is used to send IPCP parameters to ppp manager 
++-----------------------------------------------------------------------*/
++int sendPppIpv6cpPParams(const int state,
++                                const char *localIntfId,
++                                const char *remoteIntfId,
++                                pid_t pid)
++{
++
++    ipc_msg_payload_t ipcMsg = { 0 };
++
++    ipcMsg.pppEventMsg.pid = pid;
++
++    ipcMsg.pppEventMsg.pppState = state;
++
++
++    if(localIntfId)
++    {
++        snprintf(ipcMsg.pppEventMsg.event.pppIpv6cpMsg.localIntfId, BUFLEN_32, localIntfId);
++    }
++    if(remoteIntfId)
++    {
++        snprintf(ipcMsg.pppEventMsg.event.pppIpv6cpMsg.remoteIntfId, BUFLEN_32, remoteIntfId);
++    }
++
++    ipcMsg.msg_type = IPC_MSG_PPP_STATE_CHANGE;
++
++    if(sendSocket(ipcSockFd, (char*)&ipcMsg, sizeof(ipc_msg_payload_t)))
++    {
++        syslog (LOG_INFO, "pppd: ipcp ipv6 state %d has been sent to ppp manager\n", state);
++        return 0;
++
++    }
++
++    return -1;
++}
++
+Index: ppp-2.4.8/pppd/ppp_ipc.h
+===================================================================
+--- /dev/null
++++ ppp-2.4.8/pppd/ppp_ipc.h
+@@ -0,0 +1,147 @@
++/*
++ * If not stated otherwise in this file or this component's Licenses.txt file the
++ * following copyright and licenses apply:
++ *
++ * Copyright 2020 RDK Management
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ * http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++
++#ifndef _PPP_IPC_H_
++#define _PPP_IPC_H_
++
++/* ---- Include Files ---------------------------------------- */
++#if defined(_USE_NM_MSG_SOCK)
++#include <nanomsg/nn.h>
++#include <nanomsg/pipeline.h>
++#endif
++#include <errno.h>
++#include <stdio.h>
++#include <stdint.h>
++#include <stdlib.h>
++#include <string.h>
++#include <syslog.h>
++
++#define BUFLEN_4    4          
++#define BUFLEN_8    8           
++#define BUFLEN_16    16          
++#define BUFLEN_18    18          
++#define BUFLEN_24    24         
++#define BUFLEN_32    32          
++#define BUFLEN_40    40         
++#define BUFLEN_48    48          
++#define BUFLEN_64    64          
++#define BUFLEN_80    80          
++#define BUFLEN_128    128         
++#define BUFLEN_256    256         
++#define BUFLEN_264    264         
++#define BUFLEN_512    512         
++#define BUFLEN_1024    1024        
++#define IP_ADDR_LENGTH    46          
++#define IFNAME_LENGTH    BUFLEN_32
++#define MAX_FULLPATH_LENGTH    1024
++#define AFTR_NAME_LENGTH    256
++#define PPP_CONNECT_ERROR_REASON_LEN    48
++
++#define PPP_MANAGER_ADDR    "tcp://127.0.0.1:50322"
++
++typedef enum _PPP_STATES
++{
++    PPP_INTERFACE_UP = 1,
++    PPP_INTERFACE_DOWN,
++    PPP_INTERFACE_UNCONFIGURED,
++    PPP_INTERFACE_CONNECTING,
++    PPP_INTERFACE_AUTHENTICATING,
++    PPP_INTERFACE_PENDING_DISCONNET,
++    PPP_INTERFACE_DISCONNECTING,
++    PPP_INTERFACE_DISCONNECTED,
++    PPP_INTERFACE_LCP_ECHO_FAILED,
++    PPP_INTERFACE_AUTH_FAILED,
++    PPP_IPCP_COMPLETED,
++    PPP_IPCP_FAILED,
++    PPP_IPV6CP_COMPLETED,
++    PPP_IPV6CP_FAILED,
++    PPP_MAX_STATE
++}PPP_STATES;
++
++typedef enum _IPC_MODE
++{
++    IPC_SERVER = 1,
++    IPC_CLIENT
++
++}IPC_MODE;
++
++typedef enum _IPC_STATUS
++{
++    IPC_SUCCESS = 1,
++    IPC_FAILURE
++
++}IPC_STATUS;
++
++typedef enum
++{
++    IPC_MSG_PPP_STATE_CHANGE = 3,
++}ipc_msg_type_t;
++
++typedef struct _ppp_ipcp_msg
++{
++    char ip[BUFLEN_32];
++    char mask[BUFLEN_32];
++    char gateway[BUFLEN_32];
++    char nameserver[BUFLEN_64];
++
++}ppp_ipcp_msg;
++
++typedef struct _ppp_ipv6cp_msg
++{
++
++    char localIntfId[IP_ADDR_LENGTH];
++    char remoteIntfId[IP_ADDR_LENGTH];
++
++}ppp_ipv6cp_msg;
++
++typedef struct _ppp_event_msg
++{
++    pid_t pid;
++    PPP_STATES pppState; //lcp state
++    union
++    {
++        ppp_ipcp_msg pppIpcpMsg; //ncp state
++        ppp_ipv6cp_msg pppIpv6cpMsg; // ncp v6 state
++    }event;
++
++}ppp_event_msg;
++
++typedef struct _ipc_msg_payload_t
++{
++    ipc_msg_type_t msg_type;
++    ppp_event_msg pppEventMsg;
++} ipc_msg_payload_t;
++
++/*-------------------APIS----------------------------------------*/
++extern int sendPppLcpState(uint8_t PppState, pid_t pid);
++
++extern int sendPppIpcpPParams(const int state,
++        const char *ip,
++        const char *mask,
++        const char *gateway,
++        const char *nameserver,
++        pid_t pid);
++
++extern int sendPppIpv6cpPParams(const int state,
++        const char *localIntfId,
++        const char *remoteIntfId,
++        pid_t pid);
++#endif
++
++

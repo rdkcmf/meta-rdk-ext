@@ -1,0 +1,51 @@
+Date: Sep 6, 2019 10:56 PM
+
+From: 21d9ca16d4ebd276d8bbb3ea52218460748a7beb Sep 7, 2019 3:34 AM
+
+Subject: [PATCH] XRE-14261: disable Widevine for YouTube (wpe 0.4.2)
+
+	Can be enabled back by exporting WPE_ENABLE_YT_WIDEVINE
+	Unblock of Widevine rollout
+
+Source: COMCAST
+
+License: BSD-2-Clause
+
+Upstream-Status: Pending
+
+Signed-off-by: Ievgen Mutavchi <Ievgen_Mutavchi@comcast.com>
+---
+
+Index: git/Source/WebCore/platform/graphics/gstreamer/eme/CDMOpenCDM.cpp
+===================================================================
+--- git.orig/Source/WebCore/platform/graphics/gstreamer/eme/CDMOpenCDM.cpp
++++ git/Source/WebCore/platform/graphics/gstreamer/eme/CDMOpenCDM.cpp
+@@ -30,6 +30,7 @@
+ #include "MediaKeyMessageType.h"
+ #include "MediaKeysRequirement.h"
+ #include "MediaPlayerPrivateGStreamerBase.h"
++#include "MediaPlayer.h"
+ 
+ #include <gst/gst.h>
+ #include <wtf/NeverDestroyed.h>
+@@ -176,11 +177,17 @@ bool CDMFactoryOpenCDM::supportsKeySyste
+     // disable Widevine support unless it's enabled by RFC config:
+     // we want to force Youtube app to use Playready for now.
+     if (!g_strcmp0(keySystem.utf8().data(), "com.widevine.alpha")){
++        static bool enableWPEWidevine = !!getenv("WPE_ENABLE_WIDEVINE");
++        if (!enableWPEWidevine)
++        {
++            GST_WARNING("WPE_ENABLE_WIDEVINE environment variable is not set, returning false for Widevine keysystem support!");
++            return false;
++        }
+ 
+-        const char *enableWPEWidevine = getenv("WPE_ENABLE_WIDEVINE");
+-        if (NULL == enableWPEWidevine)
++        static bool enableYTWPEWidevine = !!getenv("WPE_ENABLE_YT_WIDEVINE");
++        if (!enableYTWPEWidevine && MediaPlayer::isYouTubeQuirksEnabled())
+         {
+-            GST_WARNING("%s WPE_ENABLE_WIDEVINE environment variable is not set, returning false for Widevine keysystem support!", __FUNCTION__);
++            GST_WARNING("WPE_ENABLE_YT_WIDEVINE environment variable is not set, returning false for Widevine keysystem support!");
+             return false;
+         }
+     }

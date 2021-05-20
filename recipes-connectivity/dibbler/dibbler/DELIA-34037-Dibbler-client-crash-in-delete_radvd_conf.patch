@@ -1,0 +1,48 @@
+License: GPLv2
+
+Date: Mar 18, 2019 6:39 PM
+
+From: 2ac660d66f90912473cab5469c3c899107b81af8 Mar 22, 2019 12:07 AM
+
+Subject: [PATCH] DELIA-34037: Dibbler client crash in delete_radvd_conf
+
+	Adding back the crash fix that was removed during version upgrade.
+	This change was originally added to older version of dibbler
+	as part of commit 7d8db1e933fc373d4ae44d9cb777aa2303782670
+
+	
+Source: COMCAST
+
+Upstream-Status: Pending
+
+Signed-off-by: Rakhil P E <Rakhil_PuthiyaveettilEdachena@comcast.com>
+---
+
+Index: dibbler-1.0.1/Port-linux/lowlevel-options-linux.c
+===================================================================
+--- dibbler-1.0.1.orig/Port-linux/lowlevel-options-linux.c
++++ dibbler-1.0.1/Port-linux/lowlevel-options-linux.c
+@@ -501,6 +501,7 @@ void delete_radvd_conf(const char* ifnam
+     int found = 0;
+     char buf[512];
+     char buf2[512];
++    char * errorMsg = error_message();
+ 
+     memset(&st,0,sizeof(st));
+     stat(RADVD_FILE, &st);
+@@ -508,7 +509,15 @@ void delete_radvd_conf(const char* ifnam
+     rename(RADVD_FILE,RADVD_FILE".old");
+ 
+     f = fopen(RADVD_FILE".old","r");
++    if (!f) {
++	sprintf(errorMsg, "Unable to open %s file. \n", RADVD_FILE".old");
++	return LOWLEVEL_ERROR_FILE;
++    }
+     f2 = fopen(RADVD_FILE,"w"); 
++    if (!f2) {
++	sprintf(errorMsg, "Unable to open %s file. \n", RADVD_FILE);
++	return LOWLEVEL_ERROR_FILE;
++    }
+ 
+     snprintf(buf2, 511, "### %s start ###\n", ifname);
+     while (fgets(buf,511,f)) {

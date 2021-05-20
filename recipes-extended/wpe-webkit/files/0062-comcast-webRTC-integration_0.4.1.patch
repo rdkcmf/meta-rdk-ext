@@ -1,0 +1,4206 @@
+Date: Thu, 12 Jul 2018 06:30:01 +0000
+
+From: 9602c0bb95f72d9f4d0a3fa180e8364a39db9c86 Mon Sep 17 00:00:00 2001
+
+Subject: [PATCH] wpe 0.4 configuration fixes for RDK build
+
+	webRTC-integration
+
+        New version of WPE (based on 2017.07.28 Webkit) requires gcc > 5.x
+        It's a significant update so most of Comcast patches had to be modified.
+        WPE recipe v0.4 will use the new master branch from Metro's repository.
+
+        WPE 0.4 also requires the newer version of OpenCDM from upstream
+        Metrological repository.
+
+Source: COMCAST
+
+License: BSD-2-Clause
+
+Upstream-Status: Pending
+
+Signed-off-by: Donia Abraham <Donia_Abraham@comcast.com>
+
+---
+ Source/WebCore/CMakeLists.txt                      |   3 +
+ Source/WebCore/DerivedSources.cpp                  |   1 +
+ .../mediastream/MediaEndpointPeerConnection.cpp    |   5 +-
+ .../mediastream/MediaEndpointPeerConnection.h      |   3 +-
+ .../MediaEndpointSessionDescription.cpp            |   2 +-
+ .../mediastream/MediaEndpointSessionDescription.h  |   2 +-
+ Source/WebCore/Modules/mediastream/MediaStream.cpp |   7 +-
+ Source/WebCore/Modules/mediastream/MediaStream.idl |   3 +-
+ .../Modules/mediastream/MediaTrackConstraints.cpp  |  56 ++
+ .../Modules/mediastream/MediaTrackConstraints.h    |  58 +-
+ .../Modules/mediastream/MediaTrackConstraints.idl  |  56 +-
+ .../Modules/mediastream/NavigatorUserMedia.idl     |   6 +-
+ .../Modules/mediastream/NavigatorUserMedia.js      |  12 +-
+ .../Modules/mediastream/PeerConnectionBackend.cpp  |   5 +-
+ .../Modules/mediastream/PeerConnectionBackend.h    |  18 +-
+ Source/WebCore/Modules/mediastream/RTCIceServer.h  |   4 +
+ .../WebCore/Modules/mediastream/RTCIceServer.idl   |   2 +-
+ .../WebCore/Modules/mediastream/RTCOfferOptions.h  |   7 +-
+ .../Modules/mediastream/RTCOfferOptions.idl        |   3 +
+ .../Modules/mediastream/RTCPeerConnection.cpp      |  68 ++-
+ .../Modules/mediastream/RTCPeerConnection.h        |  12 +-
+ .../Modules/mediastream/RTCPeerConnection.idl      |  22 +-
+ .../Modules/mediastream/RTCPeerConnection.js       |  73 +--
+ .../mediastream/RTCPeerConnectionInternals.js      |   4 +-
+ .../WebCore/Modules/mediastream/RTCStatsReport.cpp |  73 +++
+ .../WebCore/Modules/mediastream/RTCStatsReport.h   |  40 +-
+ .../WebCore/Modules/mediastream/RTCStatsReport.idl |  28 +
+ .../Modules/mediastream/RTCStatsResponse.cpp       |  71 +++
+ .../WebCore/Modules/mediastream/RTCStatsResponse.h |  59 ++
+ .../Modules/mediastream/RTCStatsResponse.idl       |  31 +
+ .../WebCore/Modules/mediastream/SDPProcessor.cpp   |   2 +-
+ Source/WebCore/Modules/mediastream/SDPProcessor.h  |   2 +-
+ Source/WebCore/PlatformWPE.cmake                   |  18 +
+ Source/WebCore/bindings/js/WebCoreBuiltinNames.h   |   7 +-
+ Source/WebCore/page/RuntimeEnabledFeatures.h       |   2 +-
+ Source/WebCore/platform/graphics/MediaPlayer.cpp   |   9 +
+ .../platform/mediastream/MediaConstraints.cpp      | 233 +++++++-
+ .../platform/mediastream/MediaConstraints.h        | 240 +++++++-
+ .../platform/mediastream/MediaStreamPrivate.cpp    |   8 +-
+ .../platform/mediastream/MediaStreamPrivate.h      |   5 +-
+ .../platform/mediastream/MediaStreamTrackPrivate.h |   4 +-
+ .../platform/mediastream/RTCStatsResponseBase.h    |  47 ++
+ .../RealtimeMediaSourceSupportedConstraints.cpp    |   1 +
+ .../RealtimeMediaSourceSupportedConstraints.h      |  54 +-
+ .../mediastream/SDPProcessorScriptResource.cpp     |   2 +-
+ .../mediastream/SDPProcessorScriptResource.h       |   2 +-
+ .../platform/mediastream/WebAudioSourceProvider.h  |   5 +-
+ .../mediastream/openwebrtc/MediaEndpointOwr.cpp    |   3 +-
+ .../mediastream/openwebrtc/MediaEndpointOwr.h      |   2 +-
+ .../qt5webrtc/MediaPlayerPrivateQt5WebRTC.cpp      | 296 +++++++++
+ .../qt5webrtc/MediaPlayerPrivateQt5WebRTC.h        | 141 +++++
+ .../qt5webrtc/PeerConnectionBackendQt5WebRTC.cpp   | 653 +++++++++++++++++++++
+ .../qt5webrtc/PeerConnectionBackendQt5WebRTC.h     | 146 +++++
+ .../RealtimeMediaSourceCenterQt5WebRTC.cpp         | 214 +++++++
+ .../qt5webrtc/RealtimeMediaSourceCenterQt5WebRTC.h | 160 +++++
+ Source/WebKit/Shared/WebPreferencesDefinitions.h   |   2 +-
+ .../UIProcess/API/C/WKUserMediaPermissionCheck.cpp |   2 +-
+ Source/cmake/FindQt5WebRTC.cmake                   |  21 +
+ Source/cmake/OptionsWPE.cmake                      |  13 +-
+ 59 files changed, 2899 insertions(+), 114 deletions(-)
+ create mode 100644 Source/WebCore/Modules/mediastream/RTCStatsReport.cpp
+ create mode 100644 Source/WebCore/Modules/mediastream/RTCStatsResponse.cpp
+ create mode 100644 Source/WebCore/Modules/mediastream/RTCStatsResponse.h
+ create mode 100644 Source/WebCore/Modules/mediastream/RTCStatsResponse.idl
+ create mode 100644 Source/WebCore/platform/mediastream/RTCStatsResponseBase.h
+ create mode 100644 Source/WebCore/platform/mediastream/qt5webrtc/MediaPlayerPrivateQt5WebRTC.cpp
+ create mode 100644 Source/WebCore/platform/mediastream/qt5webrtc/MediaPlayerPrivateQt5WebRTC.h
+ create mode 100644 Source/WebCore/platform/mediastream/qt5webrtc/PeerConnectionBackendQt5WebRTC.cpp
+ create mode 100644 Source/WebCore/platform/mediastream/qt5webrtc/PeerConnectionBackendQt5WebRTC.h
+ create mode 100644 Source/WebCore/platform/mediastream/qt5webrtc/RealtimeMediaSourceCenterQt5WebRTC.cpp
+ create mode 100644 Source/WebCore/platform/mediastream/qt5webrtc/RealtimeMediaSourceCenterQt5WebRTC.h
+ create mode 100644 Source/cmake/FindQt5WebRTC.cmake
+
+diff --git a/Source/WebCore/CMakeLists.txt b/Source/WebCore/CMakeLists.txt
+index 574988c7f8d..48d1aad1fbe 100644
+--- a/Source/WebCore/CMakeLists.txt
++++ b/Source/WebCore/CMakeLists.txt
+@@ -315,6 +315,7 @@ set(WebCore_NON_SVG_IDL_FILES
+     Modules/mediastream/RTCSessionDescription.idl
+     Modules/mediastream/RTCSignalingState.idl
+     Modules/mediastream/RTCStatsReport.idl
++    Modules/mediastream/RTCStatsResponse.idl
+     Modules/mediastream/RTCTrackEvent.idl
+ 
+     Modules/navigatorcontentutils/NavigatorContentUtils.idl
+@@ -1121,6 +1122,8 @@ set(WebCore_SOURCES
+     Modules/mediastream/RTCRtpTransceiver.cpp
+     Modules/mediastream/RTCSessionDescription.cpp
+     Modules/mediastream/RTCTrackEvent.cpp
++    Modules/mediastream/RTCStatsReport.cpp
++    Modules/mediastream/RTCStatsResponse.cpp
+     Modules/mediastream/SDPProcessor.cpp
+     Modules/mediastream/UserMediaController.cpp
+     Modules/mediastream/UserMediaRequest.cpp
+diff --git a/Source/WebCore/DerivedSources.cpp b/Source/WebCore/DerivedSources.cpp
+index 181499fd08d..ec0bb474d7c 100644
+--- a/Source/WebCore/DerivedSources.cpp
++++ b/Source/WebCore/DerivedSources.cpp
+@@ -394,6 +394,7 @@
+ #include "JSRTCRtpSender.cpp"
+ #include "JSRTCSessionDescription.cpp"
+ #include "JSRTCStatsReport.cpp"
++#include "JSRTCStatsResponse.cpp"
+ #include "JSRTCTrackEvent.cpp"
+ #include "JSScreen.cpp"
+ #include "JSScriptProcessorNode.cpp"
+diff --git a/Source/WebCore/Modules/mediastream/MediaEndpointPeerConnection.cpp b/Source/WebCore/Modules/mediastream/MediaEndpointPeerConnection.cpp
+index 1e92527ae2f..cd9816522a8 100644
+--- a/Source/WebCore/Modules/mediastream/MediaEndpointPeerConnection.cpp
++++ b/Source/WebCore/Modules/mediastream/MediaEndpointPeerConnection.cpp
+@@ -32,7 +32,7 @@
+ #include "config.h"
+ #include "MediaEndpointPeerConnection.h"
+ 
+-#if ENABLE(WEB_RTC)
++#if ENABLE(WEB_RTC) && !USE(QT5WEBRTC)
+ 
+ #include "EventNames.h"
+ #include "JSRTCSessionDescription.h"
+@@ -45,6 +45,7 @@
+ #include "PeerMediaDescription.h"
+ #include "RTCAnswerOptions.h"
+ #include "RTCConfiguration.h"
++#include "RTCDataChannelHandler.h"
+ #include "RTCIceCandidate.h"
+ #include "RTCOfferOptions.h"
+ #include "RTCPeerConnection.h"
+@@ -70,6 +71,7 @@ static const size_t iceUfragSize = 6;
+ // Size range from 22 to 256 ice-chars defined in RFC 5245.
+ static const size_t icePasswordSize = 24;
+ 
++#if !USE(QT5WEBRTC)
+ #if !USE(LIBWEBRTC)
+ static std::unique_ptr<PeerConnectionBackend> createMediaEndpointPeerConnection(RTCPeerConnection& peerConnection)
+ {
+@@ -78,6 +80,7 @@ static std::unique_ptr<PeerConnectionBackend> createMediaEndpointPeerConnection(
+ 
+ CreatePeerConnectionBackend PeerConnectionBackend::create = createMediaEndpointPeerConnection;
+ #endif
++#endif
+ 
+ static String randomString(size_t size)
+ {
+diff --git a/Source/WebCore/Modules/mediastream/MediaEndpointPeerConnection.h b/Source/WebCore/Modules/mediastream/MediaEndpointPeerConnection.h
+index bb813121c92..8e5b122d62a 100644
+--- a/Source/WebCore/Modules/mediastream/MediaEndpointPeerConnection.h
++++ b/Source/WebCore/Modules/mediastream/MediaEndpointPeerConnection.h
+@@ -31,7 +31,7 @@
+ 
+ #pragma once
+ 
+-#if ENABLE(WEB_RTC)
++#if ENABLE(WEB_RTC) && !USE(QT5WEBRTC)
+ 
+ #include "MediaEndpoint.h"
+ #include "PeerConnectionBackend.h"
+@@ -59,7 +59,6 @@ private:
+     bool setConfiguration(MediaEndpointConfiguration&&) final;
+ 
+     void getStats(MediaStreamTrack*, Ref<DeferredPromise>&&) final;
+-
+     Vector<RefPtr<MediaStream>> getRemoteStreams() const final;
+ 
+     Ref<RTCRtpReceiver> createReceiver(const String& transceiverMid, const String& trackKind, const String& trackId) final;
+diff --git a/Source/WebCore/Modules/mediastream/MediaEndpointSessionDescription.cpp b/Source/WebCore/Modules/mediastream/MediaEndpointSessionDescription.cpp
+index 1c606f50c2a..fa328941f48 100644
+--- a/Source/WebCore/Modules/mediastream/MediaEndpointSessionDescription.cpp
++++ b/Source/WebCore/Modules/mediastream/MediaEndpointSessionDescription.cpp
+@@ -32,7 +32,7 @@
+ #include "config.h"
+ #include "MediaEndpointSessionDescription.h"
+ 
+-#if ENABLE(WEB_RTC)
++#if ENABLE(WEB_RTC) && !USE(QT5WEBRTC)
+ 
+ #include "SDPProcessor.h"
+ #include <wtf/NeverDestroyed.h>
+diff --git a/Source/WebCore/Modules/mediastream/MediaEndpointSessionDescription.h b/Source/WebCore/Modules/mediastream/MediaEndpointSessionDescription.h
+index 1d05c7292ce..b99d5cf43d8 100644
+--- a/Source/WebCore/Modules/mediastream/MediaEndpointSessionDescription.h
++++ b/Source/WebCore/Modules/mediastream/MediaEndpointSessionDescription.h
+@@ -30,7 +30,7 @@
+ 
+ #pragma once
+ 
+-#if ENABLE(WEB_RTC)
++#if ENABLE(WEB_RTC) && !USE(QT5WEBRTC)
+ 
+ #include "ExceptionOr.h"
+ #include "RTCSessionDescription.h"
+diff --git a/Source/WebCore/Modules/mediastream/MediaStream.cpp b/Source/WebCore/Modules/mediastream/MediaStream.cpp
+index 743ecdb5950..1e84e2c0dae 100644
+--- a/Source/WebCore/Modules/mediastream/MediaStream.cpp
++++ b/Source/WebCore/Modules/mediastream/MediaStream.cpp
+@@ -228,9 +228,12 @@ bool MediaStream::internalAddTrack(Ref<MediaStreamTrack>&& trackToAdd, StreamMod
+ 
+     updateActiveState();
+ 
+-    if (streamModifier == StreamModifier::DomAPI)
++    if (streamModifier == StreamModifier::DomAPI) {
+         m_private->addTrack(&track.privateTrack(), MediaStreamPrivate::NotifyClientOption::DontNotify);
+-    else
++#if USE(QT5WEBRTC)
++        setIsActive(m_private->active());
++#endif
++    } else
+         dispatchEvent(MediaStreamTrackEvent::create(eventNames().addtrackEvent, false, false, &track));
+ 
+     return true;
+diff --git a/Source/WebCore/Modules/mediastream/MediaStream.idl b/Source/WebCore/Modules/mediastream/MediaStream.idl
+index e4b4f369a1d..28364b90f5e 100644
+--- a/Source/WebCore/Modules/mediastream/MediaStream.idl
++++ b/Source/WebCore/Modules/mediastream/MediaStream.idl
+@@ -31,7 +31,8 @@
+     ConstructorCallWith=ScriptExecutionContext,
+     ExportToWrappedFunction,
+     PrivateIdentifier,
+-    PublicIdentifier
++    PublicIdentifier,
++    InterfaceName=webkitMediaStream
+ ] interface MediaStream : EventTarget {
+ 
+     readonly attribute DOMString id;
+diff --git a/Source/WebCore/Modules/mediastream/MediaTrackConstraints.cpp b/Source/WebCore/Modules/mediastream/MediaTrackConstraints.cpp
+index c4a3fcab2f1..a39584ca01a 100644
+--- a/Source/WebCore/Modules/mediastream/MediaTrackConstraints.cpp
++++ b/Source/WebCore/Modules/mediastream/MediaTrackConstraints.cpp
+@@ -171,6 +171,55 @@ static MediaTrackConstraintSetMap convertToInternalForm(ConstraintSetType setTyp
+     // FIXME: add channelCount
+     set(result, setType, "deviceId", MediaConstraintType::DeviceId, constraintSet.deviceId);
+     set(result, setType, "groupId", MediaConstraintType::GroupId, constraintSet.groupId);
++#if USE(QT5WEBRTC)
++    // Legacy Constraints - for compatibility
++    // FIXME Finalise constraint list
++    set(result, setType, "minWidth", MediaConstraintType::MinWidth, constraintSet.minWidth);
++    set(result, setType, "maxWidth", MediaConstraintType::MaxWidth, constraintSet.maxWidth);
++    set(result, setType, "minHeight", MediaConstraintType::MinHeight, constraintSet.minHeight);
++    set(result, setType, "maxHeight", MediaConstraintType::MaxHeight, constraintSet.maxHeight);
++    set(result, setType, "minFrameRate", MediaConstraintType::MinFrameRate, constraintSet.minFrameRate);
++    set(result, setType, "maxFrameRate", MediaConstraintType::MaxFrameRate, constraintSet.maxFrameRate);
++    set(result, setType, "minAspectRatio", MediaConstraintType::MinAspectRatio, constraintSet.minAspectRatio);
++    set(result, setType, "maxAspectRatio", MediaConstraintType::MaxAspectRatio, constraintSet.maxAspectRatio);
++    set(result, setType, "googEchoCancellation", MediaConstraintType::GoogEchoCancellation, constraintSet.googEchoCancellation);
++    set(result, setType, "googEchoCancellation2", MediaConstraintType::GoogEchoCancellation2, constraintSet.googEchoCancellation2);
++    set(result, setType, "googDAEchoCancellation", MediaConstraintType::GoogDAEchoCancellation, constraintSet.googDAEchoCancellation);
++    set(result, setType, "googAutoGainControl", MediaConstraintType::GoogAutoGainControl, constraintSet.googAutoGainControl);
++    set(result, setType, "googAutoGainControl2", MediaConstraintType::GoogAutoGainControl2, constraintSet.googAutoGainControl2);
++    set(result, setType, "googNoiseSuppression", MediaConstraintType::GoogNoiseSuppression, constraintSet.googNoiseSuppression);
++    set(result, setType, "googNoiseSuppression2", MediaConstraintType::GoogNoiseSuppression2, constraintSet.googNoiseSuppression2);
++    set(result, setType, "googHighpassFilter", MediaConstraintType::GoogHighpassFilter, constraintSet.googHighpassFilter);
++    set(result, setType, "googTypingNoiseDetection", MediaConstraintType::GoogTypingNoiseDetection, constraintSet.googTypingNoiseDetection);
++    set(result, setType, "googAudioMirroring", MediaConstraintType::GoogAudioMirroring, constraintSet.googAudioMirroring);
++    set(result, setType, "audioDebugRecording", MediaConstraintType::AudioDebugRecording, constraintSet.audioDebugRecording);
++    set(result, setType, "googNoiseReduction", MediaConstraintType::GoogNoiseReduction, constraintSet.googNoiseReduction);
++    set(result, setType, "offerToReceiveAudio", MediaConstraintType::OfferToReceiveAudio, constraintSet.offerToReceiveAudio);
++    set(result, setType, "offerToReceiveVideo", MediaConstraintType::OfferToReceiveVideo, constraintSet.offerToReceiveVideo);
++    set(result, setType, "voiceActivityDetection", MediaConstraintType::VoiceActivityDetection, constraintSet.voiceActivityDetection);
++    set(result, setType, "iceRestart", MediaConstraintType::IceRestart, constraintSet.iceRestart);
++    set(result, setType, "googUseRtpMUX", MediaConstraintType::GoogUseRtpMUX, constraintSet.googUseRtpMUX);
++    set(result, setType, "dtlsSrtpKeyAgreement", MediaConstraintType::DtlsSrtpKeyAgreement, constraintSet.dtlsSrtpKeyAgreement);
++    set(result, setType, "rtpDataChannels", MediaConstraintType::RtpDataChannels, constraintSet.rtpDataChannels);
++    set(result, setType, "preferh264", MediaConstraintType::Preferh264, constraintSet.preferh264);
++    set(result, setType, "IgnoreInactiveInterfaces", MediaConstraintType::IgnoreInactiveInterfaces, constraintSet.IgnoreInactiveInterfaces);
++    set(result, setType, "googDscp", MediaConstraintType::GoogDscp, constraintSet.googDscp);
++    set(result, setType, "googIPv6", MediaConstraintType::GoogIPv6, constraintSet.googIPv6);
++    set(result, setType, "googSuspendBelowMinBitrate", MediaConstraintType::GoogSuspendBelowMinBitrate, constraintSet.googSuspendBelowMinBitrate);
++    set(result, setType, "googNumUnsignalledRecvStreams", MediaConstraintType::GoogNumUnsignalledRecvStreams, constraintSet.googNumUnsignalledRecvStreams);
++    set(result, setType, "googCombinedAudioVideoBwe", MediaConstraintType::GoogCombinedAudioVideoBwe, constraintSet.googCombinedAudioVideoBwe);
++    set(result, setType, "googScreencastMinBitrate", MediaConstraintType::GoogScreencastMinBitrate, constraintSet.googScreencastMinBitrate);
++    set(result, setType, "googCpuOveruseDetection", MediaConstraintType::GoogCpuOveruseDetection, constraintSet.googCpuOveruseDetection);
++    set(result, setType, "googCpuUnderuseThreshold", MediaConstraintType::GoogCpuUnderuseThreshold, constraintSet.googCpuUnderuseThreshold);
++    set(result, setType, "googCpuOveruseThreshold", MediaConstraintType::GoogCpuOveruseThreshold, constraintSet.googCpuOveruseThreshold);
++    set(result, setType, "googCpuUnderuseEncodeRsdThreshold", MediaConstraintType::GoogCpuUnderuseEncodeRsdThreshold, constraintSet.googCpuUnderuseEncodeRsdThreshold);
++    set(result, setType, "googCpuOveruseEncodeRsdThreshold", MediaConstraintType::GoogCpuOveruseEncodeRsdThreshold, constraintSet.googCpuOveruseEncodeRsdThreshold);
++    set(result, setType, "googCpuOveruseEncodeUsage", MediaConstraintType::GoogCpuOveruseEncodeUsage, constraintSet.googCpuOveruseEncodeUsage);
++    set(result, setType, "googHighStartBitrate", MediaConstraintType::GoogHighStartBitrate, constraintSet.googHighStartBitrate);
++    set(result, setType, "googHighBitrate", MediaConstraintType::GoogHighBitrate, constraintSet.googHighBitrate);
++    set(result, setType, "googVeryHighBitrate", MediaConstraintType::GoogVeryHighBitrate, constraintSet.googVeryHighBitrate);
++    set(result, setType, "googPayloadPadding", MediaConstraintType::GoogPayloadPadding, constraintSet.googPayloadPadding);
++#endif
+     return result;
+ }
+ 
+@@ -190,11 +239,18 @@ static Vector<MediaTrackConstraintSetMap> convertAdvancedToInternalForm(const st
+     return convertAdvancedToInternalForm(optionalVector.value());
+ }
+ 
++//Enabled for backaward compatibility only, but it will disable spec conformance
++
+ MediaConstraints createMediaConstraints(const MediaTrackConstraints& trackConstraints)
+ {
+     MediaConstraints constraints;
++#if USE(QT5WEBRTC)
++    constraints.mandatoryConstraints = convertToInternalForm(ConstraintSetType::Mandatory, trackConstraints.mandatory);
++    constraints.advancedConstraints = convertAdvancedToInternalForm(trackConstraints.optional);
++#else
+     constraints.mandatoryConstraints = convertToInternalForm(ConstraintSetType::Mandatory, trackConstraints);
+     constraints.advancedConstraints = convertAdvancedToInternalForm(trackConstraints.advanced);
++#endif
+     constraints.isValid = true;
+     return constraints;
+ }
+diff --git a/Source/WebCore/Modules/mediastream/MediaTrackConstraints.h b/Source/WebCore/Modules/mediastream/MediaTrackConstraints.h
+index 03954761ad8..d07027eab6a 100644
+--- a/Source/WebCore/Modules/mediastream/MediaTrackConstraints.h
++++ b/Source/WebCore/Modules/mediastream/MediaTrackConstraints.h
+@@ -1,5 +1,5 @@
+ /*
+- * Copyright (C) 2016 Apple Inc. All rights reserved.
++ * Copyright (C) 2013,2016 Apple Inc. All rights reserved.
+  *
+  * Redistribution and use in source and binary forms, with or without
+  * modification, are permitted provided that the following conditions
+@@ -73,10 +73,66 @@ struct MediaTrackConstraintSet {
+     std::optional<ConstrainBoolean> echoCancellation;
+     std::optional<ConstrainDOMString> deviceId;
+     std::optional<ConstrainDOMString> groupId;
++#if USE(QT5WEBRTC)
++    // Legacy Constraints - for compatibility
++    std::optional<ConstrainDOMString> minWidth;
++    std::optional<ConstrainDOMString> maxWidth;
++    std::optional<ConstrainDOMString> minHeight;
++    std::optional<ConstrainDOMString> maxHeight;
++    std::optional<ConstrainDOMString> minFrameRate;
++    std::optional<ConstrainDOMString> maxFrameRate;
++    std::optional<ConstrainDOMString> minAspectRatio;
++    std::optional<ConstrainDOMString> maxAspectRatio;
++    std::optional<ConstrainDOMString> googEchoCancellation;
++    std::optional<ConstrainDOMString> googEchoCancellation2;
++    std::optional<ConstrainDOMString> googDAEchoCancellation;
++    std::optional<ConstrainDOMString> googAutoGainControl;
++    std::optional<ConstrainDOMString> googAutoGainControl2;
++    std::optional<ConstrainDOMString> googNoiseSuppression;
++    std::optional<ConstrainDOMString> googNoiseSuppression2;
++    std::optional<ConstrainDOMString> googHighpassFilter;
++    std::optional<ConstrainDOMString> googTypingNoiseDetection;
++    std::optional<ConstrainDOMString> googAudioMirroring;
++    std::optional<ConstrainDOMString> audioDebugRecording;
++    std::optional<ConstrainDOMString> googNoiseReduction;
++    std::optional<ConstrainDOMString> offerToReceiveAudio;
++    std::optional<ConstrainDOMString> offerToReceiveVideo;
++    std::optional<ConstrainDOMString> voiceActivityDetection;
++    std::optional<ConstrainDOMString> iceRestart;
++    std::optional<ConstrainDOMString> googUseRtpMUX;
++    std::optional<ConstrainDOMString> dtlsSrtpKeyAgreement;
++    std::optional<ConstrainDOMString> rtpDataChannels;
++    std::optional<ConstrainDOMString> preferh264;
++    std::optional<ConstrainDOMString> IgnoreInactiveInterfaces;
++    std::optional<ConstrainDOMString> googDscp;
++    std::optional<ConstrainDOMString> googIPv6;
++    std::optional<ConstrainDOMString> googSuspendBelowMinBitrate;
++    std::optional<ConstrainDOMString> googNumUnsignalledRecvStreams;
++    std::optional<ConstrainDOMString> googCombinedAudioVideoBwe;
++    std::optional<ConstrainDOMString> googScreencastMinBitrate;
++    std::optional<ConstrainDOMString> googCpuOveruseDetection;
++    std::optional<ConstrainDOMString> googCpuUnderuseThreshold;
++    std::optional<ConstrainDOMString> googCpuOveruseThreshold;
++    std::optional<ConstrainDOMString> googCpuUnderuseEncodeRsdThreshold;
++    std::optional<ConstrainDOMString> googCpuOveruseEncodeRsdThreshold;
++    std::optional<ConstrainDOMString> googCpuOveruseEncodeUsage;
++    std::optional<ConstrainDOMString> googHighStartBitrate;
++    std::optional<ConstrainDOMString> googHighBitrate;
++    std::optional<ConstrainDOMString> googVeryHighBitrate;
++    std::optional<ConstrainDOMString> googPayloadPadding;
++#endif
+ };
+ 
++//Enable it if required for backaward compatibility, but it will disable spec conformance
++
++#if USE(QT5WEBRTC)
++struct MediaTrackConstraints {
++    MediaTrackConstraintSet mandatory;
++    std::optional<Vector<MediaTrackConstraintSet>> optional;
++#else
+ struct MediaTrackConstraints : MediaTrackConstraintSet {
+     std::optional<Vector<MediaTrackConstraintSet>> advanced;
++#endif
+ };
+ 
+ MediaConstraints createMediaConstraints(const MediaTrackConstraints&);
+diff --git a/Source/WebCore/Modules/mediastream/MediaTrackConstraints.idl b/Source/WebCore/Modules/mediastream/MediaTrackConstraints.idl
+index a90398361d4..514cfe0c8f6 100644
+--- a/Source/WebCore/Modules/mediastream/MediaTrackConstraints.idl
++++ b/Source/WebCore/Modules/mediastream/MediaTrackConstraints.idl
+@@ -1,5 +1,5 @@
+ /*
+- * Copyright (C) 2016 Apple Inc. All rights reserved.
++ * Copyright (C) 2013,2016 Apple Inc. All rights reserved.
+  *
+  * Redistribution and use in source and binary forms, with or without
+  * modification, are permitted provided that the following conditions
+@@ -21,14 +21,15 @@
+  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+  */
+-
+ [
+     Conditional=MEDIA_STREAM,
+     JSGenerateToJSObject,
+-] dictionary MediaTrackConstraints : MediaTrackConstraintSet {
+-    sequence<MediaTrackConstraintSet> advanced;
++] dictionary MediaTrackConstraints {
++    MediaTrackConstraintSet mandatory;
++    sequence<MediaTrackConstraintSet> optional;
+ };
+ 
++
+ [
+     Conditional=MEDIA_STREAM,
+     JSGenerateToJSObject,
+@@ -47,6 +48,53 @@
+     // FIXME 169871: add channelCount
+     ConstrainDOMString deviceId;
+     ConstrainDOMString groupId;
++    // Legacy Constraints - for compatibility
++    ConstrainDOMString minWidth;
++    ConstrainDOMString maxWidth;
++    ConstrainDOMString minHeight;
++    ConstrainDOMString maxHeight;
++    ConstrainDOMString minFrameRate;
++    ConstrainDOMString maxFrameRate;
++    ConstrainDOMString minAspectRatio;
++    ConstrainDOMString maxAspectRatio;
++    ConstrainDOMString googEchoCancellation;
++    ConstrainDOMString googEchoCancellation2;
++    ConstrainDOMString googDAEchoCancellation;
++    ConstrainDOMString googAutoGainControl;
++    ConstrainDOMString googAutoGainControl2;
++    ConstrainDOMString googNoiseSuppression;
++    ConstrainDOMString googNoiseSuppression2;
++    ConstrainDOMString googHighpassFilter;
++    ConstrainDOMString googTypingNoiseDetection;
++    ConstrainDOMString googAudioMirroring;
++    ConstrainDOMString audioDebugRecording;
++    ConstrainDOMString googNoiseReduction;
++    ConstrainDOMString offerToReceiveAudio;
++    ConstrainDOMString offerToReceiveVideo;
++    ConstrainDOMString voiceActivityDetection;
++    ConstrainDOMString iceRestart;
++    ConstrainDOMString googUseRtpMUX;
++    ConstrainDOMString dtlsSrtpKeyAgreement;
++    ConstrainDOMString rtpDataChannels;
++    ConstrainDOMString preferh264;
++    ConstrainDOMString IgnoreInactiveInterfaces;
++    ConstrainDOMString googDscp;
++    ConstrainDOMString googIPv6;
++    ConstrainDOMString googSuspendBelowMinBitrate;
++    ConstrainDOMString googNumUnsignalledRecvStreams;
++    ConstrainDOMString googCombinedAudioVideoBwe;
++    ConstrainDOMString googScreencastMinBitrate;
++    ConstrainDOMString googCpuOveruseDetection;
++    ConstrainDOMString googCpuUnderuseThreshold;
++    ConstrainDOMString googCpuOveruseThreshold;
++    ConstrainDOMString googCpuUnderuseEncodeRsdThreshold;
++    ConstrainDOMString googCpuOveruseEncodeRsdThreshold;
++    ConstrainDOMString googCpuOveruseEncodeUsage;
++    ConstrainDOMString googHighStartBitrate;
++    ConstrainDOMString googHighBitrate;
++    ConstrainDOMString googVeryHighBitrate;
++    ConstrainDOMString googPayloadPadding;
++
+ };
+ 
+ typedef (double or ConstrainDoubleRange) ConstrainDouble;
+diff --git a/Source/WebCore/Modules/mediastream/NavigatorUserMedia.idl b/Source/WebCore/Modules/mediastream/NavigatorUserMedia.idl
+index 5d86f3c7c48..b4d8708f472 100644
+--- a/Source/WebCore/Modules/mediastream/NavigatorUserMedia.idl
++++ b/Source/WebCore/Modules/mediastream/NavigatorUserMedia.idl
+@@ -1,5 +1,5 @@
+ /*
+-* Copyright (C) 2017 Apple Inc. All rights reserved.
++* Copyright (C) 2012,2017 Apple Inc. All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+@@ -30,7 +30,7 @@
+ 
+ [
+     Conditional=MEDIA_STREAM&WEB_RTC,
+-    EnabledAtRuntime=WebRTCLegacyAPI&MediaDevices,
++    EnabledAtRuntime=WebRTCLegacyAPI,
+ ] partial interface Navigator {
+-    [JSBuiltin] void getUserMedia(MediaStreamConstraints constraints, NavigatorUserMediaSuccessCallback successCallback, NavigatorUserMediaErrorCallback errorCallback);
++    [JSBuiltin] void webkitGetUserMedia(MediaStreamConstraints constraints, any successCallback, any errorCallback);
+ };
+diff --git a/Source/WebCore/Modules/mediastream/NavigatorUserMedia.js b/Source/WebCore/Modules/mediastream/NavigatorUserMedia.js
+index d1417d78b97..4a2cbe01de9 100644
+--- a/Source/WebCore/Modules/mediastream/NavigatorUserMedia.js
++++ b/Source/WebCore/Modules/mediastream/NavigatorUserMedia.js
+@@ -26,24 +26,24 @@
+ 
+ // @conditional=ENABLE(MEDIA_STREAM)
+ 
+-function getUserMedia(options, successCallback, errorCallback)
++function webkitGetUserMedia(options, successCallback, errorCallback)
+ {
+     "use strict";
+ 
+     // FIXME: We should raise a DOM unsupported exception if there is no navigator and properly detect whether method is not called on a Navigator object.
+-    if (!(this.mediaDevices && this.mediaDevices.@getUserMedia))
+-        throw @makeThisTypeError("Navigator", "getUserMedia");
++  if (!(this.mediaDevices && this.mediaDevices.@getUserMedia))
++        throw @makeThisTypeError("Navigator", "webkitGetUserMedia @getUserMedia)");
+ 
+     if (arguments.length < 3)
+         @throwTypeError("Not enough arguments");
+ 
+     if (options !== @Object(options))
+-        @throwTypeError("Argument 1 (options) to Navigator.getUserMedia must be an object");
++        @throwTypeError("Argument 1 (options) to Navigator.webkitGetUserMedia must be an object");
+ 
+     if (typeof successCallback !== "function")
+-        @throwTypeError("Argument 2 ('successCallback') to Navigator.getUserMedia must be a function");
++        @throwTypeError("Argument 2 ('successCallback') to Navigator.webkitGetUserMedia must be a function");
+     if (typeof errorCallback !== "function")
+-        @throwTypeError("Argument 3 ('errorCallback') to Navigator.getUserMedia must be a function");
++        @throwTypeError("Argument 3 ('errorCallback') to Navigator.webkitGetUserMedia must be a function");
+ 
+     this.mediaDevices.@getUserMedia(options).@then(successCallback, errorCallback);
+ }
+diff --git a/Source/WebCore/Modules/mediastream/PeerConnectionBackend.cpp b/Source/WebCore/Modules/mediastream/PeerConnectionBackend.cpp
+index 3f2b95f1197..5ae010c701b 100644
+--- a/Source/WebCore/Modules/mediastream/PeerConnectionBackend.cpp
++++ b/Source/WebCore/Modules/mediastream/PeerConnectionBackend.cpp
+@@ -54,7 +54,6 @@ PeerConnectionBackend::PeerConnectionBackend(RTCPeerConnection& peerConnection)
+ #endif
+ {
+ }
+-
+ void PeerConnectionBackend::createOffer(RTCOfferOptions&& options, PeerConnection::SessionDescriptionPromise&& promise)
+ {
+     ASSERT(!m_offerAnswerPromise);
+@@ -407,6 +406,9 @@ void PeerConnectionBackend::markAsNeedingNegotiation()
+         return;
+ 
+     m_negotiationNeeded = true;
++#if USE(QT5WEBRTC) // FIXME  Check if stream to be added wrt negotiation state
++    addStreamOnNegotiation();
++#endif
+ 
+     if (m_peerConnection.signalingState() == RTCSignalingState::Stable)
+         m_peerConnection.scheduleNegotiationNeededEvent();
+@@ -417,6 +419,7 @@ WTFLogChannel& PeerConnectionBackend::logChannel() const
+ {
+     return LogWebRTC;
+ }
++
+ #endif
+ 
+ } // namespace WebCore
+diff --git a/Source/WebCore/Modules/mediastream/PeerConnectionBackend.h b/Source/WebCore/Modules/mediastream/PeerConnectionBackend.h
+index 465db8678bd..b64c58326c6 100644
+--- a/Source/WebCore/Modules/mediastream/PeerConnectionBackend.h
++++ b/Source/WebCore/Modules/mediastream/PeerConnectionBackend.h
+@@ -37,11 +37,13 @@
+ #include "RTCRtpParameters.h"
+ #include "RTCSessionDescription.h"
+ #include "RTCSignalingState.h"
++#include "RTCStatsResponse.h"
+ #include <pal/Logger.h>
+ #include <pal/LoggerHelper.h>
+ 
+ namespace WebCore {
+ 
++class MediaConstraints;
+ class MediaStream;
+ class MediaStreamTrack;
+ class PeerConnectionBackend;
+@@ -60,7 +62,11 @@ struct RTCOfferOptions;
+ 
+ namespace PeerConnection {
+ using SessionDescriptionPromise = DOMPromiseDeferred<IDLDictionary<RTCSessionDescription::Init>>;
++#if USE(QT5WEBRTC)
++using StatsPromise = DOMPromiseDeferred<IDLInterface<RTCStatsResponse>>;
++#else
+ using StatsPromise = DOMPromiseDeferred<IDLInterface<RTCStatsReport>>;
++#endif
+ }
+ 
+ using CreatePeerConnectionBackend = std::unique_ptr<PeerConnectionBackend> (*)(RTCPeerConnection&);
+@@ -94,7 +100,11 @@ public:
+     virtual RefPtr<RTCSessionDescription> currentRemoteDescription() const = 0;
+     virtual RefPtr<RTCSessionDescription> pendingRemoteDescription() const = 0;
+ 
++#if USE(QT5WEBRTC)
++    virtual bool setConfiguration(MediaEndpointConfiguration&&, const MediaConstraints&) = 0;
++#else
+     virtual bool setConfiguration(MediaEndpointConfiguration&&) = 0;
++#endif
+ 
+     virtual void getStats(MediaStreamTrack*, Ref<DeferredPromise>&&) = 0;
+ 
+@@ -102,11 +112,15 @@ public:
+ 
+     virtual Ref<RTCRtpReceiver> createReceiver(const String& transceiverMid, const String& trackKind, const String& trackId) = 0;
+     virtual void replaceTrack(RTCRtpSender&, Ref<MediaStreamTrack>&&, DOMPromiseDeferred<void>&&) = 0;
++
++    //FIXME new interfaces added to notify track add/remove to platform.Currently not expected for qtWebRTC
+     virtual void notifyAddedTrack(RTCRtpSender&) { }
+     virtual void notifyRemovedTrack(RTCRtpSender&) { }
+ 
+     virtual RTCRtpParameters getParameters(RTCRtpSender&) const { return { }; }
+-
++#if USE(QT5WEBRTC)
++    virtual void addStreamOnNegotiation() {}
++#endif
+     void markAsNeedingNegotiation();
+     bool isNegotiationNeeded() const { return m_negotiationNeeded; };
+     void clearNegotiationNeededState() { m_negotiationNeeded = false; };
+@@ -116,7 +130,7 @@ public:
+     void newICECandidate(String&& sdp, String&& mid, unsigned short sdpMLineIndex);
+     void disableICECandidateFiltering();
+     void enableICECandidateFiltering();
+-
++    //FIXME new interfaces added.Currently not expected for qtWebRTC.Adding place holder.
+     virtual void applyRotationForOutgoingVideoSources() { }
+ 
+ #if !RELEASE_LOG_DISABLED
+diff --git a/Source/WebCore/Modules/mediastream/RTCIceServer.h b/Source/WebCore/Modules/mediastream/RTCIceServer.h
+index b0b1798ea7f..a413daa2dce 100644
+--- a/Source/WebCore/Modules/mediastream/RTCIceServer.h
++++ b/Source/WebCore/Modules/mediastream/RTCIceServer.h
+@@ -34,7 +34,11 @@
+ namespace WebCore {
+ 
+ struct RTCIceServer {
++#if USE(QT5WEBRTC)
++    Variant<String, Vector<String>> url;
++#else
+     Variant<String, Vector<String>> urls;
++#endif
+     String credential;
+     String username;
+ };
+diff --git a/Source/WebCore/Modules/mediastream/RTCIceServer.idl b/Source/WebCore/Modules/mediastream/RTCIceServer.idl
+index d92218756e7..0183cf67f59 100644
+--- a/Source/WebCore/Modules/mediastream/RTCIceServer.idl
++++ b/Source/WebCore/Modules/mediastream/RTCIceServer.idl
+@@ -28,7 +28,7 @@
+     EnabledAtRuntime=PeerConnection,
+     JSGenerateToJSObject,
+ ] dictionary RTCIceServer {
+-    required (DOMString or sequence<DOMString>) urls;
++    required (DOMString or sequence<DOMString>) url;
+     DOMString username;
+     DOMString credential;
+     // FIXME 169662: missing credentialType
+diff --git a/Source/WebCore/Modules/mediastream/RTCOfferOptions.h b/Source/WebCore/Modules/mediastream/RTCOfferOptions.h
+index b0d2cad35d1..69bf5965424 100644
+--- a/Source/WebCore/Modules/mediastream/RTCOfferOptions.h
++++ b/Source/WebCore/Modules/mediastream/RTCOfferOptions.h
+@@ -1,5 +1,6 @@
+ /*
+- * Copyright (C) 2017 Apple Inc. All rights reserved.
++ * Copyright (C) 2014,2017 Apple Inc. All rights reserved.
++ * Copyright (C) 2015 Ericsson AB. All rights reserved.
+  *
+  * Redistribution and use in source and binary forms, with or without
+  * modification, are permitted provided that the following conditions
+@@ -32,6 +33,10 @@
+ namespace WebCore {
+ 
+ struct RTCOfferOptions : RTCOfferAnswerOptions {
++#if USE(QT5WEBRTC) //Depricated maintained for legacy support
++    int64_t offerToReceiveVideo { 0 };
++    int64_t offerToReceiveAudio { 0 };
++#endif
+     bool iceRestart { false };
+ };
+ 
+diff --git a/Source/WebCore/Modules/mediastream/RTCOfferOptions.idl b/Source/WebCore/Modules/mediastream/RTCOfferOptions.idl
+index 2d9e241bcd2..6ce76ba7790 100644
+--- a/Source/WebCore/Modules/mediastream/RTCOfferOptions.idl
++++ b/Source/WebCore/Modules/mediastream/RTCOfferOptions.idl
+@@ -27,5 +27,8 @@
+     Conditional=WEB_RTC,
+     EnabledAtRuntime=PeerConnection
+ ] dictionary RTCOfferOptions : RTCOfferAnswerOptions {
++    //Depricated : Maintained for legacy support
++    long long offerToReceiveVideo;
++    long long offerToReceiveAudio;
+     boolean iceRestart = false;
+ };
+diff --git a/Source/WebCore/Modules/mediastream/RTCPeerConnection.cpp b/Source/WebCore/Modules/mediastream/RTCPeerConnection.cpp
+index 8c681dc7281..1b6ed36705f 100644
+--- a/Source/WebCore/Modules/mediastream/RTCPeerConnection.cpp
++++ b/Source/WebCore/Modules/mediastream/RTCPeerConnection.cpp
+@@ -31,9 +31,12 @@
+  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+  */
+ 
++// This file is modified for legacy support only.
+ #include "config.h"
+ #include "RTCPeerConnection.h"
+ 
++#include "Logging.h"
++
+ #if ENABLE(WEB_RTC)
+ 
+ #include "Document.h"
+@@ -48,10 +51,12 @@
+ #include "RTCConfiguration.h"
+ #include "RTCController.h"
+ #include "RTCDataChannel.h"
++#include "RTCDataChannelHandler.h"
+ #include "RTCIceCandidate.h"
+ #include "RTCPeerConnectionIceEvent.h"
+ #include "RTCSessionDescription.h"
+ #include "RTCTrackEvent.h"
++#include "MediaTrackConstraints.h"
+ #include <wtf/CryptographicallyRandomNumber.h>
+ #include <wtf/MainThread.h>
+ #include <wtf/UUID.h>
+@@ -100,16 +105,40 @@ RTCPeerConnection::~RTCPeerConnection()
+     stop();
+ }
+ 
++#if USE(QT5WEBRTC)
++ExceptionOr<void> RTCPeerConnection::initializeWith(Document& document, RTCConfiguration&& configuration, MediaTrackConstraints&& rtcConstraints)
++#else
+ ExceptionOr<void> RTCPeerConnection::initializeWith(Document& document, RTCConfiguration&& configuration)
++#endif
+ {
+     if (!document.frame())
+         return Exception { NotSupportedError };
+ 
+     if (!m_backend)
+         return Exception { NotSupportedError };
+-
++#if USE(QT5WEBRTC)
++    m_constraints = createMediaConstraints(rtcConstraints);
++#endif
+     return initializeConfiguration(WTFMove(configuration));
++
++}
++
++#if USE(QT5WEBRTC)
++ExceptionOr<void> RTCPeerConnection::addStream(Ref<MediaStream>&& stream)
++{
++  /* FIXME  Update with new siganling state if required
++  */
++    if (m_localStreams.contains(stream.ptr()))
++        return { };
++
++    Vector<std::reference_wrapper<MediaStream>> streams;
++    streams.append(stream);
++    for (auto& track : stream->getTracks())
++        addTrack(track.releaseNonNull(), streams);
++
++    return { };
+ }
++#endif
+ 
+ ExceptionOr<Ref<RTCRtpSender>> RTCPeerConnection::addTrack(Ref<MediaStreamTrack>&& track, const Vector<std::reference_wrapper<MediaStream>>& streams)
+ {
+@@ -158,6 +187,13 @@ ExceptionOr<Ref<RTCRtpSender>> RTCPeerConnection::addTrack(Ref<MediaStreamTrack>
+         sender = &transceiver->sender();
+         m_transceiverSet->append(WTFMove(transceiver));
+     }
++#if USE(QT5WEBRTC)
++    // Legacy mode
++    for (auto streamPtr : streams) {
++        if (!m_localStreams.contains(&streamPtr.get()))
++            m_localStreams.append(&streamPtr.get());
++    }
++#endif
+ 
+ #if !USE(LIBWEBRTC)
+     m_backend->markAsNeedingNegotiation();
+@@ -236,7 +272,18 @@ void RTCPeerConnection::queuedCreateOffer(RTCOfferOptions&& options, SessionDesc
+         promise.reject(InvalidStateError);
+         return;
+     }
+-
++#if USE(QT5WEBRTC)
++    Vector<String> sv;
++    auto mandatoryConstraints = (m_constraints).mandatoryConstraints;
++
++    std::optional<StringConstraint> oscv = mandatoryConstraints.offerToReceiveVideo();
++    if(oscv) {
++       options.offerToReceiveVideo = oscv->getIdeal(sv) && (sv.size() > 0) && (sv[0] == "true");
++     }
++    std::optional<StringConstraint> osca = mandatoryConstraints.offerToReceiveAudio();
++    if(osca)
++        options.offerToReceiveAudio = osca->getIdeal(sv) && (sv.size() > 0) && (sv[0] == "true");
++#endif
+     m_backend->createOffer(WTFMove(options), WTFMove(promise));
+ }
+ 
+@@ -322,7 +369,11 @@ static inline std::optional<Vector<MediaEndpointConfiguration::IceServerInfo>> i
+         servers.reserveInitialCapacity(configuration.iceServers->size());
+         for (auto& server : configuration.iceServers.value()) {
+             Vector<URL> serverURLs;
++#if USE(QT5WEBRTC)
++            WTF::switchOn(server.url, [&serverURLs] (const String& string) {
++#else
+             WTF::switchOn(server.urls, [&serverURLs] (const String& string) {
++#endif
+                 serverURLs.reserveInitialCapacity(1);
+                 serverURLs.uncheckedAppend(URL { URL { }, string });
+             }, [&serverURLs] (const Vector<String>& vector) {
+@@ -350,7 +401,11 @@ ExceptionOr<void> RTCPeerConnection::initializeConfiguration(RTCConfiguration&&
+ 
+     // FIXME: https://bugs.webkit.org/show_bug.cgi?id=173938
+     // Also decide whether to report an exception or output a message in the console log if setting configuration fails.
++#if USE(QT5WEBRTC)
++    m_backend->setConfiguration({ WTFMove(servers.value()), configuration.iceTransportPolicy, configuration.bundlePolicy, configuration.iceCandidatePoolSize }, m_constraints);
++#else
+     m_backend->setConfiguration({ WTFMove(servers.value()), configuration.iceTransportPolicy, configuration.bundlePolicy, configuration.iceCandidatePoolSize });
++#endif
+ 
+     m_configuration = WTFMove(configuration);
+     return { };
+@@ -369,16 +424,15 @@ ExceptionOr<void> RTCPeerConnection::setConfiguration(RTCConfiguration&& configu
+ 
+     // FIXME: https://bugs.webkit.org/show_bug.cgi?id=173938
+     // Also decide whether to report an exception or output a message in the console log if setting configuration fails.
++#if USE(QT5WEBRTC)
++    m_backend->setConfiguration({ WTFMove(servers.value()), configuration.iceTransportPolicy, configuration.bundlePolicy, configuration.iceCandidatePoolSize }, m_constraints);
++#else
+     m_backend->setConfiguration({ WTFMove(servers.value()), configuration.iceTransportPolicy, configuration.bundlePolicy, configuration.iceCandidatePoolSize });
++#endif
+     m_configuration = WTFMove(configuration);
+     return { };
+ }
+ 
+-void RTCPeerConnection::getStats(MediaStreamTrack* selector, Ref<DeferredPromise>&& promise)
+-{
+-    m_backend->getStats(selector, WTFMove(promise));
+-}
+-
+ ExceptionOr<Ref<RTCDataChannel>> RTCPeerConnection::createDataChannel(ScriptExecutionContext& context, String&& label, RTCDataChannelInit&& options)
+ {
+     ALWAYS_LOG(LOGIDENTIFIER);
+diff --git a/Source/WebCore/Modules/mediastream/RTCPeerConnection.h b/Source/WebCore/Modules/mediastream/RTCPeerConnection.h
+index c749f18077f..56609ebb715 100644
+--- a/Source/WebCore/Modules/mediastream/RTCPeerConnection.h
++++ b/Source/WebCore/Modules/mediastream/RTCPeerConnection.h
+@@ -32,6 +32,7 @@
+  */
+ 
+ #pragma once
++// This file is modified for legacy support only.
+ 
+ #if ENABLE(WEB_RTC)
+ 
+@@ -45,6 +46,7 @@
+ #include "RTCPeerConnectionState.h"
+ #include "RTCRtpTransceiver.h"
+ #include "RTCSignalingState.h"
++#include "RTCOfferOptions.h"
+ #include <pal/LoggerHelper.h>
+ 
+ namespace WebCore {
+@@ -79,7 +81,7 @@ public:
+ 
+     using DataChannelInit = RTCDataChannelInit;
+ 
+-    ExceptionOr<void> initializeWith(Document&, RTCConfiguration&&);
++    ExceptionOr<void> initializeWith(Document&, RTCConfiguration&&, MediaTrackConstraints&&);
+ 
+     // 4.3.2 RTCPeerConnection Interface
+     void queuedCreateOffer(RTCOfferOptions&&, PeerConnection::SessionDescriptionPromise&&);
+@@ -123,7 +125,7 @@ public:
+     ExceptionOr<Ref<RTCDataChannel>> createDataChannel(ScriptExecutionContext&, String&&, RTCDataChannelInit&&);
+ 
+     // 8.2 Statistics API
+-    void getStats(MediaStreamTrack*, Ref<DeferredPromise>&&);
++//    void getStats(MediaStreamTrack*, Ref<DeferredPromise>&&);
+ 
+     // Legacy MediaStream-based API, mostly implemented as JS built-ins
+     Vector<RefPtr<MediaStream>> getRemoteStreams() const { return m_backend->getRemoteStreams(); }
+@@ -166,6 +168,9 @@ public:
+     WTFLogChannel& logChannel() const final;
+ #endif
+ 
++    // Deprecated or removed from spec
++    ExceptionOr<void> addStream(Ref<MediaStream>&&);
++    Vector<RefPtr<MediaStream>> getLocalStreams() const {return m_localStreams; }
+ private:
+     RTCPeerConnection(ScriptExecutionContext&);
+ 
+@@ -211,9 +216,12 @@ private:
+     std::unique_ptr<RtpTransceiverSet> m_transceiverSet { std::unique_ptr<RtpTransceiverSet>(new RtpTransceiverSet()) };
+ 
+     std::unique_ptr<PeerConnectionBackend> m_backend;
++    MediaConstraints m_constraints;
+ 
+     RTCConfiguration m_configuration;
+     RTCController* m_controller { nullptr };
++    // Deprecated or removed from spec
++    Vector<RefPtr<MediaStream>> m_localStreams;
+ };
+ 
+ } // namespace WebCore
+diff --git a/Source/WebCore/Modules/mediastream/RTCPeerConnection.idl b/Source/WebCore/Modules/mediastream/RTCPeerConnection.idl
+index 977338aba0c..9ca114279be 100644
+--- a/Source/WebCore/Modules/mediastream/RTCPeerConnection.idl
++++ b/Source/WebCore/Modules/mediastream/RTCPeerConnection.idl
+@@ -31,6 +31,8 @@
+  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+  */
+ 
++// This file is backported for legacy support.
++
+ typedef RTCRtpTransceiverDirection RtpTransceiverDirection;
+ 
+ [
+@@ -62,10 +64,11 @@ typedef RTCRtpTransceiverDirection RtpTransceiverDirection;
+     ConstructorCallWith=ScriptExecutionContext,
+     EnabledAtRuntime=PeerConnection,
+     ExportMacro=WEBCORE_EXPORT,
+-    JSBuiltinConstructor
++    JSBuiltinConstructor,
++    InterfaceName=webkitRTCPeerConnection
+ ] interface RTCPeerConnection : EventTarget {
+     // JS built-in constructor handles the optional RTCConfiguration
+-    [PrivateIdentifier, CallWith=Document, MayThrowException] void initializeWith(RTCConfiguration configuration);
++    [PrivateIdentifier, CallWith=Document, MayThrowException] void initializeWith(RTCConfiguration configuration, MediaTrackConstraints rtcConstraints);
+ 
+ 
+     // 4.3.2 Interface Definition
+@@ -140,20 +143,21 @@ typedef RTCRtpTransceiverDirection RtpTransceiverDirection;
+ 
+     // 8.2 Statistics API
+     // FIXME 169644: |selector| may go away in a future version of the spec
+-    Promise<RTCStatsReport> getStats(optional MediaStreamTrack? selector = null);
++     [JSBuiltin] Promise<RTCStatsReport> getStats(optional MediaStreamTrack? selector = null);
+ 
+ 
+     // 9.6 Identity Provider API
+     // FIXME 169644: missing IdP
+ 
+     // Legacy MediaStream API
+-    [JSBuiltin, EnabledAtRuntime=WebRTCLegacyAPI] sequence<MediaStream> getLocalStreams();
+-    [PrivateIdentifier, PublicIdentifier, EnabledAtRuntime=WebRTCLegacyAPI] sequence<MediaStream> getRemoteStreams();
+-    [JSBuiltin, EnabledAtRuntime=WebRTCLegacyAPI] MediaStream getStreamById(DOMString streamId);
++    sequence<MediaStream> getLocalStreams();
++    sequence<MediaStream> getRemoteStreams();
++    [JSBuiltin] MediaStream getStreamById(DOMString streamId);
+ 
+-    [JSBuiltin, EnabledAtRuntime=WebRTCLegacyAPI] void addStream(MediaStream stream);
+-    [JSBuiltin, EnabledAtRuntime=WebRTCLegacyAPI] void removeStream(MediaStream stream);
++    [MayThrowException] void addStream(MediaStream stream);
++    [JSBuiltin] void removeStream(MediaStream stream);
+ 
+     // Legacy event handler (MediaStream-based API)
+-    [EnabledAtRuntime=WebRTCLegacyAPI] attribute EventHandler onaddstream;
++     attribute EventHandler onaddstream;
++    // Deprecated or removed from spec
+ };
+diff --git a/Source/WebCore/Modules/mediastream/RTCPeerConnection.js b/Source/WebCore/Modules/mediastream/RTCPeerConnection.js
+index 92f2f1c57e0..52495be14f9 100644
+--- a/Source/WebCore/Modules/mediastream/RTCPeerConnection.js
++++ b/Source/WebCore/Modules/mediastream/RTCPeerConnection.js
+@@ -30,39 +30,34 @@
+ 
+ // @conditional=ENABLE(WEB_RTC)
+ 
++// This file is modified for legacy support only.
+ function initializeRTCPeerConnection(configuration)
+ {
+     "use strict";
+ 
+-    if (configuration == null)
+-        configuration = {};
+-    else if (!@isObject(configuration))
+-        @throwTypeError("RTCPeerConnection argument must be a valid dictionary");
++    if (arguments.length < 1)
++        @throwTypeError("Not enough arguments");
+ 
+     // FIXME: Handle errors in a better way than catching and re-throwing (http://webkit.org/b/158936)
+     try {
+-        this.@initializeWith(configuration);
++        var configuration = arguments[0] || {};
++        var constraints = {};
++        if (arguments.length >= 2)
++            constraints = arguments[1];
++
++        this.@initializeWith(configuration, constraints);
+     } catch (e) {
+         const message = e.name === "TypeMismatchError" ? "Invalid RTCPeerConnection constructor arguments"
+-            : "Error creating RTCPeerConnection";
++            : "Error creating -  RTCPeerConnection";
+         @throwTypeError(message);
+     }
++
+     this.@operations = [];
+     this.@localStreams = [];
+ 
+     return this;
+ }
+ 
+-function getLocalStreams()
+-{
+-    "use strict";
+-
+-    if (!@isRTCPeerConnection(this))
+-        throw @makeThisTypeError("RTCPeerConnection", "getLocalStreams");
+-
+-    return this.@localStreams.slice();
+-}
+-
+ function getStreamById(streamIdArg)
+ {
+     "use strict";
+@@ -80,26 +75,6 @@ function getStreamById(streamIdArg)
+         || null;
+ }
+ 
+-function addStream(stream)
+-{
+-    "use strict";
+-
+-    if (!@isRTCPeerConnection(this))
+-        throw @makeThisTypeError("RTCPeerConnection", "addStream");
+-
+-    if (arguments.length < 1)
+-        @throwTypeError("Not enough arguments");
+-
+-    if (!(stream instanceof @MediaStream))
+-        @throwTypeError("Argument 1 ('stream') to RTCPeerConnection.addStream must be an instance of MediaStream");
+-
+-    if (this.@localStreams.find(localStream => localStream.id === stream.id))
+-        return;
+-
+-    this.@localStreams.@push(stream);
+-    stream.@getTracks().forEach(track => this.@addTrack(track, stream));
+-}
+-
+ function removeStream(stream)
+ {
+     "use strict";
+@@ -270,3 +245,29 @@ function addIceCandidate(candidate)
+         return @Promise.@resolve(@undefined);
+     });
+ }
++
++function getStats()
++{
++    "use strict";
++
++    if (!@isRTCPeerConnection(this))
++        return @Promise.@reject(new @TypeError("Function should be called on an RTCPeerConnection"));
++
++    const peerConnection = this;
++
++    const objectInfo = {
++        "constructor": @MediaStreamTrack,
++        "argName": "selector",
++        "argType": "MediaStreamTrack",
++        "defaultsToNull": true
++    };
++    return @objectAndCallbacksOverload(arguments, "getStats", objectInfo, function (selector) {
++        // Promise mode
++        return peerConnection.@privateGetStats(selector);
++    }, function (selector, successCallback, errorCallback) {
++        // Legacy callbacks mode
++        peerConnection.@privateGetStats(selector).@then(successCallback, errorCallback);
++
++        return @Promise.@resolve(@undefined);
++    });
++}
+diff --git a/Source/WebCore/Modules/mediastream/RTCPeerConnectionInternals.js b/Source/WebCore/Modules/mediastream/RTCPeerConnectionInternals.js
+index 3629e7befb2..61644da76d2 100644
+--- a/Source/WebCore/Modules/mediastream/RTCPeerConnectionInternals.js
++++ b/Source/WebCore/Modules/mediastream/RTCPeerConnectionInternals.js
+@@ -120,8 +120,8 @@ function callbacksAndDictionaryOverload(args, functionName, promiseMode, legacyM
+     if (typeof successCallback !== "function")
+         return @Promise.@reject(new @TypeError(`Argument 1 ('successCallback') to RTCPeerConnection.${functionName} must be a function`));
+ 
+-    if (typeof errorCallback !== "function")
+-        return @Promise.@reject(new @TypeError(`Argument 2 ('errorCallback') to RTCPeerConnection.${functionName} must be a function`));
++//    if (typeof errorCallback !== "function")
++//        return @Promise.@reject(new @TypeError(`Argument 2 ('errorCallback') to RTCPeerConnection.${functionName} must be a function`));
+ 
+     if (args.length > 2 && !@isDictionary(options))
+         return @Promise.@reject(new @TypeError(`Argument 3 ('options') to RTCPeerConnection.${functionName} must be a dictionary`));
+diff --git a/Source/WebCore/Modules/mediastream/RTCStatsReport.cpp b/Source/WebCore/Modules/mediastream/RTCStatsReport.cpp
+new file mode 100644
+index 00000000000..fe681d69e6d
+--- /dev/null
++++ b/Source/WebCore/Modules/mediastream/RTCStatsReport.cpp
+@@ -0,0 +1,73 @@
++
++/*
++ * Copyright (C) 2012 Google Inc. All rights reserved.
++ *
++ * Redistribution and use in source and binary forms, with or without
++ * modification, are permitted provided that the following conditions
++ * are met:
++ * 1.  Redistributions of source code must retain the above copyright
++ *     notice, this list of conditions and the following disclaimer.
++ * 2.  Redistributions in binary form must reproduce the above copyright
++ *     notice, this list of conditions and the following disclaimer in the
++ *     documentation and/or other materials provided with the distribution.
++ *
++ * THIS SOFTWARE IS PROVIDED BY APPLE INC. AND ITS CONTRIBUTORS ``AS IS'' AND ANY
++ * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
++ * WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
++ * DISCLAIMED. IN NO EVENT SHALL APPLE INC. OR ITS CONTRIBUTORS BE LIABLE FOR ANY
++ * DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
++ * (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
++ * LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON
++ * ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
++ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
++ * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
++ */
++
++#include "config.h"
++
++#if ENABLE(WEB_RTC)
++
++#include "RTCStatsReport.h"
++
++#include <wtf/text/StringHash.h>
++
++namespace WebCore {
++
++Ref<RTCStatsReport> RTCStatsReport::create(const String& id, const String& type, double timestamp)
++{
++    return adoptRef(*new RTCStatsReport(id, type, timestamp));
++}
++
++RTCStatsReport::RTCStatsReport(const String& id, const String& type, double timestamp)
++    : m_id(id)
++    , m_type(type)
++    , m_timestamp(timestamp)
++{
++}
++
++Vector<String> RTCStatsReport::names() const
++{
++    Vector<String> result;
++    for (auto& stat : m_stats.keys())
++        result.append(stat);
++    return result;
++}
++
++RTCStatsReport& RTCStatsReport::local()
++{
++    return *this;
++}
++
++RTCStatsReport& RTCStatsReport::remote()
++{
++    return *this;
++}
++
++void RTCStatsReport::addStatistic(const String& name, const String& value)
++{
++    m_stats.add(name, value);
++}
++
++} // namespace WebCore
++
++#endif // ENABLE(WEB_RTC)
+diff --git a/Source/WebCore/Modules/mediastream/RTCStatsReport.h b/Source/WebCore/Modules/mediastream/RTCStatsReport.h
+index 01f3e7f1e14..d1b14246298 100644
+--- a/Source/WebCore/Modules/mediastream/RTCStatsReport.h
++++ b/Source/WebCore/Modules/mediastream/RTCStatsReport.h
+@@ -25,6 +25,42 @@
+ 
+ #pragma once
+ 
++#include <wtf/HashMap.h>
++#include <wtf/RefCounted.h>
++#include <wtf/Vector.h>
++#include <wtf/text/WTFString.h>
++#include "ScriptWrappable.h"
++
++namespace WebCore {
++
++class RTCStatsReport : public RefCounted<RTCStatsReport>, public ScriptWrappable {
++public:
++    static Ref<RTCStatsReport> create(const String& id, const String& type, double timestamp);
++
++    double timestamp() const { return m_timestamp; }
++    String id() { return m_id; }
++    String type() { return m_type; }
++    String stat(const String& name) { return m_stats.get(name); }
++    Vector<String> names() const;
++
++    // DEPRECATED
++    RTCStatsReport& local();
++    // DEPRECATED
++    RTCStatsReport& remote();
++
++    void addStatistic(const String& name, const String& value);
++
++private:
++    RTCStatsReport(const String& id, const String& type, double timestamp);
++
++    String m_id;
++    String m_type;
++    double m_timestamp;
++    HashMap<String, String> m_stats;
++};
++}
++//Disabled for backward compatibility.
++#if 0
+ #include "JSDOMMapLike.h"
+ 
+ namespace WebCore {
+@@ -204,5 +240,5 @@ private:
+ private:
+     RefPtr<DOMMapLike> m_mapLike;
+ };
+-
+-} // namespace WebCore
++#endif
++//} // namespace WebCore
+diff --git a/Source/WebCore/Modules/mediastream/RTCStatsReport.idl b/Source/WebCore/Modules/mediastream/RTCStatsReport.idl
+index 74604262f82..71cb0009e76 100644
+--- a/Source/WebCore/Modules/mediastream/RTCStatsReport.idl
++++ b/Source/WebCore/Modules/mediastream/RTCStatsReport.idl
+@@ -23,6 +23,33 @@
+  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+  */
+ 
++[
++    NoInterfaceObject,
++    Conditional=WEB_RTC,
++    ImplementationLacksVTable,
++] interface RTCStatsReport {
++    readonly attribute Date timestamp;
++    readonly attribute DOMString id;
++    readonly attribute DOMString type;
++    DOMString stat(DOMString name);
++    sequence<DOMString> names();
++
++    // DEPRECATED - fake for old RTCStatsElement object.
++    readonly attribute RTCStatsReport local;
++    readonly attribute RTCStatsReport remote;
++};
++/*
++[
++    NoInterfaceObject,
++    Conditional=WEB_RTC,
++] interface RTCStatsResponse {
++    sequence<RTCStatsReport> result();
++    getter RTCStatsReport namedItem(DOMString name);
++};
++*/
++
++//Disabled for backward compatibility.
++/*
+ [
+     Conditional=WEB_RTC,
+     EnabledAtRuntime=PeerConnection,
+@@ -179,3 +206,4 @@ dictionary RTCCertificateStats : RTCStats {
+ // FIXME 169662: missing RTCTransportStats
+ // FIXME 169662: missing RTCIceCandidateStats
+ // FIXME 169662: missing RTCStatsIceCandidatePairState
++*/
+diff --git a/Source/WebCore/Modules/mediastream/RTCStatsResponse.cpp b/Source/WebCore/Modules/mediastream/RTCStatsResponse.cpp
+new file mode 100644
+index 00000000000..05ecc8314d9
+--- /dev/null
++++ b/Source/WebCore/Modules/mediastream/RTCStatsResponse.cpp
+@@ -0,0 +1,71 @@
++/*
++ * Copyright (C) 2012 Google Inc. All rights reserved.
++ *
++ * Redistribution and use in source and binary forms, with or without
++ * modification, are permitted provided that the following conditions
++ * are met:
++ * 1.  Redistributions of source code must retain the above copyright
++ *     notice, this list of conditions and the following disclaimer.
++ * 2.  Redistributions in binary form must reproduce the above copyright
++ *     notice, this list of conditions and the following disclaimer in the
++ *     documentation and/or other materials provided with the distribution.
++ *
++ * THIS SOFTWARE IS PROVIDED BY APPLE INC. AND ITS CONTRIBUTORS ``AS IS'' AND ANY
++ * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
++ * WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
++ * DISCLAIMED. IN NO EVENT SHALL APPLE INC. OR ITS CONTRIBUTORS BE LIABLE FOR ANY
++ * DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
++ * (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
++ * LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON
++ * ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
++ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
++ * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
++ */
++
++#include "config.h"
++
++#if ENABLE(WEB_RTC)
++
++#include "RTCStatsResponse.h"
++#include <wtf/text/StringHash.h>
++
++namespace WebCore {
++
++Ref<RTCStatsResponse> RTCStatsResponse::create()
++{
++    return adoptRef(*new RTCStatsResponse());
++}
++
++RTCStatsResponse::RTCStatsResponse()
++{
++}
++
++RefPtr<RTCStatsReport> RTCStatsResponse::namedItem(const AtomicString& name)
++{
++    if (m_idmap.find(name) != m_idmap.end())
++        return m_result[m_idmap.get(name)];
++    return nullptr;
++}
++
++Vector<AtomicString> WebCore::RTCStatsResponse::supportedPropertyNames()
++{
++    // FIXME: Should be implemented.
++    return Vector<AtomicString>();
++}
++
++size_t RTCStatsResponse::addReport(String id, String type, double timestamp)
++{
++    m_result.append(RTCStatsReport::create(id, type, timestamp));
++    m_idmap.add(id, m_result.size() - 1);
++    return m_result.size() - 1;
++}
++
++void RTCStatsResponse::addStatistic(size_t report, String name, String value)
++{
++    ASSERT_WITH_SECURITY_IMPLICATION(report < m_result.size());
++    m_result[report]->addStatistic(name, value);
++}
++
++} // namespace WebCore
++
++#endif // ENABLE(WEB_RTC)
+diff --git a/Source/WebCore/Modules/mediastream/RTCStatsResponse.h b/Source/WebCore/Modules/mediastream/RTCStatsResponse.h
+new file mode 100644
+index 00000000000..909eb2c831c
+--- /dev/null
++++ b/Source/WebCore/Modules/mediastream/RTCStatsResponse.h
+@@ -0,0 +1,59 @@
++/*
++ * Copyright (C) 2012 Google Inc. All rights reserved.
++ *
++ * Redistribution and use in source and binary forms, with or without
++ * modification, are permitted provided that the following conditions
++ * are met:
++ * 1.  Redistributions of source code must retain the above copyright
++ *     notice, this list of conditions and the following disclaimer.
++ * 2.  Redistributions in binary form must reproduce the above copyright
++ *     notice, this list of conditions and the following disclaimer in the
++ *     documentation and/or other materials provided with the distribution.
++ *
++ * THIS SOFTWARE IS PROVIDED BY APPLE INC. AND ITS CONTRIBUTORS ``AS IS'' AND ANY
++ * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
++ * WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
++ * DISCLAIMED. IN NO EVENT SHALL APPLE INC. OR ITS CONTRIBUTORS BE LIABLE FOR ANY
++ * DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
++ * (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
++ * LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON
++ * ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
++ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
++ * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
++ */
++
++#pragma once
++
++#include "ActiveDOMObject.h"
++//#include "DOMError.h"
++#include "DOMStringList.h"
++#include "Event.h"
++#include "EventListener.h"
++#include "EventTarget.h"
++#include "MediaStreamTrack.h"
++#include "RTCStatsReport.h"
++#include "RTCStatsResponseBase.h"
++#include "ScriptWrappable.h"
++#include <wtf/HashMap.h>
++
++namespace WebCore {
++
++class RTCStatsResponse : public RTCStatsResponseBase, public ScriptWrappable {
++public:
++    static Ref<RTCStatsResponse> create();
++
++    const Vector<RefPtr<RTCStatsReport>>& result() const { return m_result; };
++
++    RefPtr<RTCStatsReport> namedItem(const AtomicString&);
++    Vector<AtomicString> supportedPropertyNames();
++
++    size_t addReport(String id, String type, double timestamp) override;
++    void addStatistic(size_t report, String name, String value) override;
++
++private:
++    RTCStatsResponse();
++    Vector<RefPtr<RTCStatsReport>> m_result;
++    HashMap<String, int> m_idmap;
++};
++
++} // namespace WebCore
+diff --git a/Source/WebCore/Modules/mediastream/RTCStatsResponse.idl b/Source/WebCore/Modules/mediastream/RTCStatsResponse.idl
+new file mode 100644
+index 00000000000..6a4ee30d260
+--- /dev/null
++++ b/Source/WebCore/Modules/mediastream/RTCStatsResponse.idl
+@@ -0,0 +1,31 @@
++/*
++ * Copyright (C) 2012 Google Inc. All rights reserved.
++ *
++ * Redistribution and use in source and binary forms, with or without
++ * modification, are permitted provided that the following conditions
++ * are met:
++ * 1.  Redistributions of source code must retain the above copyright
++ *     notice, this list of conditions and the following disclaimer.
++ * 2.  Redistributions in binary form must reproduce the above copyright
++ *     notice, this list of conditions and the following disclaimer in the
++ *     documentation and/or other materials provided with the distribution.
++ *
++ * THIS SOFTWARE IS PROVIDED BY APPLE INC. AND ITS CONTRIBUTORS ``AS IS'' AND ANY
++ * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
++ * WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
++ * DISCLAIMED. IN NO EVENT SHALL APPLE INC. OR ITS CONTRIBUTORS BE LIABLE FOR ANY
++ * DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
++ * (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
++ * LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON
++ * ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
++ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
++ * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
++ */
++
++[
++    NoInterfaceObject,
++    Conditional=WEB_RTC,
++] interface RTCStatsResponse {
++    sequence<RTCStatsReport> result();
++    getter RTCStatsReport namedItem(DOMString name);
++};
+diff --git a/Source/WebCore/Modules/mediastream/SDPProcessor.cpp b/Source/WebCore/Modules/mediastream/SDPProcessor.cpp
+index 715cf2f2888..1f8d610bc0f 100644
+--- a/Source/WebCore/Modules/mediastream/SDPProcessor.cpp
++++ b/Source/WebCore/Modules/mediastream/SDPProcessor.cpp
+@@ -31,7 +31,7 @@
+ 
+ #include "config.h"
+ 
+-#if ENABLE(WEB_RTC)
++#if ENABLE(WEB_RTC) && !USE(QT5WEBRTC)
+ #include "SDPProcessor.h"
+ 
+ #include "CommonVM.h"
+diff --git a/Source/WebCore/Modules/mediastream/SDPProcessor.h b/Source/WebCore/Modules/mediastream/SDPProcessor.h
+index ca61c9a92e4..b54c8fe0e5e 100644
+--- a/Source/WebCore/Modules/mediastream/SDPProcessor.h
++++ b/Source/WebCore/Modules/mediastream/SDPProcessor.h
+@@ -30,7 +30,7 @@
+ 
+ #pragma once
+ 
+-#if ENABLE(WEB_RTC)
++#if ENABLE(WEB_RTC) && !USE(QT5WEBRTC)
+ 
+ #include "ContextDestructionObserver.h"
+ #include "IceCandidate.h"
+diff --git a/Source/WebCore/PlatformWPE.cmake b/Source/WebCore/PlatformWPE.cmake
+index 9f438e3183a..54c492d09df 100644
+--- a/Source/WebCore/PlatformWPE.cmake
++++ b/Source/WebCore/PlatformWPE.cmake
+@@ -198,6 +198,24 @@ list(APPEND WebCore_INCLUDE_DIRECTORIES
+     ${WPE_INCLUDE_DIRS}
+ )
+ 
++if (USE_QT5WEBRTC)
++    list(APPEND WebCore_SOURCES
++        platform/mediastream/qt5webrtc/MediaPlayerPrivateQt5WebRTC.cpp
++        platform/mediastream/qt5webrtc/PeerConnectionBackendQt5WebRTC.cpp
++        platform/mediastream/qt5webrtc/RealtimeMediaSourceCenterQt5WebRTC.cpp
++        platform/mediastream/SDPProcessorScriptResource.cpp
++    )
++
++    list(APPEND WebCore_SYSTEM_INCLUDE_DIRECTORIES
++        ${QT5WEBRTC_INCLUDE_DIRS}
++        platform/mediastream/qt5webrtc/
++    )
++
++#    list(APPEND WebCore_LIBRARIES
++#        ${QT5WEBRTC_LIBRARIES}
++#    )
++endif ()
++
+ add_library(WebCorePlatformWPE ${WebCore_LIBRARY_TYPE} ${WebCorePlatformWPE_SOURCES})
+ add_dependencies(WebCorePlatformWPE WebCore)
+ target_include_directories(WebCorePlatformWPE PRIVATE
+diff --git a/Source/WebCore/bindings/js/WebCoreBuiltinNames.h b/Source/WebCore/bindings/js/WebCoreBuiltinNames.h
+index 6f081f824b6..804113735f5 100644
+--- a/Source/WebCore/bindings/js/WebCoreBuiltinNames.h
++++ b/Source/WebCore/bindings/js/WebCoreBuiltinNames.h
+@@ -284,7 +284,12 @@ namespace WebCore {
+     macro(webkitIDBTransaction) \
+     macro(webkitIndexedDB) \
+     macro(window) \
+-    macro(writing)
++    macro(writing) \
++    macro(webkitMediaStream) \
++    macro(webkitGetUserMedia) \
++    macro(webkitRTCPeerConnection)
++
++
+ 
+ class WebCoreBuiltinNames {
+ public:
+diff --git a/Source/WebCore/page/RuntimeEnabledFeatures.h b/Source/WebCore/page/RuntimeEnabledFeatures.h
+index 7f508991f91..83efc92f5d0 100644
+--- a/Source/WebCore/page/RuntimeEnabledFeatures.h
++++ b/Source/WebCore/page/RuntimeEnabledFeatures.h
+@@ -264,7 +264,7 @@ private:
+ #endif
+ 
+ #if ENABLE(MEDIA_STREAM)
+-    bool m_isMediaDevicesEnabled { false };
++    bool m_isMediaDevicesEnabled { true };
+     bool m_isMediaStreamEnabled { true };
+ #endif
+ 
+diff --git a/Source/WebCore/platform/graphics/MediaPlayer.cpp b/Source/WebCore/platform/graphics/MediaPlayer.cpp
+index 83f37342bbe..5f30a19a6ef 100644
+--- a/Source/WebCore/platform/graphics/MediaPlayer.cpp
++++ b/Source/WebCore/platform/graphics/MediaPlayer.cpp
+@@ -93,6 +93,11 @@
+ #if USE(HOLE_PUNCH_EXTERNAL)
+ #include "MediaPlayerPrivateHolePunchDummy.h"
+ #endif
++
++#if ENABLE(MEDIA_STREAM) && USE(QT5WEBRTC)
++#include "MediaPlayerPrivateQt5WebRTC.h"
++#endif
++
+ namespace WebCore {
+ 
+ const PlatformMedia NoPlatformMedia = { PlatformMedia::None, {0} };
+@@ -272,6 +277,10 @@ static void buildMediaEnginesVector()
+         PlatformMediaEngineClassName::registerMediaEngine(addMediaEngine);
+ #endif
+ 
++#if ENABLE(MEDIA_STREAM) && USE(QT5WEBRTC)
++    MediaPlayerPrivateQt5WebRTC::registerMediaEngine(addMediaEngine);
++#endif
++
+ #if ENABLE(MEDIA_STREAM) && USE(GSTREAMER) && USE(OPENWEBRTC)
+     if (Settings::isGStreamerEnabled())
+         MediaPlayerPrivateGStreamerOwr::registerMediaEngine(addMediaEngine);
+diff --git a/Source/WebCore/platform/mediastream/MediaConstraints.cpp b/Source/WebCore/platform/mediastream/MediaConstraints.cpp
+index 01d291eb627..84ff8839371 100644
+--- a/Source/WebCore/platform/mediastream/MediaConstraints.cpp
++++ b/Source/WebCore/platform/mediastream/MediaConstraints.cpp
+@@ -217,11 +217,105 @@ void MediaTrackConstraintSetMap::filter(const WTF::Function<bool(const MediaCons
+         return;
+     if (m_groupId && !m_groupId->isEmpty() && callback(*m_groupId))
+         return;
++#if USE(QT5WEBRTC)
++    // Legacy Constraints - for compatibility
++    if (m_minAspectRatio && !m_minAspectRatio->isEmpty() && callback(*m_minAspectRatio))
++        return;
++    if (m_maxAspectRatio && !m_maxAspectRatio->isEmpty() && callback(*m_maxAspectRatio))
++        return;
++    if (m_maxWidth && !m_maxWidth->isEmpty() && callback(*m_maxWidth))
++        return;
++    if (m_minWidth && !m_minWidth->isEmpty() && callback(*m_minWidth))
++        return;
++    if (m_maxHeight && !m_maxHeight->isEmpty() && callback(*m_maxHeight))
++        return;
++    if (m_minHeight && !m_minHeight->isEmpty() && callback(*m_minHeight))
++        return;
++    if (m_maxFrameRate && !m_maxFrameRate->isEmpty() && callback(*m_maxFrameRate))
++        return;
++    if (m_minFrameRate && !m_minFrameRate->isEmpty() && callback(*m_minFrameRate))
++        return;
++    if (m_googEchoCancellation && !m_googEchoCancellation->isEmpty() && callback(*m_googEchoCancellation))
++        return;
++    if (m_googEchoCancellation2 && !m_googEchoCancellation2->isEmpty() && callback(*m_googEchoCancellation2))
++        return;
++    if (m_googDAEchoCancellation && !m_googDAEchoCancellation->isEmpty() && callback(*m_googDAEchoCancellation))
++        return;
++    if (m_googAutoGainControl && !m_googAutoGainControl->isEmpty() && callback(*m_googAutoGainControl))
++        return;
++    if (m_googAutoGainControl2 && !m_googAutoGainControl2->isEmpty() && callback(*m_googAutoGainControl2))
++        return;
++    if (m_googNoiseSuppression && !m_googNoiseSuppression->isEmpty() && callback(*m_googNoiseSuppression))
++        return;
++    if (m_googNoiseSuppression2 && !m_googNoiseSuppression2->isEmpty() && callback(*m_googNoiseSuppression2))
++        return;
++    if (m_googHighpassFilter && !m_googHighpassFilter->isEmpty() && callback(*m_googHighpassFilter))
++        return;
++    if (m_googTypingNoiseDetection && !m_googTypingNoiseDetection->isEmpty() && callback(*m_googTypingNoiseDetection))
++        return;
++    if (m_googAudioMirroring && !m_googAudioMirroring->isEmpty() && callback(*m_googAudioMirroring))
++        return;
++    if (m_audioDebugRecording && !m_audioDebugRecording->isEmpty() && callback(*m_audioDebugRecording))
++        return;
++    if (m_googNoiseReduction && !m_googNoiseReduction->isEmpty() && callback(*m_googNoiseReduction))
++        return;
++    if (m_offerToReceiveAudio && !m_offerToReceiveAudio->isEmpty() && callback(*m_offerToReceiveAudio))
++        return;
++    if (m_offerToReceiveVideo && !m_offerToReceiveVideo->isEmpty() && callback(*m_offerToReceiveVideo))
++        return;
++    if (m_voiceActivityDetection && !m_voiceActivityDetection->isEmpty() && callback(*m_voiceActivityDetection))
++        return;
++    if (m_iceRestart && !m_iceRestart->isEmpty() && callback(*m_iceRestart))
++        return;
++    if (m_googUseRtpMUX && !m_googUseRtpMUX->isEmpty() && callback(*m_googUseRtpMUX))
++        return;
++    if (m_dtlsSrtpKeyAgreement && !m_dtlsSrtpKeyAgreement->isEmpty() && callback(*m_dtlsSrtpKeyAgreement))
++        return;
++    if (m_rtpDataChannels && !m_rtpDataChannels->isEmpty() && callback(*m_rtpDataChannels))
++        return;
++    if (m_preferh264 && !m_preferh264->isEmpty() && callback(*m_preferh264))
++        return;
++    if (m_ignoreInactiveInterfaces && !m_ignoreInactiveInterfaces->isEmpty() && callback(*m_ignoreInactiveInterfaces))
++        return;
++    if (m_googDscp && !m_googDscp->isEmpty() && callback(*m_googDscp))
++        return;
++    if (m_googIPv6 && !m_googIPv6->isEmpty() && callback(*m_googIPv6))
++        return;
++    if (m_googSuspendBelowMinBitrate && !m_googSuspendBelowMinBitrate->isEmpty() && callback(*m_googSuspendBelowMinBitrate))
++        return;
++    if (m_googNumUnsignalledRecvStreams && !m_googNumUnsignalledRecvStreams->isEmpty() && callback(*m_googNumUnsignalledRecvStreams))
++        return;
++    if (m_googCombinedAudioVideoBwe && !m_googCombinedAudioVideoBwe->isEmpty() && callback(*m_googCombinedAudioVideoBwe))
++        return;
++    if (m_googScreencastMinBitrate && !m_googScreencastMinBitrate->isEmpty() && callback(*m_googScreencastMinBitrate))
++        return;
++    if (m_googCpuOveruseDetection && !m_googCpuOveruseDetection->isEmpty() && callback(*m_googCpuOveruseDetection))
++        return;
++    if (m_googCpuUnderuseThreshold && !m_googCpuUnderuseThreshold->isEmpty() && callback(*m_googCpuUnderuseThreshold))
++        return;
++    if (m_googCpuOveruseThreshold && !m_googCpuOveruseThreshold->isEmpty() && callback(*m_googCpuOveruseThreshold))
++        return;
++    if (m_googCpuUnderuseEncodeRsdThreshold && !m_googCpuUnderuseEncodeRsdThreshold->isEmpty() && callback(*m_googCpuUnderuseEncodeRsdThreshold))
++        return;
++    if (m_googCpuOveruseEncodeRsdThreshold && !m_googCpuOveruseEncodeRsdThreshold->isEmpty() && callback(*m_googCpuOveruseEncodeRsdThreshold))
++        return;
++    if (m_googCpuOveruseEncodeUsage && !m_googCpuOveruseEncodeUsage->isEmpty() && callback(*m_googCpuOveruseEncodeUsage))
++        return;
++    if (m_googHighStartBitrate && !m_googHighStartBitrate->isEmpty() && callback(*m_googHighStartBitrate))
++        return;
++    if (m_googHighBitrate && !m_googHighBitrate->isEmpty() && callback(*m_googHighBitrate))
++        return;
++    if (m_googVeryHighBitrate && !m_googVeryHighBitrate->isEmpty() && callback(*m_googVeryHighBitrate))
++        return;
++    if (m_googPayloadPadding && !m_googPayloadPadding->isEmpty() && callback(*m_googPayloadPadding))
++        return;
++#endif
+ }
+ 
+ void MediaTrackConstraintSetMap::set(MediaConstraintType constraintType, std::optional<IntConstraint>&& constraint)
+ {
+     switch (constraintType) {
++
+     case MediaConstraintType::Width:
+         m_width = WTFMove(constraint);
+         break;
+@@ -310,7 +404,144 @@ void MediaTrackConstraintSetMap::set(MediaConstraintType constraintType, std::op
+     case MediaConstraintType::GroupId:
+         m_groupId = WTFMove(constraint);
+         break;
+-
++#if USE(QT5WEBRTC)
++    // Legacy Constraints - for compatibility
++    case MediaConstraintType::MinAspectRatio:
++        m_minAspectRatio = WTFMove(constraint);
++        break;
++    case MediaConstraintType::MaxAspectRatio:
++        m_maxAspectRatio = WTFMove(constraint);
++        break;
++    case MediaConstraintType::MaxWidth:
++        m_maxWidth = WTFMove(constraint);
++        break;
++    case MediaConstraintType::MinWidth:
++        m_minWidth = WTFMove(constraint);
++        break;
++    case MediaConstraintType::MaxHeight:
++        m_maxHeight = WTFMove(constraint);
++        break;
++    case MediaConstraintType::MinHeight:
++        m_minHeight = WTFMove(constraint);
++        break;
++    case MediaConstraintType::MaxFrameRate:
++        m_maxFrameRate = WTFMove(constraint);
++        break;
++    case MediaConstraintType::MinFrameRate:
++        m_minFrameRate = WTFMove(constraint);
++        break;
++    case MediaConstraintType::GoogEchoCancellation:
++        m_googEchoCancellation = WTFMove(constraint);
++        break;
++    case MediaConstraintType::GoogEchoCancellation2:
++        m_googEchoCancellation2 = WTFMove(constraint);
++        break;
++    case MediaConstraintType::GoogDAEchoCancellation:
++        m_googDAEchoCancellation = WTFMove(constraint);
++        break;
++    case MediaConstraintType::GoogAutoGainControl:
++        m_googAutoGainControl = WTFMove(constraint);
++        break;
++    case MediaConstraintType::GoogAutoGainControl2:
++        m_googAutoGainControl2 = WTFMove(constraint);
++        break;
++    case MediaConstraintType::GoogNoiseSuppression:
++        m_googNoiseSuppression = WTFMove(constraint);
++        break;
++    case MediaConstraintType::GoogNoiseSuppression2:
++        m_googNoiseSuppression2 = WTFMove(constraint);
++        break;
++    case MediaConstraintType::GoogHighpassFilter:
++        m_googHighpassFilter = WTFMove(constraint);
++        break;
++    case MediaConstraintType::GoogTypingNoiseDetection:
++        m_googTypingNoiseDetection = WTFMove(constraint);
++        break;
++    case MediaConstraintType::GoogAudioMirroring:
++        m_googAudioMirroring = WTFMove(constraint);
++        break;
++    case MediaConstraintType::AudioDebugRecording:
++        m_audioDebugRecording = WTFMove(constraint);
++        break;
++    case MediaConstraintType::GoogNoiseReduction:
++        m_googNoiseReduction = WTFMove(constraint);
++        break;
++    case MediaConstraintType::OfferToReceiveAudio:
++        m_offerToReceiveAudio = WTFMove(constraint);
++        break;
++    case MediaConstraintType::OfferToReceiveVideo:
++        m_offerToReceiveVideo = WTFMove(constraint);
++        break;
++    case MediaConstraintType::VoiceActivityDetection:
++        m_voiceActivityDetection = WTFMove(constraint);
++        break;
++    case MediaConstraintType::IceRestart:
++        m_iceRestart = WTFMove(constraint);
++        break;
++    case MediaConstraintType::GoogUseRtpMUX:
++        m_googUseRtpMUX = WTFMove(constraint);
++        break;
++    case MediaConstraintType::DtlsSrtpKeyAgreement:
++        m_dtlsSrtpKeyAgreement = WTFMove(constraint);
++        break;
++    case MediaConstraintType::RtpDataChannels:
++        m_rtpDataChannels = WTFMove(constraint);
++        break;
++    case MediaConstraintType::Preferh264:
++        m_preferh264 = WTFMove(constraint);
++        break;
++    case MediaConstraintType::IgnoreInactiveInterfaces:
++        m_ignoreInactiveInterfaces = WTFMove(constraint);
++        break;
++    case MediaConstraintType::GoogDscp:
++        m_googDscp = WTFMove(constraint);
++        break;
++    case MediaConstraintType::GoogIPv6:
++        m_googIPv6 = WTFMove(constraint);
++        break;
++    case MediaConstraintType::GoogSuspendBelowMinBitrate:
++        m_googSuspendBelowMinBitrate = WTFMove(constraint);
++        break;
++    case MediaConstraintType::GoogNumUnsignalledRecvStreams:
++        m_googNumUnsignalledRecvStreams = WTFMove(constraint);
++        break;
++    case MediaConstraintType::GoogCombinedAudioVideoBwe:
++        m_googCombinedAudioVideoBwe = WTFMove(constraint);
++        break;
++    case MediaConstraintType::GoogScreencastMinBitrate:
++        m_googScreencastMinBitrate = WTFMove(constraint);
++        break;
++    case MediaConstraintType::GoogCpuOveruseDetection:
++        m_googCpuOveruseDetection = WTFMove(constraint);
++        break;
++    case MediaConstraintType::GoogCpuUnderuseThreshold:
++        m_googCpuUnderuseThreshold = WTFMove(constraint);
++        break;
++    case MediaConstraintType::GoogCpuOveruseThreshold:
++        m_googCpuOveruseThreshold = WTFMove(constraint);
++        break;
++    case MediaConstraintType::GoogCpuUnderuseEncodeRsdThreshold:
++        m_googCpuUnderuseEncodeRsdThreshold = WTFMove(constraint);
++        break;
++    case MediaConstraintType::GoogCpuOveruseEncodeRsdThreshold:
++        m_googCpuOveruseEncodeRsdThreshold = WTFMove(constraint);
++        break;
++    case MediaConstraintType::GoogCpuOveruseEncodeUsage:
++        m_googCpuOveruseEncodeUsage = WTFMove(constraint);
++        break;
++    case MediaConstraintType::GoogHighStartBitrate:
++        m_googHighStartBitrate = WTFMove(constraint);
++        break;
++    case MediaConstraintType::GoogHighBitrate:
++        m_googHighBitrate = WTFMove(constraint);
++        break;
++    case MediaConstraintType::GoogVeryHighBitrate:
++        m_googVeryHighBitrate = WTFMove(constraint);
++        break;
++    case MediaConstraintType::GoogPayloadPadding:
++        m_googPayloadPadding = WTFMove(constraint);
++        break;
++#endif
+     case MediaConstraintType::Width:
+     case MediaConstraintType::Height:
+     case MediaConstraintType::SampleRate:
+diff --git a/Source/WebCore/platform/mediastream/MediaConstraints.h b/Source/WebCore/platform/mediastream/MediaConstraints.h
+index 4c9696915e1..21a1bf38ba6 100644
+--- a/Source/WebCore/platform/mediastream/MediaConstraints.h
++++ b/Source/WebCore/platform/mediastream/MediaConstraints.h
+@@ -507,7 +507,7 @@ public:
+ 
+     bool getExact(Vector<String>& exact) const
+     {
+-        if (!m_exact.isEmpty())
++        if (m_exact.isEmpty())
+             return false;
+ 
+         exact = m_exact;
+@@ -516,7 +516,7 @@ public:
+ 
+     bool getIdeal(Vector<String>& ideal) const
+     {
+-        if (!m_ideal.isEmpty())
++        if (m_ideal.isEmpty())
+             return false;
+ 
+         ideal = m_ideal;
+@@ -597,6 +597,53 @@ public:
+     std::optional<StringConstraint> facingMode() const { return m_facingMode; }
+     std::optional<StringConstraint> deviceId() const { return m_deviceId; }
+     std::optional<StringConstraint> groupId() const { return m_groupId; }
++#if USE(QT5WEBRTC)
++    std::optional<StringConstraint> minAspectRatio() const { return m_minAspectRatio; }
++    std::optional<StringConstraint> maxAspectRatio() const { return m_maxAspectRatio; }
++    std::optional<StringConstraint> maxWidth() const { return m_maxWidth; }
++    std::optional<StringConstraint> minWidth() const { return m_minWidth; }
++    std::optional<StringConstraint> maxHeight() const { return m_maxHeight; }
++    std::optional<StringConstraint> minHeight() const { return m_minHeight; }
++    std::optional<StringConstraint> maxFrameRate() const { return m_maxFrameRate; }
++    std::optional<StringConstraint> minFrameRate() const { return m_minFrameRate; }
++    std::optional<StringConstraint> googEchoCancellation() const { return m_googEchoCancellation; }
++    std::optional<StringConstraint> googEchoCancellation2() const { return m_googEchoCancellation2; }
++    std::optional<StringConstraint> googDAEchoCancellation() const { return m_googDAEchoCancellation; }
++    std::optional<StringConstraint> googAutoGainControl() const { return m_googAutoGainControl; }
++    std::optional<StringConstraint> googAutoGainControl2() const { return m_googAutoGainControl2; }
++    std::optional<StringConstraint> googNoiseSuppression() const { return m_googNoiseSuppression; }
++    std::optional<StringConstraint> googNoiseSuppression2() const { return m_googNoiseSuppression2; }
++    std::optional<StringConstraint> googHighpassFilter() const { return m_googHighpassFilter; }
++    std::optional<StringConstraint> googTypingNoiseDetection() const { return m_googTypingNoiseDetection; }
++    std::optional<StringConstraint> googAudioMirroring() const { return m_googAudioMirroring; }
++    std::optional<StringConstraint> audioDebugRecording() const { return m_audioDebugRecording; }
++    std::optional<StringConstraint> googNoiseReduction() const { return m_googNoiseReduction; }
++    std::optional<StringConstraint> offerToReceiveAudio() const { return m_offerToReceiveAudio; }
++    std::optional<StringConstraint> offerToReceiveVideo() const { return m_offerToReceiveVideo; }
++    std::optional<StringConstraint> voiceActivityDetection() const { return m_voiceActivityDetection; }
++    std::optional<StringConstraint> iceRestart() const { return m_iceRestart; }
++    std::optional<StringConstraint> googUseRtpMUX() const { return m_googUseRtpMUX; }
++    std::optional<StringConstraint> dtlsSrtpKeyAgreement() const { return m_dtlsSrtpKeyAgreement; }
++    std::optional<StringConstraint> rtpDataChannels() const { return m_rtpDataChannels; }
++    std::optional<StringConstraint> preferh264() const { return m_preferh264; }
++    std::optional<StringConstraint> ignoreInactiveInterfaces() const { return m_ignoreInactiveInterfaces; }
++    std::optional<StringConstraint> googDscp() const { return m_googDscp; }
++    std::optional<StringConstraint> googIPv6() const { return m_googIPv6; }
++    std::optional<StringConstraint> googSuspendBelowMinBitrate() const { return m_googSuspendBelowMinBitrate; }
++    std::optional<StringConstraint> googNumUnsignalledRecvStreams() const { return m_googNumUnsignalledRecvStreams; }
++    std::optional<StringConstraint> googCombinedAudioVideoBwe() const { return m_googCombinedAudioVideoBwe; }
++    std::optional<StringConstraint> googScreencastMinBitrate() const { return m_googScreencastMinBitrate; }
++    std::optional<StringConstraint> googCpuOveruseDetection() const { return m_googCpuOveruseDetection; }
++    std::optional<StringConstraint> googCpuUnderuseThreshold() const { return m_googCpuUnderuseThreshold; }
++    std::optional<StringConstraint> googCpuOveruseThreshold() const { return m_googCpuOveruseThreshold; }
++    std::optional<StringConstraint> googCpuUnderuseEncodeRsdThreshold() const { return m_googCpuUnderuseEncodeRsdThreshold; }
++    std::optional<StringConstraint> googCpuOveruseEncodeRsdThreshold() const { return m_googCpuOveruseEncodeRsdThreshold; }
++    std::optional<StringConstraint> googCpuOveruseEncodeUsage() const { return m_googCpuOveruseEncodeUsage; }
++    std::optional<StringConstraint> googHighStartBitrate() const { return m_googHighStartBitrate; }
++    std::optional<StringConstraint> googHighBitrate() const { return m_googHighBitrate; }
++    std::optional<StringConstraint> googVeryHighBitrate() const { return m_googVeryHighBitrate; }
++    std::optional<StringConstraint> googPayloadPadding() const { return m_googPayloadPadding; }
++#endif
+ 
+     template <class Encoder> void encode(Encoder& encoder) const
+     {
+@@ -614,6 +661,53 @@ public:
+         encoder << m_facingMode;
+         encoder << m_deviceId;
+         encoder << m_groupId;
++#if USE(QT5WEBRTC)
++        encoder << m_minAspectRatio;
++        encoder << m_maxAspectRatio;
++        encoder << m_maxWidth;
++        encoder << m_minWidth;
++        encoder << m_maxHeight;
++        encoder << m_minHeight;
++        encoder << m_maxFrameRate;
++        encoder << m_minFrameRate;
++        encoder << m_googEchoCancellation;
++        encoder << m_googEchoCancellation2;
++        encoder << m_googDAEchoCancellation;
++        encoder << m_googAutoGainControl;
++        encoder << m_googAutoGainControl2;
++        encoder << m_googNoiseSuppression;
++        encoder << m_googNoiseSuppression2;
++        encoder << m_googHighpassFilter;
++        encoder << m_googTypingNoiseDetection;
++        encoder << m_googAudioMirroring;
++        encoder << m_audioDebugRecording;
++        encoder << m_googNoiseReduction;
++        encoder << m_offerToReceiveAudio;
++        encoder << m_offerToReceiveVideo;
++        encoder << m_voiceActivityDetection;
++        encoder << m_iceRestart;
++        encoder << m_googUseRtpMUX;
++        encoder << m_dtlsSrtpKeyAgreement;
++        encoder << m_rtpDataChannels;
++        encoder << m_preferh264;
++        encoder << m_ignoreInactiveInterfaces;
++        encoder << m_googDscp;
++        encoder << m_googIPv6;
++        encoder << m_googSuspendBelowMinBitrate;
++        encoder << m_googNumUnsignalledRecvStreams;
++        encoder << m_googCombinedAudioVideoBwe;
++        encoder << m_googScreencastMinBitrate;
++        encoder << m_googCpuOveruseDetection;
++        encoder << m_googCpuUnderuseThreshold;
++        encoder << m_googCpuOveruseThreshold;
++        encoder << m_googCpuUnderuseEncodeRsdThreshold;
++        encoder << m_googCpuOveruseEncodeRsdThreshold;
++        encoder << m_googCpuOveruseEncodeUsage;
++        encoder << m_googHighStartBitrate;
++        encoder << m_googHighBitrate;
++        encoder << m_googVeryHighBitrate;
++        encoder << m_googPayloadPadding;
++#endif
+     }
+ 
+     template <class Decoder> static std::optional<MediaTrackConstraintSetMap> decode(Decoder& decoder)
+@@ -644,7 +738,98 @@ public:
+             return std::nullopt;
+         if (!decoder.decode(map.m_groupId))
+             return std::nullopt;
+-
++#if USE(QT5WEBRTC)
++        if (!decoder.decode(map.m_minAspectRatio))
++            return std::nullopt;
++        if (!decoder.decode(map.m_maxAspectRatio))
++            return std::nullopt;
++        if (!decoder.decode(map.m_maxWidth))
++            return std::nullopt;
++        if (!decoder.decode(map.m_minWidth))
++            return std::nullopt;
++        if (!decoder.decode(map.m_maxHeight))
++            return std::nullopt;
++        if (!decoder.decode(map.m_minHeight))
++            return std::nullopt;
++        if (!decoder.decode(map.m_maxFrameRate))
++            return std::nullopt;
++        if (!decoder.decode(map.m_minFrameRate))
++            return std::nullopt;
++        if (!decoder.decode(map.m_googEchoCancellation))
++            return std::nullopt;
++        if (!decoder.decode(map.m_googEchoCancellation2))
++            return std::nullopt;
++        if (!decoder.decode(map.m_googDAEchoCancellation))
++            return std::nullopt;
++        if (!decoder.decode(map.m_googAutoGainControl))
++            return std::nullopt;
++        if (!decoder.decode(map.m_googAutoGainControl2))
++            return std::nullopt;
++        if (!decoder.decode(map.m_googNoiseSuppression))
++            return std::nullopt;
++        if (!decoder.decode(map.m_googNoiseSuppression2))
++            return std::nullopt;
++        if (!decoder.decode(map.m_googHighpassFilter))
++            return std::nullopt;
++        if (!decoder.decode(map.m_googTypingNoiseDetection))
++            return std::nullopt;
++        if (!decoder.decode(map.m_googAudioMirroring))
++            return std::nullopt;
++        if (!decoder.decode(map.m_audioDebugRecording))
++            return std::nullopt;
++        if (!decoder.decode(map.m_googNoiseReduction))
++            return std::nullopt;
++        if (!decoder.decode(map.m_offerToReceiveAudio))
++            return std::nullopt;
++        if (!decoder.decode(map.m_offerToReceiveVideo))
++            return std::nullopt;
++        if (!decoder.decode(map.m_voiceActivityDetection))
++            return std::nullopt;
++        if (!decoder.decode(map.m_iceRestart))
++            return std::nullopt;
++        if (!decoder.decode(map.m_googUseRtpMUX))
++            return std::nullopt;
++        if (!decoder.decode(map.m_dtlsSrtpKeyAgreement))
++            return std::nullopt;
++        if (!decoder.decode(map.m_rtpDataChannels))
++            return std::nullopt;
++        if (!decoder.decode(map.m_preferh264))
++            return std::nullopt;
++        if (!decoder.decode(map.m_ignoreInactiveInterfaces))
++            return std::nullopt;
++        if (!decoder.decode(map.m_googDscp))
++            return std::nullopt;
++        if (!decoder.decode(map.m_googIPv6))
++            return std::nullopt;
++        if (!decoder.decode(map.m_googSuspendBelowMinBitrate))
++            return std::nullopt;
++        if (!decoder.decode(map.m_googNumUnsignalledRecvStreams))
++            return std::nullopt;
++        if (!decoder.decode(map.m_googCombinedAudioVideoBwe))
++            return std::nullopt;
++        if (!decoder.decode(map.m_googScreencastMinBitrate))
++            return std::nullopt;
++        if (!decoder.decode(map.m_googCpuOveruseDetection))
++            return std::nullopt;
++        if (!decoder.decode(map.m_googCpuUnderuseThreshold))
++            return std::nullopt;
++        if (!decoder.decode(map.m_googCpuOveruseThreshold))
++            return std::nullopt;
++        if (!decoder.decode(map.m_googCpuUnderuseEncodeRsdThreshold))
++            return std::nullopt;
++        if (!decoder.decode(map.m_googCpuOveruseEncodeRsdThreshold))
++            return std::nullopt;
++        if (!decoder.decode(map.m_googCpuOveruseEncodeUsage))
++            return std::nullopt;
++        if (!decoder.decode(map.m_googHighStartBitrate))
++            return std::nullopt;
++        if (!decoder.decode(map.m_googHighBitrate))
++            return std::nullopt;
++        if (!decoder.decode(map.m_googVeryHighBitrate))
++            return std::nullopt;
++        if (!decoder.decode(map.m_googPayloadPadding))
++            return std::nullopt;
++#endif
+         return WTFMove(map);
+     }
+ 
+@@ -663,6 +848,54 @@ private:
+     std::optional<StringConstraint> m_facingMode;
+     std::optional<StringConstraint> m_deviceId;
+     std::optional<StringConstraint> m_groupId;
++
++#if USE(QT5WEBRTC)
++    std::optional<StringConstraint> m_minAspectRatio;
++    std::optional<StringConstraint> m_maxAspectRatio;
++    std::optional<StringConstraint> m_maxWidth;
++    std::optional<StringConstraint> m_minWidth;
++    std::optional<StringConstraint> m_maxHeight;
++    std::optional<StringConstraint> m_minHeight;
++    std::optional<StringConstraint> m_maxFrameRate;
++    std::optional<StringConstraint> m_minFrameRate;
++    std::optional<StringConstraint> m_googEchoCancellation;
++    std::optional<StringConstraint> m_googEchoCancellation2;
++    std::optional<StringConstraint> m_googDAEchoCancellation;
++    std::optional<StringConstraint> m_googAutoGainControl;
++    std::optional<StringConstraint> m_googAutoGainControl2;
++    std::optional<StringConstraint> m_googNoiseSuppression;
++    std::optional<StringConstraint> m_googNoiseSuppression2;
++    std::optional<StringConstraint> m_googHighpassFilter;
++    std::optional<StringConstraint> m_googTypingNoiseDetection;
++    std::optional<StringConstraint> m_googAudioMirroring;
++    std::optional<StringConstraint> m_audioDebugRecording;
++    std::optional<StringConstraint> m_googNoiseReduction;
++    std::optional<StringConstraint> m_offerToReceiveAudio;
++    std::optional<StringConstraint> m_offerToReceiveVideo;
++    std::optional<StringConstraint> m_voiceActivityDetection;
++    std::optional<StringConstraint> m_iceRestart;
++    std::optional<StringConstraint> m_googUseRtpMUX;
++    std::optional<StringConstraint> m_dtlsSrtpKeyAgreement;
++    std::optional<StringConstraint> m_rtpDataChannels;
++    std::optional<StringConstraint> m_preferh264;
++    std::optional<StringConstraint> m_ignoreInactiveInterfaces;
++    std::optional<StringConstraint> m_googDscp;
++    std::optional<StringConstraint> m_googIPv6;
++    std::optional<StringConstraint> m_googSuspendBelowMinBitrate;
++    std::optional<StringConstraint> m_googNumUnsignalledRecvStreams;
++    std::optional<StringConstraint> m_googCombinedAudioVideoBwe;
++    std::optional<StringConstraint> m_googScreencastMinBitrate;
++    std::optional<StringConstraint> m_googCpuOveruseDetection;
++    std::optional<StringConstraint> m_googCpuUnderuseThreshold;
++    std::optional<StringConstraint> m_googCpuOveruseThreshold;
++    std::optional<StringConstraint> m_googCpuUnderuseEncodeRsdThreshold;
++    std::optional<StringConstraint> m_googCpuOveruseEncodeRsdThreshold;
++    std::optional<StringConstraint> m_googCpuOveruseEncodeUsage;
++    std::optional<StringConstraint> m_googHighStartBitrate;
++    std::optional<StringConstraint> m_googHighBitrate;
++    std::optional<StringConstraint> m_googVeryHighBitrate;
++    std::optional<StringConstraint> m_googPayloadPadding;
++#endif
+ };
+ 
+ class FlattenedConstraint {
+@@ -805,7 +1038,6 @@ private:
+     int m_generation { 0 };
+ #endif
+ };
+-
+ struct MediaConstraints {
+     void setDefaultVideoConstraints();
+     bool isConstraintSet(const WTF::Function<bool(const MediaTrackConstraintSetMap&)>&);
+diff --git a/Source/WebCore/platform/mediastream/MediaStreamPrivate.cpp b/Source/WebCore/platform/mediastream/MediaStreamPrivate.cpp
+index 2f59f7bcfb3..562a20b6fed 100644
+--- a/Source/WebCore/platform/mediastream/MediaStreamPrivate.cpp
++++ b/Source/WebCore/platform/mediastream/MediaStreamPrivate.cpp
+@@ -45,6 +45,11 @@
+ namespace WebCore {
+ 
+ Ref<MediaStreamPrivate> MediaStreamPrivate::create(const Vector<Ref<RealtimeMediaSource>>& audioSources, const Vector<Ref<RealtimeMediaSource>>& videoSources)
++{
++    return MediaStreamPrivate::create(createCanonicalUUIDString(), audioSources, videoSources);
++}
++
++Ref<MediaStreamPrivate> MediaStreamPrivate::create(String&& id, const Vector<Ref<RealtimeMediaSource>>& audioSources, const Vector<Ref<RealtimeMediaSource>>& videoSources)
+ {
+     MediaStreamTrackPrivateVector tracks;
+     tracks.reserveInitialCapacity(audioSources.size() + videoSources.size());
+@@ -54,8 +59,7 @@ Ref<MediaStreamPrivate> MediaStreamPrivate::create(const Vector<Ref<RealtimeMedi
+ 
+     for (auto& source : videoSources)
+         tracks.uncheckedAppend(MediaStreamTrackPrivate::create(source.copyRef()));
+-
+-    return MediaStreamPrivate::create(tracks);
++    return adoptRef(*new MediaStreamPrivate(tracks, WTFMove(id)));
+ }
+ 
+ MediaStreamPrivate::MediaStreamPrivate(const MediaStreamTrackPrivateVector& tracks, String&& id)
+diff --git a/Source/WebCore/platform/mediastream/MediaStreamPrivate.h b/Source/WebCore/platform/mediastream/MediaStreamPrivate.h
+index 5ddfaadd41a..a86a1c67f4d 100644
+--- a/Source/WebCore/platform/mediastream/MediaStreamPrivate.h
++++ b/Source/WebCore/platform/mediastream/MediaStreamPrivate.h
+@@ -48,7 +48,7 @@
+ #include <wtf/Vector.h>
+ #include <wtf/WeakPtr.h>
+ 
+-#if USE(GSTREAMER)
++#if USE(GSTREAMER) && !USE(QT5WEBRTC)
+ #include "GRefPtrGStreamer.h"
+ #include <owr/owr_gst_video_renderer.h>
+ #endif
+@@ -71,6 +71,7 @@ public:
+     };
+ 
+     static Ref<MediaStreamPrivate> create(const Vector<Ref<RealtimeMediaSource>>& audioSources, const Vector<Ref<RealtimeMediaSource>>& videoSources);
++    static Ref<MediaStreamPrivate> create(String&& id, const Vector<Ref<RealtimeMediaSource>>& audioSources, const Vector<Ref<RealtimeMediaSource>>& videoSources);
+     static Ref<MediaStreamPrivate> create(const MediaStreamTrackPrivateVector& tracks, String&& id = createCanonicalUUIDString()) { return adoptRef(*new MediaStreamPrivate(tracks, WTFMove(id))); }
+ 
+     virtual ~MediaStreamPrivate();
+@@ -111,7 +112,7 @@ public:
+ 
+     void monitorOrientation(OrientationNotifier&);
+ 
+-#if USE(GSTREAMER)
++#if USE(GSTREAMER) && !USE(QT5WEBRTC)
+     void setVideoRenderer(OwrGstVideoRenderer* renderer, GstElement* sink) { m_gstVideoRenderer = renderer; m_gstVideoSinkElement = sink; }
+     GRefPtr<GstElement> getVideoSinkElement() const { return m_gstVideoSinkElement; }
+     GRefPtr<OwrGstVideoRenderer> getVideoRenderer() const { return m_gstVideoRenderer; }
+diff --git a/Source/WebCore/platform/mediastream/MediaStreamTrackPrivate.h b/Source/WebCore/platform/mediastream/MediaStreamTrackPrivate.h
+index 124676c7392..0ddec17b8e1 100644
+--- a/Source/WebCore/platform/mediastream/MediaStreamTrackPrivate.h
++++ b/Source/WebCore/platform/mediastream/MediaStreamTrackPrivate.h
+@@ -29,14 +29,15 @@
+ #if ENABLE(MEDIA_STREAM)
+ 
+ #include "RealtimeMediaSource.h"
++#include "WebAudioSourceProvider.h"
+ 
+ namespace WebCore {
+ 
+ class AudioSourceProvider;
++
+ class GraphicsContext;
+ class MediaSample;
+ class RealtimeMediaSourceCapabilities;
+-class WebAudioSourceProvider;
+ 
+ class MediaStreamTrackPrivate : public RefCounted<MediaStreamTrackPrivate>, public RealtimeMediaSource::Observer {
+ public:
+@@ -123,6 +124,7 @@ private:
+     bool m_isEnded { false };
+     bool m_haveProducedData { false };
+     RefPtr<WebAudioSourceProvider> m_audioSourceProvider;
++
+ };
+ 
+ typedef Vector<RefPtr<MediaStreamTrackPrivate>> MediaStreamTrackPrivateVector;
+diff --git a/Source/WebCore/platform/mediastream/RTCStatsResponseBase.h b/Source/WebCore/platform/mediastream/RTCStatsResponseBase.h
+new file mode 100644
+index 00000000000..03eee8759a1
+--- /dev/null
++++ b/Source/WebCore/platform/mediastream/RTCStatsResponseBase.h
+@@ -0,0 +1,47 @@
++/*
++ * Copyright (C) 2012 Google Inc. All rights reserved.
++ *
++ * Redistribution and use in source and binary forms, with or without
++ * modification, are permitted provided that the following conditions
++ * are met:
++ * 1.  Redistributions of source code must retain the above copyright
++ *     notice, this list of conditions and the following disclaimer.
++ * 2.  Redistributions in binary form must reproduce the above copyright
++ *     notice, this list of conditions and the following disclaimer in the
++ *     documentation and/or other materials provided with the distribution.
++ *
++ * THIS SOFTWARE IS PROVIDED BY APPLE INC. AND ITS CONTRIBUTORS ``AS IS'' AND ANY
++ * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
++ * WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
++ * DISCLAIMED. IN NO EVENT SHALL APPLE INC. OR ITS CONTRIBUTORS BE LIABLE FOR ANY
++ * DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
++ * (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
++ * LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON
++ * ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
++ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
++ * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
++ */
++
++#ifndef RTCStatsResponseBase_h
++#define RTCStatsResponseBase_h
++
++#if ENABLE(WEB_RTC)
++
++#include <wtf/RefCounted.h>
++#include <wtf/text/WTFString.h>
++
++namespace WebCore {
++
++class RTCStatsResponseBase : public RefCounted<RTCStatsResponseBase> {
++public:
++    virtual ~RTCStatsResponseBase() { }
++
++    virtual size_t addReport(String id, String type, double timestamp) = 0;
++    virtual void addStatistic(size_t report, String name, String value) = 0;
++};
++
++} // namespace WebCore
++
++#endif // ENABLE(WEB_RTC)
++
++#endif // RTCStatsResponseBase_h
+diff --git a/Source/WebCore/platform/mediastream/RealtimeMediaSourceSupportedConstraints.cpp b/Source/WebCore/platform/mediastream/RealtimeMediaSourceSupportedConstraints.cpp
+index 57156d5e9b1..9338d82a15b 100644
+--- a/Source/WebCore/platform/mediastream/RealtimeMediaSourceSupportedConstraints.cpp
++++ b/Source/WebCore/platform/mediastream/RealtimeMediaSourceSupportedConstraints.cpp
+@@ -61,6 +61,7 @@ bool RealtimeMediaSourceSupportedConstraints::supportsConstraint(MediaConstraint
+         return supportsDeviceId();
+     case MediaConstraintType::GroupId:
+         return supportsGroupId();
++    //Finalise and add legacy constraint
+     }
+ 
+     ASSERT_NOT_REACHED();
+diff --git a/Source/WebCore/platform/mediastream/RealtimeMediaSourceSupportedConstraints.h b/Source/WebCore/platform/mediastream/RealtimeMediaSourceSupportedConstraints.h
+index 4040e345889..7c7ee651db6 100644
+--- a/Source/WebCore/platform/mediastream/RealtimeMediaSourceSupportedConstraints.h
++++ b/Source/WebCore/platform/mediastream/RealtimeMediaSourceSupportedConstraints.h
+@@ -49,7 +49,55 @@ enum class MediaConstraintType {
+     SampleSize,
+     EchoCancellation,
+     DeviceId,
+-    GroupId
++    GroupId,
++#if USE(QT5WEBRTC)
++    // Legacy Constraints - for compatibility
++    MinWidth,
++    MaxWidth,
++    MinHeight,
++    MaxHeight,
++    MinFrameRate,
++    MaxFrameRate,
++    MinAspectRatio,
++    MaxAspectRatio,
++    GoogEchoCancellation,
++    GoogEchoCancellation2,
++    GoogDAEchoCancellation,
++    GoogAutoGainControl,
++    GoogAutoGainControl2,
++    GoogNoiseSuppression,
++    GoogNoiseSuppression2,
++    GoogHighpassFilter,
++    GoogTypingNoiseDetection,
++    GoogAudioMirroring,
++    AudioDebugRecording,
++    GoogNoiseReduction,
++    OfferToReceiveAudio,
++    OfferToReceiveVideo,
++    VoiceActivityDetection,
++    IceRestart,
++    GoogUseRtpMUX,
++    DtlsSrtpKeyAgreement,
++    RtpDataChannels,
++    Preferh264,
++    IgnoreInactiveInterfaces,
++    GoogDscp,
++    GoogIPv6,
++    GoogSuspendBelowMinBitrate,
++    GoogNumUnsignalledRecvStreams,
++    GoogCombinedAudioVideoBwe,
++    GoogScreencastMinBitrate,
++    GoogCpuOveruseDetection,
++    GoogCpuUnderuseThreshold,
++    GoogCpuOveruseThreshold,
++    GoogCpuUnderuseEncodeRsdThreshold,
++    GoogCpuOveruseEncodeRsdThreshold,
++    GoogCpuOveruseEncodeUsage,
++    GoogHighStartBitrate,
++    GoogHighBitrate,
++    GoogVeryHighBitrate,
++    GoogPayloadPadding,
++#endif
+ };
+ 
+ class RealtimeMediaSourceSupportedConstraints {
+@@ -90,6 +138,7 @@ public:
+ 
+     bool supportsGroupId() const { return m_supportsGroupId; }
+     void setSupportsGroupId(bool value) { m_supportsGroupId = value; }
++    //Finalise and add legacy constraint
+ 
+     bool supportsConstraint(MediaConstraintType) const;
+ 
+@@ -108,6 +157,7 @@ private:
+     bool m_supportsEchoCancellation { false };
+     bool m_supportsDeviceId { false };
+     bool m_supportsGroupId { false };
++    //Finalise and add legacy constraint
+ };
+ 
+ template<class Encoder>
+@@ -124,6 +174,7 @@ void RealtimeMediaSourceSupportedConstraints::encode(Encoder& encoder) const
+         << m_supportsEchoCancellation
+         << m_supportsDeviceId
+         << m_supportsGroupId;
++    //Finalise and add legacy constraint
+ }
+ 
+ template<class Decoder>
+@@ -140,6 +191,7 @@ bool RealtimeMediaSourceSupportedConstraints::decode(Decoder& decoder, RealtimeM
+         && decoder.decode(constraints.m_supportsEchoCancellation)
+         && decoder.decode(constraints.m_supportsDeviceId)
+         && decoder.decode(constraints.m_supportsGroupId);
++    //Finalise and add legacy constraint
+ }
+ 
+ } // namespace WebCore
+diff --git a/Source/WebCore/platform/mediastream/SDPProcessorScriptResource.cpp b/Source/WebCore/platform/mediastream/SDPProcessorScriptResource.cpp
+index 669ed2a7615..0a582ed06a9 100644
+--- a/Source/WebCore/platform/mediastream/SDPProcessorScriptResource.cpp
++++ b/Source/WebCore/platform/mediastream/SDPProcessorScriptResource.cpp
+@@ -30,7 +30,7 @@
+ 
+ #include "config.h"
+ 
+-#if ENABLE(WEB_RTC)
++#if ENABLE(WEB_RTC) && !USE(QT5WEBRTC)
+ #include "SDPProcessorScriptResource.h"
+ 
+ #include "SDPProcessorScriptsData.h"
+diff --git a/Source/WebCore/platform/mediastream/SDPProcessorScriptResource.h b/Source/WebCore/platform/mediastream/SDPProcessorScriptResource.h
+index cb5443bb070..07807bc75d9 100644
+--- a/Source/WebCore/platform/mediastream/SDPProcessorScriptResource.h
++++ b/Source/WebCore/platform/mediastream/SDPProcessorScriptResource.h
+@@ -31,7 +31,7 @@
+ #ifndef SDPProcessorScriptResource_h
+ #define SDPProcessorScriptResource_h
+ 
+-#if ENABLE(WEB_RTC)
++#if ENABLE(WEB_RTC) && !USE(QT5WEBRTC)
+ 
+ #include <wtf/text/WTFString.h>
+ 
+diff --git a/Source/WebCore/platform/mediastream/WebAudioSourceProvider.h b/Source/WebCore/platform/mediastream/WebAudioSourceProvider.h
+index 030703d5400..9508bce3dde 100644
+--- a/Source/WebCore/platform/mediastream/WebAudioSourceProvider.h
++++ b/Source/WebCore/platform/mediastream/WebAudioSourceProvider.h
+@@ -24,14 +24,11 @@
+  */
+ 
+ #pragma once
+-
+-#if ENABLE(WEB_AUDIO) && ENABLE(MEDIA_STREAM)
+-
++#if (USE(QT5WEBRTC) || ENABLE(WEB_AUDIO)) && ENABLE(MEDIA_STREAM)
+ #include "AudioSourceProvider.h"
+ #include <wtf/ThreadSafeRefCounted.h>
+ 
+ namespace WebCore {
+-
+ class WebAudioSourceProvider : public ThreadSafeRefCounted<WebAudioSourceProvider>, public AudioSourceProvider {
+ };
+ 
+diff --git a/Source/WebCore/platform/mediastream/openwebrtc/MediaEndpointOwr.cpp b/Source/WebCore/platform/mediastream/openwebrtc/MediaEndpointOwr.cpp
+index 8a584867254..ce361b31f4e 100644
+--- a/Source/WebCore/platform/mediastream/openwebrtc/MediaEndpointOwr.cpp
++++ b/Source/WebCore/platform/mediastream/openwebrtc/MediaEndpointOwr.cpp
+@@ -30,7 +30,8 @@
+ 
+ #include "config.h"
+ 
+-#if ENABLE(WEB_RTC)
++#if ENABLE(WEB_RTC) && !USE(QT5WEBRTC)
++
+ #include "MediaEndpointOwr.h"
+ 
+ #include "MediaEndpointSessionConfiguration.h"
+diff --git a/Source/WebCore/platform/mediastream/openwebrtc/MediaEndpointOwr.h b/Source/WebCore/platform/mediastream/openwebrtc/MediaEndpointOwr.h
+index f31048c9ecf..e532529357c 100644
+--- a/Source/WebCore/platform/mediastream/openwebrtc/MediaEndpointOwr.h
++++ b/Source/WebCore/platform/mediastream/openwebrtc/MediaEndpointOwr.h
+@@ -30,7 +30,7 @@
+ 
+ #pragma once
+ 
+-#if ENABLE(WEB_RTC)
++#if ENABLE(WEB_RTC) && !USE(QT5WEBRTC)
+ 
+ #include "MediaEndpoint.h"
+ #include <owr/owr_session.h>
+diff --git a/Source/WebCore/platform/mediastream/qt5webrtc/MediaPlayerPrivateQt5WebRTC.cpp b/Source/WebCore/platform/mediastream/qt5webrtc/MediaPlayerPrivateQt5WebRTC.cpp
+new file mode 100644
+index 00000000000..43e1d057e3b
+--- /dev/null
++++ b/Source/WebCore/platform/mediastream/qt5webrtc/MediaPlayerPrivateQt5WebRTC.cpp
+@@ -0,0 +1,296 @@
++/*
++ * Copyright (C) 2007, 2009 Apple Inc.  All rights reserved.
++ * Copyright (C) 2007 Collabora Ltd.  All rights reserved.
++ * Copyright (C) 2007 Alp Toker <alp@atoker.com>
++ * Copyright (C) 2009 Gustavo Noronha Silva <gns@gnome.org>
++ * Copyright (C) 2009, 2010, 2015, 2016 Igalia S.L
++ * Copyright (C) 2015, 2016 Metrological Group B.V.
++ * Copyright (c) 2016, Comcast. All rights reserved.
++ *
++ * This library is free software; you can redistribute it and/or
++ * modify it under the terms of the GNU Library General Public
++ * License as published by the Free Software Foundation; either
++ * version 2 of the License, or (at your option) any later version.
++ *
++ * This library is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++ * Library General Public License for more details.
++ *
++ * You should have received a copy of the GNU Library General Public License
++ * aint with this library; see the file COPYING.LIB.  If not, write to
++ * the Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
++ * Boston, MA 02110-1301, USA.
++ */
++
++#include "config.h"
++#include "MediaPlayerPrivateQt5WebRTC.h"
++#include "RealtimeMediaSourceCenterQt5WebRTC.h"
++
++#include <wtf/HashSet.h>
++#include <wtf/text/WTFString.h>
++#include <wtf/NeverDestroyed.h>
++
++#if USE(COORDINATED_GRAPHICS_THREADED)
++#include "TextureMapperGL.h"
++#include "TextureMapperPlatformLayerBuffer.h"
++#endif
++
++#include "BitmapImage.h"
++#include "BitmapTextureGL.h"
++#include "FloatRect.h"
++
++#include <cairo.h>
++
++#include "MediaPlayer.h"
++#include "NotImplemented.h"
++#include "TimeRanges.h"
++#include "MediaStreamPrivate.h"
++
++namespace WebCore {
++
++void MediaPlayerPrivateQt5WebRTC::notifyLoadFailed()
++{
++    m_networkState = MediaPlayer::FormatError;
++    m_readyState = MediaPlayer::HaveNothing;
++    m_player->networkStateChanged();
++}
++
++void MediaPlayerPrivateQt5WebRTC::getSupportedTypes(HashSet<String, ASCIICaseInsensitiveHash>& types)
++{
++    static NeverDestroyed<HashSet<String, ASCIICaseInsensitiveHash>> cache;
++    types = cache;
++}
++
++MediaPlayer::SupportsType MediaPlayerPrivateQt5WebRTC::supportsType(const MediaEngineSupportParameters& parameters)
++{
++    if (parameters.isMediaStream)
++        return MediaPlayer::IsSupported;
++    return MediaPlayer::IsNotSupported;
++}
++
++void MediaPlayerPrivateQt5WebRTC::registerMediaEngine(MediaEngineRegistrar registrar)
++{
++    registrar([](MediaPlayer* player) { return std::make_unique<MediaPlayerPrivateQt5WebRTC>(player); },
++            getSupportedTypes, supportsType, 0, 0, 0,
++              [](const String&, const String&) { return false; });
++}
++
++MediaPlayerPrivateQt5WebRTC::MediaPlayerPrivateQt5WebRTC(MediaPlayer* player)
++    : m_player(player)
++    , m_networkState(MediaPlayer::Empty)
++    , m_readyState(MediaPlayer::HaveMetadata)
++    , m_size(320, 240)
++{
++#if USE(COORDINATED_GRAPHICS_THREADED)
++    m_platformLayerProxy = adoptRef(new TextureMapperPlatformLayerProxy());
++    LockHolder locker(m_platformLayerProxy->lock());
++    //Push buffer.
++    m_platformLayerProxy->pushNextBuffer(
++        std::make_unique<TextureMapperPlatformLayerBuffer>(
++            0, m_size, TextureMapperGL::ShouldOverwriteRect, GL_DONT_CARE));
++#endif
++}
++
++MediaPlayerPrivateQt5WebRTC::~MediaPlayerPrivateQt5WebRTC()
++{
++    removeRenderer();
++    m_player = 0;
++}
++
++void MediaPlayerPrivateQt5WebRTC::load(MediaStreamPrivate& stream)
++{
++    m_stream = &stream;
++    m_readyState=MediaPlayer::HaveMetadata;
++    m_player->readyStateChanged();
++}
++
++FloatSize MediaPlayerPrivateQt5WebRTC::naturalSize() const
++{
++    if (!m_stream)
++        return FloatSize();
++    return m_stream->intrinsicSize();
++}
++
++void MediaPlayerPrivateQt5WebRTC::setSize(const IntSize& size)
++{
++    if (size == m_size)
++        return;
++    m_size = size;
++    updateVideoRectangle();
++}
++
++void MediaPlayerPrivateQt5WebRTC::setPosition(const IntPoint& position)
++{
++    if (position == m_position)
++        return;
++    m_position = position;
++    updateVideoRectangle();
++}
++
++void MediaPlayerPrivateQt5WebRTC::play()
++{
++    if (!m_stream || !m_stream->isProducingData())
++        return;
++    m_paused = false;
++    tryAttachRenderer();
++}
++
++void MediaPlayerPrivateQt5WebRTC::pause()
++{
++    m_paused = true;
++    removeRenderer();
++}
++
++void MediaPlayerPrivateQt5WebRTC::setVisible(bool visible)
++{
++    if (visible)
++        tryAttachRenderer();
++    else
++        removeRenderer();
++}
++
++void MediaPlayerPrivateQt5WebRTC::updateVideoRectangle()
++{
++    if (m_rtcRenderer)
++        m_rtcRenderer->setVideoRectangle(m_position.x(), m_position.y(), m_size.width(), m_size.height());
++}
++
++void MediaPlayerPrivateQt5WebRTC::tryAttachRenderer()
++{
++    if (m_rtcRenderer)
++        return;
++
++    if (!m_stream || !m_stream->isProducingData())
++        return;
++
++    if (!m_player->visible())
++        return;
++
++    MediaStreamTrackPrivate *videoTrack = m_stream->activeVideoTrack();
++    if (!videoTrack)
++        return;
++
++    RealtimeVideoSourceQt5WebRTC& videoSource = static_cast<RealtimeVideoSourceQt5WebRTC&>(videoTrack->source());
++    m_rtcRenderer.reset(getRTCMediaSourceCenter().createVideoRenderer(videoSource.rtcStream(), this));
++    videoSource.addObserver(*this);
++
++    updateVideoRectangle();
++}
++
++void MediaPlayerPrivateQt5WebRTC::removeRenderer()
++{
++    if (!m_rtcRenderer)
++        return;
++
++    m_rtcRenderer.reset();
++
++    MediaStreamTrackPrivate *videoTrack = m_stream ? m_stream->activeVideoTrack() : nullptr;
++    if (videoTrack) {
++        RealtimeVideoSourceQt5WebRTC& videoSource = static_cast<RealtimeVideoSourceQt5WebRTC&>(videoTrack->source());
++        videoSource.removeObserver(*this);
++    }
++}
++
++void MediaPlayerPrivateQt5WebRTC::renderFrame(const unsigned char *data, int byteCount, int width, int height)
++{
++#if USE(COORDINATED_GRAPHICS_THREADED)
++    cairo_format_t cairoFormat = CAIRO_FORMAT_ARGB32;
++    int stride = cairo_format_stride_for_width (cairoFormat, width);
++    ASSERT(byteCount >= (height * stride));
++    RefPtr<cairo_surface_t> surface = adoptRef(
++        cairo_image_surface_create_for_data(
++            (unsigned char*)data, cairoFormat, width, height, stride));
++    ASSERT(cairo_surface_status(surface.get()) == CAIRO_STATUS_SUCCESS);
++    RefPtr<BitmapImage> frame = BitmapImage::create(WTFMove(surface));
++    LockHolder lock(m_drawMutex);
++    bool succeeded = m_platformLayerProxy->scheduleUpdateOnCompositorThread([this, frame] {
++        LockHolder condLock(m_drawMutex);
++        pushTextureToCompositor(frame);
++        m_drawCondition.notifyOne();
++    });
++    if (succeeded) {
++        m_drawCondition.wait(m_drawMutex);
++    } else {
++        printf("***Error: scheduleUpdateOnCompositorThread failed\n");
++    }
++#endif
++}
++
++void MediaPlayerPrivateQt5WebRTC::punchHole(int width, int height)
++{
++#if USE(COORDINATED_GRAPHICS_THREADED)
++    LockHolder lock(m_drawMutex);
++    bool succeeded = m_platformLayerProxy->scheduleUpdateOnCompositorThread([this, width, height] {
++        LockHolder condLock(m_drawMutex);
++        LockHolder holder(m_platformLayerProxy->lock());
++        m_platformLayerProxy->pushNextBuffer(
++            std::make_unique<TextureMapperPlatformLayerBuffer>(
++                0, IntSize(width, height), TextureMapperGL::ShouldOverwriteRect, GL_DONT_CARE));
++        m_drawCondition.notifyOne();
++    });
++    if (succeeded) {
++        m_drawCondition.wait(m_drawMutex);
++    } else {
++        printf("***Error: scheduleUpdateOnCompositorThread failed\n");
++    }
++#endif
++}
++
++#if USE(COORDINATED_GRAPHICS_THREADED)
++void MediaPlayerPrivateQt5WebRTC::pushTextureToCompositor(RefPtr<Image> frame)
++{
++    LockHolder holder(m_platformLayerProxy->lock());
++    if (!m_platformLayerProxy->isActive()) {
++        printf("***Error: platformLayerProxy is not ready yet\n");
++        return;
++    }
++
++    IntSize frameSize(frame->width(), frame->height());
++    std::unique_ptr<TextureMapperPlatformLayerBuffer> buffer =
++        m_platformLayerProxy->getAvailableBuffer(frameSize, GL_DONT_CARE);
++    if (UNLIKELY(!buffer)) {
++
++
++
++        TextureMapperContextAttributes textureMapperContextAttributes;
++        textureMapperContextAttributes.initialize();
++        auto texture = BitmapTextureGL::create(textureMapperContextAttributes);
++        texture->reset(frameSize, BitmapTexture::SupportsAlpha);
++        buffer = std::make_unique<TextureMapperPlatformLayerBuffer>(WTFMove(texture));
++    }
++    IntRect frameRect(IntPoint(),frameSize);
++    buffer->textureGL().updateContents(
++        frame.get(), frameRect, IntPoint(), BitmapTexture::UpdateContentsFlag::UpdateCanModifyOriginalImageData);
++    m_platformLayerProxy->pushNextBuffer(WTFMove(buffer));
++}
++#endif
++
++void MediaPlayerPrivateQt5WebRTC::sourceStopped()
++{
++    removeRenderer();
++}
++
++void MediaPlayerPrivateQt5WebRTC::sourceMutedChanged()
++{
++    // Ignored
++}
++
++void MediaPlayerPrivateQt5WebRTC::sourceSettingsChanged()
++{
++    // Ignored
++}
++
++void MediaPlayerPrivateQt5WebRTC::frameRendered()
++{
++    RunLoop::main().dispatch([weakThis = m_weakPtrFactory.createWeakPtr(*this)] {
++        if (!weakThis)
++            return;
++
++        RELEASE_ASSERT_WITH_MESSAGE(isUIThread(), "Invoked from nonUI thread. Id= %d", currentThread());
++        weakThis->m_readyState=MediaPlayer::HaveEnoughData;
++        weakThis->m_player->readyStateChanged();
++   });
++}
++
++}
+diff --git a/Source/WebCore/platform/mediastream/qt5webrtc/MediaPlayerPrivateQt5WebRTC.h b/Source/WebCore/platform/mediastream/qt5webrtc/MediaPlayerPrivateQt5WebRTC.h
+new file mode 100644
+index 00000000000..3dedac4a9b5
+--- /dev/null
++++ b/Source/WebCore/platform/mediastream/qt5webrtc/MediaPlayerPrivateQt5WebRTC.h
+@@ -0,0 +1,141 @@
++/*
++ * Copyright (C) 2007, 2009 Apple Inc.  All rights reserved.
++ * Copyright (C) 2007 Collabora Ltd.  All rights reserved.
++ * Copyright (C) 2007 Alp Toker <alp@atoker.com>
++ * Copyright (C) 2009 Gustavo Noronha Silva <gns@gnome.org>
++ * Copyright (C) 2009, 2010, 2015, 2016 Igalia S.L
++ * Copyright (C) 2015, 2016 Metrological Group B.V.
++ * Copyright (c) 2016, Comcast. All rights reserved.
++ *
++ * This library is free software; you can redistribute it and/or
++ * modify it under the terms of the GNU Library General Public
++ * License as published by the Free Software Foundation; either
++ * version 2 of the License, or (at your option) any later version.
++ *
++ * This library is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++ * Library General Public License for more details.
++ *
++ * You should have received a copy of the GNU Library General Public License
++ * aint with this library; see the file COPYING.LIB.  If not, write to
++ * the Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
++ * Boston, MA 02110-1301, USA.
++ */
++
++#ifndef MediaPlayerPrivateQt5WebRTC_h
++#define MediaPlayerPrivateQt5WebRTC_h
++
++#include "MediaPlayerPrivate.h"
++#include "IntRect.h"
++#include "FloatRect.h"
++
++#include "RealtimeMediaSourceCenterQt5WebRTC.h"
++
++#if USE(COORDINATED_GRAPHICS_THREADED)
++#include "TextureMapperPlatformLayerProxy.h"
++#include "TextureMapperPlatformLayerProxyProvider.h"
++#include <wtf/Condition.h>
++#endif
++#include <wtf/WeakPtr.h>
++
++#include <wrtcint.h>
++
++namespace WebCore {
++
++class MediaPlayerPrivateQt5WebRTC : public MediaPlayerPrivateInterface
++    , public WRTCInt::RTCVideoRendererClient
++    , public RealtimeMediaSource::Observer
++#if USE(COORDINATED_GRAPHICS_THREADED)
++    , public TextureMapperPlatformLayerProxyProvider
++#endif
++{
++public:
++    explicit MediaPlayerPrivateQt5WebRTC(MediaPlayer*);
++    ~MediaPlayerPrivateQt5WebRTC();
++
++    static void registerMediaEngine(MediaEngineRegistrar);
++
++    bool hasVideo() const override { return true; }
++    bool hasAudio() const override { return true; }
++
++    void load(const String&) override { notifyLoadFailed(); }
++#if ENABLE(MEDIA_SOURCE)
++    void load(const String&, MediaSourcePrivateClient*) override { notifyLoadFailed(); }
++#endif
++#if ENABLE(MEDIA_STREAM)
++    void load(MediaStreamPrivate&) override;
++#endif
++    void cancelLoad() override { }
++    void play() override;
++    void pause() override;
++    bool paused() const override { return m_paused; }
++    bool seeking() const override { return false; }
++    std::unique_ptr<PlatformTimeRanges> buffered() const override { return std::make_unique<PlatformTimeRanges>(); }
++    bool didLoadingProgress() const override { return false; }
++    void setVolume(float) override { }
++    float volume() const override { return 0; }
++    bool supportsMuting() const override { return true; }
++    void setMuted(bool) override { }
++    void setVisible(bool) override;
++    void setSize(const IntSize&) override;
++    void setPosition(const IntPoint&) override;
++    void paint(GraphicsContext&, const FloatRect&) override { }
++
++    MediaPlayer::NetworkState networkState() const override {return m_networkState; }
++    MediaPlayer::ReadyState readyState() const { return m_readyState; }
++
++    FloatSize naturalSize() const override;
++
++    bool supportsAcceleratedRendering() const override { return true; }
++
++#if USE(COORDINATED_GRAPHICS_THREADED)
++    PlatformLayer* platformLayer() const override { return const_cast<MediaPlayerPrivateQt5WebRTC*>(this); }
++    RefPtr<TextureMapperPlatformLayerProxy> proxy() const final { return m_platformLayerProxy.copyRef(); }
++    void swapBuffersIfNeeded() final { }
++
++#else
++    PlatformLayer* platformLayer() const override { return nullptr; }
++#endif
++
++    // RealtimeMediaSource::Observer
++    void sourceStopped() override;
++    void sourceMutedChanged() override;
++    void sourceSettingsChanged() override;
++    bool preventSourceFromStopping() override { return false; }
++    // Media data changes.
++
++    // WRTCInt::VideoPlayerClient
++    void renderFrame(const unsigned char *data, int byteCount, int width, int height) override;
++    void punchHole(int width, int height) override;
++    void frameRendered() override;
++
++  private:
++    void notifyLoadFailed();
++    static void getSupportedTypes(HashSet<String, ASCIICaseInsensitiveHash>&);
++    static MediaPlayer::SupportsType supportsType(const MediaEngineSupportParameters&);
++    void updateVideoRectangle();
++    void tryAttachRenderer();
++    void removeRenderer();
++
++#if USE(COORDINATED_GRAPHICS_THREADED)
++    void pushTextureToCompositor(RefPtr<Image> frame);
++    RefPtr<TextureMapperPlatformLayerProxy> m_platformLayerProxy;
++
++    Condition m_drawCondition;
++    Lock m_drawMutex;
++#endif
++    std::unique_ptr<WRTCInt::RTCVideoRenderer> m_rtcRenderer;
++    WeakPtrFactory<MediaPlayerPrivateQt5WebRTC> m_weakPtrFactory;
++
++    MediaPlayer* m_player;
++    MediaPlayer::NetworkState m_networkState;
++    MediaPlayer::ReadyState m_readyState;
++    IntSize m_size;
++    IntPoint m_position;
++    MediaStreamPrivate* m_stream {nullptr};
++    bool m_paused {true};
++};
++
++}
++#endif
+diff --git a/Source/WebCore/platform/mediastream/qt5webrtc/PeerConnectionBackendQt5WebRTC.cpp b/Source/WebCore/platform/mediastream/qt5webrtc/PeerConnectionBackendQt5WebRTC.cpp
+new file mode 100644
+index 00000000000..df950ac5761
+--- /dev/null
++++ b/Source/WebCore/platform/mediastream/qt5webrtc/PeerConnectionBackendQt5WebRTC.cpp
+@@ -0,0 +1,661 @@
++/*
++ * Copyright (C) 2015,2016 Ericsson AB. All rights reserved.
++ * Copyright (c) 2016 Comcast. All rights reserved.
++ * Copyright (C) 2016-2017 Apple Inc. All rights reserved.
++ *
++ * Redistribution and use in source and binary forms, with or without
++ * modification, are permitted provided that the following conditions
++ * are met:
++ *
++ * 1. Redistributions of source code must retain the above copyright
++ *    notice, this list of conditions and the following disclaimer.
++ * 2. Redistributions in binary form must reproduce the above copyright
++ *    notice, this list of conditions and the following disclaimer
++ *    in the documentation and/or other materials provided with the
++ *    distribution.
++ * 3. Neither the name of Ericsson nor the names of its contributors
++ *    may be used to endorse or promote products derived from this
++ *    software without specific prior written permission.
++ *
++ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
++ * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
++ * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
++ * A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
++ * OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
++ * SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
++ * LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
++ * DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
++ * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
++ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
++ * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
++ */
++// PeerConnectionBackendQt5WebRTC.cpp are based on WebKit PeerConnectionBackend.cpp and MediaEndpointPeerConnection.cpp
++
++#include "config.h"
++#include "PeerConnectionBackendQt5WebRTC.h"
++#include "JSDOMPromiseDeferred.h"
++#include "EventNames.h"
++#include "JSRTCSessionDescription.h"
++#include "JSRTCStatsReport.h"
++#include "MediaStream.h"
++#include "MediaStreamEvent.h"
++#include "MediaStreamPrivate.h"
++#include "MediaStreamTrack.h"
++#include "MediaEndpointConfiguration.h"
++#include "RTCConfiguration.h"
++#include "RTCDataChannelEvent.h"
++#include "RTCDataChannelHandler.h"
++#include "RTCDataChannelHandlerClient.h"
++#include "RTCIceCandidate.h"
++#include "RTCSdpType.h"
++#include "RTCPeerConnectionIceEvent.h"
++#include "RTCAnswerOptions.h"
++#include "RTCOfferOptions.h"
++#include "RTCRtpReceiver.h"
++#include "RTCRtpSender.h"
++#include "RTCRtpTransceiver.h"
++#include "RTCSessionDescription.h"
++#include "RTCIceConnectionState.h"
++#include "RTCDataChannelState.h"
++#include "RTCPeerConnection.h"
++#include "RTCStatsResponse.h"
++#include "ScriptExecutionContext.h"
++#include <wtf/UUID.h>
++
++namespace WebCore {
++
++void initializeWRTCInt();
++
++using namespace PeerConnection;
++
++static bool parseSdpTypeString(const std::string& string, RTCSdpType& outType)
++{
++    if (string == "offer")
++        outType = RTCSdpType::Offer;
++    else if (string == "pranswer")
++        outType = RTCSdpType::Pranswer;
++    else if (string == "answer")
++        outType = RTCSdpType::Answer;
++    else if (string == "rollback")
++        outType = RTCSdpType::Rollback;
++    else
++        return false;
++
++    return true;
++}
++
++static std::string sdpTypeToString(const RTCSdpType& type)
++{
++    std::string sdpType;
++    switch (type) {
++    case RTCSdpType::Offer:
++        sdpType.assign("offer");
++        return sdpType;
++    case RTCSdpType::Pranswer:
++        sdpType.assign("pranswer");
++        return sdpType;
++    case RTCSdpType::Answer:
++        sdpType.assign("answer");
++        return sdpType;
++    case RTCSdpType::Rollback:
++        sdpType.assign("rollback");
++        return sdpType;
++    }
++    ASSERT_NOT_REACHED();
++    return "";
++}
++
++static std::unique_ptr<PeerConnectionBackend> createPeerConnectionBackendQt5WebRTC(RTCPeerConnection& peerConnection)
++{
++    initializeWRTCInt();
++    return std::unique_ptr<PeerConnectionBackend>(new PeerConnectionBackendQt5WebRTC(peerConnection));
++}
++
++CreatePeerConnectionBackend PeerConnectionBackend::create = createPeerConnectionBackendQt5WebRTC;
++
++void enableQt5WebRTCPeerConnectionBackend()
++{
++    PeerConnectionBackend::create = createPeerConnectionBackendQt5WebRTC;
++}
++
++PeerConnectionBackendQt5WebRTC::PeerConnectionBackendQt5WebRTC(RTCPeerConnection& peerConnection)
++    : PeerConnectionBackend(peerConnection)
++{
++    m_rtcConnection.reset(getRTCMediaSourceCenter().createPeerConnection(this));
++}
++
++void PeerConnectionBackendQt5WebRTC::doCreateOffer(RTCOfferOptions&& options)
++{
++    ASSERT(WRTCInt::InvalidRequestId == m_sessionDescriptionRequestId);
++
++    WRTCInt::RTCOfferAnswerOptions rtcOptions;
++    rtcOptions[WRTCInt::kOfferToReceiveAudio] = !!options.offerToReceiveAudio;
++    rtcOptions[WRTCInt::kOfferToReceiveVideo] = !!options.offerToReceiveVideo;
++    rtcOptions[WRTCInt::kIceRestart] = options.iceRestart;
++    rtcOptions[WRTCInt::kVoiceActivityDetection] = options.voiceActivityDetection;
++
++    int id = m_rtcConnection->createOffer(rtcOptions);
++    if (WRTCInt::InvalidRequestId != id) {
++        m_sessionDescriptionRequestId = id;
++        printf ("WEB_RTC_LOG::Created offer\n");
++    } else {
++        createOfferFailed(Exception { OperationError, "Failed to create offer" });
++    }
++}
++
++void PeerConnectionBackendQt5WebRTC::doCreateAnswer(RTCAnswerOptions&& options)
++{
++    printf ("WEB_RTC_LOG:: PeerConnectionBackendQt5WebRTC::doCreateAnswer invoked\n");
++    ASSERT(WRTCInt::InvalidRequestId == m_sessionDescriptionRequestId);
++
++    WRTCInt::RTCOfferAnswerOptions rtcOptions;
++    rtcOptions[WRTCInt::kVoiceActivityDetection] = options.voiceActivityDetection;
++
++    int id = m_rtcConnection->createAnswer(rtcOptions);
++    if (WRTCInt::InvalidRequestId != id) {
++        m_sessionDescriptionRequestId = id;
++    } else {
++        createAnswerFailed(Exception { OperationError, "Failed to create answer" });
++    }
++}
++
++void PeerConnectionBackendQt5WebRTC::doSetLocalDescription(RTCSessionDescription& desc)
++{
++    printf ("WEB_RTC_LOG:: PeerConnectionBackendQt5WebRTC::doSetLocalDescription invoked\n");
++    ASSERT(WRTCInt::InvalidRequestId == m_voidRequestId);
++
++    WRTCInt::RTCSessionDescription localDesc;
++    localDesc.type = sdpTypeToString(desc.type());
++    localDesc.sdp = desc.sdp().utf8().data();
++
++    int id = m_rtcConnection->setLocalDescription(localDesc);
++    if (WRTCInt::InvalidRequestId != id) {
++        m_voidRequestId = id;
++    } else {
++        setLocalDescriptionFailed(Exception { OperationError, "Failed to parse local description" });
++    }
++}
++RefPtr<RTCSessionDescription> PeerConnectionBackendQt5WebRTC::localDescription() const
++{
++    // TODO: pendingLocalDescription/currentLocalDescription
++    WRTCInt::RTCSessionDescription localDesc;
++    m_rtcConnection->localDescription(localDesc);
++
++    RTCSdpType sdpType;
++    if (parseSdpTypeString(localDesc.type, sdpType)) {
++        String sdp = localDesc.sdp.c_str();
++        printf ("WEB_RTC_LOG::RTCSessionDescription::create invoked\n");
++        return RTCSessionDescription::create(sdpType, WTFMove(sdp));
++    }
++    return nullptr;
++}
++RefPtr<RTCSessionDescription> PeerConnectionBackendQt5WebRTC::currentLocalDescription() const
++{
++    return localDescription();
++}
++RefPtr<RTCSessionDescription> PeerConnectionBackendQt5WebRTC::pendingLocalDescription() const
++{
++    return RefPtr<RTCSessionDescription>();
++}
++
++void PeerConnectionBackendQt5WebRTC::doSetRemoteDescription(RTCSessionDescription& desc)
++{
++    ASSERT(WRTCInt::InvalidRequestId == m_voidRequestId);
++
++    WRTCInt::RTCSessionDescription remoteDesc;
++    remoteDesc.type = sdpTypeToString(desc.type());
++    remoteDesc.sdp = desc.sdp().utf8().data();
++
++    int id = m_rtcConnection->setRemoteDescription(remoteDesc);
++    if (WRTCInt::InvalidRequestId != id) {
++        m_voidRequestId = id;
++    } else {
++        setRemoteDescriptionFailed(Exception { OperationError, "Failed to parse remote description" });
++    }
++}
++RefPtr<RTCSessionDescription> PeerConnectionBackendQt5WebRTC::remoteDescription() const
++{
++    // TODO: pendingRemoteDescription/currentRemoteDescription
++    WRTCInt::RTCSessionDescription remoteDesc;
++    m_rtcConnection->remoteDescription(remoteDesc);
++
++    RTCSdpType sdpType;
++    if (parseSdpTypeString(remoteDesc.type, sdpType)) {
++        String sdp = remoteDesc.sdp.c_str();
++        return RTCSessionDescription::create(sdpType, WTFMove(sdp));
++    }
++    return nullptr;
++}
++RefPtr<RTCSessionDescription> PeerConnectionBackendQt5WebRTC::currentRemoteDescription() const
++{
++    return remoteDescription();
++}
++RefPtr<RTCSessionDescription> PeerConnectionBackendQt5WebRTC::pendingRemoteDescription() const
++{
++    return RefPtr<RTCSessionDescription>();
++}
++
++static void updateRTCMediaConstraint(const MediaTrackConstraintSetMap& mediaConstraints, WRTCInt::RTCMediaConstraints& wrtcConstraints, bool isMandatoryConstraints)
++{
++    mediaConstraints.forEach([&wrtcConstraints, isMandatoryConstraints](const MediaConstraint& m) {
++        std::string sstrVal;
++        Vector<String> strVec;
++        StringConstraint strCnst(downcast<StringConstraint>(m));
++        if (isMandatoryConstraints)
++            sstrVal = (strCnst.getIdeal(strVec) && (strVec.size() > 0)) ? strVec[0].utf8().data() : "";
++        else
++            sstrVal = (strCnst.getExact(strVec) && (strVec.size() > 0)) ? strVec[0].utf8().data() : "";
++        wrtcConstraints[m.name().utf8().data()] = sstrVal;
++    });
++}
++
++bool PeerConnectionBackendQt5WebRTC::setConfiguration(MediaEndpointConfiguration&& configuration, const MediaConstraints& constraints)
++{
++    std::optional<MediaEndpointConfiguration> config;
++    config = WTFMove(configuration);
++    WRTCInt::RTCConfiguration wrtcConfig;
++    for (auto& server : config->iceServers) {
++        WRTCInt::RTCIceServer wrtcICEServer;
++        wrtcICEServer.credential = server.credential.utf8().data();
++        wrtcICEServer.username = server.username.utf8().data();
++        for(auto& url : server.urls) {
++            printf ("WEB_RTC_LOG::iceServers url is %s\n", url.string().ascii().data());
++            wrtcICEServer.urls.push_back(url.string().ascii().data());
++        }
++        wrtcConfig.iceServers.push_back(wrtcICEServer);
++    }
++
++    WRTCInt::RTCMediaConstraints wrtcConstraints;
++    MediaTrackConstraintSetMap mediaConstraints = constraints.mandatoryConstraints;
++    updateRTCMediaConstraint(mediaConstraints, wrtcConstraints, true);
++
++    Vector<MediaTrackConstraintSetMap> advancedConstraints = constraints.advancedConstraints;
++    for (const auto& constraints : advancedConstraints) {
++        updateRTCMediaConstraint(constraints, wrtcConstraints, false);
++    }
++
++    m_rtcConnection->setConfiguration(wrtcConfig, wrtcConstraints);
++    return true;
++}
++
++void PeerConnectionBackendQt5WebRTC::doAddIceCandidate(RTCIceCandidate& candidate)
++{
++    WRTCInt::RTCIceCandidate iceCandidate;
++    iceCandidate.sdp = candidate.candidate().utf8().data();
++    iceCandidate.sdpMid = candidate.sdpMid().utf8().data();
++    iceCandidate.sdpMLineIndex = candidate.sdpMLineIndex().value_or(0);
++    bool rc = m_rtcConnection->addIceCandidate(iceCandidate);
++    if (rc) {
++        printf ("WEB_RTC_LOG::ICECandidate\n");
++        addIceCandidateSucceeded();
++    } else {
++        addIceCandidateFailed(Exception { OperationError, "Failed to add ICECandidate" });
++    }
++}
++
++void PeerConnectionBackendQt5WebRTC::getStats(MediaStreamTrack*, Ref<DeferredPromise>&& promise)
++{
++    int id = m_rtcConnection->getStats();
++    if (WRTCInt::InvalidRequestId != id) {
++        m_statsPromises.add(id, WTFMove(promise));
++    } else {
++        //TODO Enable Failure response
++        printf("Failed to get status of peer connection\n");
++    }
++}
++
++Vector<RefPtr<MediaStream>> PeerConnectionBackendQt5WebRTC::getRemoteStreams() const
++{
++    return m_remoteStreams;
++}
++
++Ref<RTCRtpReceiver> PeerConnectionBackendQt5WebRTC::createReceiver(const String&, const String& trackKind, const String& trackId)
++{
++    String id(createCanonicalUUIDString());
++    if (trackKind == "audio") {
++        auto remoteTrackPrivate = MediaStreamTrackPrivate::create(adoptRef(*new RealtimeAudioSourceQt5WebRTC(id, trackKind)), String(trackId));
++        auto remoteTrack = MediaStreamTrack::create(*m_peerConnection.scriptExecutionContext(), WTFMove(remoteTrackPrivate));
++
++        return RTCRtpReceiver::create(WTFMove(remoteTrack));
++    }
++    auto remoteTrackPrivate = MediaStreamTrackPrivate::create(adoptRef(*new RealtimeVideoSourceQt5WebRTC(id, trackKind)), String(trackId));
++    auto remoteSource = adoptRef(*new RealtimeVideoSourceQt5WebRTC(id, trackKind));
++    auto remoteTrack = MediaStreamTrack::create(*m_peerConnection.scriptExecutionContext(), WTFMove(remoteTrackPrivate));
++
++    return RTCRtpReceiver::create(WTFMove(remoteTrack));
++}
++
++void PeerConnectionBackendQt5WebRTC::replaceTrack(RTCRtpSender&, Ref<MediaStreamTrack>&&, DOMPromiseDeferred<void>&& promise)
++{
++    notImplemented();
++    promise.reject(Exception { OperationError, "NotSupportedError" });
++}
++
++void PeerConnectionBackendQt5WebRTC::doStop()
++{
++    m_rtcConnection->stop();
++}
++
++void PeerConnectionBackendQt5WebRTC::addStreamOnNegotiation()
++{
++    const Vector<RefPtr<RTCRtpTransceiver>>& transceivers = m_peerConnection.getTransceivers();//m_peerConnection.getTransceivers();
++    for(auto &transceiver : transceivers) {
++        if (!transceiver)
++            continue;
++        RTCRtpSender& sender = transceiver->sender();
++        if (!sender.track())
++            continue;
++        RealtimeMediaSource& source = sender.track()->source();
++        WRTCInt::RTCMediaStream* stream = static_cast<RealtimeMediaSourceQt5WebRTC&>(source).rtcStream();
++        if (stream) {
++            m_rtcConnection->addStream(stream);
++            break;
++        }
++    }
++}
++
++std::unique_ptr<RTCDataChannelHandler> PeerConnectionBackendQt5WebRTC::createDataChannelHandler(const String& label, const RTCDataChannelInit& rtcInitData)
++{
++    WRTCInt::DataChannelInit initData;
++    if(rtcInitData.ordered)
++        initData.ordered = rtcInitData.ordered.value();
++    if(rtcInitData.negotiated)
++        initData.negotiated = rtcInitData.negotiated.value();
++    if(rtcInitData.id)
++        initData.id = rtcInitData.id.value();
++    if(rtcInitData.maxRetransmits)
++        initData.maxRetransmits = rtcInitData.maxRetransmits.value();
++    if(rtcInitData.maxPacketLifeTime)
++        initData.maxRetransmitTime = rtcInitData.maxPacketLifeTime.value();
++    initData.protocol = rtcInitData.protocol.utf8().data();
++    WRTCInt::RTCDataChannel* channel = m_rtcConnection->createDataChannel(label.utf8().data(), initData);
++    return channel
++        ? std::make_unique<RTCDataChannelHandlerQt5WebRTC>(channel)
++        : nullptr;
++}
++
++// ===========  WRTCInt::RTCPeerConnectionClient ==========
++
++void PeerConnectionBackendQt5WebRTC::requestSucceeded(int id, const WRTCInt::RTCSessionDescription& desc)
++{
++    (void)id;
++    ASSERT(id == m_sessionDescriptionRequestId);
++
++    // printf("%p:%s: %d, type=%s sdp=\n%s\n", this, __func__, id, desc.type.c_str(), desc.sdp.c_str());
++
++    RTCSdpType sdpType;
++    if (parseSdpTypeString(desc.type, sdpType)) {
++        String sdp = desc.sdp.c_str();
++        if (sdpType == RTCSdpType::Offer)
++            createOfferSucceeded(WTFMove(sdp));
++        else if (sdpType == RTCSdpType::Answer)
++            createAnswerSucceeded(WTFMove(sdp));
++        else
++            createOfferFailed(Exception { OperationError, "Wrong type" });
++    } else {
++        createOfferFailed(Exception { OperationError, "Failed to parse sdp type" });
++    }
++
++    m_sessionDescriptionRequestId = WRTCInt::InvalidRequestId;
++}
++
++void PeerConnectionBackendQt5WebRTC::requestSucceeded(int id, const std::vector<std::unique_ptr<WRTCInt::RTCStatsReport>>& reports)
++{
++    printf ("WEB_RTC_LOG::PeerConnectionBackendQt5WebRTC::requestSucceeded\n");
++    //FIXME  Could not backport stats directly, chances of failure
++    std::optional<Ref<DeferredPromise>> statsPromise = m_statsPromises.take(id);
++    if (!statsPromise) {
++        printf ("Error: couldn't find promise for stats request\n");
++        return;
++    }
++
++    Ref<RTCStatsResponse> response = RTCStatsResponse::create();
++    for(auto& r : reports)
++    {
++        String id = r->id().c_str();
++        String type = r->type().c_str();
++        double timestamp = r->timestamp();
++        size_t idx = response->addReport(id, type, timestamp);
++        for(auto& v : r->values())
++        {
++            response->addStatistic(idx, v.first.c_str(), v.second.c_str());
++        }
++    }
++    printf ("WEB_RTC_LOG::Important statsPromise has to be resolved \n");
++
++}
++
++void PeerConnectionBackendQt5WebRTC::requestSucceeded(int id)
++{
++    (void)id;
++    ASSERT(id == m_voidRequestId);
++
++    setLocalDescriptionSucceeded();
++    m_voidRequestId = WRTCInt::InvalidRequestId;
++}
++
++void PeerConnectionBackendQt5WebRTC::requestFailed(int id, const std::string& error)
++{
++    if (id == m_voidRequestId) {
++        setLocalDescriptionFailed(Exception { OperationError, error.c_str() });
++        m_voidRequestId = WRTCInt::InvalidRequestId;
++    } else if (id == m_sessionDescriptionRequestId) {
++        createAnswerFailed(Exception { OperationError, error.c_str() });
++        m_sessionDescriptionRequestId = WRTCInt::InvalidRequestId;
++    } else {
++        ASSERT_NOT_REACHED();
++    }
++}
++
++void PeerConnectionBackendQt5WebRTC::negotiationNeeded()
++{
++    m_isNegotiationNeeded = true;
++    m_peerConnection.scheduleNegotiationNeededEvent();
++}
++
++void PeerConnectionBackendQt5WebRTC::didAddRemoteStream(
++    WRTCInt::RTCMediaStream *stream,
++    const std::vector<std::string> &audioDevices,
++    const std::vector<std::string> &videoDevices)
++{
++    std::shared_ptr<WRTCInt::RTCMediaStream> rtcStream;
++    rtcStream.reset(stream);
++
++    Vector<Ref<RealtimeMediaSource>> audioSources;
++    Vector<Ref<RealtimeMediaSource>> videoSources;
++
++    for (auto& device : audioDevices) {
++        String name(device.c_str());
++        String id(createCanonicalUUIDString());
++        RefPtr<RealtimeMediaSourceQt5WebRTC> audioSource = adoptRef(new RealtimeAudioSourceQt5WebRTC(id, name));
++        audioSource->setRTCStream(rtcStream);
++        audioSources.append(audioSource.releaseNonNull());
++    }
++    for (auto& device : videoDevices) {
++        String name(device.c_str());
++        String id(createCanonicalUUIDString());
++        RefPtr<RealtimeMediaSourceQt5WebRTC> videoSource = adoptRef(new RealtimeVideoSourceQt5WebRTC(id, name));
++        videoSource->setRTCStream(rtcStream);
++        videoSources.append(videoSource.releaseNonNull());
++    }
++    String id = rtcStream->id().c_str();
++    auto privateStream = MediaStreamPrivate::create(WTFMove(id), audioSources, videoSources);
++    privateStream->startProducingData();//FIXME rechek if mandatory to move it after  MediaStream::create
++    RefPtr<MediaStream> mediaStream = MediaStream::create(*m_peerConnection.scriptExecutionContext(), privateStream.copyRef());
++
++    m_remoteStreams.append(mediaStream);
++    m_peerConnection.scriptExecutionContext()->postTask([=](ScriptExecutionContext&) {
++        m_peerConnection.fireEvent(MediaStreamEvent::create(eventNames().addstreamEvent, false, false, mediaStream.copyRef()));
++    });
++}
++
++// deprecated
++void PeerConnectionBackendQt5WebRTC::didGenerateIceCandidate(const WRTCInt::RTCIceCandidate& iceCandidate)
++{
++    String sdp = iceCandidate.sdp.c_str();
++    String sdpMid = iceCandidate.sdpMid.c_str();
++    std::optional<unsigned short> sdpMLineIndex = iceCandidate.sdpMLineIndex;
++    RefPtr<RTCIceCandidate> candidate = RTCIceCandidate::create(sdp, sdpMid, sdpMLineIndex);
++    m_peerConnection.scriptExecutionContext()->postTask([this, candidate] (ScriptExecutionContext&) {
++        m_peerConnection.fireEvent(RTCPeerConnectionIceEvent::create(false, false, candidate.copyRef()));
++    });
++}
++
++void PeerConnectionBackendQt5WebRTC::didChangeSignalingState(WRTCInt::SignalingState state)
++{
++    RTCSignalingState signalingState = RTCSignalingState::Stable;
++    switch(state)
++    {
++        case WRTCInt::Stable:
++            signalingState = RTCSignalingState::Stable;
++            break;
++        case WRTCInt::HaveLocalOffer:
++            signalingState = RTCSignalingState::HaveLocalOffer;
++            break;
++        case WRTCInt::HaveRemoteOffer:
++            signalingState = RTCSignalingState::HaveRemoteOffer;
++            break;
++        case WRTCInt::HaveLocalPrAnswer:
++            signalingState = RTCSignalingState::HaveLocalPranswer;
++            break;
++        case WRTCInt::HaveRemotePrAnswer:
++            signalingState = RTCSignalingState::HaveRemotePranswer;
++            break;
++        default:
++            return;
++    }
++    m_peerConnection.setSignalingState(signalingState);
++}
++
++void PeerConnectionBackendQt5WebRTC::didChangeIceGatheringState(WRTCInt::IceGatheringState state)
++{
++    RTCIceGatheringState iceGatheringState = RTCIceGatheringState::New;
++    switch(state)
++    {
++        case WRTCInt::IceGatheringNew:
++            iceGatheringState = RTCIceGatheringState::New;
++            break;
++        case WRTCInt::IceGatheringGathering:
++            iceGatheringState = RTCIceGatheringState::Gathering;
++            break;
++        case WRTCInt::IceGatheringComplete:
++            iceGatheringState = RTCIceGatheringState::Complete;
++            break;
++        default:
++            return;
++    }
++    m_peerConnection.updateIceGatheringState(iceGatheringState);
++}
++
++void PeerConnectionBackendQt5WebRTC::didChangeIceConnectionState(WRTCInt::IceConnectionState state)
++{
++    RTCIceConnectionState iceConnectionState = RTCIceConnectionState::New;
++    switch(state)
++    {
++        case WRTCInt::IceConnectionNew:
++            iceConnectionState = RTCIceConnectionState::New;
++            break;
++        case WRTCInt::IceConnectionChecking:
++            iceConnectionState = RTCIceConnectionState::Checking;
++            break;
++        case WRTCInt::IceConnectionConnected:
++            iceConnectionState = RTCIceConnectionState::Connected;
++            break;
++        case WRTCInt::IceConnectionCompleted:
++            iceConnectionState = RTCIceConnectionState::Completed;
++            break;
++        case WRTCInt::IceConnectionFailed:
++            iceConnectionState = RTCIceConnectionState::Failed;
++            break;
++        case WRTCInt::IceConnectionDisconnected:
++            iceConnectionState = RTCIceConnectionState::Disconnected;
++            break;
++        case WRTCInt::IceConnectionClosed:
++            iceConnectionState = RTCIceConnectionState::Closed;
++            break;
++        default:
++            return;
++    }
++    m_peerConnection.updateIceConnectionState(iceConnectionState);
++}
++
++void PeerConnectionBackendQt5WebRTC::didAddRemoteDataChannel(WRTCInt::RTCDataChannel* channel)
++{
++    std::unique_ptr<RTCDataChannelHandler> handler = std::make_unique<RTCDataChannelHandlerQt5WebRTC>(channel);
++    auto dataChannel = RTCDataChannel::create(*m_peerConnection.scriptExecutionContext(), WTFMove(handler), channel->label().c_str(), RTCDataChannelInit());
++    //m_remoteDataChannels.append(dataChannel);
++    m_peerConnection.scriptExecutionContext()->postTask([this,dataChannel=dataChannel.copyRef()] (ScriptExecutionContext&) mutable {
++        m_peerConnection.fireEvent(RTCDataChannelEvent::create(eventNames().datachannelEvent, false, false, WTFMove(dataChannel)));
++    });
++}
++
++RTCDataChannelHandlerQt5WebRTC::RTCDataChannelHandlerQt5WebRTC(WRTCInt::RTCDataChannel* dataChannel)
++    : m_rtcDataChannel(dataChannel)
++    , m_client(nullptr)
++{
++}
++
++void RTCDataChannelHandlerQt5WebRTC::setClient(RTCDataChannelHandlerClient& client)
++{
++    // ASSERT(!m_client);
++    if (m_client == &client)
++        return;
++
++    m_client = &client;
++
++    if (m_client)
++        m_rtcDataChannel->setClient(this);
++}
++
++size_t RTCDataChannelHandlerQt5WebRTC::bufferedAmount() const
++{
++    return m_rtcDataChannel->bufferedAmount();
++}
++bool RTCDataChannelHandlerQt5WebRTC::sendStringData(const String& str)
++{
++    return m_rtcDataChannel->sendStringData(str.utf8().data());
++}
++
++bool RTCDataChannelHandlerQt5WebRTC::sendRawData(const char* data, size_t size)
++{
++    return m_rtcDataChannel->sendRawData(data, size);
++}
++
++void RTCDataChannelHandlerQt5WebRTC::close()
++{
++    m_rtcDataChannel->close();
++}
++
++void RTCDataChannelHandlerQt5WebRTC::didChangeReadyState(WRTCInt::DataChannelState state)
++{
++    RTCDataChannelState readyState = RTCDataChannelState::Connecting;
++    switch(state) {
++        case WRTCInt::DataChannelConnecting:
++            readyState = RTCDataChannelState::Connecting;
++            break;
++        case WRTCInt::DataChannelOpen:
++            readyState = RTCDataChannelState::Open;
++            break;
++        case WRTCInt::DataChannelClosing:
++            readyState = RTCDataChannelState::Closing;
++            break;
++        case WRTCInt::DataChannelClosed:
++            readyState = RTCDataChannelState::Closed;
++            break;
++        default:
++            break;
++    };
++    m_client->didChangeReadyState(readyState);
++}
++
++void RTCDataChannelHandlerQt5WebRTC::didReceiveStringData(const std::string& str)
++{
++    m_client->didReceiveStringData(str.c_str());
++}
++
++void RTCDataChannelHandlerQt5WebRTC::didReceiveRawData(const char* data, size_t sz)
++{
++    m_client->didReceiveRawData(data, sz);
++}
++
++}
+diff --git a/Source/WebCore/platform/mediastream/qt5webrtc/PeerConnectionBackendQt5WebRTC.h b/Source/WebCore/platform/mediastream/qt5webrtc/PeerConnectionBackendQt5WebRTC.h
+new file mode 100644
+index 00000000000..1a179f51134
+--- /dev/null
++++ b/Source/WebCore/platform/mediastream/qt5webrtc/PeerConnectionBackendQt5WebRTC.h
+@@ -0,0 +1,146 @@
++/*
++ * Copyright (C) 2015,2016 Ericsson AB. All rights reserved.
++ * Copyright (c) 2016 Comcast. All rights reserved.
++ * Copyright (C) 2017 Apple Inc. All rights reserved.
++ *
++ * Redistribution and use in source and binary forms, with or without
++ * modification, are permitted provided that the following conditions
++ * are met:
++ *
++ * 1. Redistributions of source code must retain the above copyright
++ *    notice, this list of conditions and the following disclaimer.
++ * 2. Redistributions in binary form must reproduce the above copyright
++ *    notice, this list of conditions and the following disclaimer
++ *    in the documentation and/or other materials provided with the
++ *    distribution.
++ * 3. Neither the name of Ericsson nor the names of its contributors
++ *    may be used to endorse or promote products derived from this
++ *    software without specific prior written permission.
++ *
++ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
++ * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
++ * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
++ * A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
++ * OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
++ * SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
++ * LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
++ * DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
++ * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
++ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
++ * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
++ */
++// PeerConnectionBackendQt5WebRTC.h are based on WebKit PeerConnectionBackend.h and MediaEndpointPeerConnection.h
++
++#ifndef _PEERCONNECTIONBACKENDQT5WEBRTC_H_
++#define _PEERCONNECTIONBACKENDQT5WEBRTC_H_
++
++#include "PeerConnectionBackend.h"
++#include "NotImplemented.h"
++
++#include "RTCDataChannelHandler.h"
++#include "RealtimeMediaSourceCenterQt5WebRTC.h"
++
++#include <wtf/HashMap.h>
++#include <wtf/RefPtr.h>
++
++namespace WebCore {
++
++class PeerConnectionBackendClient;
++class RTCDataChannel;
++
++class PeerConnectionBackendQt5WebRTC : public PeerConnectionBackend, public WRTCInt::RTCPeerConnectionClient {
++public:
++    explicit PeerConnectionBackendQt5WebRTC(RTCPeerConnection&);
++    ~PeerConnectionBackendQt5WebRTC() {}
++    virtual Vector<RefPtr<MediaStream>> getRemoteStreams() const final;
++
++    virtual RefPtr<RTCSessionDescription> localDescription() const final;
++    virtual RefPtr<RTCSessionDescription> currentLocalDescription() const final;
++    virtual RefPtr<RTCSessionDescription> pendingLocalDescription() const final;
++
++    virtual RefPtr<RTCSessionDescription> remoteDescription() const final;
++    virtual RefPtr<RTCSessionDescription> currentRemoteDescription() const final;
++    virtual RefPtr<RTCSessionDescription> pendingRemoteDescription() const final;
++
++    virtual bool setConfiguration(MediaEndpointConfiguration&& configuration, const MediaConstraints& constraints) final;
++
++    virtual std::unique_ptr<RTCDataChannelHandler> createDataChannelHandler(const String&, const RTCDataChannelInit&) final;
++
++    virtual void getStats(MediaStreamTrack*, Ref<DeferredPromise>&&) final;
++
++    virtual Ref<RTCRtpReceiver> createReceiver(const String& transceiverMid, const String& trackKind, const String& trackId) final;
++    virtual void replaceTrack(RTCRtpSender&, Ref<MediaStreamTrack>&&, DOMPromiseDeferred<void>&&) final;
++
++#if USE(QT5WEBRTC)
++    virtual void addStreamOnNegotiation() final;
++#endif
++
++    virtual void emulatePlatformEvent(const String&) final {}
++    virtual void requestSucceeded(int id, const WRTCInt::RTCSessionDescription& desc) final;
++    virtual void requestSucceeded(int id, const std::vector<std::unique_ptr<WRTCInt::RTCStatsReport>>& reports) final;
++    virtual void requestSucceeded(int id) final;
++    virtual void requestFailed(int id, const std::string& error) final;
++    virtual void negotiationNeeded() final;
++    virtual void didAddRemoteStream(WRTCInt::RTCMediaStream *stream,
++                                    const std::vector<std::string> &audioSources,
++                                    const std::vector<std::string> &videoSources) final;
++    virtual void didGenerateIceCandidate(const WRTCInt::RTCIceCandidate& candidate) final;
++
++    virtual void didChangeSignalingState(WRTCInt::SignalingState state) final;
++    virtual void didChangeIceGatheringState(WRTCInt::IceGatheringState state) final;
++    virtual void didChangeIceConnectionState(WRTCInt::IceConnectionState state) final;
++    virtual void didAddRemoteDataChannel(WRTCInt::RTCDataChannel* channel) final;
++
++private:
++    virtual void doCreateOffer(RTCOfferOptions&&) final;
++    virtual void doCreateAnswer(RTCAnswerOptions&&) final;
++    virtual void doSetLocalDescription(RTCSessionDescription&) final;
++    virtual void doSetRemoteDescription(RTCSessionDescription&) final;
++    virtual void doAddIceCandidate(RTCIceCandidate&) final;
++    virtual void doStop() final;
++
++    //PeerConnectionBackendClient* m_client;
++    std::unique_ptr<WRTCInt::RTCPeerConnection> m_rtcConnection;
++
++    bool m_isNegotiationNeeded { false };
++    int m_sessionDescriptionRequestId { WRTCInt::InvalidRequestId };
++    //Optional<PeerConnection::SessionDescriptionPromise> m_sessionDescriptionPromise;
++    int m_voidRequestId { WRTCInt::InvalidRequestId };
++    HashMap<int, Ref<DeferredPromise>> m_statsPromises;
++    //Vector<Ref<RTCDataChannel>> m_remoteDataChannels;
++    Vector<RefPtr<MediaStream>> m_remoteStreams;
++};
++
++class RTCDataChannelHandlerQt5WebRTC
++    : public RTCDataChannelHandler
++    , public WRTCInt::RTCDataChannelClient
++{
++public:
++    RTCDataChannelHandlerQt5WebRTC(WRTCInt::RTCDataChannel* dataChannel);
++
++    // RTCDataChannelHandler
++    void setClient(RTCDataChannelHandlerClient&) final;
++    /*String label() final;
++    bool ordered() final;
++    unsigned short maxRetransmitTime() final;
++    unsigned short maxRetransmits() final;
++    String protocol() final;
++    bool negotiated() final;
++    unsigned short id() final;*/
++    size_t bufferedAmount() const final;
++    bool sendStringData(const String&) final;
++    bool sendRawData(const char*, size_t) final;
++    void close() final;
++
++    // WRTCInt::RTCDataChannelClient
++    void didChangeReadyState(WRTCInt::DataChannelState state) final;
++    void didReceiveStringData(const std::string& str) final;
++    void didReceiveRawData(const char* data, size_t sz) final;
++
++private:
++    std::unique_ptr<WRTCInt::RTCDataChannel> m_rtcDataChannel;
++    RTCDataChannelHandlerClient* m_client;
++};
++
++}
++#endif  // _PEERCONNECTIONBACKENDQT5WEBRTC_H_
+diff --git a/Source/WebCore/platform/mediastream/qt5webrtc/RealtimeMediaSourceCenterQt5WebRTC.cpp b/Source/WebCore/platform/mediastream/qt5webrtc/RealtimeMediaSourceCenterQt5WebRTC.cpp
+new file mode 100644
+index 00000000000..df3e29b224b
+--- /dev/null
++++ b/Source/WebCore/platform/mediastream/qt5webrtc/RealtimeMediaSourceCenterQt5WebRTC.cpp
+@@ -0,0 +1,249 @@
++/*
++ * Copyright (C) 2011 Ericsson AB. All rights reserved.
++ * Copyright (C) 2012 Google Inc. All rights reserved.
++ * Copyright (C) 2015 Igalia S.L. All rights reserved.
++ * Copyright (C) 2015 Metrological. All rights reserved.
++ * Copyright (c) 2016 Comcast. All rights reserved.
++ * Copyright (C) 2013-2016 Apple Inc. All rights reserved.
++ *
++ * Redistribution and use in source and binary forms, with or without
++ * modification, are permitted provided that the following conditions
++ * are met:
++ *
++ * 1. Redistributions of source code must retain the above copyright
++ *    notice, this list of conditions and the following disclaimer.
++ * 2. Redistributions in binary form must reproduce the above copyright
++ *    notice, this list of conditions and the following disclaimer
++ *    in the documentation and/or other materials provided with the
++ *    distribution.
++ * 3. Neither the name of Ericsson nor the names of its contributors
++ *    may be used to endorse or promote products derived from this
++ *    software without specific prior written permission.
++ *
++ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
++ * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
++ * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
++ * A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
++ * OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
++ * SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
++ * LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
++ * DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
++ * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
++ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
++ * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
++ */
++// RealtimeMediaSourceCenterQt5WebRTC.cpp based on WebKit RealtimeMediaSourceCenter.cpp and RealtimeMediaSourceCenterOwr.cpp
++
++#include "config.h"
++#include "RealtimeMediaSourceCenterQt5WebRTC.h"
++
++#if ENABLE(MEDIA_STREAM)
++
++#include "MediaStream.h"
++#include "MediaStreamPrivate.h"
++#include "MediaStreamTrack.h"
++#include "CaptureDevice.h"
++#include <wtf/UUID.h>
++
++#include <wtf/NeverDestroyed.h>
++#include <wtf/MainThread.h>
++#include <NotImplemented.h>
++
++#include "FloatRect.h"
++
++#include <cairo.h>
++#include <gmodule.h>
++
++namespace WebCore {
++
++void enableQt5WebRTCPeerConnectionBackend();
++
++typedef int (*CreateWRTCIntAccessorFun)(WRTCInt::WRTCIntAccessor** instance);
++static CreateWRTCIntAccessorFun gCreateWRTCIntAccessorFun = nullptr;
++
++static bool loadQtWebRTC()
++{
++    static GModule *gQtWebRTC = nullptr;
++    if (!gQtWebRTC)
++    {
++        gQtWebRTC = g_module_open("/usr/lib/libQt5WebRTC.so.5", G_MODULE_BIND_LAZY);
++        if (!gQtWebRTC)
++            LOG_ERROR("Failed to load libQt5WebRTC.so.5, err='%s'", g_module_error());
++        else if (!g_module_symbol(gQtWebRTC, "createWRTCIntAccessor", (gpointer*)&gCreateWRTCIntAccessorFun))
++            LOG_ERROR("Failed to resolve 'createWRTCIntAccessor()', err='%s'", g_module_error());
++    }
++    return gCreateWRTCIntAccessorFun != nullptr;
++}
++
++static WRTCInt::WRTCIntAccessor& wrtcIntAccessor()
++{
++   static WRTCInt::WRTCIntAccessor* gWRTCIntAccessor = nullptr;
++   static std::once_flag flag;
++   std::call_once(flag, [](){
++      if (loadQtWebRTC())
++          gCreateWRTCIntAccessorFun(&gWRTCIntAccessor);
++      RELEASE_ASSERT(gWRTCIntAccessor != nullptr);
++   });
++   return *gWRTCIntAccessor;
++}
++
++void initializeWRTCInt()
++{
++    wrtcIntAccessor().init();
++}
++
++WRTCInt::RTCMediaSourceCenter& getRTCMediaSourceCenter()
++{
++    static std::unique_ptr<WRTCInt::RTCMediaSourceCenter> rtcMediaSourceCenter;
++    if (!rtcMediaSourceCenter)
++        rtcMediaSourceCenter.reset(wrtcIntAccessor().createRTCMediaSourceCenter());
++    return *rtcMediaSourceCenter.get();
++}
++
++void RealtimeMediaSourceQt5WebRTC::startProducingData()
++{
++    if (m_stream) {
++        m_isProducingData = true;
++    }
++}
++
++void RealtimeMediaSourceQt5WebRTC::stopProducingData()
++{
++    if (m_isProducingData) {
++        m_isProducingData = false;
++        m_stream.reset();
++    }
++}
++
++RealtimeVideoSourceQt5WebRTC::RealtimeVideoSourceQt5WebRTC(const String& id, const String& name)
++    : RealtimeMediaSourceQt5WebRTC(id, RealtimeMediaSource::Type::Video, name)
++{
++    // TODO: obtain settings from the device
++    m_currentSettings.setWidth(320);
++    m_currentSettings.setHeight(240);
++}
++
++RealtimeMediaSourceCenter& RealtimeMediaSourceCenter::platformCenter()
++{
++    ASSERT(isMainThread());
++
++    static NeverDestroyed<RealtimeMediaSourceCenterQt5WebRTC> center;
++    return center;
++}
++
++RealtimeMediaSourceCenterQt5WebRTC::RealtimeMediaSourceCenterQt5WebRTC()
++{
++    enableQt5WebRTCPeerConnectionBackend();
++
++    m_supportedConstraints.setSupportsWidth(true);
++    m_supportedConstraints.setSupportsHeight(true);
++}
++
++void RealtimeMediaSourceCenterQt5WebRTC::validateRequestConstraints(ValidConstraintsHandler&& validHandler, InvalidConstraintsHandler&& invalidHandler, const MediaConstraints& audioConstraints, const MediaConstraints& videoConstraints, String&& deviceIdentifierHashSalt)
++{ //FIXME Cheack use of deviceIdentifierHashSalt
++    bool needsAudio = audioConstraints.isValid;
++    bool needsVideo = videoConstraints.isValid;
++
++    Vector<String> audioNames;
++    Vector<String> videoNames;
++
++    enumerateSources(needsAudio, needsVideo, audioNames, videoNames);
++
++    Vector<String> audioSources;
++    Vector<String> videoSources;
++
++    for (int i = 0; i < audioNames.size(); ++i) {
++        audioSources.append(createCanonicalUUIDString());
++    }
++    for (int i = 0; i < videoNames.size(); ++i) {
++        videoSources.append(createCanonicalUUIDString());
++    }
++
++    validHandler(WTFMove(audioSources), WTFMove(videoSources), WTFMove(deviceIdentifierHashSalt));
++}
++
++void RealtimeMediaSourceCenterQt5WebRTC::createMediaStream(NewMediaStreamHandler&& handler, const String& audioDeviceID, const String& videoDeviceID, const MediaConstraints*, const MediaConstraints*)
++{
++    Vector<String> audioNames;
++    Vector<String> videoNames;
++
++    enumerateSources(!audioDeviceID.isEmpty(), !videoDeviceID.isEmpty(), audioNames, videoNames);
++
++    RefPtr<RealtimeMediaSourceQt5WebRTC> audioSource = !audioNames.isEmpty() ? adoptRef(new RealtimeAudioSourceQt5WebRTC(audioDeviceID, audioNames[0])) : nullptr;
++    RefPtr<RealtimeMediaSourceQt5WebRTC> videoSource = !videoNames.isEmpty() ? adoptRef(new RealtimeVideoSourceQt5WebRTC(videoDeviceID, videoNames[0])) : nullptr;
++
++    String audioSourceName = audioSource ? audioSource->name() : String();
++    String videoSourceName = videoSource ? videoSource->name() : String();
++
++    std::shared_ptr<WRTCInt::RTCMediaStream> rtcStream(
++        getRTCMediaSourceCenter().createMediaStream(
++            audioSourceName.utf8().data(), videoSourceName.utf8().data()));
++
++    Vector<Ref<RealtimeMediaSource>> audioSources;
++    Vector<Ref<RealtimeMediaSource>> videoSources;
++
++    if (audioSource) {
++        audioSource->setRTCStream(rtcStream);
++        audioSources.append(audioSource.releaseNonNull());
++    }
++
++    if (videoSource) {
++        videoSource->setRTCStream(rtcStream);
++        videoSources.append(videoSource.releaseNonNull());
++    }
++
++    String id = rtcStream->id().c_str();
++
++    handler(MediaStreamPrivate::create(WTFMove(id), audioSources, videoSources));
++}
++
++
++void RealtimeMediaSourceCenterQt5WebRTC::enumerateSources(bool needsAudio, bool needsVideo, Vector<String>& audios, Vector<String>& videos)
++{
++    initializeWRTCInt();
++
++    if (needsAudio) {
++        std::vector<std::string> audioDevices;
++        wrtcIntAccessor().enumerateDevices(WRTCInt::AUDIO, audioDevices);
++        for (auto& device : audioDevices) {
++            audios.append(device.c_str());
++        }
++    }
++
++    if (needsVideo) {
++        std::vector<std::string> videoDevices;
++        wrtcIntAccessor().enumerateDevices(WRTCInt::VIDEO, videoDevices);
++        for (auto& device : videoDevices) {
++            videos.append(device.c_str());
++        }
++    }
++}
++
++Vector<CaptureDevice> RealtimeMediaSourceCenterQt5WebRTC::getMediaStreamDevices()
++{
++    return Vector<CaptureDevice>();
++}
++
++//FIXME Dummy Implementation  fot capture manager.
++CaptureSourceOrError RealtimeMediaSourceCenterQt5WebRTC::AudioCaptureFactoryQt5WebRTC::createAudioCaptureSource(const String&, const MediaConstraints*)
++{
++    notImplemented();
++    return { };
++}
++
++CaptureSourceOrError RealtimeMediaSourceCenterQt5WebRTC::VideoCaptureFactoryQt5WebRTC::createVideoCaptureSource(const String&, const MediaConstraints*)
++{
++    notImplemented();
++    return { };
++}
++
++Vector<CaptureDevice>& RealtimeMediaSourceCenterQt5WebRTC::CaptureDeviceManagerQt5WebRTC::captureDevices()
++{
++    notImplemented();
++    return m_devices;
++}
++
++
++} // namespace WebCore
++
++#endif // ENABLE(MEDIA_STREAM)
+diff --git a/Source/WebCore/platform/mediastream/qt5webrtc/RealtimeMediaSourceCenterQt5WebRTC.h b/Source/WebCore/platform/mediastream/qt5webrtc/RealtimeMediaSourceCenterQt5WebRTC.h
+new file mode 100644
+index 00000000000..fea22e4146a
+--- /dev/null
++++ b/Source/WebCore/platform/mediastream/qt5webrtc/RealtimeMediaSourceCenterQt5WebRTC.h
+@@ -0,0 +1,160 @@
++/*
++ * Copyright (C) 2011 Ericsson AB. All rights reserved.
++ * Copyright (C) 2012 Google Inc. All rights reserved.
++ * Copyright (C) 2015 Igalia S.L. All rights reserved.
++ * Copyright (C) 2015 Metrological. All rights reserved.
++ * Copyright (c) 2016 Comcast. All rights reserved.
++ * Copyright (C) 2013-2016 Apple Inc. All rights reserved.
++ *
++ * Redistribution and use in source and binary forms, with or without
++ * modification, are permitted provided that the following conditions
++ * are met:
++ *
++ * 1. Redistributions of source code must retain the above copyright
++ *    notice, this list of conditions and the following disclaimer.
++ * 2. Redistributions in binary form must reproduce the above copyright
++ *    notice, this list of conditions and the following disclaimer
++ *    in the documentation and/or other materials provided with the
++ *    distribution.
++ * 3. Neither the name of Ericsson nor the names of its contributors
++ *    may be used to endorse or promote products derived from this
++ *    software without specific prior written permission.
++ *
++ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
++ * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
++ * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
++ * A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
++ * OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
++ * SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
++ * LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
++ * DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
++ * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
++ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
++ * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
++ */
++// RealtimeMediaSourceCenterQt5WebRTC.h based on WebKit RealtimeMediaSourceCenter.h and RealtimeMediaSourceCenterOwr.h
++
++#ifndef _REALTIMEMEDIASOURCECENTERQT5WEBRTC_H_
++#define _REALTIMEMEDIASOURCECENTERQT5WEBRTC_H_
++
++#if ENABLE(MEDIA_STREAM)
++
++#include "CaptureDeviceManager.h"
++#include "RealtimeMediaSourceCenter.h"
++#include "RealtimeMediaSource.h"
++#include "RealtimeMediaSourceCapabilities.h"
++
++#include <wtf/HashMap.h>
++#include <wtf/RefPtr.h>
++#include <wtf/text/WTFString.h>
++
++#include <wrtcint.h>
++
++namespace WebCore {
++
++WRTCInt::RTCMediaSourceCenter& getRTCMediaSourceCenter();
++
++class RealtimeMediaSourceQt5WebRTC : public RealtimeMediaSource
++{
++public:
++    RealtimeMediaSourceQt5WebRTC(const String& id, RealtimeMediaSource::Type type, const String& name)
++        : RealtimeMediaSource(id, type, name) { }
++    virtual ~RealtimeMediaSourceQt5WebRTC() { }
++
++    virtual const RealtimeMediaSourceCapabilities& capabilities() const final { return m_capabilities; }
++    virtual const RealtimeMediaSourceSettings& settings() const final { return m_currentSettings; }
++    virtual void startProducingData() final;
++    virtual void stopProducingData() final;
++    virtual bool isProducingData() const { return m_isProducingData; }
++
++    // helper
++    void setRTCStream(std::shared_ptr<WRTCInt::RTCMediaStream> stream) { m_stream = stream; }
++    WRTCInt::RTCMediaStream* rtcStream() { return m_stream.get(); }
++
++protected:
++    RealtimeMediaSourceCapabilities m_capabilities;
++    RealtimeMediaSourceSettings m_currentSettings;
++    bool m_isProducingData { false };
++    std::shared_ptr<WRTCInt::RTCMediaStream> m_stream;
++};
++
++class RealtimeAudioSourceQt5WebRTC final : public RealtimeMediaSourceQt5WebRTC
++{
++  public:
++    RealtimeAudioSourceQt5WebRTC(const String& id, const String& name)
++        : RealtimeMediaSourceQt5WebRTC(id, RealtimeMediaSource::Type::Audio, name)
++    { }
++};
++
++class RealtimeVideoSourceQt5WebRTC final : public RealtimeMediaSourceQt5WebRTC
++{
++  public:
++    RealtimeVideoSourceQt5WebRTC(const String& id, const String& name);
++};
++
++class RealtimeMediaSourceCenterQt5WebRTC final : public RealtimeMediaSourceCenter {
++private:
++    friend NeverDestroyed<RealtimeMediaSourceCenterQt5WebRTC>;
++
++    RealtimeMediaSourceCenterQt5WebRTC();
++    void validateRequestConstraints(ValidConstraintsHandler&& validHandler, InvalidConstraintsHandler&& invalidHandler,
++                                    const MediaConstraints& audioConstraints,
++                                    const MediaConstraints& videoConstraints, String&&) final;
++
++    void createMediaStream(NewMediaStreamHandler&&,
++                           const String& audioDeviceID,
++                           const String& videoDeviceID,
++                           const MediaConstraints* audioConstraints,
++                           const MediaConstraints* videoConstraints) final;
++
++    Vector<CaptureDevice> getMediaStreamDevices() final;
++
++    //bool getMediaStreamTrackSources(PassRefPtr<MediaStreamTrackSourcesRequestClient>) override;
++
++    //RefPtr<TrackSourceInfo> sourceWithUID(const String&, RealtimeMediaSource::Type, MediaConstraints*) override;
++
++    //FIXME Addition  for Capture Manager dummy Implemenation.
++    void enumerateSources(bool needsAudio, bool needsVideo, Vector<String>& audios, Vector<String>& video);
++
++    class AudioCaptureFactoryQt5WebRTC : public RealtimeMediaSource::AudioCaptureFactory {
++      public:
++        AudioCaptureFactoryQt5WebRTC() = default;
++        ~AudioCaptureFactoryQt5WebRTC() = default;
++      private:
++        CaptureSourceOrError createAudioCaptureSource(const String&, const MediaConstraints*) final;
++    };
++
++    class VideoCaptureFactoryQt5WebRTC : public RealtimeMediaSource::VideoCaptureFactory {
++      public:
++        VideoCaptureFactoryQt5WebRTC() = default;
++        ~VideoCaptureFactoryQt5WebRTC() = default;
++      private:
++        CaptureSourceOrError createVideoCaptureSource(const String&, const MediaConstraints*) final;
++    };
++
++    class CaptureDeviceManagerQt5WebRTC : public CaptureDeviceManager {
++      public:
++        CaptureDeviceManagerQt5WebRTC() =default;
++        ~CaptureDeviceManagerQt5WebRTC() =default;
++      private:
++        Vector<CaptureDevice>& captureDevices() final;
++        Vector<CaptureDevice> m_devices;
++    };
++
++    RealtimeMediaSource::AudioCaptureFactory& defaultAudioFactory() final { return m_defaultCaptureAudioFactory; }
++    RealtimeMediaSource::VideoCaptureFactory& defaultVideoFactory() final { return m_defaultCaptureVideoFactory; }
++    CaptureDeviceManager& defaultAudioCaptureDeviceManager() final { return m_defaultCaptureAudioDeviceManager; }
++    CaptureDeviceManager& defaultVideoCaptureDeviceManager() final { return m_defaultCaptureVideoDeviceManager; }
++
++    CaptureDeviceManagerQt5WebRTC m_defaultCaptureAudioDeviceManager;
++    CaptureDeviceManagerQt5WebRTC m_defaultCaptureVideoDeviceManager;
++    AudioCaptureFactoryQt5WebRTC m_defaultCaptureAudioFactory;
++    VideoCaptureFactoryQt5WebRTC m_defaultCaptureVideoFactory;
++};
++
++}
++
++#endif
++
++
++#endif  // _REALTIMEMEDIASOURCECENTERQT5WEBRTC_H_
+diff --git a/Source/WebKit/Shared/WebPreferencesDefinitions.h b/Source/WebKit/Shared/WebPreferencesDefinitions.h
+index 7e299acf66f..c1be58fb10e 100644
+--- a/Source/WebKit/Shared/WebPreferencesDefinitions.h
++++ b/Source/WebKit/Shared/WebPreferencesDefinitions.h
+@@ -254,7 +254,7 @@
+     macro(SimpleLineLayoutEnabled, simpleLineLayoutEnabled, Bool, bool, true, "", "") \
+     macro(SubpixelCSSOMElementMetricsEnabled, subpixelCSSOMElementMetricsEnabled, Bool, bool, false, "", "") \
+     macro(UseGiantTiles, useGiantTiles, Bool, bool, false, "", "") \
+-    macro(MediaDevicesEnabled, mediaDevicesEnabled, Bool, bool, false, "", "") \
++    macro(MediaDevicesEnabled, mediaDevicesEnabled, Bool, bool, true, "", "") \
+     macro(MediaStreamEnabled, mediaStreamEnabled, Bool, bool, true, "", "") \
+     macro(PeerConnectionEnabled, peerConnectionEnabled, Bool, bool, WebCore::LibWebRTCProvider::webRTCAvailable(), "", "") \
+     macro(UseLegacyTextAlignPositionedElementBehavior, useLegacyTextAlignPositionedElementBehavior, Bool, bool, false, "", "") \
+diff --git a/Source/WebKit/UIProcess/API/C/WKUserMediaPermissionCheck.cpp b/Source/WebKit/UIProcess/API/C/WKUserMediaPermissionCheck.cpp
+index 4403cd75ff3..68a338c3f4e 100644
+--- a/Source/WebKit/UIProcess/API/C/WKUserMediaPermissionCheck.cpp
++++ b/Source/WebKit/UIProcess/API/C/WKUserMediaPermissionCheck.cpp
+@@ -25,7 +25,7 @@
+  */
+ 
+ #include "config.h"
+-#include "WKUserMediaPermissionCheck.h"
++#include <WebKit/WKUserMediaPermissionCheck.h>
+ 
+ #include "UserMediaPermissionCheckProxy.h"
+ #include "WKAPICast.h"
+diff --git a/Source/cmake/FindQt5WebRTC.cmake b/Source/cmake/FindQt5WebRTC.cmake
+new file mode 100644
+index 00000000000..9a01c04c2de
+--- /dev/null
++++ b/Source/cmake/FindQt5WebRTC.cmake
+@@ -0,0 +1,21 @@
++find_package(PkgConfig)
++pkg_check_modules(PC_QT5WEBRTC Qt5WebRTC)
++
++find_path(QT5WEBRTC_INCLUDE_DIRS
++    NAMES wrtcint.h
++    HINTS ${PC_QT5WEBRTC_INCLUDE_DIRS} ${PC_QT5WEBRTC_INCLUDE_DIRS}
++)
++
++set(QT5WEBRTC_LIBRARIES "")
++set(QT5WEBRTC_NAMES ${PC_QT5WEBRTC_LIBRARIES})
++foreach (_library ${QT5WEBRTC_NAMES})
++  find_library(QT5WEBRTC_LIBRARIES_${_library} ${_library}
++    HINTS ${PC_QT5WEBRTC_LIBDIR} ${PC_QT5WEBRTC_LIBRARY_DIRS}
++  )
++  set(QT5WEBRTC_LIBRARIES ${QT5WEBRTC_LIBRARIES} ${QT5WEBRTC_LIBRARIES_${_library}})
++endforeach ()
++
++include(FindPackageHandleStandardArgs)
++FIND_PACKAGE_HANDLE_STANDARD_ARGS(QT5WEBRTC DEFAULT_MSG QT5WEBRTC_INCLUDE_DIRS QT5WEBRTC_LIBRARIES)
++
++message(STATUS "found qt5webrtc: ${QT5WEBRTC_LIBRARIES}")
+diff --git a/Source/cmake/OptionsWPE.cmake b/Source/cmake/OptionsWPE.cmake
+index 1536a5d85be..606b19dbec3 100644
+--- a/Source/cmake/OptionsWPE.cmake
++++ b/Source/cmake/OptionsWPE.cmake
+@@ -116,11 +116,16 @@ if (USE_WPEWEBKIT_BACKEND_BCM_NEXUS_WAYLAND)
+ endif(USE_WPEWEBKIT_BACKEND_BCM_NEXUS_WAYLAND)
+ 
+ if (ENABLE_MEDIA_STREAM OR ENABLE_WEB_RTC)
+-    find_package(OpenWebRTC)
+-    if (NOT OPENWEBRTC_FOUND)
+-        message(FATAL_ERROR "OpenWebRTC is needed for ENABLE_MEDIA_STREAM and ENABLE_WEB_RTC.")
++    find_package(Qt5WebRTC)
++    if (QT5WEBRTC_FOUND)
++        SET_AND_EXPOSE_TO_BUILD(USE_QT5WEBRTC TRUE)
++    else ()
++        find_package(OpenWebRTC)
++        if (NOT OPENWEBRTC_FOUND)
++            message(FATAL_ERROR "OpenWebRTC is needed for ENABLE_MEDIA_STREAM.")
++        endif ()
++        SET_AND_EXPOSE_TO_BUILD(USE_OPENWEBRTC TRUE)
+     endif ()
+-    SET_AND_EXPOSE_TO_BUILD(USE_OPENWEBRTC TRUE)
+ endif ()
+ 
+ if (ENABLE_ACCELERATED_2D_CANVAS)
+-- 
+2.16.2
+

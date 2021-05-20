@@ -1,0 +1,27 @@
+From 6a46aadd63c47f2188edfcf75b623c25f3757f10 Mon Sep 17 00:00:00 2001
+From: Siva Sankar Raja <sivasankar_raja@comcast.com>
+Source: COMCAST
+License: LICENSE-LGPL-2.1
+Upstream-Status: Pending
+Signed-off-by: Siva Sankar Raja <sivasankar_raja@comcast.com>
+Date: Wed, 10 Jul 2019 12:11:42 +0000
+Subject: [PATCH] Disable memory pressure relief logging
+
+---
+ Source/WebKit/UIProcess/WebProcessPool.cpp | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+Index: git/Source/WebKit/UIProcess/WebProcessPool.cpp
+===================================================================
+--- git.orig/Source/WebKit/UIProcess/WebProcessPool.cpp
++++ git/Source/WebKit/UIProcess/WebProcessPool.cpp
+@@ -961,7 +961,8 @@ void WebProcessPool::initializeNewWebPro
+ #endif
+ 
+ #if OS(LINUX)
+-    parameters.shouldEnableMemoryPressureReliefLogging = true;
++    static bool enableReliefLogging = !!getenv("WPE_ENABLE_RELIEF_LOGGING");
++    parameters.shouldEnableMemoryPressureReliefLogging = enableReliefLogging;
+ #endif
+ 
+ #if PLATFORM(WAYLAND) && USE(EGL)

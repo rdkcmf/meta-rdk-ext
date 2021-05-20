@@ -1,0 +1,197 @@
+commit dcd546852bd8a52112fdeaf30da6b7c0dc2807ba
+Author: Paul Duree <Paul.Duree@symphonyteleca.com>
+Date:   Thu May 8 19:39:32 2014 +0000
+
+JIRA: WKIT-205
+
+Backport key codes for multimedia keys to Qt 5.1.1.
+
+This patch is imported from rdk/components/opensource/qt5_1/generic.
+This patch is required by xre for some of the keys mentioned
+in this patch Qt::Key_Yellow.
+
+diff --git a/src/corelib/global/qnamespace.h b/src/corelib/global/qnamespace.h
+index 25c47d5..91d8223 100644
+--- a/src/corelib/global/qnamespace.h
++++ b/src/corelib/global/qnamespace.h
+@@ -899,7 +899,7 @@ public:
+         Key_BrightnessAdjust = 0x010000c2,
+         Key_Finance = 0x010000c3,
+         Key_Community = 0x010000c4,
+-        Key_AudioRewind = 0x010000c5,
++        Key_AudioRewind = 0x010000c5, // Media rewind
+         Key_BackForward = 0x010000c6,
+         Key_ApplicationLeft = 0x010000c7,
+         Key_ApplicationRight = 0x010000c8,
+@@ -911,7 +911,7 @@ public:
+         Key_Close = 0x010000ce,
+         Key_Copy = 0x010000cf,
+         Key_Cut = 0x010000d0,
+-        Key_Display = 0x010000d1,
++        Key_Display = 0x010000d1, // Output switch key
+         Key_DOS = 0x010000d2,
+         Key_Documents = 0x010000d3,
+         Key_Excel = 0x010000d4,
+@@ -960,9 +960,9 @@ public:
+         Key_Bluetooth = 0x010000ff,
+         Key_WLAN = 0x01000100,
+         Key_UWB = 0x01000101,
+-        Key_AudioForward = 0x01000102,
+-        Key_AudioRepeat = 0x01000103,
+-        Key_AudioRandomPlay = 0x01000104,
++        Key_AudioForward = 0x01000102, // Media fast-forward
++        Key_AudioRepeat = 0x01000103, // Toggle repeat mode
++        Key_AudioRandomPlay = 0x01000104, // Toggle shuffle mode
+         Key_Subtitle = 0x01000105,
+         Key_AudioCycleTrack = 0x01000106,
+         Key_Time = 0x01000107,
+@@ -981,7 +981,19 @@ public:
+         Key_TouchpadOff = 0x01000112,
+ 
+         Key_MicMute = 0x01000113,
+-
++//COMCAST MODIFICATION BEGIN [BACKPORT]
++        Key_Red = 0x01000114,
++        Key_Green = 0x01000115,
++        Key_Yellow = 0x01000116,
++        Key_Blue = 0x01000117,
++
++        Key_ChannelUp = 0x01000118,
++        Key_ChannelDown = 0x01000119,
++
++        Key_Guide    = 0x0100011a,
++        Key_Info     = 0x0100011b,
++        Key_Settings = 0x0100011c,
++//COMCAST MODIFICATION END [BACKPORT]
+         Key_MediaLast = 0x0100ffff,
+ 
+         // Keypad navigation keys
+@@ -999,7 +1011,9 @@ public:
+         //Key_Jisho   = 0x01020007, // IME: Dictionary key
+         //Key_Oyayubi_Left = 0x01020008, // IME: Left Oyayubi key
+         //Key_Oyayubi_Right = 0x01020009, // IME: Right Oyayubi key
+-
++//COMCAST MODIFICATION BEGIN [BACKPORT]
++        Key_Exit    = 0x0102000a,
++//COMCAST MODIFICATION END [BACKPORT]
+         // Device keys
+         Key_Context1 = 0x01100000,
+         Key_Context2 = 0x01100001,
+diff --git a/src/platformsupport/input/evdevkeyboard/qevdevkeyboard_defaultmap_p.h b/src/platformsupport/input/evdevkeyboard/qevdevkeyboard_defaultmap_p.h
+index 2aa8248..e1baf11 100644
+--- a/src/platformsupport/input/evdevkeyboard/qevdevkeyboard_defaultmap_p.h
++++ b/src/platformsupport/input/evdevkeyboard/qevdevkeyboard_defaultmap_p.h
+@@ -42,6 +42,11 @@
+ #ifndef QEVDEVKEYBOARDHANDLER_DEFAULTMAP_P_H
+ #define QEVDEVKEYBOARDHANDLER_DEFAULTMAP_P_H
+ 
++//COMCAST MODIFICATION BEGIN [BACKPORT]
++#include "qnamespace.h"
++#include "linux/input.h"
++//COMCAST MODIFICATION END [BACKPORT]
++
+ // no QT_BEGIN_NAMESPACE, since we include it internally...
+ 
+ const QEvdevKeyboardMap::Mapping QEvdevKeyboardHandler::s_keymap_default[] = {
+@@ -631,7 +636,36 @@ const QEvdevKeyboardMap::Mapping QEvdevKeyboardHandler::s_keymap_default[] = {
+     { 111, 0xffff, 0x01000007, 0x00, 0x00, 0x0000 },
+     { 111, 0xffff, 0x01000000, 0x06, 0x08, 0x0200 },
+     { 111, 0xffff, 0x01000000, 0x0c, 0x08, 0x0200 },
+-    { 119, 0xffff, 0x01000008, 0x00, 0x00, 0x0000 },
++
++//COMCAST MODIFICATION BEGIN [BACKPORT]
++    // 113 -> 248
++    { KEY_MUTE,         0xffff, Qt::Key_VolumeMute,     0x00, 0x00, 0x0000 },
++    { KEY_VOLUMEDOWN,   0xffff, Qt::Key_VolumeDown,     0x00, 0x00, 0x0000 },
++    { KEY_VOLUMEUP,     0xffff, Qt::Key_VolumeUp,       0x00, 0x00, 0x0000 },
++    { KEY_PAUSE,        0xffff, Qt::Key_Pause,          0x00, 0x00, 0x0000 },
++    { KEY_STOP,         0xffff, Qt::Key_Stop,           0x00, 0x00, 0x0000 },
++    { KEY_SETUP,        0xffff, Qt::Key_Settings,       0x00, 0x00, 0x0000 },
++    { KEY_RECORD,       0xffff, Qt::Key_MediaRecord,    0x00, 0x00, 0x0000 },
++    { KEY_REWIND,       0xffff, Qt::Key_AudioRewind,    0x00, 0x00, 0x0000 },
++    { KEY_PLAYPAUSE,    0xffff, Qt::Key_MediaTogglePlayPause,  0x00, 0x00, 0x0000 },
++    { KEY_PLAY,         0xffff, Qt::Key_MediaPlay,      0x00, 0x00, 0x0000 },
++    { KEY_FASTFORWARD,  0xffff, Qt::Key_AudioForward,   0x00, 0x00, 0x0000 },
++    { KEY_CANCEL,       0xffff, Qt::Key_Cancel,         0x00, 0x00, 0x0000 },
++    { 248,              0xffff, Qt::Key_MicMute,        0x00, 0x00, 0x0000 },
++    // 0x160 ->
++    { KEY_SELECT,       0xffff, Qt::Key_Select,         0x00, 0x00, 0x0000 },
++    { KEY_CLEAR,        0xffff, Qt::Key_Clear,          0x00, 0x00, 0x0000 },
++    { KEY_EXIT,         0xffff, Qt::Key_Exit,           0x00, 0x00, 0x0000 },
++    { KEY_INFO,         0xffff, Qt::Key_Info,           0x00, 0x00, 0x0000 },
++    { KEY_PROGRAM,      0xffff, Qt::Key_Guide,          0x00, 0x00, 0x0000 },
++    { KEY_CALENDAR,     0xffff, Qt::Key_Calendar,       0x00, 0x00, 0x0000 },
++    { KEY_RED,          0xffff, Qt::Key_Red,            0x00, 0x00, 0x0000 },
++    { KEY_GREEN,        0xffff, Qt::Key_Green,          0x00, 0x00, 0x0000 },
++    { KEY_YELLOW,       0xffff, Qt::Key_Yellow,         0x00, 0x00, 0x0000 },
++    { KEY_BLUE,         0xffff, Qt::Key_Blue,           0x00, 0x00, 0x0000 },
++    { KEY_CHANNELUP,    0xffff, Qt::Key_ChannelUp,      0x00, 0x00, 0x0000 },
++    { KEY_CHANNELDOWN,  0xffff, Qt::Key_ChannelDown,    0x00, 0x00, 0x0000 },
++//COMCAST MODIFICATION END [BACKPORT]
+ };
+ 
+ const QEvdevKeyboardMap::Composing QEvdevKeyboardHandler::s_keycompose_default[] = {
+diff --git a/src/plugins/platforms/directfb/qdirectfbconvenience.cpp b/src/plugins/platforms/directfb/qdirectfbconvenience.cpp
+index 939d8c0..2e74f2c 100644
+--- a/src/plugins/platforms/directfb/qdirectfbconvenience.cpp
++++ b/src/plugins/platforms/directfb/qdirectfbconvenience.cpp
+@@ -281,11 +281,29 @@ QDirectFbKeyMap::QDirectFbKeyMap()
+     insert(DIKS_CLEAR                 , Qt::Key_Clear);
+     insert(DIKS_MENU                  , Qt::Key_Menu);
+     insert(DIKS_HELP                  , Qt::Key_Help);
++//COMCAST MODIFICATION BEGIN [BACKPORT]
++    insert(DIKS_INFO                  , Qt::Key_Info);
++    insert(DIKS_EXIT                  , Qt::Key_Exit);
++    insert(DIKS_SETUP                 , Qt::Key_Settings);
+ 
++    insert(DIKS_CD                    , Qt::Key_CD);
++//COMCAST MODIFICATION END [BACKPORT]
+     insert(DIKS_INTERNET              , Qt::Key_HomePage);
+     insert(DIKS_MAIL                  , Qt::Key_LaunchMail);
+     insert(DIKS_FAVORITES             , Qt::Key_Favorites);
++//COMCAST MODIFICATION BEGIN [BACKPORT]
++    insert(DIKS_PHONE                 , Qt::Key_Phone);
++    insert(DIKS_PROGRAM               , Qt::Key_Guide);
++    insert(DIKS_TIME                  , Qt::Key_Time);
+ 
++    insert(DIKS_RED                   , Qt::Key_Red);
++    insert(DIKS_GREEN                 , Qt::Key_Green);
++    insert(DIKS_YELLOW                , Qt::Key_Yellow);
++    insert(DIKS_BLUE                  , Qt::Key_Blue);
++
++    insert(DIKS_CHANNEL_UP            , Qt::Key_ChannelUp);
++    insert(DIKS_CHANNEL_DOWN          , Qt::Key_ChannelDown);
++//COMCAST MODIFICATION END [BACKPORT]
+     insert(DIKS_BACK                  , Qt::Key_Back);
+     insert(DIKS_FORWARD               , Qt::Key_Forward);
+     insert(DIKS_VOLUME_UP             , Qt::Key_VolumeUp);
+diff --git a/src/plugins/platforms/xcb/qxcbkeyboard.cpp b/src/plugins/platforms/xcb/qxcbkeyboard.cpp
+index 38cbfaf..b1d2d61 100644
+--- a/src/plugins/platforms/xcb/qxcbkeyboard.cpp
++++ b/src/plugins/platforms/xcb/qxcbkeyboard.cpp
+@@ -243,6 +243,12 @@
+ #define XF86XK_Select              0x1008FFA0
+ #define XF86XK_View                0x1008FFA1
+ #define XF86XK_TopMenu             0x1008FFA2
++//COMCAST MODIFICATION BEGIN [BACKPORT]
++#define XF86XK_Red                 0x1008FFA3
++#define XF86XK_Green               0x1008FFA4
++#define XF86XK_Yellow              0x1008FFA5
++#define XF86XK_Blue                0x1008FFA6
++//COMCAST MODIFICATION END [BACKPORT]
+ #define XF86XK_Suspend             0x1008FFA7
+ #define XF86XK_Hibernate           0x1008FFA8
+ #define XF86XK_TouchpadToggle      0x1008FFA9
+@@ -538,6 +544,12 @@ static const unsigned int KeyTbl[] = {
+     XF86XK_Select,              Qt::Key_Select,
+     XF86XK_View,                Qt::Key_View,
+     XF86XK_TopMenu,             Qt::Key_TopMenu,
++//COMCAST MODIFICATION BEGIN [BACKPORT]
++    XF86XK_Red,                 Qt::Key_Red,
++    XF86XK_Green,               Qt::Key_Green,
++    XF86XK_Yellow,              Qt::Key_Yellow,
++    XF86XK_Blue,                Qt::Key_Blue,
++//COMCAST MODIFICATION END [BACKPORT]
+     XF86XK_Bluetooth,           Qt::Key_Bluetooth,
+     XF86XK_Suspend,             Qt::Key_Suspend,
+     XF86XK_Hibernate,           Qt::Key_Hibernate,

@@ -1,0 +1,93 @@
+From ba2e9c893a263aa1bd8c9f957e0902adf778ec77 Mon Sep 17 00:00:00 2001
+From: krishnapriya kanagaraj <krishnapriya_kanagaraj@comcast.com>
+Source: COMCAST
+License: LICENSE-LGPL-2.1
+Upstream-Status: Pending
+Signed-off-by: krishnapriya kanagaraj <krishnapriya_kanagaraj@comcast.com>
+Date: Thu, 20 Feb 2020 10:32:28 +0000
+Subject: [PATCH] XRE-14693: Fixed Relay candidate resolving on libwebrtc
+
+Reason for change: Relay candidate are not generated on libwebrtc.
+Test Procedure: Disable Host candidate and
+ ensure the Relay candidate are generated.
+Risks: Low
+Signed-off-by: Krishna Priya Kanagaraj <KrishnaPriya_Kanagaraj@comcast.com>
+---
+ Source/WebCore/platform/network/DNS.h                  | 11 +++++++++++
+ .../platform/network/soup/DNSResolveQueueSoup.cpp      | 18 +++++++++++++++---
+ .../NetworkProcess/webrtc/NetworkRTCProvider.cpp       |  5 ++++-
+ 3 files changed, 30 insertions(+), 4 deletions(-)
+
+Index: git/Source/WebCore/platform/network/DNS.h
+===================================================================
+--- git.orig/Source/WebCore/platform/network/DNS.h
++++ git/Source/WebCore/platform/network/DNS.h
+@@ -41,12 +41,23 @@ public:
+     {
+         memset(&m_address, 0, sizeof(struct sockaddr_in));
+         m_address = address;
++        m_family = AF_INET;
++    }
++    explicit IPAddress(const struct sockaddr_in6& address)
++    {
++        memset(&p_address, 0, sizeof(struct sockaddr_in6));
++        p_address = address;
++        m_family = AF_INET6;
+     }
+ 
+     const struct in_addr& getSinAddr() { return m_address.sin_addr; };
++    const struct in6_addr& getSin6Addr() {return p_address.sin6_addr;};
++    const int family() {return m_family;};
+ 
+ private:
++    int m_family;
+     struct sockaddr_in m_address;
++    struct sockaddr_in6 p_address;
+ };
+ 
+ enum class DNSError { Unknown, CannotResolve, Cancelled };
+Index: git/Source/WebCore/platform/network/soup/DNSResolveQueueSoup.cpp
+===================================================================
+--- git.orig/Source/WebCore/platform/network/soup/DNSResolveQueueSoup.cpp
++++ git/Source/WebCore/platform/network/soup/DNSResolveQueueSoup.cpp
+@@ -132,9 +132,21 @@ static void resolvedWithObserverCallback
+     Vector<WebCore::IPAddress> addresses;
+     addresses.reserveInitialCapacity(1);
+     int len;
+-    auto* ipAddress = reinterpret_cast<const struct sockaddr_in*>(soup_address_get_sockaddr(address, &len));
+-    for (unsigned i = 0; i < sizeof(*ipAddress) / len; i++)
+-        addresses.uncheckedAppend(WebCore::IPAddress(ipAddress[i]));
++    auto* ipAddress = soup_address_get_sockaddr(address, &len);
++    if(ipAddress->sa_family == AF_INET)
++    {
++        auto* ipAddress4 = reinterpret_cast<const struct sockaddr_in*>(ipAddress);
++        for (unsigned i = 0; i < sizeof(*ipAddress4) / len; i++){
++            addresses.uncheckedAppend(WebCore::IPAddress(ipAddress4[i]));
++        }
++    }
++    else
++    {
++        auto* ipAddress6 = reinterpret_cast<const struct sockaddr_in6*>(ipAddress);
++        for (unsigned i = 0; i < sizeof(*ipAddress6) / len; i++){
++            addresses.uncheckedAppend(WebCore::IPAddress(ipAddress6[i]));
++        }
++    }
+ 
+     completionHandler(addresses);
+ }
+Index: git/Source/WebKit/NetworkProcess/webrtc/NetworkRTCProvider.cpp
+===================================================================
+--- git.orig/Source/WebKit/NetworkProcess/webrtc/NetworkRTCProvider.cpp
++++ git/Source/WebKit/NetworkProcess/webrtc/NetworkRTCProvider.cpp
+@@ -205,7 +205,10 @@ void NetworkRTCProvider::createResolver(
+         }
+ 
+         auto addresses = WTF::map(result.value(), [] (auto& address) {
+-            return RTCNetwork::IPAddress { rtc::IPAddress { address.getSinAddr() } };
++            if (address.family() == AF_INET)
++                return RTCNetwork::IPAddress { rtc::IPAddress { address.getSinAddr() } };
++            else
++                return RTCNetwork::IPAddress { rtc::IPAddress { address.getSin6Addr() } };
+         });
+ 
+         m_connection->connection().send(Messages::WebRTCResolver::SetResolvedAddress(addresses), identifier);

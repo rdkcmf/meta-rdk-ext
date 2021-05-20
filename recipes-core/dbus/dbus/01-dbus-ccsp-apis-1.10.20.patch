@@ -1,0 +1,873 @@
+Copyright (c) 2013, Georg Reinke (<guelfey at gmail dot com>), Google
+All rights reserved.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions
+are met:
+
+1. Redistributions of source code must retain the above copyright notice,
+this list of conditions and the following disclaimer.
+
+2. Redistributions in binary form must reproduce the above copyright
+notice, this list of conditions and the following disclaimer in the
+documentation and/or other materials provided with the distribution.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+"AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED
+TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF
+LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
+NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+Date: Oct 31 15:37:55 2017
+
+From: 6e3aeeb93738fbb31f7b6093f5e0019601b452c2 Nov 24 06:15:49 2017
+
+Subject: [PATCH] RDKCOM-394: dbus: add CCSP APIs patch for dbus 1.10.20 ( required for RDK-B with OE 2.4 )
+
+        When building RDK-B, the meta-rdk dbus .bbappend applies a version
+        specific patch to dbus to enable support for CCSP APIs. Currently no
+        patch exists for dbus 1.10.10 (ie the OE 2.2 version), which causes
+        OE 2.2 based RDK-B builds to fail.
+
+        To unblock development and testing of OE 2.2, copy the existing CCSP
+        APIs patch for dbus 1.10.6 and apply it to dbus 1.10.10. Note that
+        the patch has been build tested only and further updates may still be
+        required to fully support dbus 1.10.10.
+
+Source: LGI
+
+Upstream-Status: Pending
+
+Signed-off-by: Andre McCurdy <armccurdy@gmail.com>
+---
+
+diff --git a/bus/activation.c b/bus/activation.c
+index 1a98af6..6389e29 100644
+--- a/bus/activation.c
++++ b/bus/activation.c
+@@ -175,7 +175,7 @@ bus_pending_activation_unref (BusPendingActivation *pending_activation)
+ 
+   if (pending_activation->timeout_added)
+     {
+-      _dbus_loop_remove_timeout (bus_context_get_loop (pending_activation->activation->context),
++      dbus_loop_remove_timeout (bus_context_get_loop (pending_activation->activation->context),
+                                  pending_activation->timeout);
+       pending_activation->timeout_added = FALSE;
+     }
+@@ -1286,7 +1286,7 @@ pending_activation_failed (BusPendingActivation *pending_activation,
+ {
+   /* FIXME use preallocated OOM messages instead of bus_wait_for_memory() */
+   while (!try_send_activation_failure (pending_activation, how))
+-    _dbus_wait_for_memory ();
++    dbus_wait_for_memory ();
+ 
+   /* Destroy this pending activation */
+   _dbus_hash_table_remove_string (pending_activation->activation->pending_activations,
+@@ -1439,7 +1439,7 @@ add_babysitter_watch (DBusWatch      *watch,
+ {
+   BusPendingActivation *pending_activation = data;
+ 
+-  return _dbus_loop_add_watch (
++  return dbus_loop_add_watch (
+       bus_context_get_loop (pending_activation->activation->context),
+       watch);
+ }
+@@ -1450,7 +1450,7 @@ remove_babysitter_watch (DBusWatch      *watch,
+ {
+   BusPendingActivation *pending_activation = data;
+ 
+-  _dbus_loop_remove_watch (bus_context_get_loop (pending_activation->activation->context),
++  dbus_loop_remove_watch (bus_context_get_loop (pending_activation->activation->context),
+                            watch);
+ }
+ 
+@@ -1460,7 +1460,7 @@ toggle_babysitter_watch (DBusWatch      *watch,
+ {
+   BusPendingActivation *pending_activation = data;
+ 
+-  _dbus_loop_toggle_watch (bus_context_get_loop (pending_activation->activation->context),
++  dbus_loop_toggle_watch (bus_context_get_loop (pending_activation->activation->context),
+                            watch);
+ }
+ 
+@@ -1905,7 +1905,7 @@ bus_activation_activate_service (BusActivation  *activation,
+           return FALSE;
+         }
+ 
+-      if (!_dbus_loop_add_timeout (bus_context_get_loop (activation->context),
++      if (!dbus_loop_add_timeout (bus_context_get_loop (activation->context),
+                                    pending_activation->timeout))
+         {
+           _dbus_verbose ("Failed to add timeout for pending activation\n");
+diff --git a/bus/bus.c b/bus/bus.c
+index fd4ab9e..a3e8867 100644
+--- a/bus/bus.c
++++ b/bus/bus.c
+@@ -116,7 +116,7 @@ add_server_watch (DBusWatch  *watch,
+ 
+   context = server_get_context (server);
+ 
+-  return _dbus_loop_add_watch (context->loop, watch);
++  return dbus_loop_add_watch (context->loop, watch);
+ }
+ 
+ static void
+@@ -128,7 +128,7 @@ remove_server_watch (DBusWatch  *watch,
+ 
+   context = server_get_context (server);
+ 
+-  _dbus_loop_remove_watch (context->loop, watch);
++  dbus_loop_remove_watch (context->loop, watch);
+ }
+ 
+ static void
+@@ -140,7 +140,7 @@ toggle_server_watch (DBusWatch  *watch,
+ 
+   context = server_get_context (server);
+ 
+-  _dbus_loop_toggle_watch (context->loop, watch);
++  dbus_loop_toggle_watch (context->loop, watch);
+ }
+ 
+ static dbus_bool_t
+@@ -152,7 +152,7 @@ add_server_timeout (DBusTimeout *timeout,
+ 
+   context = server_get_context (server);
+ 
+-  return _dbus_loop_add_timeout (context->loop, timeout);
++  return dbus_loop_add_timeout (context->loop, timeout);
+ }
+ 
+ static void
+@@ -164,7 +164,7 @@ remove_server_timeout (DBusTimeout *timeout,
+ 
+   context = server_get_context (server);
+ 
+-  _dbus_loop_remove_timeout (context->loop, timeout);
++  dbus_loop_remove_timeout (context->loop, timeout);
+ }
+ 
+ static void
+@@ -776,7 +776,7 @@ bus_context_new (const DBusString *config_file,
+       goto failed;
+     }
+ 
+-  context->loop = _dbus_loop_new ();
++  context->loop = dbus_loop_new ();
+   if (context->loop == NULL)
+     {
+       BUS_SET_OOM (error);
+@@ -1147,7 +1147,7 @@ bus_context_unref (BusContext *context)
+ 
+       if (context->loop)
+         {
+-          _dbus_loop_unref (context->loop);
++          dbus_loop_unref (context->loop);
+           context->loop = NULL;
+         }
+ 
+diff --git a/bus/connection.c b/bus/connection.c
+index 02d6c22..694a87d 100644
+--- a/bus/connection.c
++++ b/bus/connection.c
+@@ -236,7 +236,7 @@ bus_connection_disconnected (DBusConnection *connection)
+       dbus_error_init (&error);
+         
+       while ((transaction = bus_transaction_new (d->connections->context)) == NULL)
+-        _dbus_wait_for_memory ();
++        dbus_wait_for_memory ();
+         
+       if (!bus_service_remove_owner (service, connection,
+                                      transaction, &error))
+@@ -247,7 +247,7 @@ bus_connection_disconnected (DBusConnection *connection)
+             {
+               dbus_error_free (&error);
+               bus_transaction_cancel_and_free (transaction);
+-              _dbus_wait_for_memory ();
++              dbus_wait_for_memory ();
+               goto retry;
+             }
+           else
+@@ -286,7 +286,7 @@ bus_connection_disconnected (DBusConnection *connection)
+ 
+   if (d->pending_unix_fds_timeout)
+     {
+-      _dbus_loop_remove_timeout (bus_context_get_loop (d->connections->context),
++      dbus_loop_remove_timeout (bus_context_get_loop (d->connections->context),
+                                  d->pending_unix_fds_timeout);
+       _dbus_timeout_unref (d->pending_unix_fds_timeout);
+     }
+@@ -354,7 +354,7 @@ add_connection_watch (DBusWatch      *watch,
+ {
+   DBusConnection *connection = data;
+ 
+-  return _dbus_loop_add_watch (connection_get_loop (connection), watch);
++  return dbus_loop_add_watch (connection_get_loop (connection), watch);
+ }
+ 
+ static void
+@@ -363,7 +363,7 @@ remove_connection_watch (DBusWatch      *watch,
+ {
+   DBusConnection *connection = data;
+   
+-  _dbus_loop_remove_watch (connection_get_loop (connection), watch);
++  dbus_loop_remove_watch (connection_get_loop (connection), watch);
+ }
+ 
+ static void
+@@ -372,7 +372,7 @@ toggle_connection_watch (DBusWatch      *watch,
+ {
+   DBusConnection *connection = data;
+ 
+-  _dbus_loop_toggle_watch (connection_get_loop (connection), watch);
++  dbus_loop_toggle_watch (connection_get_loop (connection), watch);
+ }
+ 
+ static dbus_bool_t
+@@ -381,7 +381,7 @@ add_connection_timeout (DBusTimeout    *timeout,
+ {
+   DBusConnection *connection = data;
+   
+-  return _dbus_loop_add_timeout (connection_get_loop (connection), timeout);
++  return dbus_loop_add_timeout (connection_get_loop (connection), timeout);
+ }
+ 
+ static void
+@@ -390,7 +390,7 @@ remove_connection_timeout (DBusTimeout    *timeout,
+ {
+   DBusConnection *connection = data;
+   
+-  _dbus_loop_remove_timeout (connection_get_loop (connection), timeout);
++  dbus_loop_remove_timeout (connection_get_loop (connection), timeout);
+ }
+ 
+ static void
+@@ -402,8 +402,8 @@ dispatch_status_function (DBusConnection    *connection,
+   
+   if (new_status != DBUS_DISPATCH_COMPLETE)
+     {
+-      while (!_dbus_loop_queue_dispatch (loop, connection))
+-        _dbus_wait_for_memory ();
++      while (!dbus_loop_queue_dispatch (loop, connection))
++        dbus_wait_for_memory ();
+     }
+ }
+ 
+@@ -486,7 +486,7 @@ bus_connections_new (BusContext *context)
+   if (connections->pending_replies == NULL)
+     goto failed_4;
+   
+-  if (!_dbus_loop_add_timeout (bus_context_get_loop (context),
++  if (!dbus_loop_add_timeout (bus_context_get_loop (context),
+                                connections->expire_timeout))
+     goto failed_5;
+   
+@@ -560,7 +560,7 @@ bus_connections_unref (BusConnections *connections)
+ 
+       bus_expire_list_free (connections->pending_replies);
+       
+-      _dbus_loop_remove_timeout (bus_context_get_loop (connections->context),
++      dbus_loop_remove_timeout (bus_context_get_loop (connections->context),
+                                  connections->expire_timeout);
+       
+       _dbus_timeout_unref (connections->expire_timeout);
+@@ -802,7 +802,7 @@ bus_connections_setup_connection (BusConnections *connections,
+ 
+   if (dbus_connection_get_dispatch_status (connection) != DBUS_DISPATCH_COMPLETE)
+     {
+-      if (!_dbus_loop_queue_dispatch (bus_context_get_loop (connections->context), connection))
++      if (!dbus_loop_queue_dispatch (bus_context_get_loop (connections->context), connection))
+         {
+           bus_dispatch_remove_connection (connection);
+           goto out;
+@@ -817,7 +817,7 @@ bus_connections_setup_connection (BusConnections *connections,
+     goto out;
+ 
+   _dbus_timeout_set_enabled (d->pending_unix_fds_timeout, FALSE);
+-  if (!_dbus_loop_add_timeout (bus_context_get_loop (connections->context),
++  if (!dbus_loop_add_timeout (bus_context_get_loop (connections->context),
+                                d->pending_unix_fds_timeout))
+     goto out;
+ 
+diff --git a/bus/dir-watch-inotify.c b/bus/dir-watch-inotify.c
+index ce19fdc..4dc275e 100644
+--- a/bus/dir-watch-inotify.c
++++ b/bus/dir-watch-inotify.c
+@@ -203,10 +203,10 @@ _shutdown_inotify (void *data)
+ 
+   if (watch != NULL)
+     {
+-      _dbus_loop_remove_watch (loop, watch);
++      dbus_loop_remove_watch (loop, watch);
+       _dbus_watch_invalidate (watch);
+       _dbus_watch_unref (watch);
+-      _dbus_loop_unref (loop);
++      dbus_loop_unref (loop);
+     }
+   watch = NULL;
+   loop = NULL;
+@@ -243,7 +243,7 @@ _init_inotify (BusContext *context)
+       _dbus_fd_set_close_on_exec (inotify_fd);
+ 
+       loop = bus_context_get_loop (context);
+-      _dbus_loop_ref (loop);
++      dbus_loop_ref (loop);
+ 
+       watch = _dbus_watch_new (inotify_fd, DBUS_WATCH_READABLE, TRUE,
+                                _handle_inotify_watch, NULL, NULL);
+@@ -254,7 +254,7 @@ _init_inotify (BusContext *context)
+           goto out;
+         }
+ 
+-      if (!_dbus_loop_add_watch (loop, watch))
++      if (!dbus_loop_add_watch (loop, watch))
+         {
+           _dbus_warn ("Unable to add reload watch to main loop");
+           _dbus_watch_unref (watch);
+diff --git a/bus/dispatch.c b/bus/dispatch.c
+index edfa1b4..658e963 100644
+--- a/bus/dispatch.c
++++ b/bus/dispatch.c
+@@ -232,7 +232,7 @@ bus_dispatch (DBusConnection *connection,
+    * until we can.
+    */
+   while (!bus_connection_preallocate_oom_error (connection))
+-    _dbus_wait_for_memory ();
++    dbus_wait_for_memory ();
+ 
+   /* Ref connection in case we disconnect it at some point in here */
+   dbus_connection_ref (connection);
+diff --git a/bus/expirelist.c b/bus/expirelist.c
+index 9a3886e..89ae988 100644
+--- a/bus/expirelist.c
++++ b/bus/expirelist.c
+@@ -65,7 +65,7 @@ bus_expire_list_new (DBusLoop      *loop,
+ 
+   _dbus_timeout_set_enabled (list->timeout, FALSE);
+ 
+-  if (!_dbus_loop_add_timeout (list->loop, list->timeout))
++  if (!dbus_loop_add_timeout (list->loop, list->timeout))
+     goto failed;
+ 
+   return list;
+@@ -84,7 +84,7 @@ bus_expire_list_free (BusExpireList *list)
+ {
+   _dbus_assert (list->items == NULL);
+ 
+-  _dbus_loop_remove_timeout (list->loop, list->timeout);
++  dbus_loop_remove_timeout (list->loop, list->timeout);
+ 
+   _dbus_timeout_unref (list->timeout);
+ 
+@@ -160,7 +160,7 @@ do_expiration_with_monotonic_time (BusExpireList *list,
+            */
+           if (!(* list->expire_func) (list, link, list->data))
+             {
+-              next_interval = _dbus_get_oom_wait ();
++              next_interval = dbus_get_oom_wait ();
+               break;
+             }
+         }
+diff --git a/bus/main.c b/bus/main.c
+index c38f252..f076784 100644
+--- a/bus/main.c
++++ b/bus/main.c
+@@ -251,7 +251,7 @@ handle_reload_watch (DBusWatch    *watch,
+   char action = '\0';
+ 
+   while (!_dbus_string_init (&str))
+-    _dbus_wait_for_memory ();
++    dbus_wait_for_memory ();
+ 
+   if ((reload_pipe[RELOAD_READ_END].fd > 0) &&
+       _dbus_read_socket (reload_pipe[RELOAD_READ_END], &str, 1) != 1)
+@@ -300,7 +300,7 @@ handle_reload_watch (DBusWatch    *watch,
+         loop = bus_context_get_loop (context);
+         if (loop != NULL)
+           {
+-            _dbus_loop_quit (loop);
++            dbus_loop_quit (loop);
+           }
+       }
+       break;
+@@ -341,7 +341,7 @@ setup_reload_pipe (DBusLoop *loop)
+       exit (1);
+     }
+ 
+-  if (!_dbus_loop_add_watch (loop, watch))
++  if (!dbus_loop_add_watch (loop, watch))
+     {
+       _dbus_warn ("Unable to add reload watch to main loop: %s\n",
+ 		  error.message);
+@@ -354,7 +354,7 @@ setup_reload_pipe (DBusLoop *loop)
+ static void
+ close_reload_pipe (DBusWatch **watch)
+ {
+-    _dbus_loop_remove_watch (bus_context_get_loop (context), *watch);
++    dbus_loop_remove_watch (bus_context_get_loop (context), *watch);
+     _dbus_watch_invalidate (*watch);
+     _dbus_watch_unref (*watch);
+     *watch = NULL;
+@@ -681,7 +681,7 @@ main (int argc, char **argv)
+ #endif /* DBUS_UNIX */
+ 
+   _dbus_verbose ("We are on D-Bus...\n");
+-  _dbus_loop_run (bus_context_get_loop (context));
++  dbus_loop_run (bus_context_get_loop (context));
+ 
+   bus_context_shutdown (context);
+   bus_context_unref (context);
+diff --git a/bus/utils.c b/bus/utils.c
+index 7d24872..4442a74 100644
+--- a/bus/utils.c
++++ b/bus/utils.c
+@@ -42,7 +42,7 @@ bus_connection_dispatch_one_message  (DBusConnection *connection)
+   DBusDispatchStatus status;
+ 
+   while ((status = dbus_connection_dispatch (connection)) == DBUS_DISPATCH_NEED_MEMORY)
+-    _dbus_wait_for_memory ();
++    dbus_wait_for_memory ();
+   
+   return status == DBUS_DISPATCH_DATA_REMAINS;
+ }
+diff --git a/dbus/Makefile.am b/dbus/Makefile.am
+index a7b3491..90f86d3 100644
+--- a/dbus/Makefile.am
++++ b/dbus/Makefile.am
+@@ -123,13 +123,14 @@ DBUS_UTIL_arch_sources = 			\
+ endif
+ 
+ if HAVE_LINUX_EPOLL
+-DBUS_UTIL_arch_sources += dbus-socket-set-epoll.c
++DBUS_SHARED_arch_sources += dbus-socket-set-epoll.c
+ endif
+ 
+ dbusinclude_HEADERS=				\
+ 	dbus.h					\
+ 	dbus-address.h				\
+ 	dbus-bus.h				\
++	dbus-ccsp-apis.h			\
+ 	dbus-connection.h			\
+ 	dbus-errors.h				\
+ 	dbus-macros.h				\
+@@ -156,6 +157,7 @@ DBUS_LIB_SOURCES=				\
+ 	dbus-auth.c				\
+ 	dbus-auth.h				\
+ 	dbus-bus.c				\
++	dbus-ccsp-apis.c			\
+ 	dbus-connection.c			\
+ 	dbus-connection-internal.h		\
+ 	dbus-credentials.c			\
+@@ -202,9 +204,7 @@ DBUS_LIB_SOURCES=				\
+ 	dbus-transport.h			\
+ 	dbus-transport-protected.h		\
+ 	dbus-transport-socket.c			\
+-	dbus-transport-socket.h			\
+-	dbus-watch.c				\
+-	dbus-watch.h
++	dbus-transport-socket.h			
+ 
+ ### source code that goes in the installed client library
+ ### AND is generic utility functionality used by the
+@@ -221,6 +221,8 @@ DBUS_SHARED_SOURCES=				\
+ 	dbus-internals.h			\
+ 	dbus-list.c				\
+ 	dbus-list.h				\
++	dbus-mainloop.c				\
++	dbus-mainloop.h				\
+ 	dbus-marshal-basic.c			\
+ 	dbus-marshal-basic.h			\
+ 	dbus-memory.c				\
+@@ -228,6 +230,11 @@ DBUS_SHARED_SOURCES=				\
+ 	dbus-mempool.h				\
+ 	dbus-pipe.c                 \
+ 	dbus-pipe.h                 \
++	dbus-socket-set.h			\
++	dbus-socket-set.c			\
++	dbus-socket-set-poll.c			\
++	dbus-watch.c				\
++	dbus-watch.h                            \
+ 	dbus-string.c				\
+ 	dbus-string.h				\
+ 	dbus-string-private.h			\
+@@ -248,8 +255,6 @@ DBUS_UTIL_SOURCES=				\
+ 	dbus-auth-script.h			\
+ 	dbus-auth-util.c			\
+ 	dbus-credentials-util.c			\
+-	dbus-mainloop.c				\
+-	dbus-mainloop.h				\
+ 	dbus-marshal-byteswap-util.c		\
+ 	dbus-marshal-recursive-util.c		\
+ 	dbus-marshal-validate-util.c		\
+@@ -259,9 +264,6 @@ DBUS_UTIL_SOURCES=				\
+ 	dbus-shell.c				\
+ 	dbus-shell.h				\
+ 	$(DBUS_UTIL_arch_sources)		\
+-	dbus-socket-set.h			\
+-	dbus-socket-set.c			\
+-	dbus-socket-set-poll.c			\
+ 	dbus-spawn.h				\
+ 	dbus-string-util.c			\
+ 	dbus-sysdeps-util.c			\
+diff --git a/dbus/dbus-ccsp-apis.c b/dbus/dbus-ccsp-apis.c
+new file mode 100644
+index 0000000..20ff316
+--- /dev/null
++++ b/dbus/dbus-ccsp-apis.c
+@@ -0,0 +1,141 @@
++/* -*- mode: C; c-file-style: "gnu"; indent-tabs-mode: nil; -*- */
++/* dbus-ccsp-apis.c
++ *
++ * Copyright (C) 2003  Red Hat, Inc.
++ *
++ * Licensed under the Academic Free License version 2.1
++ *
++ * This program is free software; you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License as published by
++ * the Free Software Foundation; either version 2 of the License, or
++ * (at your option) any later version.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU General Public License for more details.
++ *
++ * You should have received a copy of the GNU General Public License
++ * along with this program; if not, write to the Free Software
++ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
++ *
++ */
++
++#include <dbus/dbus-ccsp-apis.h>
++#include <dbus/dbus-internals.h>
++#include <dbus/dbus-watch.h>
++#ifdef DBUS_UNIX
++#include <dbus/dbus-sysdeps-unix.h>
++#endif
++
++/* Handle the loop wakeup watch */
++dbus_bool_t wake_handler(DBusWatch *watch, unsigned int flags, void *data)
++{
++    char ch;
++    int fd = (int)data;
++    /* Read and discard */
++    while(read(fd, &ch, 1) == 1);
++}
++
++/* We only need 1 wake watch per mainloop process */
++DBusWatch *wake_watch = NULL;
++
++/* From dbus-mainloop */
++DBusLoop* dbus_loop_new(void)
++{
++    return _dbus_loop_new();
++}
++
++DBusLoop* dbus_loop_ref(DBusLoop *loop)
++{
++    return _dbus_loop_ref(loop);
++}
++
++void dbus_loop_unref(DBusLoop *loop) { _dbus_loop_unref(loop); }
++
++dbus_bool_t dbus_loop_add_watch(DBusLoop *loop, DBusWatch *watch)
++{
++    return _dbus_loop_add_watch(loop, watch);
++}
++
++void dbus_loop_remove_watch(DBusLoop *loop, DBusWatch *watch)
++{
++    _dbus_loop_remove_watch(loop, watch);
++}
++
++void dbus_loop_toggle_watch(DBusLoop *loop, DBusWatch *watch)
++{
++    _dbus_loop_toggle_watch(loop, watch);
++}
++
++dbus_bool_t dbus_loop_add_timeout(DBusLoop *loop, DBusTimeout *timeout)
++{
++    return _dbus_loop_add_timeout(loop, timeout);
++}
++
++void dbus_loop_remove_timeout(DBusLoop *loop, DBusTimeout *timeout)
++{
++     _dbus_loop_remove_timeout(loop, timeout);
++}
++
++dbus_bool_t dbus_loop_queue_dispatch(DBusLoop *loop, DBusConnection *connection)
++{
++    return _dbus_loop_queue_dispatch(loop, connection);
++}
++
++void dbus_loop_run(DBusLoop *loop)
++{
++     _dbus_loop_run(loop);
++}
++
++void dbus_loop_quit(DBusLoop *loop)
++{
++     _dbus_loop_quit(loop);
++}
++
++dbus_bool_t dbus_loop_iterate(DBusLoop *loop, dbus_bool_t block)
++{
++    return _dbus_loop_iterate(loop, block);
++}
++
++dbus_bool_t dbus_loop_dispatch(DBusLoop *loop)
++{
++    return _dbus_loop_dispatch(loop);
++}
++
++void dbus_wait_for_memory(void)
++{
++    _dbus_wait_for_memory();
++}
++
++/* From dbus-connection */
++void dbus_connection_lock(DBusConnection *connection)
++{
++    _dbus_connection_lock(connection);
++}
++
++void dbus_connection_unlock(DBusConnection *connection)
++{
++    _dbus_connection_unlock(connection);
++}
++
++int dbus_get_oom_wait (void)
++{
++     return _dbus_get_oom_wait();
++}
++
++dbus_bool_t dbus_loop_add_wake(DBusLoop *loop, int fd)
++{
++     wake_watch = _dbus_watch_new(fd, DBUS_WATCH_READABLE, TRUE, wake_handler, (void *)fd, NULL);
++     return dbus_loop_add_watch(loop, wake_watch);
++}
++
++void dbus_loop_remove_wake(DBusLoop *loop)
++{
++     if (wake_watch)
++     {
++         dbus_loop_remove_watch(loop, wake_watch);
++         _dbus_watch_unref(wake_watch);
++         wake_watch = NULL;
++     }
++}
+diff --git a/dbus/dbus-ccsp-apis.h b/dbus/dbus-ccsp-apis.h
+new file mode 100644
+index 0000000..aec0806
+--- /dev/null
++++ b/dbus/dbus-ccsp-apis.h
+@@ -0,0 +1,112 @@
++/* -*- mode: C; c-file-style: "gnu"; indent-tabs-mode: nil; -*- */
++/* dbus-ccsp-apis.h
++ *
++ * Copyright (C) 2003  Red Hat, Inc.
++ *
++ * Licensed under the Academic Free License version 2.1
++ *
++ * This program is free software; you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License as published by
++ * the Free Software Foundation; either version 2 of the License, or
++ * (at your option) any later version.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU General Public License for more details.
++ *
++ * You should have received a copy of the GNU General Public License
++ * along with this program; if not, write to the Free Software
++ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
++ *
++ */
++#if !defined (DBUS_INSIDE_DBUS_H) && !defined (DBUS_COMPILATION)
++#error "Only <dbus/dbus.h> can be included directly, this file may disappear or change contents."
++#endif
++
++#ifndef DBUS_CCSP_APIS_H
++#define DBUS_CCSP_APIS_H
++
++#include <dbus/dbus.h>
++#include <stdarg.h>
++
++typedef struct DBusLoop DBusLoop;
++
++DBUS_BEGIN_DECLS
++
++/**
++ * @addtogroup DBusCcspApis
++ * @{
++ */
++
++/* From dbus-mainloop */
++DBUS_EXPORT
++DBusLoop*   dbus_loop_new            (void);
++
++DBUS_EXPORT
++DBusLoop*   dbus_loop_ref            (DBusLoop            *loop);
++
++DBUS_EXPORT
++void        dbus_loop_unref          (DBusLoop            *loop);
++
++DBUS_EXPORT
++dbus_bool_t dbus_loop_add_watch      (DBusLoop            *loop,
++                                      DBusWatch           *watch);
++
++DBUS_EXPORT
++void        dbus_loop_remove_watch   (DBusLoop            *loop,
++                                      DBusWatch           *watch);
++DBUS_EXPORT
++void        dbus_loop_toggle_watch   (DBusLoop            *loop,
++                                      DBusWatch           *watch);
++DBUS_EXPORT
++dbus_bool_t dbus_loop_add_timeout    (DBusLoop            *loop,
++                                      DBusTimeout         *timeout);
++
++DBUS_EXPORT
++void        dbus_loop_remove_timeout (DBusLoop            *loop,
++                                      DBusTimeout         *timeout);
++
++DBUS_EXPORT
++dbus_bool_t dbus_loop_queue_dispatch (DBusLoop            *loop,
++                                      DBusConnection      *connection);
++
++DBUS_EXPORT
++void        dbus_loop_run            (DBusLoop            *loop);
++
++DBUS_EXPORT
++void        dbus_loop_quit           (DBusLoop            *loop);
++
++DBUS_EXPORT
++dbus_bool_t dbus_loop_iterate        (DBusLoop            *loop,
++                                      dbus_bool_t          block);
++
++DBUS_EXPORT
++dbus_bool_t dbus_loop_dispatch       (DBusLoop            *loop);
++
++DBUS_EXPORT
++void dbus_wait_for_memory(void);
++
++DBUS_EXPORT
++int dbus_get_oom_wait(void);
++
++/* From dbus-connection */
++DBUS_EXPORT
++void dbus_connection_lock(DBusConnection *connection);
++
++DBUS_EXPORT
++void dbus_connection_unlock(DBusConnection *connection);
++
++DBUS_EXPORT
++dbus_bool_t dbus_loop_add_wake       (DBusLoop            *loop,
++                                      int                 fd);
++
++DBUS_EXPORT
++void dbus_loop_remove_wake           (DBusLoop            *loop);
++
++/** @} */
++
++DBUS_END_DECLS
++
++#endif /* DBUS_CCSP_APIS_H */
++
+diff --git a/dbus/dbus-connection.c b/dbus/dbus-connection.c
+index 7f5b329..03ac826 100644
+--- a/dbus/dbus-connection.c
++++ b/dbus/dbus-connection.c
+@@ -2325,10 +2325,11 @@ complete_pending_call_and_unlock (DBusConnection  *connection,
+ {
+   _dbus_pending_call_set_reply_unlocked (pending, message);
+   _dbus_pending_call_ref_unlocked (pending); /* in case there's no app with a ref held */
++  _dbus_pending_call_start_completion_unlocked(pending);
+   _dbus_connection_detach_pending_call_and_unlock (connection, pending);
+- 
++
+   /* Must be called unlocked since it invokes app callback */
+-  _dbus_pending_call_complete (pending);
++  _dbus_pending_call_finish_completion (pending);
+   dbus_pending_call_unref (pending);
+ }
+ 
+@@ -2527,7 +2528,7 @@ _dbus_connection_block_pending_call (DBusPendingCall *pending)
+         {          
+           /* block again, we don't have the reply buffered yet. */
+           _dbus_connection_do_iteration_unlocked (connection,
+-                                                  NULL,
++                                                  pending,
+                                                   DBUS_ITERATION_DO_READING |
+                                                   DBUS_ITERATION_BLOCK,
+                                                   timeout_milliseconds - elapsed_milliseconds);
+diff --git a/dbus/dbus-pending-call-internal.h b/dbus/dbus-pending-call-internal.h
+index 393e660..cd8ab1a 100644
+--- a/dbus/dbus-pending-call-internal.h
++++ b/dbus/dbus-pending-call-internal.h
+@@ -41,7 +41,10 @@ void             _dbus_pending_call_set_reply_serial_unlocked    (DBusPendingCal
+ DBusConnection * _dbus_pending_call_get_connection_and_lock      (DBusPendingCall    *pending);
+ DBusConnection * _dbus_pending_call_get_connection_unlocked      (DBusPendingCall    *pending);
+ dbus_bool_t      _dbus_pending_call_get_completed_unlocked       (DBusPendingCall    *pending);
+-void             _dbus_pending_call_complete                     (DBusPendingCall    *pending);
++
++void             _dbus_pending_call_start_completion_unlocked    (DBusPendingCall    *pending);
++void             _dbus_pending_call_finish_completion            (DBusPendingCall    *pending);
++
+ void             _dbus_pending_call_set_reply_unlocked           (DBusPendingCall    *pending,
+                                                                   DBusMessage        *message);
+ void             _dbus_pending_call_queue_timeout_error_unlocked (DBusPendingCall    *pending,
+diff --git a/dbus/dbus-pending-call.c b/dbus/dbus-pending-call.c
+index be53410..1bc5d1e 100644
+--- a/dbus/dbus-pending-call.c
++++ b/dbus/dbus-pending-call.c
+@@ -194,18 +194,27 @@ _dbus_pending_call_set_reply_unlocked (DBusPendingCall *pending,
+ }
+ 
+ /**
+- * Calls notifier function for the pending call
+- * and sets the call to completed.
++ * Sets the pending call to completed
+  *
+  * @param pending the pending call
+- * 
+  */
+ void
+-_dbus_pending_call_complete (DBusPendingCall *pending)
++_dbus_pending_call_start_completion_unlocked (DBusPendingCall *pending)
+ {
+   _dbus_assert (!pending->completed);
+   
+   pending->completed = TRUE;
++}
++
++/**
++ * Call the notifier function for the pending call.
++ *
++ * @param pending the pending call
++ */
++void
++_dbus_pending_call_finish_completion (DBusPendingCall *pending)
++{
++  _dbus_assert (pending->completed);
+ 
+   if (pending->function)
+     {
+diff --git a/dbus/dbus.h b/dbus/dbus.h
+index 932ceab..5bb4097 100644
+--- a/dbus/dbus.h
++++ b/dbus/dbus.h
+@@ -29,6 +29,7 @@
+ #include <dbus/dbus-arch-deps.h>
+ #include <dbus/dbus-address.h>
+ #include <dbus/dbus-bus.h>
++#include <dbus/dbus-ccsp-apis.h>
+ #include <dbus/dbus-connection.h>
+ #include <dbus/dbus-errors.h>
+ #include <dbus/dbus-macros.h>

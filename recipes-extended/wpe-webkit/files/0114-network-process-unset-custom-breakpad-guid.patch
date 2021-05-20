@@ -1,0 +1,29 @@
+Date: Jan 07 20:28:11 2019
+
+From: 81cf8ec538a78a50924966a74fd69d14b56bfd42 Jan 07 22:06:06 2019
+
+Subject: [PATCH] XRE-13706 unset BREAKPAD_GUID for WPE Network Process
+
+	unset BREAKPAD_GUID for WPE Network Process
+
+Source: COMCAST
+
+License: BSD-2-Clause
+
+Upstream-Status: Pending
+
+Signed-off-by:  Igor Borovkov <igor_borovkov@cable.comcast.com>
+---
+
+diff --git a/Source/WebKit/NetworkProcess/EntryPoint/unix/NetworkProcessMain.cpp b/Source/WebKit/NetworkProcess/EntryPoint/unix/NetworkProcessMain.cpp
+index 0f03298078e..4b2f0edaa24 100644
+--- a/Source/WebKit/NetworkProcess/EntryPoint/unix/NetworkProcessMain.cpp
++++ b/Source/WebKit/NetworkProcess/EntryPoint/unix/NetworkProcessMain.cpp
+@@ -40,6 +40,7 @@ using namespace WebKit;
+ int main(int argc, char** argv)
+ {
+ #if defined (USE_BREAKPAD)
++    fprintf(stderr, "WPENetworkProcess: Unsetting BREAKPAD_GUID: unsetenv: [%d]\n", unsetenv("BREAKPAD_GUID"));
+     installExceptionHandler();
+ #endif
+ 

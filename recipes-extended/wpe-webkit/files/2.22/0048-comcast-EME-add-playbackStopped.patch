@@ -1,0 +1,30 @@
+From 92f2c22de5dc54eccb86c4e8558c3587a77f0251 Mon Sep 17 00:00:00 2001
+From: Siva Sankar Raja <sivasankar_raja@comcast.com>
+Source: COMCAST
+License: LICENSE-LGPL-2.1
+Upstream-Status: Pending
+Signed-off-by: Siva Sankar Raja <sivasankar_raja@comcast.com>
+Date: Sat, 6 Jul 2019 13:35:46 +0000
+Subject: [PATCH] comcast EME add playbackStopped()
+
+---
+ .../graphics/gstreamer/eme/WebKitOpenCDMDecryptorGStreamer.cpp      | 6 ++++++
+ 1 file changed, 6 insertions(+)
+
+Index: git/Source/WebCore/platform/graphics/gstreamer/eme/WebKitOpenCDMDecryptorGStreamer.cpp
+===================================================================
+--- git.orig/Source/WebCore/platform/graphics/gstreamer/eme/WebKitOpenCDMDecryptorGStreamer.cpp
++++ git/Source/WebCore/platform/graphics/gstreamer/eme/WebKitOpenCDMDecryptorGStreamer.cpp
+@@ -146,6 +146,12 @@ static void webkit_media_opencdm_decrypt
+ static void webKitMediaOpenCDMDecryptorFinalize(GObject* object)
+ {
+     WebKitOpenCDMDecryptPrivate* priv = GST_WEBKIT_OPENCDM_DECRYPT_GET_PRIVATE(WEBKIT_OPENCDM_DECRYPT(object));
++
++    // Let OCDM sessions know playback has stopped
++    // output restrictions can be reset now
++    if(priv->m_openCdmSession)
++        opencdm_session_resetoutputprotection(priv->m_openCdmSession.get());
++
+     priv->~WebKitOpenCDMDecryptPrivate();
+     GST_CALL_PARENT(G_OBJECT_CLASS, finalize, (object));
+ }

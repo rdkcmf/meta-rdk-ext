@@ -1,0 +1,47 @@
+Date: Feb 03 23:11:40 2014
+
+From: cc4b7fad229051f8321977c8c7bb986d9a58d735 Mar 18 20:56:33 2014
+
+Subject: [PATCH] qtbase: add config for qemux86 platform (aka RDK emulator)
+
+	On x86/qemu we rely on mesa with s/w rasterization.
+
+Source: COMCAST
+
+Upstream-Status: Pending
+
+Signed-off-by: Nicolas Dechesne <nicolas.dechesne@linaro.org>
+---
+
+Index: qtbase-opensource-src-5.1.0/src/plugins/platforms/eglfs/qeglfswindow.cpp
+===================================================================
+--- qtbase-opensource-src-5.1.0.orig/src/plugins/platforms/eglfs/qeglfswindow.cpp
++++ qtbase-opensource-src-5.1.0/src/plugins/platforms/eglfs/qeglfswindow.cpp
+@@ -71,6 +71,15 @@ void QEglFSWindow::create()
+     if (m_window)
+         return;
+ 
++    static EGLSurface __singleWindowSurface;
++    if (!QEglFSHooks::hooks()->hasCapability(QPlatformIntegration::Capability::MultipleWindows) && (__singleWindowSurface)) {
++        m_surface = __singleWindowSurface;
++#ifdef QEGL_EXTRA_DEBUG
++        qWarning("Surface recreate request, re-using %x\n", m_surface);
++#endif
++        return;
++    }
++
+     setWindowState(Qt::WindowFullScreen);
+ 
+     if (window()->type() == Qt::Desktop) {
+@@ -85,6 +94,11 @@ void QEglFSWindow::create()
+     m_config = QEglFSIntegration::chooseConfig(display, platformFormat);
+     m_format = q_glFormatFromConfig(display, m_config);
+     resetSurface();
++
++    if (!QEglFSHooks::hooks()->hasCapability(QPlatformIntegration::Capability::MultipleWindows))
++    {
++        __singleWindowSurface = m_surface;
++    }
+ }
+ 
+ void QEglFSWindow::invalidateSurface()

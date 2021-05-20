@@ -1,0 +1,34 @@
+Date: Mar 18 17:17:05 2016
+
+From: eeb79de48f0bdea8f3ab967353ae9bc2f2bcb1c7 Mar 25 21:18:24 2016
+
+Subject: [PATCH] DELIA-12902: modified compress_blob to return 0 on failures.
+
+	The usage in journal-file , it is treating failures as
+        successfull compression which is causing the issue of
+        flooding the console. The fix for it is available in the
+        latest version of systemd, just backported the small portion
+        to have the issue fixed in version 216.
+
+Source: GITHUB
+
+License: LGPL-2.1-or-later
+
+Upstream-Status: Submitted [ https://github.com/coreos/bugs/issues/322 ]
+
+Signed-off-by: Balaji Punnuru <balaji_punnuru@cable.comcast.com>
+---
+
+Index: git/src/journal/compress.h
+===================================================================
+--- git.orig/src/journal/compress.h
++++ git/src/journal/compress.h
+@@ -44,7 +44,7 @@ static inline int compress_blob(const vo
+         if (r == 0)
+                 return OBJECT_COMPRESSED_XZ;
+ #endif
+-        return r;
++        return 0;
+ }
+ 
+ int decompress_blob_xz(const void *src, uint64_t src_size,

@@ -1,0 +1,28 @@
+From 1c79cf242ae5d236f2f38a290f80a7da8a6e4679 Mon Sep 17 00:00:00 2001
+From: Eugene Mutavchi <Ievgen_Mutavchi@comcast.com>
+Date: Mon, 1 Feb 2021 16:25:47 +0000
+Subject: [PATCH] Fix crash in setRootCompositingLayer on page close
+
+---
+ Source/WebKit/WebProcess/WebPage/AcceleratedDrawingArea.cpp | 5 ++++-
+ 1 file changed, 4 insertions(+), 1 deletion(-)
+
+diff --git a/Source/WebKit/WebProcess/WebPage/AcceleratedDrawingArea.cpp b/Source/WebKit/WebProcess/WebPage/AcceleratedDrawingArea.cpp
+index 2803f4482ac3..9c0ed6b454ab 100644
+--- a/Source/WebKit/WebProcess/WebPage/AcceleratedDrawingArea.cpp
++++ b/Source/WebKit/WebProcess/WebPage/AcceleratedDrawingArea.cpp
+@@ -218,7 +218,10 @@ GraphicsLayerFactory* AcceleratedDrawingArea::graphicsLayerFactory()
+ 
+ void AcceleratedDrawingArea::setRootCompositingLayer(GraphicsLayer* graphicsLayer)
+ {
+-    ASSERT(m_layerTreeHost);
++    if (m_layerTreeHost == nullptr && graphicsLayer == nullptr)
++        return;
++
++    RELEASE_ASSERT(m_layerTreeHost);
+ 
+     // FIXME: Instead of using nested if statements, we should keep a compositing state
+     // enum in the AcceleratedDrawingArea object and have a changeAcceleratedCompositingState function
+-- 
+2.17.1
+

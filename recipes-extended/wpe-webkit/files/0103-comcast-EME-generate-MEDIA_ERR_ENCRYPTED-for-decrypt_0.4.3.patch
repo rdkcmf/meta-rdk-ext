@@ -1,0 +1,163 @@
+From b6c5a51c4af1e75d156db7ebb0ec0b6322d5aa70 Mon Sep 17 00:00:00 2001
+From: Gurdal Oruklu <gurdaloruklu@gmail.com>
+License: GPLV2
+Source: COMCAST
+Upstream-Status: none
+Date: Tue, 10 Sep 2019 21:11:42 +0000
+Subject: [PATCH] comcast EME generate MEDIA_ERR_ENCRYPTED for decryption
+Signed-off-by: Gurdal Oruklu <gurdal_oruklu@comcast.com>
+---
+ Source/WebCore/html/HTMLMediaElement.cpp              |  6 ++++++
+ Source/WebCore/html/HTMLMediaElement.h                |  1 +
+ Source/WebCore/html/MediaError.h                      |  2 +-
+ Source/WebCore/platform/graphics/MediaPlayer.cpp      |  5 +++++
+ Source/WebCore/platform/graphics/MediaPlayer.h        |  2 ++
+ .../gstreamer/MediaPlayerPrivateGStreamer.cpp         | 19 +++++++++++++++++++
+ .../graphics/gstreamer/MediaPlayerPrivateGStreamer.h  |  3 +++
+ .../eme/WebKitCommonEncryptionDecryptorGStreamer.cpp  |  1 +
+ 8 files changed, 38 insertions(+), 1 deletion(-)
+
+diff --git a/Source/WebCore/html/HTMLMediaElement.cpp b/Source/WebCore/html/HTMLMediaElement.cpp
+index 0d111ea..8ade350 100644
+--- a/Source/WebCore/html/HTMLMediaElement.cpp
++++ b/Source/WebCore/html/HTMLMediaElement.cpp
+@@ -2697,6 +2697,12 @@ void HTMLMediaElement::mediaPlayerInitializationDataEncountered(const String& in
+     m_asyncEventQueue.enqueueEvent(MediaEncryptedEvent::create(eventNames().encryptedEvent, initializer, Event::IsTrusted::Yes));
+ }
+ 
++void HTMLMediaElement::mediaPlayerDecryptErrorEncountered()
++{
++    m_error = MediaError::create(MediaError::MEDIA_ERR_ENCRYPTED);
++    scheduleEvent(eventNames().errorEvent);
++}
++
+ void HTMLMediaElement::attemptToDecrypt()
+ {
+     // https://w3c.github.io/encrypted-media/#attempt-to-decrypt
+diff --git a/Source/WebCore/html/HTMLMediaElement.h b/Source/WebCore/html/HTMLMediaElement.h
+index 5422f77..8253cd0 100644
+--- a/Source/WebCore/html/HTMLMediaElement.h
++++ b/Source/WebCore/html/HTMLMediaElement.h
+@@ -647,6 +647,7 @@ private:
+ 
+ #if ENABLE(ENCRYPTED_MEDIA)
+     void mediaPlayerInitializationDataEncountered(const String&, RefPtr<ArrayBuffer>&&) final;
++    void mediaPlayerDecryptErrorEncountered() final;
+ 
+     void attemptToDecrypt();
+     void attemptToResumePlaybackIfNecessary();
+diff --git a/Source/WebCore/html/MediaError.h b/Source/WebCore/html/MediaError.h
+index 1e59b7d..d0762d7 100644
+--- a/Source/WebCore/html/MediaError.h
++++ b/Source/WebCore/html/MediaError.h
+@@ -38,7 +38,7 @@ public:
+         MEDIA_ERR_NETWORK,
+         MEDIA_ERR_DECODE,
+         MEDIA_ERR_SRC_NOT_SUPPORTED
+-#if ENABLE(LEGACY_ENCRYPTED_MEDIA)
++#if ENABLE(ENCRYPTED_MEDIA)
+         , MEDIA_ERR_ENCRYPTED
+ #endif
+     };
+diff --git a/Source/WebCore/platform/graphics/MediaPlayer.cpp b/Source/WebCore/platform/graphics/MediaPlayer.cpp
+index bb992f2..ecb30cc 100644
+--- a/Source/WebCore/platform/graphics/MediaPlayer.cpp
++++ b/Source/WebCore/platform/graphics/MediaPlayer.cpp
+@@ -1300,6 +1300,11 @@ void MediaPlayer::initializationDataEncountered(const String& initDataType, RefP
+ {
+     client().mediaPlayerInitializationDataEncountered(initDataType, WTFMove(initData));
+ }
++
++void MediaPlayer::decryptErrorEncountered()
++{
++    client().mediaPlayerDecryptErrorEncountered();
++}
+ #endif
+ 
+ String MediaPlayer::referrer() const
+diff --git a/Source/WebCore/platform/graphics/MediaPlayer.h b/Source/WebCore/platform/graphics/MediaPlayer.h
+index a4ee969..215584c 100644
+--- a/Source/WebCore/platform/graphics/MediaPlayer.h
++++ b/Source/WebCore/platform/graphics/MediaPlayer.h
+@@ -237,6 +237,7 @@ public:
+ 
+ #if ENABLE(ENCRYPTED_MEDIA)
+     virtual void mediaPlayerInitializationDataEncountered(const String&, RefPtr<ArrayBuffer>&&) { }
++    virtual void mediaPlayerDecryptErrorEncountered() {}
+ #endif
+     
+ #if ENABLE(WIRELESS_PLAYBACK_TARGET)
+@@ -570,6 +571,7 @@ public:
+ 
+ #if ENABLE(ENCRYPTED_MEDIA)
+     void initializationDataEncountered(const String&, RefPtr<ArrayBuffer>&&);
++    void decryptErrorEncountered();
+ #endif
+ 
+     String referrer() const;
+diff --git a/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp b/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp
+index 8a88650..f36bf2d 100644
+--- a/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp
++++ b/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp
+@@ -1294,6 +1294,9 @@ void MediaPlayerPrivateGStreamer::handleMessage(GstMessage* message)
+             else if (gst_structure_has_name(structure, "drm-initialization-data-encountered")) {
+                 GST_DEBUG("drm-initialization-data-encountered message from %s", GST_MESSAGE_SRC_NAME(message));
+                 handleProtectionStructure(structure);
++            } else if(gst_structure_has_name(structure, "drm-decryption-error-encountered")) {
++                GST_DEBUG("drm-decryption-error-encountered message from %s", GST_MESSAGE_SRC_NAME(message));
++                handleDecryptionError(structure);
+             }
+ #endif
+         }
+@@ -2620,6 +2623,22 @@ bool MediaPlayerPrivateGStreamer::handleSyncMessage(GstMessage* message)
+     return MediaPlayerPrivateGStreamerBase::handleSyncMessage(message);
+ }
+ 
++#if ENABLE(ENCRYPTED_MEDIA)
++void MediaPlayerPrivateGStreamer::handleDecryptionError(const GstStructure* structure)
++{
++    ASSERT(isMainThread());
++
++    RunLoop::main().dispatch([weakThis = m_weakPtrFactory.createWeakPtr(*this)] {
++        if (!weakThis)
++            return;
++
++        GST_WARNING("scheduling decryptionErrorEncountered event");
++        weakThis->m_player->decryptErrorEncountered();
++    });
++}
++#endif
++
++
+ }
+ 
+ #endif // USE(GSTREAMER)
+diff --git a/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.h b/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.h
+index b69d7a5..c1381f0 100644
+--- a/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.h
++++ b/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.h
+@@ -133,6 +133,9 @@ public:
+     bool isLiveStream() const override { return m_isStreaming; }
+ 
+     bool handleSyncMessage(GstMessage*) override;
++#if ENABLE(ENCRYPTED_MEDIA)
++    void handleDecryptionError(const GstStructure*);
++#endif
+     bool m_reportedPlaybackStarted;
+     bool m_reportedPlaybackFailed;
+     bool m_reportedPlaybackEOS;
+diff --git a/Source/WebCore/platform/graphics/gstreamer/eme/WebKitCommonEncryptionDecryptorGStreamer.cpp b/Source/WebCore/platform/graphics/gstreamer/eme/WebKitCommonEncryptionDecryptorGStreamer.cpp
+index d7b0322..a17c81a 100644
+--- a/Source/WebCore/platform/graphics/gstreamer/eme/WebKitCommonEncryptionDecryptorGStreamer.cpp
++++ b/Source/WebCore/platform/graphics/gstreamer/eme/WebKitCommonEncryptionDecryptorGStreamer.cpp
+@@ -344,6 +344,7 @@ static GstFlowReturn webkitMediaCommonEncryptionDecryptTransformInPlace(GstBaseT
+         GST_ERROR_OBJECT(self, "Decryption failed");
+         klass->releaseCipher(self);
+         gst_buffer_remove_meta(buffer, reinterpret_cast<GstMeta*>(protectionMeta));
++        gst_element_post_message(GST_ELEMENT(self), gst_message_new_element(GST_OBJECT(self), gst_structure_new_empty("drm-decryption-error-encountered")));
+         return GST_FLOW_NOT_SUPPORTED;
+     }
+ 
+-- 
+1.9.1
+

@@ -1,0 +1,21 @@
+include needed header <cstdio> for fixing following error with gcc5
+
+CommonSampleUtil.cc:130:47: error: 'printf' was not declared in this scope
+|          printf("failed to setup about data.\n");
+
+
+Upstream-Status: Pending
+Signed-off-by: Khem Raj <raj.khem@gmail.com>
+
+Index: source/services/base/sample_apps/cpp/samples_common/CommonSampleUtil.cc
+===================================================================
+--- source.orig/services/base/sample_apps/cpp/samples_common/CommonSampleUtil.cc
++++ source/services/base/sample_apps/cpp/samples_common/CommonSampleUtil.cc
+@@ -15,6 +15,7 @@
+  ******************************************************************************/
+ 
+ #include <algorithm>
++#include <cstdio>
+ #include "CommonSampleUtil.h"
+ #include "AboutObjApi.h"
+ #include <qcc/StringUtil.h>

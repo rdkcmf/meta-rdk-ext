@@ -1,0 +1,60 @@
+Copyright (c) 2013, Georg Reinke (<guelfey at gmail dot com>), Google
+All rights reserved.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions
+are met:
+
+1. Redistributions of source code must retain the above copyright notice,
+this list of conditions and the following disclaimer.
+
+2. Redistributions in binary form must reproduce the above copyright
+notice, this list of conditions and the following disclaimer in the
+documentation and/or other materials provided with the distribution.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+"AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED
+TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF
+LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
+NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+Date: Jun 23 18:59:49 2014
+
+From: 5fee2e840b33c83e5b72ebfc59438fede4900fd2 Jun 29 19:48:28 2014
+
+Subject: [PATCH] RDKSYSINTSW-948: Moved iamrbus implementation from fusiondale to dbus
+
+	Added rdk dbus configuration so wrote a bbappend to apply this
+	as a patch to system.conf.
+
+	Modified iarmbus, iarmmgrs recipe to include dbus as a dependency.
+
+	Modified rdkbrowser recipe to link libdbus-1.so through a patch.
+
+Source: COMCAST
+
+Upstream-Status: Pending
+
+Signed-off-by: rra <ridish.ra@lnttechservices.com>
+---
+
+diff -urN dbus-1.6.18.orig/bus/system.conf.in dbus-1.6.18/bus/system.conf.in
+--- dbus-1.6.18.orig/bus/system.conf.in	2014-06-23 17:19:37.479688002 +0000
++++ dbus-1.6.18/bus/system.conf.in	2014-06-23 17:20:02.159688723 +0000
+@@ -47,8 +47,8 @@
+ 
+     <!-- Holes must be punched in service configuration files for
+          name ownership and sending method calls -->
+-    <deny own="*"/>
+-    <deny send_type="method_call"/>
++    <allow own="*"/>
++    <allow send_type="method_call"/>
+ 
+     <!-- Signals and reply messages (method returns, errors) are allowed
+          by default -->

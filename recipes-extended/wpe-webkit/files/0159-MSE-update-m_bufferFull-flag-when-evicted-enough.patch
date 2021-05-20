@@ -1,0 +1,29 @@
+From 422cd3661c831488836a435fd8640de4fb48689e Mon Sep 17 00:00:00 2001
+From: Ievgen Mutavchi <Ievgen_Mutavchi@comcast.com>
+Date: Wed, 2 Oct 2019 16:30:14 -0400
+Subject: [PATCH] [MSE] update `m_bufferFull` flag when evicted enough
+
+---
+ Source/WebCore/Modules/mediasource/SourceBuffer.cpp | 6 ++++++
+ 1 file changed, 6 insertions(+)
+
+diff --git a/Source/WebCore/Modules/mediasource/SourceBuffer.cpp b/Source/WebCore/Modules/mediasource/SourceBuffer.cpp
+index b43a87f..1dad496 100644
+--- a/Source/WebCore/Modules/mediasource/SourceBuffer.cpp
++++ b/Source/WebCore/Modules/mediasource/SourceBuffer.cpp
+@@ -976,6 +976,12 @@ void SourceBuffer::evictCodedFrames(size_t newDataSize)
+ 
+     if (MediaTime::zeroTime() != rangeStart && rangeStart < maximumRangeEnd) {
+         removeCodedFrames(MediaTime::zeroTime(), rangeStart, true);
++        // Check if removed enough already
++        if (extraMemoryCost() + newDataSize < maximumBufferSize) {
++            LOG(MediaSource, "SourceBuffer::evictCodedFrames(%p) - the buffer is not full anymore.", this);
++            m_bufferFull = false;
++            return;
++        }
+     }
+ 
+     while (rangeStart < maximumRangeEnd) {
+-- 
+2.7.4
+

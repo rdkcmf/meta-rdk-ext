@@ -1,0 +1,31 @@
+Date: Mar 09 15:33:17 2017
+
+From: 6b5bcb6ce1c5202a39ddf406bd08aad90fef8615 Mar 09 16:27:36 2017
+
+Subject: [PATCH] XRE-10648: add ca-certificates configuration
+
+	And fix handling certificates with wildcards in hostname
+	Fix soup running in ssl strict mode
+
+Source: COMCAST
+
+License: LGPL-2.1-or-later
+
+Upstream-Status: Pending
+
+Signed-off-by: Eugene Mutavchi <Ievgen_Mutavchi@comcast.com>
+---
+
+Index: glib-openssl-2.50.0/tls/openssl/openssl-util.c
+===================================================================
+--- glib-openssl-2.50.0.orig/tls/openssl/openssl-util.c
++++ glib-openssl-2.50.0/tls/openssl/openssl-util.c
+@@ -269,7 +269,7 @@ static int wildcard_match(const unsigned
+         if (!(('0' <= *p && *p <= '9') ||
+               ('A' <= *p && *p <= 'Z') ||
+               ('a' <= *p && *p <= 'z') ||
+-              *p == '-' || (allow_multi && *p == '.')))
++              *p == '-' || *p == '_' || (allow_multi && *p == '.')))
+             return 0;
+     return 1;
+ }

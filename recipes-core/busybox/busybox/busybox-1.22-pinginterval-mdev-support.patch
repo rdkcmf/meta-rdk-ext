@@ -1,0 +1,171 @@
+Date: Dec 7, 2017 8:30 PM
+
+From: 432416a3812aef86478df25fd6a014ea762d3a8b Jan 19, 2018 11:14 AM
+
+Subject: [PATCH] RDK-20961 : Added interval and standard deviation support for busybox ping
+
+        Ping telemetry requires ping interval and standard deviation support
+        Ping interval support is available in sub-second level too
+        For Seconds - eg for 1sec, pass argument as "-i 1"
+	For Subseconds - for 0.1s, pass as "-i 0.1"
+
+Source: COMCAST
+
+License: GPL-2-or-later
+
+Upstream-Status: Pending
+
+Signed-off-by: gtheres <Geethu_TheresK2@comcast.com>
+---
+
+diff --git a/networking/ping.c b/networking/ping.c
+index 5d71fe8..e564698 100644
+--- a/networking/ping.c
++++ b/networking/ping.c
+@@ -102,6 +102,7 @@
+ //usage:     "\n			(can exit earlier with -c CNT)"
+ //usage:     "\n	-q		Quiet, only displays output at start"
+ //usage:     "\n			and when finished"
++//usage:     "\n        -i INTERVAL     Sets interval in between ping packets"
+ //usage:
+ //usage:# define ping6_trivial_usage
+ //usage:       "[OPTIONS] HOST"
+@@ -112,6 +113,7 @@
+ //usage:     "\n	-I IFACE/IP	Use interface or IP address as source"
+ //usage:     "\n	-q		Quiet, only displays output at start"
+ //usage:     "\n			and when finished"
++//usage:     "\n        -i INTERVAL     Sets interval in between ping packets"
+ //usage:
+ //usage:#endif
+ //usage:
+@@ -343,7 +345,7 @@ static int common_ping_main(sa_family_t af, char **argv)
+ 
+ /* Full(er) version */
+ 
+-#define OPT_STRING ("qvc:s:t:w:W:I:n4" IF_PING6("6"))
++#define OPT_STRING ("qvc:s:t:w:W:I:i:n4" IF_PING6("6"))
+ enum {
+ 	OPT_QUIET = 1 << 0,
+ 	OPT_VERBOSE = 1 << 1,
+@@ -353,9 +355,10 @@ enum {
+ 	OPT_w = 1 << 5,
+ 	OPT_W = 1 << 6,
+ 	OPT_I = 1 << 7,
+-	/*OPT_n = 1 << 8, - ignored */
+-	OPT_IPV4 = 1 << 9,
+-	OPT_IPV6 = (1 << 10) * ENABLE_PING6,
++	OPT_i = 1 << 8,
++	/*OPT_n = 1 << 9, - ignored */
++	OPT_IPV4 = 1 << 10,
++	OPT_IPV6 = (1 << 11) * ENABLE_PING6,
+ };
+ 
+ 
+@@ -364,15 +367,17 @@ struct globals {
+ 	char *str_I;
+ 	len_and_sockaddr *source_lsa;
+ 	unsigned datalen;
++	double pinginterval;
+ 	unsigned pingcount; /* must be int-sized */
+ 	unsigned opt_ttl;
+ 	unsigned long ntransmitted, nreceived, nrepeats;
+ 	uint16_t myid;
+ 	unsigned tmin, tmax; /* in us */
+ 	unsigned long long tsum; /* in us, sum of all times */
++	unsigned long long tsum2;
+ 	unsigned deadline;
+ 	unsigned timeout;
+-	unsigned total_secs;
++	uint32_t total_millisecs;
+ 	unsigned sizeof_rcv_packet;
+ 	char *rcv_packet; /* [datalen + MAXIPLEN + MAXICMPLEN] */
+ 	void *snd_packet; /* [datalen + ipv4/ipv6_const] */
+@@ -392,15 +397,17 @@ struct globals {
+ #define source_lsa   (G.source_lsa  )
+ #define str_I        (G.str_I       )
+ #define datalen      (G.datalen     )
++#define pinginterval (G.pinginterval)
+ #define pingcount    (G.pingcount   )
+ #define opt_ttl      (G.opt_ttl     )
+ #define myid         (G.myid        )
+ #define tmin         (G.tmin        )
+ #define tmax         (G.tmax        )
+ #define tsum         (G.tsum        )
++#define tsum2        (G.tsum2       )
+ #define deadline     (G.deadline    )
+ #define timeout      (G.timeout     )
+-#define total_secs   (G.total_secs  )
++#define total_millisecs   (G.total_millisecs  )
+ #define hostname     (G.hostname    )
+ #define dotted       (G.dotted      )
+ #define pingaddr     (G.pingaddr    )
+@@ -412,6 +419,7 @@ void BUG_ping_globals_too_big(void);
+ 	datalen = DEFDATALEN; \
+ 	timeout = MAXWAIT; \
+ 	tmin = UINT_MAX; \
++        pinginterval = PINGINTERVAL; \
+ } while (0)
+ 
+ 
+@@ -443,10 +451,13 @@ static void print_stats_and_exit(int junk UNUSED_PARAM)
+ 	printf("%lu%% packet loss\n", ul);
+ 	if (tmin != UINT_MAX) {
+ 		unsigned tavg = tsum / (nrecv + G.nrepeats);
+-		printf("round-trip min/avg/max = %u.%03u/%u.%03u/%u.%03u ms\n",
++		unsigned tavg2 = tsum2 / (nrecv + G.nrepeats);
++		unsigned long tmdev = sqrt(tavg2 - tavg * tavg);
++		printf("round-trip min/avg/max/mdev = %u.%03u/%u.%03u/%u.%03u/%u.%03u ms\n",
+ 			tmin / 1000, tmin % 1000,
+ 			tavg / 1000, tavg % 1000,
+-			tmax / 1000, tmax % 1000);
++			tmax / 1000, tmax % 1000,
++			tmdev / 1000, tmdev % 1000);
+ 	}
+ 	/* if condition is true, exit with 1 -- 'failure' */
+ 	exit(nrecv == 0 || (deadline && nrecv < pingcount));
+@@ -471,11 +482,15 @@ static void sendping_tail(void (*sp)(int), int size_pkt)
+ 		/* Didn't send all pings yet - schedule next in 1s */
+ 		signal(SIGALRM, sp);
+ 		if (deadline) {
+-			total_secs += PINGINTERVAL;
+-			if (total_secs >= deadline)
++			total_millisecs += pinginterval*1000;
++			if (total_millisecs/1000 >= deadline)
+ 				signal(SIGALRM, print_stats_and_exit);
+ 		}
+-		alarm(PINGINTERVAL);
++                if ( pinginterval >= 1 ) {
++                    alarm(pinginterval);
++                } else {
++		    ualarm(pinginterval*1000*1000,0);
++                }
+ 	} else { /* -c NN, and all NN are sent (and no deadline) */
+ 		/* Wait for the last ping to come back.
+ 		 * -W timeout: wait for a response in seconds.
+@@ -598,6 +613,7 @@ static void unpack_tail(int sz, uint32_t *tp,
+ 		/* (doesn't hurt 32-bit real-world anyway) */
+ 		triptime = (int32_t) ((uint32_t)monotonic_us() - *tp);
+ 		tsum += triptime;
++		tsum2 += triptime * triptime;
+ 		if (triptime < tmin)
+ 			tmin = triptime;
+ 		if (triptime > tmax)
+@@ -864,14 +880,17 @@ static int common_ping_main(int opt, char **argv)
+ {
+ 	len_and_sockaddr *lsa;
+ 	char *str_s;
++        char *str_i;
+ 
+ 	INIT_G();
+ 
+ 	/* exactly one argument needed; -v and -q don't mix; -c NUM, -t NUM, -w NUM, -W NUM */
+ 	opt_complementary = "=1:q--v:v--q:c+:t+:w+:W+";
+-	opt |= getopt32(argv, OPT_STRING, &pingcount, &str_s, &opt_ttl, &deadline, &timeout, &str_I);
++	opt |= getopt32(argv, OPT_STRING, &pingcount, &str_s, &opt_ttl, &deadline, &timeout, &str_I, &str_i);
+ 	if (opt & OPT_s)
+ 		datalen = xatou16(str_s); // -s
++        if (opt & OPT_i)
++                pinginterval = atof(str_i); // -i
+ 	if (opt & OPT_I) { // -I
+ 		if_index = if_nametoindex(str_I);
+ 		if (!if_index) {

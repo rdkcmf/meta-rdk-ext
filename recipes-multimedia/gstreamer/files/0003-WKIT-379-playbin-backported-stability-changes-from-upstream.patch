@@ -1,0 +1,444 @@
+Date: Wed, 24 Feb 2016 16:37:28 +0200
+
+From: 593306d51b84d6048bb86767fcec809b294ccc24 Mon Sep 17 00:00:00 2001
+
+Subject: [PATCH] WKIT-379: backported stability changes from upstream
+
+        bin: Make sure to free all cached messages when going to NULL
+
+        An ASYNC READY->PAUSED might have failed without the bin code noticing during
+        the state change, in which case we will never get PAUSED->READY and would leak
+        messages.
+
+        pad: Unblock blocking pad probes when receiving FLUSH_START in send_event() too
+        Without this, flushing might not unblock the streaming thread and cause deadlocks.
+        basesink: clean up the need_preroll variable
+
+        Based on patch from Song Bing <b06498@freescale.com>
+
+        Don't just set the need_preroll flag to TRUE in all cases. When we
+        are already prerolled it needs to be set to FALSE and when we go to
+        READY we should not touch it. We should only set it to TRUE in other
+        cases, like what the code above does.
+
+
+        Backported commits are mentioned in patch files
+
+        void hang on early destruction
+
+Source: BUGZILLA
+
+License: LGPL-2.1-or-later
+
+Upstream-Status: Submitted [ https://bugzilla.gnome.org/show_bug.cgi?id=757257
+                             https://bugzilla.gnome.org/show_bug.cgi?id=756611
+                             https://bugzilla.gnome.org/show_bug.cgi?id=736655 ]
+
+Signed-off-by: Eugene Mutavchi <emutavchi@productengine.com>
+---
+
+ gst/playback/gstdecodebin2.c      |   1 +
+ gst/playback/gstplaybin2.c        | 140 ++++++++++++++++++++++++++++++++------
+ gst/playback/gstplaysink.c        |   1 +
+ gst/playback/gstsubtitleoverlay.c |   4 +-
+ gst/playback/gsturidecodebin.c    |   4 ++
+ 5 files changed, 127 insertions(+), 23 deletions(-)
+
+diff --git a/gst/playback/gstdecodebin2.c b/gst/playback/gstdecodebin2.c
+index e2bb1a0..f0c38fe 100644
+--- a/gst/playback/gstdecodebin2.c
++++ b/gst/playback/gstdecodebin2.c
+@@ -4590,6 +4590,7 @@ activate_failed:
+   {
+     GST_DEBUG_OBJECT (element,
+         "element failed to change states -- activation problem?");
++    do_async_done (dbin);
+     return GST_STATE_CHANGE_FAILURE;
+   }
+ }
+diff --git a/gst/playback/gstplaybin2.c b/gst/playback/gstplaybin2.c
+index 4e1f9bf..8228008 100644
+--- a/gst/playback/gstplaybin2.c
++++ b/gst/playback/gstplaybin2.c
+@@ -434,6 +434,7 @@ struct _GstPlayBin
+   GMutex dyn_lock;
+   /* if we are shutting down or not */
+   gint shutdown;
++  gboolean async_pending;       /* async-start has been emitted */
+ 
+   GMutex elements_lock;
+   guint32 elements_cookie;
+@@ -613,6 +614,8 @@ static void gst_play_bin_handle_message (GstBin * bin, GstMessage * message);
+ static gboolean gst_play_bin_query (GstElement * element, GstQuery * query);
+ static void gst_play_bin_set_context (GstElement * element,
+     GstContext * context);
++static gboolean gst_play_bin_send_event (GstElement * element,
++    GstEvent * event);
+ 
+ static GstTagList *gst_play_bin_get_video_tags (GstPlayBin * playbin,
+     gint stream);
+@@ -628,7 +631,8 @@ static GstPad *gst_play_bin_get_video_pad (GstPlayBin * playbin, gint stream);
+ static GstPad *gst_play_bin_get_audio_pad (GstPlayBin * playbin, gint stream);
+ static GstPad *gst_play_bin_get_text_pad (GstPlayBin * playbin, gint stream);
+ 
+-static gboolean setup_next_source (GstPlayBin * playbin, GstState target);
++static GstStateChangeReturn setup_next_source (GstPlayBin * playbin,
++    GstState target);
+ 
+ static void no_more_pads_cb (GstElement * decodebin, GstSourceGroup * group);
+ static void pad_removed_cb (GstElement * decodebin, GstPad * pad,
+@@ -1267,12 +1271,42 @@ gst_play_bin_class_init (GstPlayBinClass * klass)
+       GST_DEBUG_FUNCPTR (gst_play_bin_change_state);
+   gstelement_klass->query = GST_DEBUG_FUNCPTR (gst_play_bin_query);
+   gstelement_klass->set_context = GST_DEBUG_FUNCPTR (gst_play_bin_set_context);
++  gstelement_klass->send_event = GST_DEBUG_FUNCPTR (gst_play_bin_send_event);
+ 
+   gstbin_klass->handle_message =
+       GST_DEBUG_FUNCPTR (gst_play_bin_handle_message);
+ }
+ 
+ static void
++do_async_start (GstPlayBin * playbin)
++{
++  GstMessage *message;
++
++  playbin->async_pending = TRUE;
++
++  message = gst_message_new_async_start (GST_OBJECT_CAST (playbin));
++  GST_BIN_CLASS (parent_class)->handle_message (GST_BIN_CAST (playbin),
++      message);
++}
++
++static void
++do_async_done (GstPlayBin * playbin)
++{
++  GstMessage *message;
++
++  if (playbin->async_pending) {
++    GST_DEBUG_OBJECT (playbin, "posting ASYNC_DONE");
++    message =
++        gst_message_new_async_done (GST_OBJECT_CAST (playbin),
++        GST_CLOCK_TIME_NONE);
++    GST_BIN_CLASS (parent_class)->handle_message (GST_BIN_CAST (playbin),
++        message);
++
++    playbin->async_pending = FALSE;
++  }
++}
++
++static void
+ init_group (GstPlayBin * playbin, GstSourceGroup * group)
+ {
+   /* store the array for the different channels */
+@@ -2873,6 +2907,11 @@ gst_play_bin_handle_message (GstBin * bin, GstMessage * msg)
+         gst_bin_remove (bin, group->suburidecodebin);
+         gst_element_set_locked_state (group->suburidecodebin, FALSE);
+ 
++        GST_SOURCE_GROUP_LOCK (group);
++        g_free (group->suburi);
++        group->suburi = NULL;
++        GST_SOURCE_GROUP_UNLOCK (group);
++
+         if (group->sub_pending) {
+           group->sub_pending = FALSE;
+           no_more_pads_cb (NULL, group);
+@@ -3105,6 +3144,8 @@ pad_added_cb (GstElement * decodebin, GstPad * pad, GstSourceGroup * group)
+ 
+   playbin = group->playbin;
+ 
++  GST_PLAY_BIN_SHUTDOWN_LOCK (playbin, shutdown);
++
+   caps = gst_pad_get_current_caps (pad);
+   if (!caps)
+     caps = gst_pad_query_caps (pad, NULL);
+@@ -3146,8 +3187,10 @@ pad_added_cb (GstElement * decodebin, GstPad * pad, GstSourceGroup * group)
+   }
+   /* no combiner found for the media type, don't bother linking it to a
+    * combiner. This will leave the pad unlinked and thus ignored. */
+-  if (combine == NULL)
++  if (combine == NULL) {
++    GST_PLAY_BIN_SHUTDOWN_UNLOCK (playbin);
+     goto unknown_type;
++  }
+ 
+   GST_SOURCE_GROUP_LOCK (group);
+   if (combine->combiner == NULL && playbin->have_selector) {
+@@ -3193,6 +3236,8 @@ pad_added_cb (GstElement * decodebin, GstPad * pad, GstSourceGroup * group)
+     }
+   }
+ 
++  GST_PLAY_BIN_SHUTDOWN_UNLOCK (playbin);
++
+   if (combine->srcpad == NULL) {
+     if (combine->combiner) {
+       /* save source pad of the combiner */
+@@ -3342,6 +3387,12 @@ request_pad_failed:
+       ("Failed to get request pad from combiner %p.", combine->combiner));
+   GST_SOURCE_GROUP_UNLOCK (group);
+   goto done;
++shutdown:
++  {
++    GST_DEBUG ("ignoring, we are shutting down. Pad will be left unlinked");
++    /* not going to done as we didn't request the caps */
++    return;
++  }
+ }
+ 
+ /* called when a pad is removed from the uridecodebin. We unlink the pad from
+@@ -3583,6 +3634,10 @@ no_more_pads_cb (GstElement * decodebin, GstSourceGroup * group)
+ 
+   GST_PLAY_BIN_SHUTDOWN_UNLOCK (playbin);
+ 
++  if (configure) {
++    do_async_done (playbin);
++  }
++
+   return;
+ 
+ shutdown:
+@@ -4140,6 +4195,27 @@ autoplug_factories_cb (GstElement * decodebin, GstPad * pad,
+   return result;
+ }
+ 
++static gboolean
++gst_play_bin_send_event (GstElement * element, GstEvent * event)
++{
++  GstPlayBin *playbin = GST_PLAY_BIN (element);
++
++  /* Send event directly to playsink instead of letting GstBin iterate
++   * over all sink elements. The latter might send the event multiple times
++   * in case the SEEK causes a reconfiguration of the pipeline, as can easily
++   * happen with adaptive streaming demuxers.
++   *
++   * What would then happen is that the iterator would be reset, we send the
++   * event again, and on the second time it will fail in the majority of cases
++   * because the pipeline is still being reconfigured
++   */
++  if (GST_EVENT_IS_UPSTREAM (event)) {
++    return gst_element_send_event (GST_ELEMENT_CAST (playbin->playsink), event);
++  }
++
++  return GST_ELEMENT_CLASS (parent_class)->send_event (element, event);
++}
++
+ static void
+ gst_play_bin_set_context (GstElement * element, GstContext * context)
+ {
+@@ -4991,7 +5067,7 @@ group_set_locked_state_unlocked (GstPlayBin * playbin, GstSourceGroup * group,
+ }
+ 
+ /* must be called with PLAY_BIN_LOCK */
+-static gboolean
++static GstStateChangeReturn
+ activate_group (GstPlayBin * playbin, GstSourceGroup * group, GstState target)
+ {
+   GstElement *uridecodebin = NULL;
+@@ -5000,9 +5076,10 @@ activate_group (GstPlayBin * playbin, GstSourceGroup * group, GstState target)
+   gboolean audio_sink_activated = FALSE;
+   gboolean video_sink_activated = FALSE;
+   gboolean text_sink_activated = FALSE;
++  GstStateChangeReturn state_ret;
+ 
+-  g_return_val_if_fail (group->valid, FALSE);
+-  g_return_val_if_fail (!group->active, FALSE);
++  g_return_val_if_fail (group->valid, GST_STATE_CHANGE_FAILURE);
++  g_return_val_if_fail (!group->active, GST_STATE_CHANGE_FAILURE);
+ 
+   GST_DEBUG_OBJECT (playbin, "activating group %p", group);
+ 
+@@ -5206,10 +5283,14 @@ activate_group (GstPlayBin * playbin, GstSourceGroup * group, GstState target)
+         group->sub_pending = FALSE;
+       }
+       gst_element_set_state (suburidecodebin, GST_STATE_READY);
++      g_free (group->suburi);
++      group->suburi = NULL;
+       GST_SOURCE_GROUP_UNLOCK (group);
+     }
+   }
+-  if (gst_element_set_state (uridecodebin, target) == GST_STATE_CHANGE_FAILURE)
++  if ((state_ret =
++          gst_element_set_state (uridecodebin,
++              target)) == GST_STATE_CHANGE_FAILURE)
+     goto uridecodebin_failure;
+ 
+   GST_SOURCE_GROUP_LOCK (group);
+@@ -5218,7 +5299,7 @@ activate_group (GstPlayBin * playbin, GstSourceGroup * group, GstState target)
+   group->active = TRUE;
+   GST_SOURCE_GROUP_UNLOCK (group);
+ 
+-  return TRUE;
++  return state_ret;
+ 
+   /* ERRORS */
+ no_decodebin:
+@@ -5286,7 +5367,7 @@ error_cleanup:
+ 
+     GST_SOURCE_GROUP_UNLOCK (group);
+ 
+-    return FALSE;
++    return GST_STATE_CHANGE_FAILURE;
+   }
+ }
+ 
+@@ -5394,10 +5475,11 @@ deactivate_group (GstPlayBin * playbin, GstSourceGroup * group)
+ /* setup the next group to play, this assumes the next_group is valid and
+  * configured. It swaps out the current_group and activates the valid
+  * next_group. */
+-static gboolean
++static GstStateChangeReturn
+ setup_next_source (GstPlayBin * playbin, GstState target)
+ {
+   GstSourceGroup *new_group, *old_group;
++  GstStateChangeReturn state_ret;
+ 
+   GST_DEBUG_OBJECT (playbin, "setup sources");
+ 
+@@ -5423,12 +5505,14 @@ setup_next_source (GstPlayBin * playbin, GstState target)
+   playbin->next_group = old_group;
+ 
+   /* activate the new group */
+-  if (!activate_group (playbin, new_group, target))
++  if ((state_ret =
++          activate_group (playbin, new_group,
++              target)) == GST_STATE_CHANGE_FAILURE)
+     goto activate_failed;
+ 
+   GST_PLAY_BIN_UNLOCK (playbin);
+ 
+-  return TRUE;
++  return state_ret;
+ 
+   /* ERRORS */
+ no_next_group:
+@@ -5437,14 +5521,15 @@ no_next_group:
+     if (target == GST_STATE_READY && new_group && new_group->uri == NULL)
+       GST_ELEMENT_ERROR (playbin, RESOURCE, NOT_FOUND, ("No URI set"), (NULL));
+     GST_PLAY_BIN_UNLOCK (playbin);
+-    return FALSE;
++    return GST_STATE_CHANGE_FAILURE;
+   }
+ activate_failed:
+   {
+     new_group->stream_changed_pending = FALSE;
+     GST_DEBUG_OBJECT (playbin, "activate failed");
++    new_group->valid = FALSE;
+     GST_PLAY_BIN_UNLOCK (playbin);
+-    return FALSE;
++    return GST_STATE_CHANGE_FAILURE;
+   }
+ }
+ 
+@@ -5510,11 +5595,7 @@ gst_play_bin_change_state (GstElement * element, GstStateChange transition)
+       GST_LOG_OBJECT (playbin, "clearing shutdown flag");
+       memset (&playbin->duration, 0, sizeof (playbin->duration));
+       g_atomic_int_set (&playbin->shutdown, 0);
+-
+-      if (!setup_next_source (playbin, GST_STATE_READY)) {
+-        ret = GST_STATE_CHANGE_FAILURE;
+-        goto failure;
+-      }
++      do_async_start (playbin);
+       break;
+     case GST_STATE_CHANGE_PAUSED_TO_READY:
+     async_down:
+@@ -5533,7 +5614,7 @@ gst_play_bin_change_state (GstElement * element, GstStateChange transition)
+         break;
+     case GST_STATE_CHANGE_READY_TO_NULL:
+       /* we go async to PAUSED, so if that fails, we never make it to PAUSED
+-       * an no state change PAUSED to READY passes here,
++       * and no state change PAUSED to READY passes here,
+        * though it is a nice-to-have ... */
+       if (!g_atomic_int_get (&playbin->shutdown)) {
+         do_save = TRUE;
+@@ -5554,8 +5635,16 @@ gst_play_bin_change_state (GstElement * element, GstStateChange transition)
+ 
+   switch (transition) {
+     case GST_STATE_CHANGE_READY_TO_PAUSED:
++      if ((ret =
++              setup_next_source (playbin,
++                  GST_STATE_PAUSED)) == GST_STATE_CHANGE_FAILURE)
++        goto failure;
++      if (ret == GST_STATE_CHANGE_SUCCESS)
++        ret = GST_STATE_CHANGE_ASYNC;
++
+       break;
+     case GST_STATE_CHANGE_PLAYING_TO_PAUSED:
++      do_async_done (playbin);
+       /* FIXME Release audio device when we implement that */
+       break;
+     case GST_STATE_CHANGE_PAUSED_TO_READY:
+@@ -5642,18 +5731,25 @@ gst_play_bin_change_state (GstElement * element, GstStateChange transition)
+       break;
+   }
+ 
++  if (ret == GST_STATE_CHANGE_NO_PREROLL)
++    do_async_done (playbin);
++
+   return ret;
+ 
+   /* ERRORS */
+ failure:
+   {
++    do_async_done (playbin);
++
+     if (transition == GST_STATE_CHANGE_READY_TO_PAUSED) {
+       GstSourceGroup *curr_group;
+ 
+       curr_group = playbin->curr_group;
+-      if (curr_group && curr_group->active && curr_group->valid) {
+-        /* unlink our pads with the sink */
+-        deactivate_group (playbin, curr_group);
++      if (curr_group) {
++        if (curr_group->active && curr_group->valid) {
++          /* unlink our pads with the sink */
++          deactivate_group (playbin, curr_group);
++        }
+         curr_group->valid = FALSE;
+       }
+ 
+diff --git a/gst/playback/gstplaysink.c b/gst/playback/gstplaysink.c
+index 839cde1..9747c8e 100644
+--- a/gst/playback/gstplaysink.c
++++ b/gst/playback/gstplaysink.c
+@@ -4929,6 +4929,7 @@ activate_failed:
+   {
+     GST_DEBUG_OBJECT (element,
+         "element failed to change states -- activation problem?");
++    do_async_done (playsink);
+     return GST_STATE_CHANGE_FAILURE;
+   }
+ }
+diff --git a/gst/playback/gstsubtitleoverlay.c b/gst/playback/gstsubtitleoverlay.c
+index e5b2fea..9239c4a 100644
+--- a/gst/playback/gstsubtitleoverlay.c
++++ b/gst/playback/gstsubtitleoverlay.c
+@@ -1333,8 +1333,10 @@ gst_subtitle_overlay_change_state (GstElement * element,
+ 
+     bret = GST_ELEMENT_CLASS (parent_class)->change_state (element, transition);
+     GST_DEBUG_OBJECT (self, "Base class state changed returned: %d", bret);
+-    if (G_UNLIKELY (bret == GST_STATE_CHANGE_FAILURE))
++    if (G_UNLIKELY (bret == GST_STATE_CHANGE_FAILURE)) {
++      do_async_done (self);
+       return ret;
++    }
+     else if (bret == GST_STATE_CHANGE_ASYNC)
+       ret = bret;
+     else if (G_UNLIKELY (bret == GST_STATE_CHANGE_NO_PREROLL)) {
+diff --git a/gst/playback/gsturidecodebin.c b/gst/playback/gsturidecodebin.c
+index 709483e..decd120 100644
+--- a/gst/playback/gsturidecodebin.c
++++ b/gst/playback/gsturidecodebin.c
+@@ -2747,6 +2747,10 @@ gst_uri_decode_bin_change_state (GstElement * element,
+     default:
+       break;
+   }
++
++  if (ret == GST_STATE_CHANGE_NO_PREROLL)
++    do_async_done (decoder);
++
+   return ret;
+ 
+   /* ERRORS */
+-- 
+2.1.4
+

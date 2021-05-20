@@ -1,0 +1,88 @@
+From f0ef22537b366a9a449d968a08b967f1f48e4a09 Mon Sep 17 00:00:00 2001
+From: Balaji Selvam <balaji_selvam@comcast.com>
+Source: COMCAST
+License: LICENSE-LGPL-2.1
+Upstream-Status: Pending
+Signed-off-by: Balaji Selvam <balaji_selvam@comcast.com>
+Date: Thu, 8 Aug 2019 19:40:30 +0000
+Subject: [PATCH] comcast-browse-to-watch-log
+
+---
+ .../gstreamer/MediaPlayerPrivateGStreamer.cpp      | 38 ++++++++++++++++++++++
+ Source/WebCore/replay/UserInputBridge.cpp          |  6 ++++
+ 2 files changed, 44 insertions(+)
+
+Index: git/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp
+===================================================================
+--- git.orig/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp
++++ git/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp
+@@ -90,6 +90,30 @@ GST_DEBUG_CATEGORY_EXTERN(webkit_media_p
+ namespace WebCore {
+ using namespace std;
+ 
++MonotonicTime gEnterKeyDownTime;
++
++void noticeEnterKeyDownEvent()
++{
++    gEnterKeyDownTime = WTF::MonotonicTime::now();
++}
++
++void noticeFirstVideoFrame()
++{
++    if (gEnterKeyDownTime)
++    {
++        auto diffTime = WTF::MonotonicTime::now() - gEnterKeyDownTime;
++        gEnterKeyDownTime = MonotonicTime();
++        WTFLogAlways("Media: browse-to-watch = %.2f ms\n", diffTime.milliseconds());
++    }
++}
++
++#if USE(WESTEROS_SINK)
++static void onFirstVideoFrameCallback(MediaPlayerPrivateGStreamer* /*player*/)
++{
++    noticeFirstVideoFrame();
++}
++#endif
++
+ static void busMessageCallback(GstBus*, GstMessage* message, MediaPlayerPrivateGStreamer* player)
+ {
+     player->handleMessage(message);
+@@ -216,6 +240,9 @@ MediaPlayerPrivateGStreamer::~MediaPlaye
+     if (m_videoSink) {
+         GRefPtr<GstPad> videoSinkPad = adoptGRef(gst_element_get_static_pad(m_videoSink.get(), "sink"));
+         g_signal_handlers_disconnect_matched(videoSinkPad.get(), G_SIGNAL_MATCH_DATA, 0, 0, nullptr, nullptr, this);
++#if USE(WESTEROS_SINK)
++        g_signal_handlers_disconnect_by_func(G_OBJECT(m_videoSink.get()), reinterpret_cast<gpointer>(onFirstVideoFrameCallback), this);
++#endif
+     }
+ 
+     if (m_pipeline) {
+@@ -2765,6 +2792,11 @@ void MediaPlayerPrivateGStreamer::create
+         g_signal_connect_swapped(videoSinkPad.get(), "notify::caps", G_CALLBACK(videoSinkCapsChangedCallback), this);
+ #endif
+ 
++#if USE(WESTEROS_SINK)
++    if (m_videoSink)
++        g_signal_connect_swapped(m_videoSink.get(), "first-video-frame-callback", G_CALLBACK(onFirstVideoFrameCallback), this);
++#endif
++
+ #if !USE(WESTEROS_SINK) && !USE(FUSION_SINK)
+     g_object_set(m_pipeline.get(), "audio-sink", createAudioSink(), nullptr);
+ #endif
+Index: git/Source/WebCore/replay/UserInputBridge.cpp
+===================================================================
+--- git.orig/Source/WebCore/replay/UserInputBridge.cpp
++++ git/Source/WebCore/replay/UserInputBridge.cpp
+@@ -77,8 +77,12 @@ bool UserInputBridge::handleMouseForceEv
+     return m_page.mainFrame().eventHandler().handleMouseForceEvent(mouseEvent);
+ }
+ 
++// Implemented in MediaPlayerPrivateGStreamer.cpp
++void noticeEnterKeyDownEvent();
+ bool UserInputBridge::handleKeyEvent(const PlatformKeyboardEvent& keyEvent, InputSource)
+ {
++    if (keyEvent.type() == PlatformEvent::KeyDown && keyEvent.keyIdentifier() == "Enter")
++        noticeEnterKeyDownEvent();
+     return m_page.focusController().focusedOrMainFrame().eventHandler().keyEvent(keyEvent);
+ }
+ 

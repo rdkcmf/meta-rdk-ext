@@ -1,0 +1,64 @@
+Copyright (c) 2004, Jan Kneschke, incremental
+All rights reserved.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
+
+- Redistributions of source code must retain the above copyright notice, this
+list of conditions and the following disclaimer.
+
+- Redistributions in binary form must reproduce the above copyright notice,
+this list of conditions and the following disclaimer in the documentation
+and/or other materials provided with the distribution.
+
+- Neither the name of the 'incremental' nor the names of its contributors may
+be used to endorse or promote products derived from this software without
+specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE
+LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
+THE POSSIBILITY OF SUCH DAMAGE.
+
+Date: Feb 18, 2017 12:52 AM
+
+From: c180251783de9b86e99c7d87aea4d3aa6cdcd42a Feb 18, 2017 2:52 AM
+
+Subject: [PATCH] CISCOXB3-1982: lighttpderror, SSL_shutdown:shutdown while in init
+
+	[Field] 2.3p11s2 | lighttpderror | Device went to Captive Portal | Continuous logs of error:140E0197:SSL routines:SSL_shutdown:sh	 utdown while in init
+	SSL errors "SSL: 1 -1 error:140E0197:SSL routines:SSL_shutdown:shutdown while in init" and "SSL: 1 error:140760FC:SSL routines:SS	 L23_GET_CLIENT_HELLO:unknown protocol" are added in openssl 1.0.2f.
+	lighttpd git master (post lighttpd 1.4.41) has a patch to skip SSL_shutdown() if TLS handshake has not yet completed.
+	
+Source: LIGHTTPD 
+
+Upstream-Status: Submitted [ https://redmine.lighttpd.net/projects/lighttpd/repository/revisions/156bea38597ced5de7521ada2e85fb67aead21db/diff/src/connections.c ] 
+
+Signed-off-by: Santosh Nayak Santosh_Nayak03@infosys.com 
+---
+
+#post lighttpd 1.4.41 this fix won't be needed
+#SSL errors "SSL: 1 -1 error:140E0197:SSL routines:SSL_shutdown:shutdown while in init" and "SSL: 1 error:140760FC:SSL routines:SSL23_GET_CLIENT_HELLO:unknown protocol" are added in openssl 1.0.2f. lighttpd git master (post lighttpd 1.4.41) has a patch to skip SSL_shutdown() if TLS handshake has not yet completed.
+#We have backported this fix from git master (post lighttpd 1.4.41) to 1.4.39.
+
+Index: lighttpd-1.4.39/src/connections.c
+===================================================================
+--- lighttpd-1.4.39.orig/src/connections.c
++++ lighttpd-1.4.39/src/connections.c
+
+@@ -1504,7 +1504,7 @@ int connection_state_machine(server *srv
+ 				plugins_call_handle_request_done(srv, con);
+ 			}
+ #ifdef USE_OPENSSL
+-			if (srv_sock->is_ssl) {
++			if (srv_sock->is_ssl && SSL_is_init_finished(con->ssl)) {
+ 				int ret, ssl_r;
+ 				unsigned long err;
+ 				ERR_clear_error();

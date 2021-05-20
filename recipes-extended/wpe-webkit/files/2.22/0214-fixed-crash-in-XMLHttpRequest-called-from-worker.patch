@@ -1,0 +1,30 @@
+From cfe5de83c63c41dee280378d041be6c39ca774c4 Mon Sep 17 00:00:00 2001
+From: Amadeusz Skrzypczak <amadeusz.skrzypczak@ukbuilder01.redembedded.com>
+Date: Fri, 13 Nov 2020 11:18:16 +0000
+Subject: [PATCH] Fixed crash when calling XMLHttpRequest.setRequestHeader() in a worker
+
+Patch comes from webkit upstream
+https://github.com/WebKit/webkit/commit/673841f96982b745e2a6cab7779d0d3ab7732950
+
+---
+ Source/WebCore/xml/XMLHttpRequest.cpp | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/Source/WebCore/xml/XMLHttpRequest.cpp b/Source/WebCore/xml/XMLHttpRequest.cpp
+index fe5011d..9885b53 100644
+--- a/Source/WebCore/xml/XMLHttpRequest.cpp
++++ b/Source/WebCore/xml/XMLHttpRequest.cpp
+@@ -822,7 +822,9 @@ ExceptionOr<void> XMLHttpRequest::setRequestHeader(const String& name, const Str
+ #if ENABLE(DASHBOARD_SUPPORT)
+     allowUnsafeHeaderField = usesDashboardBackwardCompatibilityMode();
+ #endif
+-    if (securityOrigin()->canLoadLocalResources() && document()->settings().allowSettingAnyXHRHeaderFromFileURLs())
++
++    // FIXME: The allowSettingAnyXHRHeaderFromFileURLs setting currently only applies to Documents, not workers.
++    if (securityOrigin()->canLoadLocalResources() && scriptExecutionContext()->isDocument() && document()->settings().allowSettingAnyXHRHeaderFromFileURLs())
+         allowUnsafeHeaderField = true;
+     if (!allowUnsafeHeaderField && isForbiddenHeaderName(name)) {
+         logConsoleError(scriptExecutionContext(), "Refused to set unsafe header \"" + name + "\"");
+-- 
+1.8.3.1
+

@@ -1,0 +1,27 @@
+From 5b6df0a49f1978f637514365401f40b54918c3b7 Mon Sep 17 00:00:00 2001
+From: Eugene Mutavchi <Ievgen_Mutavchi@comcast.com>
+Date: Wed, 24 Feb 2021 01:17:29 +0000
+Subject: [PATCH] Fix RWI on macOS Big Sur
+
+---
+ Source/WebInspectorUI/UserInterface/Base/Platform.js | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/Source/WebInspectorUI/UserInterface/Base/Platform.js b/Source/WebInspectorUI/UserInterface/Base/Platform.js
+index c82e01238d04..3db035146e0a 100644
+--- a/Source/WebInspectorUI/UserInterface/Base/Platform.js
++++ b/Source/WebInspectorUI/UserInterface/Base/Platform.js
+@@ -45,8 +45,8 @@ WI.Platform = {
+     }
+ 
+     let osVersionMatch = / Mac OS X (\d+)_(\d+)/.exec(navigator.appVersion);
+-    if (osVersionMatch && osVersionMatch[1] === "10") {
+-        WI.Platform.version.base = 10;
++    if (osVersionMatch) {
++        WI.Platform.version.base = parseInt(osVersionMatch[1]);
+         WI.Platform.version.release = parseInt(osVersionMatch[2]);
+         switch (osVersionMatch[2]) {
+         case "12":
+-- 
+2.17.1
+

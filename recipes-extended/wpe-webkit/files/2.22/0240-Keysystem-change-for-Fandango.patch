@@ -1,0 +1,67 @@
+From 8de2c0b133373acfc1a1abf061a4c71e128aab0e Mon Sep 17 00:00:00 2001
+From: nrajan002c <nambi_rajang@cable.comcast.com>
+Date: Thu, 25 Mar 2021 08:45:27 +0000
+Subject: [PATCH] Keysystem change for Fandango
+
+Signed-off-by: nrajan002c <nambi_rajang@cable.comcast.com>
+---
+ Source/WebCore/Modules/encryptedmedia/CDM.cpp                  |  6 ++++--
+ .../platform/graphics/gstreamer/eme/GStreamerEMEUtilities.h    | 10 +++++-----
+ 2 files changed, 9 insertions(+), 7 deletions(-)
+
+diff --git a/Source/WebCore/Modules/encryptedmedia/CDM.cpp b/Source/WebCore/Modules/encryptedmedia/CDM.cpp
+index 5059036..98b66c5 100644
+--- a/Source/WebCore/Modules/encryptedmedia/CDM.cpp
++++ b/Source/WebCore/Modules/encryptedmedia/CDM.cpp
+@@ -64,10 +64,12 @@ CDM::CDM(Document& document, const String& keySystem)
+     : ContextDestructionObserver(&document)
+     , m_keySystem(keySystem)
+ {
+-    ASSERT(supportsKeySystem(keySystem));
++    // append the origin domain to the keysystem string
++    String keysystemDomain = keySystem + ";origin=" + document.securityOrigin().domain();
++
+     for (auto* factory : CDMFactory::registeredFactories()) {
+         if (factory->supportsKeySystem(keySystem)) {
+-            m_private = factory->createCDM(keySystem);
++            m_private = factory->createCDM(keysystemDomain);
+             break;
+         }
+     }
+diff --git a/Source/WebCore/platform/graphics/gstreamer/eme/GStreamerEMEUtilities.h b/Source/WebCore/platform/graphics/gstreamer/eme/GStreamerEMEUtilities.h
+index 2070bd7..b2376bf 100644
+--- a/Source/WebCore/platform/graphics/gstreamer/eme/GStreamerEMEUtilities.h
++++ b/Source/WebCore/platform/graphics/gstreamer/eme/GStreamerEMEUtilities.h
+@@ -63,24 +63,24 @@ public:
+ 
+     static bool isClearKeyKeySystem(const String& keySystem)
+     {
+-        return equalIgnoringASCIICase(keySystem, s_ClearKeyKeySystem);
++        return keySystem.startsWithIgnoringASCIICase(s_ClearKeyKeySystem);
+     }
+ 
+     static bool isUnspecifiedKeySystem(const String& keySystem)
+     {
+-        return equalIgnoringASCIICase(keySystem, s_UnspecifiedKeySystem);
++        return keySystem.startsWithIgnoringASCIICase(s_UnspecifiedKeySystem);
+     }
+ 
+ #if USE(OPENCDM)
+     static bool isPlayReadyKeySystem(const String& keySystem)
+     {
+-        return equalIgnoringASCIICase(keySystem, s_PlayReadyKeySystems[0])
+-            || equalIgnoringASCIICase(keySystem, s_PlayReadyKeySystems[1]);
++        return keySystem.startsWithIgnoringASCIICase(s_PlayReadyKeySystems[0])
++            || keySystem.startsWithIgnoringASCIICase(s_PlayReadyKeySystems[1]);
+     }
+ 
+     static bool isWidevineKeySystem(const String& keySystem)
+     {
+-        return equalIgnoringASCIICase(keySystem, s_WidevineKeySystem);
++        return keySystem.startsWithIgnoringASCIICase(s_WidevineKeySystem);
+     }
+ #endif
+ 
+-- 
+1.9.1
+

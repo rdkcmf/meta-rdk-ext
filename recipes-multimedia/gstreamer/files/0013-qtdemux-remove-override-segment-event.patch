@@ -1,0 +1,32 @@
+Date: Jan 17 22:43:19 2018
+
+From: 4886e3c45d8eceb04e453c1fb93cf201d118322a Jan 19 03:02:21 2018
+
+Subject: [PATCH] DELIA-25802: 4K VOD AAMP PTS error after seek
+
+	qtdemux overrides segment.position value of a
+	received SEGMENT event. This was resulting in PTS error from brcmvideodecoder
+	since AAMP sends a GST_EVENT_SEGMENT right after flushing gst pipeline for seek.
+
+Source: COMCAST
+
+License: LGPL-2.1-or-later
+
+Upstream-Status: Pending
+
+Signed-off-by: Vinish K B <Vinish_KB@comcast.com>
+---
+
+Index: gst-plugins-good-1.10.4/gst/isomp4/qtdemux.c
+===================================================================
+--- gst-plugins-good-1.10.4.orig/gst/isomp4/qtdemux.c
++++ gst-plugins-good-1.10.4/gst/isomp4/qtdemux.c
+@@ -2182,7 +2182,7 @@ gst_qtdemux_handle_sink_event (GstPad *
+ 
+       /* accept upstream's notion of segment and distribute along */
+       segment.format = GST_FORMAT_TIME;
+-      segment.position = segment.time = segment.start;
++      segment.time = segment.start;
+       segment.duration = demux->segment.duration;
+       segment.base = gst_segment_to_running_time (&demux->segment,
+           GST_FORMAT_TIME, demux->segment.position);

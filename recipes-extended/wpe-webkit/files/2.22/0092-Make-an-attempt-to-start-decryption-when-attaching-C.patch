@@ -1,0 +1,76 @@
+From 1424d06d4371d3cd5a07ce90f19ba0574f68a958 Mon Sep 17 00:00:00 2001
+From: Ievgen Mutavchi <Ievgen_Mutavchi@comcast.com>
+Date: Sun, 26 Apr 2020 12:04:12 -0400
+Subject: [PATCH 81/93] Make an attempt to start decryption when attaching
+ CDMInstance with valid key sessions
+Source: COMCAST
+License: GPLV2
+Upstream-Status: None
+Signed-off-by: Eugene Mutavchi <Ievgen_Mutavchi@comcast.com>
+
+---
+ .../gstreamer/MediaPlayerPrivateGStreamerBase.cpp  | 10 ++++++++++
+ .../platform/graphics/gstreamer/eme/CDMOpenCDM.cpp | 14 ++++++++++++++
+ .../platform/graphics/gstreamer/eme/CDMOpenCDM.h   |  3 +++
+ 3 files changed, 27 insertions(+)
+
+Index: git/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamerBase.cpp
+===================================================================
+--- git.orig/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamerBase.cpp
++++ git/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamerBase.cpp
+@@ -1504,6 +1504,16 @@ void MediaPlayerPrivateGStreamerBase::cd
+     gst_element_set_context(GST_ELEMENT(m_pipeline.get()), context.get());
+ 
+     GST_LOG("CDM instance %p dispatched as context", m_cdmInstance.get());
++
++    #if USE(OPENCDM)
++    if (m_cdmInstance) {
++        auto& cdmInstanceOpenCDM = downcast<WebCore::CDMInstanceOpenCDM>(*m_cdmInstance);
++        if (cdmInstanceOpenCDM.hasValidSessions())
++        {
++            attemptToDecryptWithLocalInstance();
++        }
++    }
++    #endif
+ }
+ 
+ void MediaPlayerPrivateGStreamerBase::cdmInstanceDetached(CDMInstance& instance)
+Index: git/Source/WebCore/platform/graphics/gstreamer/eme/CDMOpenCDM.cpp
+===================================================================
+--- git.orig/Source/WebCore/platform/graphics/gstreamer/eme/CDMOpenCDM.cpp
++++ git/Source/WebCore/platform/graphics/gstreamer/eme/CDMOpenCDM.cpp
+@@ -706,6 +706,20 @@ RefPtr<CDMInstanceOpenCDM::Session> CDMI
+     return session == m_sessionsMap.end() ? nullptr : session->value;
+ }
+ 
++bool CDMInstanceOpenCDM::hasValidSessions() const
++{
++    LockHolder locker(m_sessionMapMutex);
++    if (m_sessionsMap.size() > 0)
++    {
++        for (const auto& pair : m_sessionsMap)
++        {
++            if (pair.value->isValid())
++                return true;
++        }
++    }
++    return false;
++}
++
+ } // namespace WebCore
+ 
+ #endif // ENABLE(ENCRYPTED_MEDIA) && USE(OPENCDM)
+Index: git/Source/WebCore/platform/graphics/gstreamer/eme/CDMOpenCDM.h
+===================================================================
+--- git.orig/Source/WebCore/platform/graphics/gstreamer/eme/CDMOpenCDM.h
++++ git/Source/WebCore/platform/graphics/gstreamer/eme/CDMOpenCDM.h
+@@ -104,6 +104,9 @@ public:
+     CDMInstanceClient* client() const { return m_client; }
+ 
+     OpenCDMSystem* ocdmSystem() const { return &m_openCDMSystem; }
++
++    bool hasValidSessions() const;
++
+ private:
+     bool addSession(const String& sessionId, RefPtr<Session>&& session);
+     bool removeSession(const String& sessionId);

@@ -1,0 +1,60 @@
+Date: Tue, 24 Nov 2015 16:25:48 +0200
+
+From: fe6bc30e63e2fc5b25209d01c7b4acbe43644125 Mon Sep 17 00:00:00 2001
+
+Subject: [PATCH] WKIT-393: Fix gst buffers leak on parsing encrypted info
+
+	Fix protection info leak
+
+Source: COMCAST
+
+License: LGPL-2.1-or-later
+
+Upstream-Status: Pending
+
+Signed-off-by: Eugene Mutavchi <emutavchi@productengine.com>
+
+---
+ gst/isomp4/qtdemux.c | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+diff --git a/gst/isomp4/qtdemux.c b/gst/isomp4/qtdemux.c
+index 6c58181..bccd44e 100644
+--- a/gst/isomp4/qtdemux.c
++++ b/gst/isomp4/qtdemux.c
+@@ -2415,6 +2415,8 @@ qtdemux_parse_ftyp (GstQTDemux * qtdemux, const guint8 * buffer, gint length)
+     qtdemux->major_brand = QT_FOURCC (buffer + 8);
+     GST_DEBUG_OBJECT (qtdemux, "major brand: %" GST_FOURCC_FORMAT,
+         GST_FOURCC_ARGS (qtdemux->major_brand));
++    if (qtdemux->comp_brands)
++      gst_buffer_unref (qtdemux->comp_brands);
+     buf = qtdemux->comp_brands = gst_buffer_new_and_alloc (length - 16);
+     gst_buffer_fill (buf, 0, buffer + 16, length - 16);
+   }
+@@ -3430,6 +3432,7 @@ qtdemux_parse_cenc_aux_info (GstQTDemux * qtdemux, QtDemuxStream * stream,
+     }
+     buf = gst_buffer_new_wrapped (data, iv_size);
+     gst_structure_set (properties, "iv", GST_TYPE_BUFFER, buf, NULL);
++    gst_buffer_unref (buf);
+     size = info_sizes[i];
+     if (size > iv_size) {
+       if (!gst_byte_reader_get_uint16_be (br, &n_subsamples)
+@@ -3454,6 +3457,7 @@ qtdemux_parse_cenc_aux_info (GstQTDemux * qtdemux, QtDemuxStream * stream,
+       gst_structure_set (properties,
+           "subsample_count", G_TYPE_UINT, n_subsamples,
+           "subsamples", GST_TYPE_BUFFER, buf, NULL);
++      gst_buffer_unref (buf);
+     } else {
+       gst_structure_set (properties, "subsample_count", G_TYPE_UINT, 0, NULL);
+     }
+@@ -9415,6 +9419,7 @@ qtdemux_parse_trak (GstQTDemux * qtdemux, GNode * trak)
+              * than its own fourcc */
+             gst_caps_set_simple (stream->caps, "seqh", GST_TYPE_BUFFER, seqh,
+                 NULL);
++            gst_buffer_unref (seqh);
+           }
+ 
+           GST_DEBUG_OBJECT (qtdemux, "found codec_data in stsd");
+-- 
+2.1.4
+

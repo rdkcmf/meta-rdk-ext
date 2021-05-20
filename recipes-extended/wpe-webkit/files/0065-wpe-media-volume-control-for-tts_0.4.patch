@@ -1,0 +1,99 @@
+From 0976fc95d836c45c45907029d9d54b0ee70299bf Mon Sep 17 00:00:00 2001
+From: "Vivek.A" <Vivek_Arumugam@comcast.com>
+Date: Thu, 3 May 2018 10:21:57 +0000
+Subject: [PATCH] Volume Control for TTS
+
+---
+ Source/WebCore/html/HTMLMediaElement.cpp                       |  7 ++++++-
+ Source/WebCore/html/HTMLMediaElement.h                         |  1 +
+ Source/WebKit/WebProcess/InjectedBundle/API/c/WKBundlePage.cpp | 10 ++++++++++
+ Source/WebKit/WebProcess/InjectedBundle/API/c/WKBundlePage.h   |  4 ++++
+ 4 files changed, 21 insertions(+), 1 deletion(-)
+
+diff --git a/Source/WebCore/html/HTMLMediaElement.cpp b/Source/WebCore/html/HTMLMediaElement.cpp
+index fca25bf1a21..c2409d5b31d 100644
+--- a/Source/WebCore/html/HTMLMediaElement.cpp
++++ b/Source/WebCore/html/HTMLMediaElement.cpp
+@@ -3568,6 +3568,7 @@ ExceptionOr<void> HTMLMediaElement::setVolume(double volume)
+         return { };
+ 
+     m_volume = volume;
++    m_referenceVolume = m_volume;
+     m_volumeInitialized = true;
+     updateVolume();
+     scheduleEvent(eventNames().volumechangeEvent);
+@@ -4730,6 +4731,9 @@ void HTMLMediaElement::mediaPlayerVolumeChanged(MediaPlayer*)
+         double vol = m_player->volume();
+         if (vol != m_volume) {
+             m_volume = vol;
++            Page* page = document().page();
++            if(!page || page->mediaVolume() == 1)
++                m_referenceVolume = vol;
+             updateVolume();
+             scheduleEvent(eventNames().volumechangeEvent);
+         }
+@@ -5136,6 +5140,7 @@ void HTMLMediaElement::updateVolume()
+     float volume = m_player->volume();
+     if (m_volume != volume) {
+         m_volume = volume;
++        m_referenceVolume = volume;
+         scheduleEvent(eventNames().volumechangeEvent);
+     }
+ #else
+@@ -5156,7 +5161,7 @@ void HTMLMediaElement::updateVolume()
+ #endif
+ 
+         m_player->setMuted(shouldMute);
+-        m_player->setVolume(m_volume * volumeMultiplier);
++        m_player->setVolume(m_referenceVolume * volumeMultiplier);
+     }
+ 
+ #if ENABLE(MEDIA_SESSION)
+diff --git a/Source/WebCore/html/HTMLMediaElement.h b/Source/WebCore/html/HTMLMediaElement.h
+index 20bc81e4592..3ba85299ab0 100644
+--- a/Source/WebCore/html/HTMLMediaElement.h
++++ b/Source/WebCore/html/HTMLMediaElement.h
+@@ -958,6 +958,7 @@ private:
+     SeekType m_pendingSeekType { NoSeek };
+ 
+     double m_volume { 1 };
++    double m_referenceVolume { 1 };
+     bool m_volumeInitialized { false };
+     MediaTime m_lastSeekTime;
+     
+diff --git a/Source/WebKit/WebProcess/InjectedBundle/API/c/WKBundlePage.cpp b/Source/WebKit/WebProcess/InjectedBundle/API/c/WKBundlePage.cpp
+index 07edabfb6fc..bb949f68dd1 100644
+--- a/Source/WebKit/WebProcess/InjectedBundle/API/c/WKBundlePage.cpp
++++ b/Source/WebKit/WebProcess/InjectedBundle/API/c/WKBundlePage.cpp
+@@ -706,3 +706,13 @@ void WKBundlePageSetEventThrottlingBehaviorOverride(WKBundlePageRef page, WKEven
+ 
+     toImpl(page)->corePage()->setEventThrottlingBehaviorOverride(behaviorValue);
+ }
++
++WK_EXPORT double WKBundlePageGetVolume(WKBundlePageRef page)
++{
++    return (float)toImpl(page)->corePage()->mediaVolume();
++}
++
++WK_EXPORT void WKBundlePageSetVolume(WKBundlePageRef page, double volume)
++{
++    toImpl(page)->corePage()->setMediaVolume((float)volume);
++}
+diff --git a/Source/WebKit/WebProcess/InjectedBundle/API/c/WKBundlePage.h b/Source/WebKit/WebProcess/InjectedBundle/API/c/WKBundlePage.h
+index de2ead3de88..c1005315126 100644
+--- a/Source/WebKit/WebProcess/InjectedBundle/API/c/WKBundlePage.h
++++ b/Source/WebKit/WebProcess/InjectedBundle/API/c/WKBundlePage.h
+@@ -121,6 +121,10 @@ WK_EXPORT void WKBundlePagePostMessage(WKBundlePageRef page, WKStringRef message
+ // Switches a connection into a fully synchronous mode, so all messages become synchronous until we get a response.
+ WK_EXPORT void WKBundlePagePostSynchronousMessageForTesting(WKBundlePageRef page, WKStringRef messageName, WKTypeRef messageBody, WKTypeRef* returnData);
+ 
++WK_EXPORT double WKBundlePageGetVolume(WKBundlePageRef page);
++
++WK_EXPORT void WKBundlePageSetVolume(WKBundlePageRef page, double volume);
++
+ #ifdef __cplusplus
+ }
+ #endif
+-- 
+2.16.2
+

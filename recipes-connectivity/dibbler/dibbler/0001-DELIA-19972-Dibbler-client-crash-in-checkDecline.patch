@@ -1,0 +1,135 @@
+Date: Fri, 13 Oct 2017 16:32:54 
+
+From: 1ec0f0e7def4efdcdcaae51e36e3d598efab135d Mon Sep 17 00:00:00 2017
+
+Subject: [PATCH] DELIA-19972: Dibbler client crash in checkDecline
+
+	Cherry picked commit from dibbler git manually to fix dibbler client crash
+
+Source: GITHUB
+
+License: GPL-2.0-or-later
+
+Upstream-Status: Submitted [ https://github.com/tomaszmrugalski/dibbler/commit/cda62b7c9a29524af2581b0a58c62b56b00afdf3 ]
+
+Signed-off-by: ganesh <Ganesh_Kumar@comcast.com>
+---
+ ClntMessages/ClntMsgRebind.cpp  | 10 +++++-----
+ ClntMessages/ClntMsgRequest.cpp |  2 +-
+ ClntTransMgr/ClntTransMgr.cpp   |  2 +-
+ SrvIfaceMgr/SrvIfaceMgr.cpp     |  4 ++--
+ SrvMessages/SrvMsg.cpp          |  2 +-
+ 5 files changed, 10 insertions(+), 10 deletions(-)
+
+diff --git a/ClntMessages/ClntMsgRebind.cpp b/ClntMessages/ClntMsgRebind.cpp
+index d1dd4b7..04695fd 100644
+--- a/ClntMessages/ClntMsgRebind.cpp
++++ b/ClntMessages/ClntMsgRebind.cpp
+@@ -85,7 +85,7 @@ SPtr<TOpt> opt;
+     
+     // get DUID
+     SPtr<TClntOptServerIdentifier> ptrDUID;
+-    ptrDUID = (Ptr*) Reply->getOption(OPTION_SERVERID);
++    ptrDUID = Reply->getOption(OPTION_SERVERID);
+     
+     SPtr<TClntOptOptionRequest> ptrOptionReqOpt=(Ptr*)getOption(OPTION_ORO);
+ 
+@@ -96,14 +96,14 @@ SPtr<TOpt> opt;
+         switch (opt->getOptType()) {
+         case OPTION_IA_NA: {
+             iaCnt++;
+-            SPtr<TClntOptIA_NA> ptrOptIA = (Ptr*)opt;
++            SPtr<TClntOptIA_NA> ptrOptIA = opt;
+             if (ptrOptIA->getStatusCode()!=STATUSCODE_SUCCESS) {
+                 if(ptrOptIA->getStatusCode() == STATUSCODE_NOBINDING){
+                     ClntTransMgr().sendRequest(Options,Iface);
+                     IsDone = true;
+                     return;
+                 }else{
+-		    SPtr<TClntOptStatusCode> status = (Ptr*) ptrOptIA->getOption(OPTION_STATUS_CODE);
++		    SPtr<TClntOptStatusCode> status = ptrOptIA->getOption(OPTION_STATUS_CODE);
+                     Log(Warning) << "Received IA (iaid=" << ptrOptIA->getIAID() << ") with status code " <<
+                         StatusCodeToString(status->getCode()) << ": "
+                                  << status->getText() << LogEnd;
+@@ -118,7 +118,7 @@ SPtr<TOpt> opt;
+         }
+         case OPTION_IA_PD: {
+             iaCnt++;
+-            SPtr<TClntOptIA_PD> pd = (Ptr*) opt;
++            SPtr<TClntOptIA_PD> pd = opt;
+             if (pd->getStatusCode() != STATUSCODE_SUCCESS) {
+                 if(pd->getStatusCode() == STATUSCODE_NOBINDING){
+                     ClntTransMgr->sendRequest(Options,Iface);
+@@ -126,7 +126,7 @@ SPtr<TOpt> opt;
+                     return;
+                 }
+                 else{
+-                    SPtr<TClntOptStatusCode> status = (Ptr*) pd->getOption(OPTION_STATUS_CODE);
++                    SPtr<TClntOptStatusCode> status = pd->getOption(OPTION_STATUS_CODE);
+                     Log(Warning) << "Received PD (iaid=" << pd->getIAID() << ") with status code " <<
+                         StatusCodeToString(status->getCode()) << ": "
+                                  << status->getText() << LogEnd;
+diff --git a/ClntMessages/ClntMsgRequest.cpp b/ClntMessages/ClntMsgRequest.cpp
+index f3e40fd..6f45555 100644
+--- a/ClntMessages/ClntMsgRequest.cpp
++++ b/ClntMessages/ClntMsgRequest.cpp
+@@ -154,7 +154,7 @@ TClntMsgRequest::TClntMsgRequest(List(TAddrIA) IAs,
+ 	return;
+     }
+     
+-    ptr = (Ptr*) new TOptDUID(OPTION_SERVERID, srvDUID,this);
++    ptr = new TOptDUID(OPTION_SERVERID, srvDUID,this);
+     // all IAs provided by checkSolicit
+     SPtr<TAddrIA> ClntAddrIA;
+     if ( ptr ) {
+diff --git a/ClntTransMgr/ClntTransMgr.cpp b/ClntTransMgr/ClntTransMgr.cpp
+index 77cfb2f..7454688 100644
+--- a/ClntTransMgr/ClntTransMgr.cpp
++++ b/ClntTransMgr/ClntTransMgr.cpp
+@@ -1531,7 +1531,7 @@ bool TClntTransMgr::processRemoteReply(SPtr<TClntMsg> reply) {
+         return false;
+     }
+ 
+-    SPtr<TClntMsgReply> rpl = (Ptr*) reply;
++    SPtr<TClntMsgReply> rpl = reply;
+     neigh->reply = reply;
+     neigh->rcvdAddr = rpl->getFirstAddr();
+     neigh->state = TNeighborInfo::NeighborInfoState_Received;
+diff --git a/SrvIfaceMgr/SrvIfaceMgr.cpp b/SrvIfaceMgr/SrvIfaceMgr.cpp
+index 39c6e2f..00a5e28 100644
+--- a/SrvIfaceMgr/SrvIfaceMgr.cpp
++++ b/SrvIfaceMgr/SrvIfaceMgr.cpp
+@@ -307,7 +307,7 @@ SPtr<TSrvMsg> TSrvIfaceMgr::select(unsigned long timeout) {
+ #if 0
+ bool TSrvIfaceMgr::setupRelay(std::string name, int ifindex, int underIfindex,
+                               SPtr<TSrvOptInterfaceID> interfaceID) {
+-    SPtr<TIfaceIface> under = (Ptr*)this->getIfaceByID(underIfindex);
++    SPtr<TIfaceIface> under = this->getIfaceByID(underIfindex);
+     if (!under) {
+         Log(Crit) << "Unable to setup " << name << "/" << ifindex
+                   << " relay: underlaying interface with id=" << underIfindex
+@@ -330,7 +330,7 @@ bool TSrvIfaceMgr::setupRelay(std::string name, int ifindex, int underIfindex,
+                                                         0,0, // global addresses
+                                                         0);  // hardware type
+     relay->setUnderlaying(under);
+-    this->IfaceLst.append((Ptr*)relay);
++    this->IfaceLst.append(relay);
+ 
+     if (!under->appendRelay(relay, interfaceID)) {
+         Log(Crit) << "Unable to setup " << name << "/" << ifindex
+diff --git a/SrvMessages/SrvMsg.cpp b/SrvMessages/SrvMsg.cpp
+index a4ff081..912441a 100644
+--- a/SrvMessages/SrvMsg.cpp
++++ b/SrvMessages/SrvMsg.cpp
+@@ -1028,7 +1028,7 @@ bool TSrvMsg::appendRequestedOptions(SPtr<TDUID> duid, SPtr<TIPv6Addr> addr,
+     if ( reqOpts->isOption(OPTION_KEYGEN) && SrvCfgMgr().getDigest() != DIGEST_NONE )
+     { // && this->MsgType == ADVERTISE_MSG ) {
+         SPtr<TSrvOptKeyGeneration> optKeyGeneration = new TSrvOptKeyGeneration(this);
+-        Options.push_back( (Ptr*)optKeyGeneration);
++        Options.push_back(optKeyGeneration);
+     }
+ #endif
+ #endif
+-- 
+2.7.1
+

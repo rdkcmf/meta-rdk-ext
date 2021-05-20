@@ -1,0 +1,242 @@
+Date: Jun 13 22:28:20 2019
+
+From: a034a4456af299fc1c5e1d5a4a923162d8dc2719 Aug 28 09:32:38 2019
+
+Subject: [PATCH] ARRISXB3-9144 :XDNS feature off but still logging XDNS warnings
+
+	Excessive Logging has been disabled by changing the log level of print
+
+Source: COMCAST
+
+License: GPL-2.0-or-later
+
+Upstream-Status: Pending
+
+Signed-off-by: Sudheep kolipaka <sudheep_kolipaka@comcast.com>
+---
+
+diff -ruN dnsmasq-2.78.orig/src/arp.c dnsmasq-2.78/src/arp.c
+--- dnsmasq-2.78.orig/src/arp.c	2019-06-13 22:11:28.904076163 +0000
++++ dnsmasq-2.78/src/arp.c	2019-06-13 22:12:51.400083991 +0000
+@@ -242,7 +242,7 @@
+ {
+        if(!macaddr)
+        {
+-               my_syslog(LOG_WARNING, _("#### XDNS : get_dnsoverride_record(%s) Error Param!!"), macaddr);
++               my_syslog(LOG_INFO, _("#### XDNS : get_dnsoverride_record(%s) Error Param!!"), macaddr);
+                return NULL;
+        }
+ 
+@@ -264,7 +264,7 @@
+ 
+        if(!p)
+        {
+-               my_syslog(LOG_WARNING, _("#### XDNS : get_dnsoverride_record(%s) Not found!"), macaddr);
++               my_syslog(LOG_INFO, _("#### XDNS : get_dnsoverride_record(%s) Not found!"), macaddr);
+        }
+ 
+        return p;
+@@ -280,7 +280,7 @@
+                if(strcmp(p->macaddr, XDNS_NULL_MAC) == 0)
+                {
+                        //found
+-                       my_syslog(LOG_WARNING, _("#### XDNS : found default rec"));
++                       my_syslog(LOG_INFO, _("#### XDNS : found default rec"));
+                        break;
+                }
+                p = p->next;
+@@ -289,7 +289,7 @@
+ 
+        if(!p)
+        {
+-               my_syslog(LOG_WARNING, _("#### XDNS : get_dnsoverride_defaultrecord() Not found!"));
++               my_syslog(LOG_INFO, _("#### XDNS : get_dnsoverride_defaultrecord() Not found!"));
+        }
+ 
+        return p;
+@@ -300,7 +300,7 @@
+ {
+        if(!macaddr || !serv)
+        {
+-               my_syslog(LOG_WARNING, _("#### XDNS : find_dnsoverride_server() Error Param!!"));
++               my_syslog(LOG_INFO, _("#### XDNS : find_dnsoverride_server() Error Param!!"));
+                return 0; //fail
+        }
+ 
+@@ -316,18 +316,18 @@
+                        if(iptype == 4)
+                        {
+                                memcpy(serv, &p->dnsaddr4, sizeof(struct all_addr));
+-                               my_syslog(LOG_WARNING, _("#### XDNS : found ipv4 server"));
++                               my_syslog(LOG_INFO, _("#### XDNS : found ipv4 server"));
+                        }
+ #ifdef HAVE_IPV6
+                        else if(iptype == 6)
+                        {
+                                memcpy(serv, &p->dnsaddr6, sizeof(struct all_addr));
+-                               my_syslog(LOG_WARNING, _("#### XDNS : found ipv6 server"));
++                               my_syslog(LOG_INFO, _("#### XDNS : found ipv6 server"));
+                        }
+ #endif
+                        else
+                        {
+-                               my_syslog(LOG_WARNING, _("#### XDNS : find_dnsoverride_server() Error Param! invalid iptype: %d !"), iptype);
++                               my_syslog(LOG_INFO, _("#### XDNS : find_dnsoverride_server() Error Param! invalid iptype: %d !"), iptype);
+                                return 0; // fail
+                        }
+                        		return 1; //success
+@@ -339,7 +339,7 @@
+        }
+        //unlock
+ 
+-       my_syslog(LOG_WARNING, _("#### XDNS : find_dnsoverride_server(%s) override dns server not found!"), macaddr);
++       my_syslog(LOG_INFO, _("#### XDNS : find_dnsoverride_server(%s) override dns server not found!"), macaddr);
+ 
+        return 0; // not found
+ }
+@@ -350,7 +350,7 @@
+        int retval;	
+        if(!serv1)
+        {
+-               my_syslog(LOG_WARNING, _("#### XDNS : find_dnsoverride_defaultserver(%x) Error Param!!"), serv1);
++               my_syslog(LOG_INFO, _("#### XDNS : find_dnsoverride_defaultserver(%x) Error Param!!"), serv1);
+                return 0;
+        }
+ 
+@@ -364,7 +364,7 @@
+ 		}
+ 		else
+ 		{
+-			my_syslog(LOG_WARNING, _("#### XDNS : find_dnsoverride_defaultserver(%x)secondary XDNS Error Param!!"), serv2);
++			my_syslog(LOG_INFO, _("#### XDNS : find_dnsoverride_defaultserver(%x)secondary XDNS Error Param!!"), serv2);
+ 		}
+ 	}
+ 	
+diff -ruN dnsmasq-2.78.orig/src/edns0.c dnsmasq-2.78/src/edns0.c
+--- dnsmasq-2.78.orig/src/edns0.c	2019-06-13 22:11:28.904076163 +0000
++++ dnsmasq-2.78/src/edns0.c	2019-06-13 22:12:51.412083991 +0000
+@@ -291,7 +291,7 @@
+                }
+                else
+                {
+-                       my_syslog(LOG_WARNING, _("#### XDNS add_cpe_tag() Could not find cpetag for mac %s"), strmac);
++                       my_syslog(LOG_INFO, _("#### XDNS add_cpe_tag() Could not find cpetag for mac %s"), strmac);
+                }
+        }
+ 
+@@ -304,11 +304,11 @@
+        // if no cpetag found return. Don't call add header.
+        if(cpetag == NULL)
+        {
+-               my_syslog(LOG_WARNING, _("#### XDNS : no cpetag found in dnsmasq config"));
++               my_syslog(LOG_INFO, _("#### XDNS : no cpetag found in dnsmasq config"));
+                return plen;
+        }
+ 
+-       my_syslog(LOG_WARNING, _("### XDNS - add cpe tag \'%s\' to edns0 header for mac [%s]"), cpetag, strmac);
++       my_syslog(LOG_INFO, _("### XDNS - add cpe tag \'%s\' to edns0 header for mac [%s]"), cpetag, strmac);
+        return add_pseudoheader(header, plen, limit, PACKETSZ, EDNS0_OPTION_NOMCPEID, cpetag, strlen(cpetag), 0, 1);
+ }
+ //</XDNS>
+@@ -408,7 +408,7 @@
+                             }
+                             else
+                             {
+-                                   my_syslog(LOG_WARNING, _("#### XDNS : add_xdns_server() Could't find xdns server for [%s] or the default server!"), strmac);
++                                   my_syslog(LOG_INFO, _("#### XDNS : add_xdns_server() Could't find xdns server for [%s] or the default server!"), strmac);
+                                    reset_option_dnsoverride();
+                                    return plen;
+                             }
+@@ -436,22 +436,22 @@
+                		{
+                        		if(iptype == 4)
+                        		{
+-                               		my_syslog(LOG_WARNING, _("### XDNS - set secondary ipv4 dns_override_server entry in daemon"));
++                               		my_syslog(LOG_INFO, _("### XDNS - set secondary ipv4 dns_override_server entry in daemon"));
+                               		//serv->addr.in.sin_addr = secondarydnsaddr.addr.addr4;
+                                		memcpy(&secondserv->addr.in.sin_addr, &secondarydnsaddr.addr.addr4, sizeof(struct in_addr));
+                                		secondserv->addr.sa.sa_family = AF_INET;
+ 					inet_ntop(AF_INET, &(secondarydnsaddr.addr.addr4), string, 64);
+-					my_syslog(LOG_WARNING, _("### XDNS - set secondary ipv4 dns_override_server string:%s!"),string);
++					my_syslog(LOG_INFO, _("### XDNS - set secondary ipv4 dns_override_server string:%s!"),string);
+                      		}
+ #ifdef HAVE_IPV6
+                        		else if(iptype == 6)
+                        		{
+-                               		my_syslog(LOG_WARNING, _("### XDNS - set secondary ipv6 dns_override_server entry in daemon"));
++                               		my_syslog(LOG_INFO, _("### XDNS - set secondary ipv6 dns_override_server entry in daemon"));
+                                		//serv->addr.in6.sin6_addr = secondarydnsaddr.addr.addr6;
+                                		memcpy(&secondserv->addr.in6.sin6_addr, &secondarydnsaddr.addr.addr6, sizeof(struct in6_addr));
+                                		secondserv->addr.sa.sa_family = AF_INET6;
+                                         inet_ntop(AF_INET6, &(secondarydnsaddr.addr.addr6), string, 64);
+-                                        my_syslog(LOG_WARNING, _("### XDNS - set secondary ipv6 dns_override_server string:%s!"),string);
++                                        my_syslog(LOG_INFO, _("### XDNS - set secondary ipv6 dns_override_server string:%s!"),string);
+                        		}
+ #endif
+                	 		}
+@@ -459,7 +459,7 @@
+ 			else
+ 			{
+ 				daemon->dns_override_server2=NULL;
+-				my_syslog(LOG_WARNING, _("### XDNS - secondary XDNS server does not exist!"));
++				my_syslog(LOG_INFO, _("### XDNS - secondary XDNS server does not exist!"));
+ 			
+ 			}
+ 
+@@ -482,7 +482,7 @@
+                {
+                        if(iptype == 4)
+                        {
+-                               my_syslog(LOG_WARNING, _("### XDNS - set ipv4 dns_override_server entry in daemon"));
++                               my_syslog(LOG_INFO, _("### XDNS - set ipv4 dns_override_server entry in daemon"));
+                               //serv->addr.in.sin_addr = dnsaddr.addr.addr4;
+                                memcpy(&serv->addr.in.sin_addr, &dnsaddr.addr.addr4, sizeof(struct in_addr));
+                                serv->addr.sa.sa_family = AF_INET;
+@@ -490,7 +490,7 @@
+ #ifdef HAVE_IPV6
+                        else if(iptype == 6)
+                        {
+-                               my_syslog(LOG_WARNING, _("### XDNS - set ipv6 dns_override_server entry in daemon"));
++                               my_syslog(LOG_INFO, _("### XDNS - set ipv6 dns_override_server entry in daemon"));
+                                //serv->addr.in6.sin6_addr = dnsaddr.addr.addr6;
+                                memcpy(&serv->addr.in6.sin6_addr, &dnsaddr.addr.addr6, sizeof(struct in6_addr));
+                                serv->addr.sa.sa_family = AF_INET6;
+@@ -503,7 +503,7 @@
+ 	else
+ 	{
+ 		reset_option_dnsoverride();
+-		my_syslog(LOG_WARNING, _("#### XDNS : could not find MAC from l3 sockaddr !"));
++		my_syslog(LOG_INFO, _("#### XDNS : could not find MAC from l3 sockaddr !"));
+ 	}
+ 
+        return plen;
+@@ -513,7 +513,7 @@
+ 
+ static size_t add_mac(struct dns_header *header, size_t plen, unsigned char *limit, union mysockaddr *l3, time_t now)
+ {
+-       my_syslog(LOG_WARNING, _("#### XDNS : add_mac() called"));
++       my_syslog(LOG_INFO, _("#### XDNS : add_mac() called"));
+        int maclen = 0;
+        unsigned char mac[DHCP_CHADDR_MAX];
+ 
+@@ -523,7 +523,7 @@
+        }
+        else
+        {
+-       	my_syslog(LOG_WARNING, _("#### XDNS : add_mac() maclen = 0 !!"));
++       	my_syslog(LOG_INFO, _("#### XDNS : add_mac() maclen = 0 !!"));
+        	reset_option_dnsoverride();
+        }
+   return plen; 
+diff -ruN dnsmasq-2.78.orig/src/forward.c dnsmasq-2.78/src/forward.c
+--- dnsmasq-2.78.orig/src/forward.c	2019-06-13 22:11:28.908076164 +0000
++++ dnsmasq-2.78/src/forward.c	2019-06-13 22:12:51.404083992 +0000
+@@ -683,7 +683,7 @@
+                 }
+                 else
+                 {
+-                         my_syslog(LOG_WARNING, _("#### XDNS : sendto() failed!"));
++                         my_syslog(LOG_INFO, _("#### XDNS : sendto() failed!"));
+                 }
+         }
+  

@@ -1,0 +1,68 @@
+From c8c9b791c0058a8252bc8a94ce8a7bd4ca0ae99f Mon Sep 17 00:00:00 2001
+From: Amadeusz Skrzypczak <amadeusz.skrzypczak@redembedded.com>
+Date: Mon, 22 Mar 2021 12:52:22 +0100
+Subject: [PATCH] Prevent localStoarge from growing indefinitely
+
+This patch does two changes:
+1. Added env WPE_WAL_AUTOCHECKPOINT to set maximum size for journal -wal file
+2. Added manual checkpoint during SQLite db opening to remove remained
+wal file after potential incorrect SQLite exit. Based on
+https://github.com/WebKit/WebKit/commit/614f68bef0becf52068535387b3fd641866f46d3
+
+---
+ .../WebCore/platform/sql/SQLiteDatabase.cpp   | 37 +++++++++++++++----
+ 1 file changed, 30 insertions(+), 7 deletions(-)
+
+diff --git a/Source/WebCore/platform/sql/SQLiteDatabase.cpp b/Source/WebCore/platform/sql/SQLiteDatabase.cpp
+index 38eafc61..20a4220a 100644
+--- a/Source/WebCore/platform/sql/SQLiteDatabase.cpp
++++ b/Source/WebCore/platform/sql/SQLiteDatabase.cpp
+@@ -173,15 +173,38 @@ bool SQLiteDatabase::open(const String& filename, bool forWebSQLDatabase, std::o
+     if (!SQLiteStatement(*this, "PRAGMA temp_store = MEMORY;"_s).executeCommand())
+         LOG_ERROR("SQLite database could not set temp_store to memory");
+ 
+-    SQLiteStatement walStatement(*this, "PRAGMA journal_mode=WAL;"_s);
+-    if (walStatement.prepareAndStep() == SQLITE_ROW) {
++    {
++        SQLiteStatement walStatement(*this, "PRAGMA journal_mode=WAL;"_s);
++        if (walStatement.prepareAndStep() == SQLITE_ROW) {
+ #ifndef NDEBUG
+-        String mode = walStatement.getColumnText(0);
+-        if (!equalLettersIgnoringASCIICase(mode, "wal"))
+-            LOG_ERROR("journal_mode of database should be 'WAL', but is '%s'", mode.utf8().data());
++            String mode = walStatement.getColumnText(0);
++            if (!equalLettersIgnoringASCIICase(mode, "wal"))
++                LOG_ERROR("journal_mode of database should be 'WAL', but is '%s'", mode.utf8().data());
+ #endif
+-    } else
+-        LOG_ERROR("SQLite database failed to set journal_mode to WAL, error: %s", lastErrorMsg());
++        } else
++            LOG_ERROR("SQLite database failed to set journal_mode to WAL, error: %s", lastErrorMsg());
++    }
++
++    // prevent -wal file from growing indefinitely
++    // wal_autocheckpoint value is a number of pages after which checkpoint should be run
++    if (std::getenv("WPE_WAL_AUTOCHECKPOINT")) {
++        SQLiteStatement autocheckpointStatement(*this, String::format("PRAGMA wal_autocheckpoint=%s;",
++                                                std::getenv("WPE_WAL_AUTOCHECKPOINT")));
++        if (!autocheckpointStatement.executeCommand()) {
++            LOG_ERROR("SQLite database failed to set wal_autocheckpoint, error: %s", lastErrorMsg());
++        }
++    }
++
++    // perform manual checkpoint to remove -wal file remained after potential incorrect SQLite exit
++    // https://github.com/WebKit/WebKit/commit/614f68bef0becf52068535387b3fd641866f46d3
++    {
++        SQLiteStatement checkpointStatement(*this, "PRAGMA wal_checkpoint(TRUNCATE)"_s);
++        if (checkpointStatement.prepareAndStep() == SQLITE_ROW) {
++            if (checkpointStatement.getColumnInt(0))
++                LOG(SQLDatabase, "SQLite database checkpoint is blocked");
++        } else
++            LOG_ERROR("SQLite database failed to checkpoint: %s", lastErrorMsg());
++    }
+ 
+     return isOpen();
+ }
+-- 
+2.17.1
+

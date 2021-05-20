@@ -1,0 +1,2752 @@
+Date: Nov 15 09:16:43 2013
+
+From: 50193b9fe48dbdef8b143a34ce48c80e959fb3dc Dec 12 15:26:52 2013
+
+Subject: [PATCH] qtwebkit 5.1.1: add RDK patches
+
+	This commit adds the Qt qtwebkit 5.1.1 patches from RDK to OE's qtwebkit.
+
+Source: COMCAST
+
+Upstream-Status: Pending
+
+Signed-off-by: Trevor Woerner <trevor.woerner@linaro.org>
+---
+
+Index: qtwebkit/Source/WebCore/bridge/npruntime_internal.h
+===================================================================
+--- qtwebkit/Source/WebCore/bridge/npruntime_internal.h
++++ qtwebkit/Source/WebCore/bridge/npruntime_internal.h
+@@ -29,7 +29,7 @@
+ #include "npfunctions.h"
+ #include "npruntime.h"
+ 
+-#ifdef XP_UNIX
++#if defined(XP_UNIX) && !ENABLE(WINDOWLESS_FLASH_PLUGIN)
+     #include <X11/Xresource.h>
+ 
+     #undef None
+Index: qtwebkit/Source/WebCore/plugins/npapi.cpp
+===================================================================
+--- qtwebkit/Source/WebCore/plugins/npapi.cpp
++++ qtwebkit/Source/WebCore/plugins/npapi.cpp
+@@ -185,6 +185,19 @@
+     PluginMainThreadScheduler::scheduler().scheduleCall(instance, reinterpret_cast<PluginMainThreadScheduler::MainThreadFunction*>(func), userData);
+ }
+ 
++#if ENABLE(WINDOWLESS_FLASH_PLUGIN)
++uint32_t NPN_ScheduleTimer(NPP instance, uint32_t interval, NPBool repeat, void (*timerFunc)(NPP instance, uint32_t timerID))
++{
++    return pluginViewForInstance(instance)->scheduleTimer(instance, interval, repeat, timerFunc);
++}
++
++void NPN_UnscheduleTimer(NPP instance, uint32_t timerID)
++{
++    pluginViewForInstance(instance)->unscheduleTimer(instance, timerID);
++    return;
++}
++#endif // WINDOWLESS_FLASH_PLUGIN
++
+ NPError NPN_GetValueForURL(NPP instance, NPNURLVariable variable, const char* url, char** value, uint32_t* len)
+ {
+     return pluginViewForInstance(instance)->getValueForURL(variable, url, value, len);
+Index: qtwebkit/Source/WebCore/plugins/npapi.h
+===================================================================
+--- qtwebkit/Source/WebCore/plugins/npapi.h
++++ qtwebkit/Source/WebCore/plugins/npapi.h
+@@ -89,7 +89,7 @@
+ #endif
+ #endif
+ 
+-#if defined(XP_UNIX)
++#if defined(XP_UNIX) && !ENABLE(WINDOWLESS_FLASH_PLUGIN)
+ #include <stdio.h>
+ #if defined(MOZ_X11)
+ #include <X11/Xlib.h>
+@@ -268,7 +268,7 @@
+ typedef struct
+ {
+   int32_t      type;
+-#if defined(MOZ_X11)
++#if defined(MOZ_X11) && !ENABLE(WINDOWLESS_FLASH_PLUGIN)
+   Display*     display;
+   Visual*      visual;
+   Colormap     colormap;
+@@ -276,11 +276,13 @@
+ #endif
+ } NPSetWindowCallbackStruct;
+ 
++#if !ENABLE(WINDOWLESS_FLASH_PLUGIN)
+ typedef struct
+ {
+   int32_t type;
+   FILE* fp;
+ } NPPrintCallbackStruct;
++#endif
+ 
+ #endif /* XP_UNIX */
+ 
+@@ -541,7 +543,7 @@
+   uint32_t wParam;
+   uint32_t lParam;
+ } NPEvent;
+-#elif defined(XP_UNIX) && defined(MOZ_X11)
++#elif defined(XP_UNIX) && defined(MOZ_X11) && !ENABLE(WINDOWLESS_FLASH_PLUGIN)
+ typedef XEvent NPEvent;
+ #else
+ typedef void*  NPEvent;
+@@ -555,7 +557,7 @@
+ typedef CGPathRef NPCGRegion;
+ #elif defined(XP_WIN)
+ typedef HRGN NPRegion;
+-#elif defined(XP_UNIX) && defined(MOZ_X11)
++#elif defined(XP_UNIX) && defined(MOZ_X11) && !ENABLE(WINDOWLESS_FLASH_PLUGIN)
+ typedef Region NPRegion;
+ #else
+ typedef void *NPRegion;
+Index: qtwebkit/Source/WebCore/plugins/PluginDatabase.cpp
+===================================================================
+--- qtwebkit/Source/WebCore/plugins/PluginDatabase.cpp
++++ qtwebkit/Source/WebCore/plugins/PluginDatabase.cpp
+@@ -369,6 +369,7 @@
+ {
+     Vector<String> paths;
+ 
++#if 0
+     // Add paths specific to each platform
+ #if defined(XP_UNIX)
+     String userPluginPath = homeDirectoryPath();
+@@ -416,9 +417,10 @@
+     userPluginPath.append(String("\\Application Data\\Mozilla\\plugins"));
+     paths.append(userPluginPath);
+ #endif
++#endif
+ 
+     // Add paths specific to each port
+-#if PLATFORM(QT)
++#if PLATFORM(QT) || ENABLE(WINDOWLESS_FLASH_PLUGIN)
+     Vector<String> qtPaths;
+     String qtPath(qgetenv("QTWEBKIT_PLUGIN_PATH").constData());
+     qtPath.split(UChar(':'), /* allowEmptyEntries */ false, qtPaths);
+Index: qtwebkit/Source/WebCore/plugins/PluginPackage.cpp
+===================================================================
+--- qtwebkit/Source/WebCore/plugins/PluginPackage.cpp
++++ qtwebkit/Source/WebCore/plugins/PluginPackage.cpp
+@@ -206,8 +206,14 @@
+         }
+ 
+ #if PLATFORM(QT)
+-        // Flash will crash on repeated calls to SetWindow in windowed mode
+-        m_quirks.add(PluginQuirkDontCallSetWindowMoreThanOnce);
++        // Flash will crash on repeated calls to SetWindow in windowed mode.
++        // Defer the setWindow, so we don't set it to the wrong size too early.
++
++        //COMCAST MODIFICATION BEGIN [XRE-3269 CRASH]
++        //commenting out to fix crash in libflashplayer.so due to missing Window handler
++        //m_quirks.add(PluginQuirkDeferFirstSetWindowCall);
++        //m_quirks.add(PluginQuirkDontCallSetWindowMoreThanOnce);
++        //COMCAST MODIFICATION END [XRE-3269 CRASH]
+ #endif
+ 
+ #if CPU(X86_64)
+@@ -330,6 +336,11 @@
+     m_browserFuncs.setvalueforurl = NPN_SetValueForURL;
+     m_browserFuncs.getauthenticationinfo = NPN_GetAuthenticationInfo;
+ 
++#if ENABLE(WINDOWLESS_FLASH_PLUGIN)
++    m_browserFuncs.scheduletimer = NPN_ScheduleTimer;
++    m_browserFuncs.unscheduletimer = NPN_UnscheduleTimer;
++#endif
++
+     m_browserFuncs.popupcontextmenu = NPN_PopUpContextMenu;
+ }
+ #endif // ENABLE(NETSCAPE_PLUGIN_API)
+Index: qtwebkit/Source/WebCore/plugins/PluginView.cpp
+===================================================================
+--- qtwebkit/Source/WebCore/plugins/PluginView.cpp
++++ qtwebkit/Source/WebCore/plugins/PluginView.cpp
+@@ -512,8 +512,8 @@
+ void PluginView::scheduleRequest(PluginRequest* request)
+ {
+     m_requests.append(request);
+-
+-    if (!m_isJavaScriptPaused)
++    bool isActive = m_requestTimer.isActive();
++    if (!m_isJavaScriptPaused && !isActive)
+         m_requestTimer.startOneShot(0);
+ }
+ 
+@@ -853,7 +853,7 @@
+ #if defined(XP_MACOSX)
+     , m_contextRef(0)
+ #endif
+-#if defined(XP_UNIX) && ENABLE(NETSCAPE_PLUGIN_API)
++#if defined(XP_UNIX) && ENABLE(NETSCAPE_PLUGIN_API) && !ENABLE(WINDOWLESS_FLASH_PLUGIN)
+     , m_hasPendingGeometryChange(true)
+     , m_drawable(0)
+     , m_visual(0)
+@@ -867,6 +867,9 @@
+     , m_manualStream(0)
+     , m_isJavaScriptPaused(false)
+     , m_haveCalledSetWindow(false)
++#if ENABLE(WINDOWLESS_FLASH_PLUGIN)
++    , m_Timers()
++#endif
+ {
+     if (!m_plugin) {
+         m_status = PluginStatusCanNotFindPlugin;
+Index: qtwebkit/Source/WebCore/plugins/PluginView.h
+===================================================================
+--- qtwebkit/Source/WebCore/plugins/PluginView.h
++++ qtwebkit/Source/WebCore/plugins/PluginView.h
+@@ -103,6 +103,84 @@
+         PluginStatusLoadedSuccessfully
+     };
+ 
++#if ENABLE(WINDOWLESS_FLASH_PLUGIN)
++    // NPN Timers for Flash
++    class PluginTimers;
++    typedef void (*TIMERFUNC)(NPP npp, uint32_t timerID);
++
++    class PluginTimer : public TimerBase {
++      public:
++        PluginTimer(NPP instance, bool repeat, TIMERFUNC timerFunc);
++        virtual ~PluginTimer();
++
++        uint32_t timerID() const { return m_timerID; }
++
++      private:
++        // override from TimerBase
++        virtual void fired();
++
++        NPP             m_instance;
++        TIMERFUNC       m_timerFunc;
++        uint32_t          m_timerID;
++        bool            m_repeat;
++
++        friend class PluginTimerList;
++        PluginTimer		*m_next, *m_prev;
++    };
++
++    class PluginTimerList {
++    public:
++        PluginTimerList() : m_head(NULL) {};
++        virtual ~PluginTimerList() {};
++        void Clear() {
++            while (m_head) {
++                Remove(m_head);
++                delete(m_head);
++            }
++        }
++        void Add(PluginTimer* timer) {
++            if (m_head)
++                m_head->m_prev = timer;
++            timer->m_next = m_head;
++            timer->m_prev = NULL;
++            m_head = timer;
++        }
++        void Remove(PluginTimer* timer) {
++            if (m_head == timer)
++                m_head = timer->m_next;
++            if (timer->m_prev)
++                timer->m_prev->m_next = timer->m_next;
++            if (timer->m_next)
++                timer->m_next->m_prev = timer->m_prev;
++        }
++        PluginTimer* Find(uint32_t id) {
++            PluginTimer* timer = m_head;
++            while (timer) {
++                if (timer->m_timerID == id)
++                    return timer;
++                timer = timer->m_next;
++            }
++            return NULL;
++        }
++
++    private:
++        PluginTimer* m_head;
++    };
++
++    class PluginTimers {
++      public:
++        PluginTimers() : m_TimerList() {}
++        ~PluginTimers();
++
++        uint32_t schedule(NPP instance, uint32_t interval, bool repeat, TIMERFUNC proc);
++        void unschedule(NPP instance, uint32_t timerID);
++
++      private:
++        PluginTimerList m_TimerList;
++    };
++#endif //WINDOWLESS_FLASH_PLUGIN
++
++
+     class PluginRequest {
+         WTF_MAKE_NONCOPYABLE(PluginRequest); WTF_MAKE_FAST_ALLOCATED;
+     public:
+@@ -261,7 +339,7 @@
+ #endif
+ #endif
+ 
+-#if PLATFORM(QT) && ENABLE(NETSCAPE_PLUGIN_API) && defined(XP_UNIX)
++#if PLATFORM(QT) && ENABLE(NETSCAPE_PLUGIN_API) && defined(XP_UNIX) && !ENABLE(WINDOWLESS_FLASH_PLUGIN)
+         // PluginViewQt (X11) needs a few workarounds when running under DRT
+         static void setIsRunningUnderDRT(bool flag) { s_isRunningUnderDRT = flag; }
+ #endif
+@@ -320,9 +398,13 @@
+         void lifeSupportTimerFired(Timer<PluginView>*);
+         Timer<PluginView> m_lifeSupportTimer;
+ 
++#if ENABLE(WINDOWLESS_FLASH_PLUGIN)
++        bool dispatchNPEvent(NPEvent);
++#else
+ #if ENABLE(NETSCAPE_PLUGIN_API)
+         bool dispatchNPEvent(NPEvent&);
+ #endif
++#endif
+ #if defined(XP_MACOSX) && ENABLE(NETSCAPE_PLUGIN_API)
+         int16_t dispatchNPCocoaEvent(NPCocoaEvent&);
+         bool m_updatedCocoaTextInputRequested;
+@@ -399,6 +481,11 @@
+         PlatformPluginWidget platformPluginWidget() const { return platformWidget(); }
+ #endif
+ 
++#if ENABLE(WINDOWLESS_FLASH_PLUGIN)
++        uint32_t    scheduleTimer(NPP instance, uint32_t interval, bool repeat, void (*timerFunc)(NPP instance, uint32_t timerID));
++        void    unscheduleTimer(NPP instance, uint32_t timerID);
++#endif
++
+ private:
+ 
+ #if defined(XP_UNIX) || PLATFORM(GTK)
+@@ -410,7 +497,7 @@
+         void setNPWindowIfNeeded();
+ #endif
+ 
+-#if defined(XP_UNIX) && ENABLE(NETSCAPE_PLUGIN_API)
++#if defined(XP_UNIX) && ENABLE(NETSCAPE_PLUGIN_API) && !ENABLE(WINDOWLESS_FLASH_PLUGIN)
+         bool m_hasPendingGeometryChange;
+         Pixmap m_drawable;
+         Visual* m_visual;
+@@ -421,7 +508,7 @@
+ #endif
+ 
+ #if PLATFORM(QT)
+-#if defined(XP_UNIX) && ENABLE(NETSCAPE_PLUGIN_API)
++#if defined(XP_UNIX) && ENABLE(NETSCAPE_PLUGIN_API) && !ENABLE(WINDOWLESS_FLASH_PLUGIN)
+         static bool s_isRunningUnderDRT;
+         static void setXKeyEventSpecificFields(XEvent*, KeyboardEvent*);
+         void paintUsingXPixmap(QPainter* painter, const QRect &exposedRect);
+@@ -451,6 +538,26 @@
+ 
+         bool m_haveCalledSetWindow;
+ 
++#if ENABLE(WINDOWLESS_FLASH_PLUGIN)
++        // NPN Timers for Flash
++        PluginTimers	m_Timers;
++
++        // Canvas size - as specified in HTML
++        int m_canvasWidth, m_canvasHeight;
++
++        // Screen coordinates of the WebView
++        IntRect m_webviewRect;
++        // Screen coordinates of the PluginView
++        IntRect m_pluginRect;
++        // Coordinates of the Flash canvas
++        IntRect m_canvasRect;
++        bool m_bScaled;
++
++        // Dirty rect tracking - to reduce memcpy during paint
++        IntRect m_dirtyRect;
++        char* m_pRMName;
++#endif
++
+         static PluginView* s_currentPluginView;
+     };
+ 
+Index: qtwebkit/Source/WebCore/plugins/wndls/PluginEventsWNDLS.h
+===================================================================
+--- /dev/null
++++ qtwebkit/Source/WebCore/plugins/wndls/PluginEventsWNDLS.h
+@@ -0,0 +1,644 @@
++#ifndef PluginEventsSDL_h
++#define PluginEventsSDL_h
++
++#include "config.h"
++
++typedef enum PluginEventType_e
++{
++    PluginMouseEventType,
++    PluginKeyEventType,
++    PluginPaintEventType,
++    PluginBitmapEventType,
++}PluginEventType;
++
++typedef enum PluginMouseState_e
++{
++    PluginMouseButtonDown,
++    PluginMouseButtonUp,
++    PluginMouseButtonMove
++}PluginMouseState;
++
++typedef enum PluginMouseButton_e
++{
++    PluginMouseButtonLeft,
++    PluginMouseButtonCenter,
++    PluginMouseButtonRight,
++    PluginMouseButtonWheelUp,
++    PluginMouseButtonWheelDown
++}PluginMouseButton;
++
++typedef enum PluginKeyState_e
++{
++    PluginKeyDown,
++    PluginKeyUp
++}PluginKeyState;
++
++typedef enum PluginModifierKey_e
++{
++    PluginAltKey        = 1 << 0,
++    PluginCtrlKey       = 1 << 1,
++    PluginMetaKey       = 1 << 2,
++    PluginShiftKey      = 1 << 3,
++}PluginModifierKey;
++
++
++typedef struct PluginRect_s
++{
++    int16_t        top;
++    int16_t        left;
++    int16_t        bottom;
++    int16_t        right;
++} PluginRect;
++
++typedef struct
++{
++    uint8_t             type;
++    uint8_t             state;
++    uint16_t            x;
++    uint16_t            y;
++    int16_t             xrel;
++    int16_t             yrel;
++    uint8_t             which;
++    uint8_t             button;
++} PluginMouseEvent;
++
++typedef struct
++{
++    uint8_t             type;
++    uint8_t             state;
++    uint8_t             scancode;
++    uint16_t            sym;
++    uint16_t            mod;
++    uint16_t            unicode;
++} PluginKeyEvent;
++
++typedef struct
++{
++    uint8_t             type;
++    uint8_t             bUseAccelBlit;
++    PluginRect          inval;
++    uint16_t            w;
++    uint16_t            h;
++    uint16_t            xoffset;
++    uint16_t            yoffset;
++    uint16_t            pitch;
++    uint8_t             depth;
++    uint8_t*            pixels;
++} PluginPaintEvent;
++
++typedef struct
++{
++    uint8_t             type;
++    uint8_t             bRelease;
++    uint16_t            width;
++    uint16_t            height;
++    void*               pixels;
++} PluginBitmapEvent;
++
++typedef union
++{
++    uint8_t             type;
++    PluginMouseEvent    mouse;
++    PluginKeyEvent      key;
++    PluginPaintEvent    paint;
++    PluginBitmapEvent   bitmap;
++} PluginEvent;
++
++
++// Extend the NPNVariable enumeration
++#define NPPVpluginDrawingFunctions      9999
++#define NPPVpluginResourceMgmtFunctions 9998
++#define NPPVpluginResourceMgmtName      9997
++#define NPPVpluginScreenScaleWidth      9996
++#define NPPVpluginScreenScaleHeight     9995
++#define NPPVpluginCanvasScaleWidth      9994
++#define NPPVpluginCanvasScaleHeight     9993
++
++typedef void*   (*CREATE_SURFACE_FUNC)      (int width, int height, int depth_in_bits);
++typedef bool    (*FREE_SURFACE_FUNC)        (void * pSurface);
++typedef bool    (*LOCK_SURFACE_FUNC)        (void * pSurface);
++typedef bool    (*UNLOCK_SURFACE_FUNC)      (void * pSurface);
++typedef void*   (*GET_PIXELS_FUNC)          (void * pSurface);
++typedef int     (*GET_PITCH_FUNC)           (void * pSurface);
++typedef bool    (*DRAW_RECT_FUNC)           (void * pSurface, uint32_t color, const PluginRect* rect);
++typedef bool    (*BLIT_FUNC)                (void * pSurface, void* pTargetSurface, const int nTargetPitch, const PluginRect* src_rect,
++                                             const PluginRect* dest_rect, bool bSourceAlpha);
++
++typedef struct GL_FuncTable_s
++{
++    CREATE_SURFACE_FUNC      pfCreateSurface;
++    FREE_SURFACE_FUNC        pfFreeSurface;
++    LOCK_SURFACE_FUNC        pfLockSurface;
++    UNLOCK_SURFACE_FUNC      pfUnlockSurface;
++    GET_PIXELS_FUNC          pfGetPixels;
++    GET_PITCH_FUNC           pfGetPitch;
++    DRAW_RECT_FUNC           pfDrawRect;
++    BLIT_FUNC                pfBlit;
++} GL_FuncTable;
++
++
++
++// VK_BACK (08) BACKSPACE key
++const int VK_BACK = 0x08;
++
++// VK_TAB (09) TAB key
++const int VK_TAB = 0x09;
++
++// VK_CLEAR (0C) CLEAR key
++const int VK_CLEAR = 0x0C;
++
++// VK_RETURN (0D)
++const int VK_RETURN = 0x0D;
++
++// VK_SHIFT (10) SHIFT key
++const int VK_SHIFT = 0x10;
++
++// VK_CONTROL (11) CTRL key
++const int VK_CONTROL = 0x11;
++
++// VK_MENU (12) ALT key
++const int VK_MENU = 0x12;
++
++// VK_PAUSE (13) PAUSE key
++const int VK_PAUSE = 0x13;
++
++// VK_CAPITAL (14) CAPS LOCK key
++const int VK_CAPITAL = 0x14;
++
++// VK_KANA (15) Input Method Editor (IME) Kana mode
++const int VK_KANA = 0x15;
++
++// VK_HANGUEL (15) IME Hanguel mode (maintained for compatibility; use VK_HANGUL)
++// VK_HANGUL (15) IME Hangul mode
++const int VK_HANGUL = 0x15;
++
++// VK_JUNJA (17) IME Junja mode
++const int VK_JUNJA = 0x17;
++
++// VK_FINAL (18) IME final mode
++const int VK_FINAL = 0x18;
++
++// VK_HANJA (19) IME Hanja mode
++const int VK_HANJA = 0x19;
++
++// VK_KANJI (19) IME Kanji mode
++const int VK_KANJI = 0x19;
++
++// VK_ESCAPE (1B) ESC key
++const int VK_ESCAPE = 0x1B;
++
++// VK_CONVERT (1C) IME convert
++const int VK_CONVERT = 0x1C;
++
++// VK_NONCONVERT (1D) IME nonconvert
++const int VK_NONCONVERT = 0x1D;
++
++// VK_ACCEPT (1E) IME accept
++const int VK_ACCEPT = 0x1E;
++
++// VK_MODECHANGE (1F) IME mode change request
++const int VK_MODECHANGE = 0x1F;
++
++// VK_SPACE (20) SPACEBAR
++const int VK_SPACE = 0x20;
++
++// VK_PRIOR (21) PAGE UP key
++const int VK_PRIOR = 0x21;
++
++// VK_NEXT (22) PAGE DOWN key
++const int VK_NEXT = 0x22;
++
++// VK_END (23) END key
++const int VK_END = 0x23;
++
++// VK_HOME (24) HOME key
++const int VK_HOME = 0x24;
++
++// VK_LEFT (25) LEFT ARROW key
++const int VK_LEFT = 0x25;
++
++// VK_UP (26) UP ARROW key
++const int VK_UP = 0x26;
++
++// VK_RIGHT (27) RIGHT ARROW key
++const int VK_RIGHT = 0x27;
++
++// VK_DOWN (28) DOWN ARROW key
++const int VK_DOWN = 0x28;
++
++// VK_SELECT (29) SELECT key
++const int VK_SELECT = 0x29;
++
++// VK_PRINT (2A) PRINT key
++const int VK_PRINT = 0x2A;
++
++// VK_EXECUTE (2B) EXECUTE key
++const int VK_EXECUTE = 0x2B;
++
++// VK_SNAPSHOT (2C) PRINT SCREEN key
++const int VK_SNAPSHOT = 0x2C;
++
++// VK_INSERT (2D) INS key
++const int VK_INSERT = 0x2D;
++
++// VK_DELETE (2E) DEL key
++const int VK_DELETE = 0x2E;
++
++// VK_HELP (2F) HELP key
++const int VK_HELP = 0x2F;
++
++// (30) 0 key
++const int VK_0 = 0x30;
++
++// (31) 1 key
++const int VK_1 = 0x31;
++
++// (32) 2 key
++const int VK_2 = 0x32;
++
++// (33) 3 key
++const int VK_3 = 0x33;
++
++// (34) 4 key
++const int VK_4 = 0x34;
++
++// (35) 5 key;
++
++const int VK_5 = 0x35;
++
++// (36) 6 key
++const int VK_6 = 0x36;
++
++// (37) 7 key
++const int VK_7 = 0x37;
++
++// (38) 8 key
++const int VK_8 = 0x38;
++
++// (39) 9 key
++const int VK_9 = 0x39;
++
++// (41) A key
++const int VK_A = 0x41;
++
++// (42) B key
++const int VK_B = 0x42;
++
++// (43) C key
++const int VK_C = 0x43;
++
++// (44) D key
++const int VK_D = 0x44;
++
++// (45) E key
++const int VK_E = 0x45;
++
++// (46) F key
++const int VK_F = 0x46;
++
++// (47) G key
++const int VK_G = 0x47;
++
++// (48) H key
++const int VK_H = 0x48;
++
++// (49) I key
++const int VK_I = 0x49;
++
++// (4A) J key
++const int VK_J = 0x4A;
++
++// (4B) K key
++const int VK_K = 0x4B;
++
++// (4C) L key
++const int VK_L = 0x4C;
++
++// (4D) M key
++const int VK_M = 0x4D;
++
++// (4E) N key
++const int VK_N = 0x4E;
++
++// (4F) O key
++const int VK_O = 0x4F;
++
++// (50) P key
++const int VK_P = 0x50;
++
++// (51) Q key
++const int VK_Q = 0x51;
++
++// (52) R key
++const int VK_R = 0x52;
++
++// (53) S key
++const int VK_S = 0x53;
++
++// (54) T key
++const int VK_T = 0x54;
++
++// (55) U key
++const int VK_U = 0x55;
++
++// (56) V key
++const int VK_V = 0x56;
++
++// (57) W key
++const int VK_W = 0x57;
++
++// (58) X key
++const int VK_X = 0x58;
++
++// (59) Y key
++const int VK_Y = 0x59;
++
++// (5A) Z key
++const int VK_Z = 0x5A;
++
++// VK_LWIN (5B) Left Windows key (Microsoft Natural keyboard)
++const int VK_LWIN = 0x5B;
++
++// VK_RWIN (5C) Right Windows key (Natural keyboard)
++const int VK_RWIN = 0x5C;
++
++// VK_APPS (5D) Applications key (Natural keyboard)
++const int VK_APPS = 0x5D;
++
++// VK_SLEEP (5F) Computer Sleep key
++const int VK_SLEEP = 0x5F;
++
++// VK_NUMPAD0 (60) Numeric keypad 0 key
++const int VK_NUMPAD0 = 0x60;
++
++// VK_NUMPAD1 (61) Numeric keypad 1 key
++const int VK_NUMPAD1 = 0x61;
++
++// VK_NUMPAD2 (62) Numeric keypad 2 key
++const int VK_NUMPAD2 = 0x62;
++
++// VK_NUMPAD3 (63) Numeric keypad 3 key
++const int VK_NUMPAD3 = 0x63;
++
++// VK_NUMPAD4 (64) Numeric keypad 4 key
++const int VK_NUMPAD4 = 0x64;
++
++// VK_NUMPAD5 (65) Numeric keypad 5 key
++const int VK_NUMPAD5 = 0x65;
++
++// VK_NUMPAD6 (66) Numeric keypad 6 key
++const int VK_NUMPAD6 = 0x66;
++
++// VK_NUMPAD7 (67) Numeric keypad 7 key
++const int VK_NUMPAD7 = 0x67;
++
++// VK_NUMPAD8 (68) Numeric keypad 8 key
++const int VK_NUMPAD8 = 0x68;
++
++// VK_NUMPAD9 (69) Numeric keypad 9 key
++const int VK_NUMPAD9 = 0x69;
++
++// VK_MULTIPLY (6A) Multiply key
++const int VK_MULTIPLY = 0x6A;
++
++// VK_ADD (6B) Add key
++const int VK_ADD = 0x6B;
++
++// VK_SEPARATOR (6C) Separator key
++const int VK_SEPARATOR = 0x6C;
++
++// VK_SUBTRACT (6D) Subtract key
++const int VK_SUBTRACT = 0x6D;
++
++// VK_DECIMAL (6E) Decimal key
++const int VK_DECIMAL = 0x6E;
++
++// VK_DIVIDE (6F) Divide key
++const int VK_DIVIDE = 0x6F;
++
++// VK_F1 (70) F1 key
++const int VK_F1 = 0x70;
++
++// VK_F2 (71) F2 key
++const int VK_F2 = 0x71;
++
++// VK_F3 (72) F3 key
++const int VK_F3 = 0x72;
++
++// VK_F4 (73) F4 key
++const int VK_F4 = 0x73;
++
++// VK_F5 (74) F5 key
++const int VK_F5 = 0x74;
++
++// VK_F6 (75) F6 key
++const int VK_F6 = 0x75;
++
++// VK_F7 (76) F7 key
++const int VK_F7 = 0x76;
++
++// VK_F8 (77) F8 key
++const int VK_F8 = 0x77;
++
++// VK_F9 (78) F9 key
++const int VK_F9 = 0x78;
++
++// VK_F10 (79) F10 key
++const int VK_F10 = 0x79;
++
++// VK_F11 (7A) F11 key
++const int VK_F11 = 0x7A;
++
++// VK_F12 (7B) F12 key
++const int VK_F12 = 0x7B;
++
++// VK_F13 (7C) F13 key
++const int VK_F13 = 0x7C;
++
++// VK_F14 (7D) F14 key
++const int VK_F14 = 0x7D;
++
++// VK_F15 (7E) F15 key
++const int VK_F15 = 0x7E;
++
++// VK_F16 (7F) F16 key
++const int VK_F16 = 0x7F;
++
++// VK_F17 (80H) F17 key
++const int VK_F17 = 0x80;
++
++// VK_F18 (81H) F18 key
++const int VK_F18 = 0x81;
++
++// VK_F19 (82H) F19 key
++const int VK_F19 = 0x82;
++
++// VK_F20 (83H) F20 key
++const int VK_F20 = 0x83;
++
++// VK_F21 (84H) F21 key
++const int VK_F21 = 0x84;
++
++// VK_F22 (85H) F22 key
++const int VK_F22 = 0x85;
++
++// VK_F23 (86H) F23 key
++const int VK_F23 = 0x86;
++
++// VK_F24 (87H) F24 key
++const int VK_F24 = 0x87;
++
++// VK_NUMLOCK (90) NUM LOCK key
++const int VK_NUMLOCK = 0x90;
++
++// VK_SCROLL (91) SCROLL LOCK key
++const int VK_SCROLL = 0x91;
++
++// VK_LSHIFT (A0) Left SHIFT key
++const int VK_LSHIFT = 0xA0;
++
++// VK_RSHIFT (A1) Right SHIFT key
++const int VK_RSHIFT = 0xA1;
++
++// VK_LCONTROL (A2) Left CONTROL key
++const int VK_LCONTROL = 0xA2;
++
++// VK_RCONTROL (A3) Right CONTROL key
++const int VK_RCONTROL = 0xA3;
++
++// VK_LMENU (A4) Left MENU key
++const int VK_LMENU = 0xA4;
++
++// VK_RMENU (A5) Right MENU key
++const int VK_RMENU = 0xA5;
++
++// VK_BROWSER_BACK (A6) Windows 2000/XP: Browser Back key
++const int VK_BROWSER_BACK = 0xA6;
++
++// VK_BROWSER_FORWARD (A7) Windows 2000/XP: Browser Forward key
++const int VK_BROWSER_FORWARD = 0xA7;
++
++// VK_BROWSER_REFRESH (A8) Windows 2000/XP: Browser Refresh key
++const int VK_BROWSER_REFRESH = 0xA8;
++
++// VK_BROWSER_STOP (A9) Windows 2000/XP: Browser Stop key
++const int VK_BROWSER_STOP = 0xA9;
++
++// VK_BROWSER_SEARCH (AA) Windows 2000/XP: Browser Search key
++const int VK_BROWSER_SEARCH = 0xAA;
++
++// VK_BROWSER_FAVORITES (AB) Windows 2000/XP: Browser Favorites key
++const int VK_BROWSER_FAVORITES = 0xAB;
++
++// VK_BROWSER_HOME (AC) Windows 2000/XP: Browser Start and Home key
++const int VK_BROWSER_HOME = 0xAC;
++
++// VK_VOLUME_MUTE (AD) Windows 2000/XP: Volume Mute key
++const int VK_VOLUME_MUTE = 0xAD;
++
++// VK_VOLUME_DOWN (AE) Windows 2000/XP: Volume Down key
++const int VK_VOLUME_DOWN = 0xAE;
++
++// VK_VOLUME_UP (AF) Windows 2000/XP: Volume Up key
++const int VK_VOLUME_UP = 0xAF;
++
++// VK_MEDIA_NEXT_TRACK (B0) Windows 2000/XP: Next Track key
++const int VK_MEDIA_NEXT_TRACK = 0xB0;
++
++// VK_MEDIA_PREV_TRACK (B1) Windows 2000/XP: Previous Track key
++const int VK_MEDIA_PREV_TRACK = 0xB1;
++
++// VK_MEDIA_STOP (B2) Windows 2000/XP: Stop Media key
++const int VK_MEDIA_STOP = 0xB2;
++
++// VK_MEDIA_PLAY_PAUSE (B3) Windows 2000/XP: Play/Pause Media key
++const int VK_MEDIA_PLAY_PAUSE = 0xB3;
++
++// VK_LAUNCH_MAIL (B4) Windows 2000/XP: Start Mail key
++const int VK_MEDIA_LAUNCH_MAIL = 0xB4;
++
++// VK_LAUNCH_MEDIA_SELECT (B5) Windows 2000/XP: Select Media key
++const int VK_MEDIA_LAUNCH_MEDIA_SELECT = 0xB5;
++
++// VK_LAUNCH_APP1 (B6) Windows 2000/XP: Start Application 1 key
++const int VK_MEDIA_LAUNCH_APP1 = 0xB6;
++
++// VK_LAUNCH_APP2 (B7) Windows 2000/XP: Start Application 2 key
++const int VK_MEDIA_LAUNCH_APP2 = 0xB7;
++
++// VK_OEM_1 (BA) Used for miscellaneous characters; it can vary by keyboard. Windows 2000/XP: For the US standard keyboard, the ';:' key
++const int VK_OEM_1 = 0xBA;
++
++// VK_OEM_PLUS (BB) Windows 2000/XP: For any country/region, the '+' key
++const int VK_OEM_PLUS = 0xBB;
++
++// VK_OEM_COMMA (BC) Windows 2000/XP: For any country/region, the ',' key
++const int VK_OEM_COMMA = 0xBC;
++
++// VK_OEM_MINUS (BD) Windows 2000/XP: For any country/region, the '-' key
++const int VK_OEM_MINUS = 0xBD;
++
++// VK_OEM_PERIOD (BE) Windows 2000/XP: For any country/region, the '.' key
++const int VK_OEM_PERIOD = 0xBE;
++
++// VK_OEM_2 (BF) Used for miscellaneous characters; it can vary by keyboard. Windows 2000/XP: For the US standard keyboard, the '/?' key
++const int VK_OEM_2 = 0xBF;
++
++// VK_OEM_3 (C0) Used for miscellaneous characters; it can vary by keyboard. Windows 2000/XP: For the US standard keyboard, the '`~' key
++const int VK_OEM_3 = 0xC0;
++
++// VK_OEM_4 (DB) Used for miscellaneous characters; it can vary by keyboard. Windows 2000/XP: For the US standard keyboard, the '[{' key
++const int VK_OEM_4 = 0xDB;
++
++// VK_OEM_5 (DC) Used for miscellaneous characters; it can vary by keyboard. Windows 2000/XP: For the US standard keyboard, the '\|' key
++const int VK_OEM_5 = 0xDC;
++
++// VK_OEM_6 (DD) Used for miscellaneous characters; it can vary by keyboard. Windows 2000/XP: For the US standard keyboard, the ']}' key
++const int VK_OEM_6 = 0xDD;
++
++// VK_OEM_7 (DE) Used for miscellaneous characters; it can vary by keyboard. Windows 2000/XP: For the US standard keyboard, the 'single-quote/double-quote' key
++const int VK_OEM_7 = 0xDE;
++
++// VK_OEM_8 (DF) Used for miscellaneous characters; it can vary by keyboard.
++const int VK_OEM_8 = 0xDF;
++
++// VK_OEM_102 (E2) Windows 2000/XP: Either the angle bracket key or the backslash key on the RT 102-key keyboard
++const int VK_OEM_102 = 0xE2;
++
++// VK_PROCESSKEY (E5) Windows 95/98/Me, Windows NT 4.0, Windows 2000/XP: IME PROCESS key
++const int VK_PROCESSKEY = 0xE5;
++
++// VK_PACKET (E7) Windows 2000/XP: Used to pass Unicode characters as if they were keystrokes. The VK_PACKET key is the low word of a 32-bit Virtual Key value used for non-keyboard input methods. For more information, see Remark in KEYBDINPUT,SendInput, WM_KEYDOWN, and WM_KEYUP
++const int VK_PACKET = 0xE7;
++
++// VK_ATTN (F6) Attn key
++const int VK_ATTN = 0xF6;
++
++// VK_CRSEL (F7) CrSel key
++const int VK_CRSEL = 0xF7;
++
++// VK_EXSEL (F8) ExSel key
++const int VK_EXSEL = 0xF8;
++
++// VK_EREOF (F9) Erase EOF key
++const int VK_EREOF = 0xF9;
++
++// VK_PLAY (FA) Play key
++const int VK_PLAY = 0xFA;
++
++// VK_ZOOM (FB) Zoom key
++const int VK_ZOOM = 0xFB;
++
++// VK_NONAME (FC) Reserved for future use
++const int VK_NONAME = 0xFC;
++
++// VK_PA1 (FD) PA1 key
++const int VK_PA1 = 0xFD;
++
++// VK_OEM_CLEAR (FE) Clear key
++const int VK_OEM_CLEAR = 0xFE;
++
++const int VK_UNKNOWN = 0;
++
++
++#endif // PluginEventsSDL_h
+Index: qtwebkit/Source/WebCore/plugins/wndls/PluginGL.h
+===================================================================
+--- /dev/null
++++ qtwebkit/Source/WebCore/plugins/wndls/PluginGL.h
+@@ -0,0 +1,38 @@
++//-----------------------------------------------------------------------------
++// Declarations for Graphics Layer Interfaces for windowless Flash plugin
++// Ed Windes, Triple Play Integration, May, 2010
++//-----------------------------------------------------------------------------
++#include "PluginEventsWNDLS.h"
++#include <QPainter>
++#include <QRect>
++#include "IntRect.h"
++
++// ARGB32
++#define PLUGIN_BYTES_PER_PIXEL 4
++
++namespace WebCore {
++
++// Information needed to paint in Qt
++typedef struct {
++    QPainter*           qpainter;
++    IntRect*            webviewRect;
++    IntRect*            pluginRect;
++    IntRect*            canvasRect;
++    IntRect*            dirtyRect;
++    QRect*              glRect;
++
++} qt_paint_info_t;
++
++// State info for graphics layer
++typedef struct {
++    ulong                width, height, pitch;
++    uchar*               canvas;
++    qt_paint_info_t*     paint_info;
++    void*                gl_info;
++} GLSurface;
++
++void GLInitOpenGLES();
++
++bool GLGetFuncsOpenGLES(GL_FuncTable **pTable);
++
++}
+Index: qtwebkit/Source/WebCore/plugins/wndls/PluginGLOpenGLES.cpp
+===================================================================
+--- /dev/null
++++ qtwebkit/Source/WebCore/plugins/wndls/PluginGLOpenGLES.cpp
+@@ -0,0 +1,640 @@
++//-----------------------------------------------------------------------------
++// OpenGLES Graphics Layer for Windowless Flash Plugin
++// Ed Windes, Triple Play Integration, May, 2010
++//-----------------------------------------------------------------------------
++#include "PluginGL.h"
++#include <QtOpenGL/qglshaderprogram.h>
++#include <EGL/egl.h>
++#include <EGL/eglext.h>
++#include <GLES/gl.h>
++#include <GLES/glext.h>
++// TODO: Each vendor can provide functions via a custom gfxdriver, alternative mechanism or stubs
++//#include "../../../../../plugins/gfxdrivers/customvendor/customvendorscreen.h"
++
++namespace WebCore {
++
++#define COPY_FLASH_CANVAS
++#define USE_DIRTY_RECT
++
++#define CLAMP(Val,Vmax) if(Val < 0)Val=0; else if(Val > Vmax)Val=Vmax;
++
++// Error reporting macros
++// Turn off error reporting by default
++#if 0
++// These macros follow a function call of the appropriate type
++// and report any error. The caller can provide either a NULL string,
++// or arguments for printf().
++#define EGLERR(s...) egl_error(__FILE__, __LINE__, __FUNCTION__, #s)
++#define GLERR(s...)  gl_error(__FILE__, __LINE__, __FUNCTION__, #s)
++
++// convenience macro for converting constants to strings
++#define CASESTRING(var,x) case x: var = #x; break;
++
++char * egl_error_string(EGLint rc)
++{
++    char *retval = "(unknown)";
++    switch (rc) {
++        CASESTRING(retval, EGL_SUCCESS)
++        CASESTRING(retval, EGL_NOT_INITIALIZED)
++        CASESTRING(retval, EGL_BAD_ACCESS)
++        CASESTRING(retval, EGL_BAD_ALLOC)
++        CASESTRING(retval, EGL_BAD_ATTRIBUTE)
++        CASESTRING(retval, EGL_BAD_CONFIG)
++        CASESTRING(retval, EGL_BAD_CONTEXT)
++        CASESTRING(retval, EGL_BAD_CURRENT_SURFACE)
++        CASESTRING(retval, EGL_BAD_DISPLAY)
++        CASESTRING(retval, EGL_BAD_MATCH)
++        CASESTRING(retval, EGL_BAD_NATIVE_PIXMAP)
++        CASESTRING(retval, EGL_BAD_NATIVE_WINDOW)
++        CASESTRING(retval, EGL_BAD_PARAMETER)
++        CASESTRING(retval, EGL_BAD_SURFACE)
++        CASESTRING(retval, EGL_CONTEXT_LOST)
++    }
++    return retval;
++}
++char * gl_error_string(unsigned int rc)
++{
++    char *retval = "(unknown)";
++    switch (rc) {
++        CASESTRING(retval, GL_NO_ERROR)
++        CASESTRING(retval, GL_INVALID_ENUM)
++        CASESTRING(retval, GL_INVALID_VALUE)
++        CASESTRING(retval, GL_INVALID_OPERATION)
++        CASESTRING(retval, GL_OUT_OF_MEMORY)
++        CASESTRING(retval, GL_TRUE)
++    }
++    return retval;
++}
++
++int egl_error(const char *file, const int line, const char *function, char *s)
++{
++    GLuint ec = eglGetError();
++    if (ec != EGL_SUCCESS) {
++        if (s)
++            printf("### EGL ERROR in %s: %s (0x%x) [%s:%d]\n",
++                s, egl_error_string(ec), ec,
++                file,line);
++        else
++            printf("### EGL ERROR in %s(): %s (0x%x) [%s:%d]\n",
++                function, egl_error_string(ec), ec,
++                file,line);
++        return TRUE;
++    } else {
++        return FALSE;
++    }
++}
++int gl_error(const char *file, const int line, const char *function, char *s)
++{
++    GLuint ec = glGetError();
++    if (ec != GL_NO_ERROR) {
++        if (s)
++            printf("### GL ERROR in %s: %s (0x%x) [%s:%d]\n",
++                s, gl_error_string(ec), ec,
++                file,line);
++        else
++            printf("### GL ERROR in %s(): %s (0x%x) [%s:%d]\n",
++                function, gl_error_string(ec), ec,
++                file,line);
++        return TRUE;
++    } else {
++        return FALSE;
++    }
++}
++#else
++#define EGLERR(s...)
++#define GLERR(s...)
++#endif
++
++//-----------------------------------------------------------------------------
++
++inline static uint nextPowerOfTwo(uint v)
++{
++    v--;
++    v |= v >> 1;
++    v |= v >> 2;
++    v |= v >> 4;
++    v |= v >> 8;
++    v |= v >> 16;
++    ++v;
++    return v;
++}
++
++// TODO: Add other platform specific image structures here to allow for rendering
++typedef struct {
++	int					bytesperpixel;
++	int					width;
++	int					height;
++	int					pitch;
++	size_t				bytes;
++} tpi_surface_info_t;
++
++typedef struct {
++	GLuint 				texture_id;
++	tpi_surface_info_t	surface_info;
++	void*				bits;
++} gles_info_t;
++
++/**
++ * Initialize file static variables used by graphics layer functions
++ */
++void GLInitOpenGLES()
++{
++}
++
++static gles_info_t* createGlesSurface(int width, int height)
++{
++	// Create our structure to hold information about the texture
++	gles_info_t *gles_info = new gles_info_t;
++	if (!gles_info) {
++		fprintf(stderr, "%s: failed to create OpenGLES info struct\n", __FUNCTION__);
++		return NULL;
++	}
++	memset(gles_info, 0, sizeof(gles_info_t));
++
++	// Create texture object, and bind it
++	glGenTextures(1, &gles_info->texture_id);
++	GLERR(glGenTextures);
++	glBindTexture(GL_TEXTURE_2D, gles_info->texture_id);
++	GLERR(glBindTexture);
++
++	glPixelStorei(GL_PACK_ALIGNMENT, 4);
++	glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
++
++	// !!! FIX ME !!! is this the right way to get the storage?
++	gles_info->surface_info.bytesperpixel = 4;
++	gles_info->surface_info.width = width;
++	gles_info->surface_info.height = height;
++	gles_info->surface_info.pitch = width * gles_info->surface_info.bytesperpixel;
++	gles_info->surface_info.bytes = (size_t)(height * gles_info->surface_info.pitch);
++	gles_info->bits = malloc(gles_info->surface_info.bytes);
++	if (!gles_info->bits) {
++		fprintf(stderr, "%s: failed to create OpenGLES texture map\n", __FUNCTION__);
++		free(gles_info);
++		return NULL;
++	}
++	memset(gles_info->bits, gles_info->surface_info.bytes, 0);
++
++	// !!! FIX ME !!! GL_INT32_8_8_8_8 and GL_UNSIGNED_BYTE not listed in gl.h !!! SYMBOLS BELOW COME FROM GLEXT.H !!!
++	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, gles_info->bits);
++	GLERR(glTexImage2D);
++
++	return gles_info;
++}
++
++static void deleteGlesSurface(gles_info_t* gles)
++{
++	glDeleteTextures(1, &gles->texture_id);
++	GLERR(glDeleteTextures);
++
++	// free the pixmap storage
++	if(gles->bits) {
++		free(gles->bits);
++	}
++
++	delete gles;
++}
++
++/*********************************************************************/
++
++static GLuint createShader(const char *pShaderText, int shaderType)
++{
++	GLuint shaderId = 0;       			// vertex or fragment shader Id
++	static const int MSG_LEN = 1000;
++	char pInfoLog[MSG_LEN+1];    			// error message
++	int shaderStatus, infoLogLength;    //shader's status and error information length
++	int shaderTexLen = 0;      			// shader text length
++
++	if (pShaderText != NULL)
++	{
++        shaderId = glCreateShader(shaderType);
++	    glShaderSource(shaderId, 1, (const char **)&pShaderText, &shaderTexLen);
++	    glCompileShader(shaderId);
++
++	    glGetShaderiv( shaderId, GL_COMPILE_STATUS, &shaderStatus);
++	    if (shaderStatus != GL_TRUE)
++	    {
++	        if( GL_VERTEX_SHADER == shaderType )
++	        {
++	            fprintf(stderr,"Error: Failed to compile GL vertex Shader\n");
++	        }
++	        else
++	        {
++	            fprintf(stderr,"Error: Failed to compile GL fragment Shader\n");
++	        }
++	        glGetShaderInfoLog( shaderId, MSG_LEN, &infoLogLength, pInfoLog);
++	        if (infoLogLength > MSG_LEN)
++	        {
++	             pInfoLog[MSG_LEN] = '\0';
++	        }
++	        else
++	        {
++	            pInfoLog[infoLogLength] = '\0';
++	        }
++	        fprintf(stderr, "%s\n",pInfoLog);
++
++	    }
++	}
++	return shaderId;
++}
++static GLuint createProgram( const char *vertexShaderSource, const char *fragmentShaderSource )
++{
++	GLuint programId(0), vertexShaderId(0), fragmentShaderId(0);
++	vertexShaderId = createShader(vertexShaderSource, GL_VERTEX_SHADER);
++	fragmentShaderId = createShader(fragmentShaderSource, GL_FRAGMENT_SHADER);
++	if( vertexShaderId && fragmentShaderId )
++	{
++	    programId = glCreateProgram();
++	    glAttachShader(programId, vertexShaderId);
++	    glAttachShader(programId, fragmentShaderId);
++	}
++	return programId;
++}
++static GLuint linkProgram(GLuint programId)
++{
++	int shaderStatus = GL_FALSE;
++    int infoLen;                  	// error checking info length
++	static const int MSG_LEN = 1000;
++    char infoLog[MSG_LEN+1];        // error checking info log
++
++	glLinkProgram(programId);
++
++    glGetProgramiv(programId, GL_LINK_STATUS, &shaderStatus);
++    if (shaderStatus != GL_TRUE)
++    {
++        fprintf(stderr,"Error: Failed to link GLSL program\n");
++        glGetProgramInfoLog(programId, MSG_LEN, &infoLen, infoLog);
++        if (infoLen > MSG_LEN)
++        {
++            infoLog[MSG_LEN] = '\0';
++        }
++        fprintf(stderr,"%s\n",infoLog);
++		return 0;
++    }
++    else  // (shaderStatus == GL_TRUE)
++    {
++        glValidateProgram(programId);
++        glGetProgramiv(programId, GL_VALIDATE_STATUS, &shaderStatus);
++        if (shaderStatus != GL_TRUE)
++        {
++            fprintf(stderr,"Error: Failed to validate GLSL program\n");
++            glGetProgramInfoLog(programId, MSG_LEN, &infoLen, infoLog);
++            if (infoLen > MSG_LEN)
++            {
++                infoLog[MSG_LEN] = '\0';
++            }
++            fprintf(stderr,"%s\n",infoLog);
++			return 0;
++        }
++    }
++	return 1;
++}
++
++// OpenGLES stuff to draw texture onto a rectangle.
++//
++// glRect is the QGLWidget's rectangle - which, for now is always the whole display.
++// webviewRect is the browser widget's rectangle.  This may be smaller than the display and
++//   the QGLWidget.  If the browser doesn't cover the whole screen, we use a scissor test
++//   to ensure we don't paint outside its bounds (which could happen as a flash object
++//   was scrolled.)
++// flashRect is the flash plugin's rectangle.
++//
++// The texture is assumed to be bound before calling this function.
++//
++void glDrawTexture(qt_paint_info_t* paint_info, const PluginRect* srcRect, bool alphaBlend)
++{
++	static GLuint shaderProgram = 0;
++	static int uniMVP = -1;
++	static int uniTexture = -1;
++	static int atrPosition = -1;
++	static int atrTCoords = -1;
++	if(!shaderProgram)
++	{
++		const char* vShaderStr =
++		"varying vec2 texcoords;\n"
++		"attribute vec4 positionIn;\n"
++		"attribute vec2 texcoordsIn;\n"
++		"uniform mat4 mvp;\n"
++		"\n"
++		"void main(void) \n"
++		"{\n"
++		"  texcoords = texcoordsIn;\n"
++		"  gl_Position = mvp * positionIn;\n"
++		"}\n";
++
++		const char* fShaderStr =
++		"precision mediump float;\n"
++		"varying vec2 texcoords;\n"
++		"uniform sampler2D texture;\n"
++		"\n"
++		"void main(void)\n"
++		"{\n"
++		"  gl_FragColor = texture2D(texture, texcoords).bgra;\n"
++		"}\n";
++
++		shaderProgram = createProgram(vShaderStr, fShaderStr);
++        glBindAttribLocation(shaderProgram, 0, "positionIn");
++        glBindAttribLocation(shaderProgram, 1, "texcoordsIn0");
++		linkProgram(shaderProgram);
++
++		if(shaderProgram)
++		{
++			if( -1 == (uniMVP 		= glGetUniformLocation(shaderProgram, "mvp")))
++				printf("args 1 failed\n");
++			if( -1 == (uniTexture 	= glGetUniformLocation(shaderProgram, "texture")))
++				printf("args 2 failed\n");
++			if( -1 == (atrPosition  = glGetAttribLocation(shaderProgram, "positionIn")))
++				printf("args 3 failed\n");
++			if( -1 == (atrTCoords 	= glGetAttribLocation(shaderProgram, "texcoordsIn")))
++				printf("args 4 failed\n");
++		}
++		else
++		{
++			printf("shader failed\n");
++		}
++	}
++
++	if(!shaderProgram || uniMVP == -1 || uniTexture == -1 || atrPosition == -1 || atrTCoords == -1)
++		return;
++
++	// glRect is the OpenGL rectangle
++	// assume that it is the same as the display rectangle
++	int glw = paint_info->glRect->width();
++	int glh = paint_info->glRect->height();
++
++	QMatrix4x4 modelview;
++	modelview.ortho(0,glw,0,glh,-1,1);
++
++	GLfloat mvp[16];
++	for(int i = 0; i < 16; ++i)
++		mvp[i] = modelview.data()[i];
++
++    QSize windowSize; QSizeF displayUpscale; QSizeF graphicsUpscale;
++    #if 0
++    // TODO:	Assume that the qt_screen is a specific kind of screen and can provide
++    //	the screen/window size and the amount of scaling needed. Reasonable defaults are
++    //	1280x720 for the windowSize, 1.0,1.0 for both display and graphics upscale
++    ((CustomVendorScreen*)qt_screen)->getWindowSizeAndUpscale(&windowSize, &displayUpscale, &graphicsUpscale);
++    float scaleX=1;
++    float scaleY=1;
++    float offsetY=0;
++    if(displayUpscale.height() < 1)
++    {
++        scaleX = displayUpscale.width();
++        scaleY = displayUpscale.height();
++        glh = windowSize.height();
++    }
++
++    //Next block handles 'True SD' case
++    int actualWindowWidth= (int)(windowSize.width()*displayUpscale.width()+0.5f);
++    int actualWindowHeight= (int)(windowSize.height()*displayUpscale.height()+0.5f);
++    // TODO: getTrueSD: complements/returns the value that is set by the XREApplication protocol in
++    // via Platform::Screen::setSupportsTrueSD
++    if( actualWindowWidth==720 && actualWindowHeight==480 && graphicsUpscale.width()<1.0 && graphicsUpscale.height()<1.0 && ((CustomVendorScreen*)qt_screen)->getTrueSD())
++    {
++        scaleX = 720/640.0f;
++        scaleY = 1;
++        glh = 480;
++    }
++    #else
++    float scaleX=1;
++    float scaleY=1;
++    float offsetY=0;
++    glh = 720;
++    #endif
++	GLfloat afVertices[] = {
++			paint_info->pluginRect->x()                                     *scaleX,   offsetY + (glh - (paint_info->pluginRect->y()+paint_info->pluginRect->height())) *scaleY,
++			(paint_info->pluginRect->x()+paint_info->pluginRect->width())   *scaleX,   offsetY + (glh - (paint_info->pluginRect->y()+paint_info->pluginRect->height())) *scaleY,
++			paint_info->pluginRect->x()                                     *scaleX,   offsetY + (glh - paint_info->pluginRect->y())                                    *scaleY,
++			(paint_info->pluginRect->x()+paint_info->pluginRect->width())   *scaleX,   offsetY + (glh - paint_info->pluginRect->y())                                    *scaleY
++	};
++
++	GLfloat afTexCoord[] = {0,1, 1,1, 0,0, 1,0};
++	glUseProgram(shaderProgram);
++	GLERR(glUseProgram);
++
++	glUniformMatrix4fv(uniMVP, 1, GL_FALSE, mvp);
++    glUniform1i(uniTexture, 0);
++    GLERR(glUniform1i);
++    glVertexAttribPointer(atrPosition, 2, GL_FLOAT, GL_FALSE, 0, afVertices);
++    glVertexAttribPointer(atrTCoords, 2, GL_FLOAT, GL_FALSE, 0, afTexCoord);
++	GLERR(glVertexAttribPointer);
++    glEnableVertexAttribArray(atrPosition);
++    glEnableVertexAttribArray(atrTCoords);
++    GLERR(glEnableVertexAtribArray);
++
++	glDisable(GL_CULL_FACE);
++	glDisable(GL_DEPTH_TEST);
++	GLERR(glDisable);
++
++	bool bScaled = false;
++	if (paint_info->pluginRect != paint_info->canvasRect)
++		bScaled = true;
++
++	// Set the filtering mode
++	if (bScaled) {
++		glTexParameteri ( GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR );
++		glTexParameteri ( GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR );
++	}
++	else {
++		glTexParameteri ( GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST );
++		glTexParameteri ( GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST );
++	}
++	// Set the wrap mode
++	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
++	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
++	GLERR(glTexParameteri);
++
++
++	// Only want to draw the portion of the flash canvas specified in srcRect.
++	// So... translate that rect to global coordinates, and  find its
++	// intersection with the WebView.
++
++	QRect blitRect;
++	if (bScaled) {
++		float xscale = (float)paint_info->pluginRect->width() / paint_info->canvasRect->width();
++		float yscale = (float)paint_info->pluginRect->height() / paint_info->canvasRect->height();
++		blitRect = QRect((int)(paint_info->pluginRect->x() + srcRect->left * xscale),
++						 (int)(paint_info->pluginRect->y() + srcRect->top * yscale),
++						 (int)((srcRect->right - srcRect->left) * xscale),
++						 (int)((srcRect->bottom - srcRect->top) * yscale));
++	}
++	else {
++		blitRect = QRect(paint_info->pluginRect->x() + srcRect->left,
++						   paint_info->pluginRect->y() + srcRect->top,
++						   srcRect->right - srcRect->left,
++						   srcRect->bottom - srcRect->top);
++	}
++	blitRect = blitRect.intersected(
++			QRect(paint_info->webviewRect->x(),
++							  paint_info->webviewRect->y(),
++							  paint_info->webviewRect->width(),
++							  paint_info->webviewRect->height()));
++
++	// and use the calculated rectangle in scissor test.
++	glScissor(blitRect.x()*scaleX, offsetY+(glh-blitRect.bottom())*scaleY, blitRect.width()*scaleX, blitRect.height()*scaleY);
++	glEnable(GL_SCISSOR_TEST);
++	GLERR(glScissor);
++
++	if (alphaBlend) {
++		glBlendFuncSeparate(GL_ONE, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ONE);
++		glEnable(GL_BLEND);
++	}
++
++    glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
++    GLERR(glDrawArrays);
++
++    if (alphaBlend)
++    	glDisable(GL_BLEND);
++
++    glDisable(GL_SCISSOR_TEST);
++    GLERR(glDisable);
++
++    glDisableVertexAttribArray(atrPosition);
++    glDisableVertexAttribArray(atrTCoords);
++	GLERR(glDisableVertexAttribArray);
++}
++
++/**********************************************************************
++ *
++ * Graphics Layer interface functions - called by Flash plugin to manage
++ *  its graphics surface(s)
++ */
++static void* GLCreateSurface(int width, int height, int depth)
++{
++	//fprintf(stderr, "### GLCreateSurface(%d, %d, %d)\n", width, height, depth);
++	if (depth != 32) {
++		fprintf(stderr, "PluginViewWNDLS:%s: invalid plugin color depth\n", __FUNCTION__);
++		return NULL;
++	}
++	if (width <= 0 || height <= 0) {
++		fprintf(stderr, "PluginViewWNDLS:%s: invalid plugin rectangle\n", __FUNCTION__);
++		return NULL;
++	}
++
++	GLSurface *pSurface = new GLSurface;
++	memset(pSurface, 0, sizeof(GLSurface));
++
++	gles_info_t* gles_info = createGlesSurface(width, height);
++	pSurface->width = width;
++	pSurface->height = height;
++	pSurface->pitch = gles_info->surface_info.pitch;
++	pSurface->canvas = (unsigned char*)gles_info->bits;
++	pSurface->gl_info = gles_info;
++
++	return (void*)pSurface;
++}
++static bool GLFreeSurface(void * pvSurface)
++{
++	GLSurface *pSurface = (GLSurface*)pvSurface;
++	//fprintf(stderr, "### GLFreeSurface(%p)\n", pSurface);
++
++	if (pSurface->paint_info) {
++		delete(pSurface->paint_info);
++		pSurface->paint_info = NULL;
++	}
++	if (pSurface->gl_info) {
++		deleteGlesSurface((gles_info_t*)(pSurface->gl_info));
++		pSurface->gl_info = NULL;
++	}
++	return true;
++}
++static bool GLLockSurface(void * /*pvSurface*/)
++{
++//	fprintf(stderr, "### GLLockSurface(%p)\n", pvSurface);
++//	GLSurface* pSurface = (GLSurface*)pvSurface;
++	return true;
++}
++static bool GLUnlockSurface(void * /*pvSurface*/)
++{
++//	fprintf(stderr, "### GLUnlockSurface(%p)\n", pvSurface);
++//	GLSurface* pSurface = (GLSurface*)pvSurface;
++	return true;
++}
++static void* GLGetPixels(void * pvSurface)
++{
++	GLSurface* pSurface = (GLSurface*)pvSurface;
++	//fprintf(stderr, "### GLGetPixels(%p), bits=%p\n", pSurface, pSurface->canvas);
++	return (void*)(pSurface->canvas);
++}
++static int GLGetPitch(void * pvSurface)
++{
++	GLSurface* pSurface = (GLSurface*)pvSurface;
++	//fprintf(stderr, "### GLGetPitch(%p), pitch=%d\n", pSurface, pSurface->.pitch);
++ 	return pSurface->pitch;
++}
++static bool GLDrawRect(void* pvSurface, uint32_t color, const PluginRect* pRect)
++{
++     GLSurface* pSurface = (GLSurface*)pvSurface;
++
++     static int count = 0;
++     count++;
++     if( (count % 20) == 0)//if this function is called too much it could be a performance bottleneck so i'm going to print so we'll know if it starts showing up
++         fprintf(stderr, "### GLDrawRect(%p, %8.8X, %d,%d,%d,%d)\n", pSurface, color, pRect->left, pRect->top, pRect->right, pRect->bottom);
++
++     for ( int y = pRect->top; y < pRect->bottom; y++ )
++     {
++           uint32_t* row = (uint32_t*)( pSurface->canvas + (y * pSurface->pitch) + (pRect->left * 4) );
++
++           for ( int x = 0; x < (pRect->right - pRect->left); x++ )
++                row[x] = color;
++     }
++
++     return true;
++}
++
++static bool GLBlit(void * pvSurface, void* pvTarget, const int /*nTargetPitch*/,
++				   const PluginRect* srcRect, const PluginRect* /*dstRect*/, bool bAlphaBlend)
++{
++//	fprintf(stderr, "### GLBlit() (%d %d %d %d) %d\n", srcRect->left, srcRect->top, srcRect->right, srcRect->bottom, bAlphaBlend);
++
++	GLSurface* pSurface = (GLSurface*)pvSurface;
++	GLSurface* pTarget = (GLSurface*)pvTarget;
++
++	if (pTarget->paint_info) {
++		qt_paint_info_t*  paint_info = pTarget->paint_info;
++		gles_info_t* gles_info = (gles_info_t*)pSurface->gl_info;
++
++		// TODO: flush any buffers to make sure the platform surface is updated
++
++		paint_info->qpainter->beginNativePainting();
++
++		// Use our texture
++		glActiveTexture(GL_TEXTURE0);
++		glBindTexture(GL_TEXTURE_2D, gles_info->texture_id);
++		GLERR(glBindTexture);
++
++		// Update the texture
++		glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
++		glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, pSurface->width, pSurface->height, GL_RGBA, GL_UNSIGNED_BYTE, gles_info->bits);
++		GLERR(glTexSubImage2D);
++
++		// Draw the plugin rectangle, with the texture mapped onto it
++		glDrawTexture(paint_info, srcRect, bAlphaBlend);
++
++	    paint_info->qpainter->endNativePainting();
++		return true;
++	}
++	else {
++		// Don't have an accelerated blit()
++		fprintf(stderr, "%s: error: missing paint_info\n", __FUNCTION__);
++		return false;
++	}
++}
++bool GLGetFuncsOpenGLES(GL_FuncTable **pTable)
++{
++	static GL_FuncTable DrawingFuncs = { NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL };
++
++	DrawingFuncs.pfCreateSurface	= GLCreateSurface;
++	DrawingFuncs.pfFreeSurface		= GLFreeSurface;
++	DrawingFuncs.pfLockSurface		= GLLockSurface;
++	DrawingFuncs.pfUnlockSurface	= GLUnlockSurface;
++	DrawingFuncs.pfGetPixels		= GLGetPixels;
++	DrawingFuncs.pfGetPitch			= GLGetPitch;
++	DrawingFuncs.pfDrawRect			= GLDrawRect;
++	DrawingFuncs.pfBlit				= GLBlit;
++
++	*pTable = &DrawingFuncs;
++	return true;
++}
++
++} // namespace WebCore
+Index: qtwebkit/Source/WebCore/plugins/wndls/PluginPackageWNDLS.cpp
+===================================================================
+--- /dev/null
++++ qtwebkit/Source/WebCore/plugins/wndls/PluginPackageWNDLS.cpp
+@@ -0,0 +1,164 @@
++/*
++ * Copyright (C) 2006, 2007 Apple Inc.  All rights reserved.
++ * Copyright (C) 2008 Collabora Ltd. All rights reserved.
++ *
++ * Redistribution and use in source and binary forms, with or without
++ * modification, are permitted provided that the following conditions
++ * are met:
++ * 1. Redistributions of source code must retain the above copyright
++ *    notice, this list of conditions and the following disclaimer.
++ * 2. Redistributions in binary form must reproduce the above copyright
++ *    notice, this list of conditions and the following disclaimer in the
++ *    documentation and/or other materials provided with the distribution.
++ *
++ * THIS SOFTWARE IS PROVIDED BY APPLE COMPUTER, INC. ``AS IS'' AND ANY
++ * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
++ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
++ * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL APPLE COMPUTER, INC. OR
++ * CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
++ * EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
++ * PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
++ * PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY
++ * OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
++ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
++ * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
++ */
++
++#include "config.h"
++#include "PluginPackage.h"
++
++
++#include "MIMETypeRegistry.h"
++#include "npruntime_impl.h"
++#include "PluginDatabase.h"
++#include "PluginDebug.h"
++#include <QDebug>
++
++namespace WebCore {
++
++bool PluginPackage::fetchInfo()
++{
++    if (!load())
++        return false;
++
++    NPP_GetValueProcPtr gv = (NPP_GetValueProcPtr)m_module->resolve("NP_GetValue");
++    typedef char *(*NPP_GetMIMEDescriptionProcPtr)();
++    NPP_GetMIMEDescriptionProcPtr gm =
++        (NPP_GetMIMEDescriptionProcPtr)m_module->resolve("NP_GetMIMEDescription");
++    if (!gm || !gv)
++        return false;
++
++    char *buf = 0;
++    NPError err = gv(0, NPPVpluginNameString, (void*) &buf);
++    if (err != NPERR_NO_ERROR)
++        return false;
++
++    m_name = buf;
++    err = gv(0, NPPVpluginDescriptionString, (void*) &buf);
++    if (err != NPERR_NO_ERROR)
++        return false;
++
++    m_description = buf;
++    determineModuleVersionFromDescription();
++
++    String s = gm();
++    Vector<String> types;
++    s.split(UChar(';'), false, types);
++    for (unsigned i = 0; i < types.size(); ++i) {
++        Vector<String> mime;
++        qDebug() << "mime type: " << (QString)types[i];
++        types[i].split(UChar(':'), true, mime);
++        if (mime.size() > 0) {
++            Vector<String> exts;
++            if (mime.size() > 1)
++                mime[1].split(UChar(','), false, exts);
++            determineQuirks(mime[0]);
++            m_mimeToExtensions.add(mime[0], exts);
++            if (mime.size() > 2)
++                m_mimeToDescriptions.add(mime[0], mime[2]);
++        }
++    }
++
++    qDebug() << "loaded plugin: " << (QString)m_path;
++    return true;
++}
++
++bool PluginPackage::load()
++{
++    if (m_isLoaded) {
++        m_loadCount++;
++        return true;
++    }
++
++    m_module = new QLibrary((QString)m_path);
++    m_module->setLoadHints(QLibrary::ResolveAllSymbolsHint);
++    if (!m_module->load()) {
++        qDebug() << "module load failed" << m_module->errorString().toLatin1().constData();
++        LOG(Plugins, "%s not loaded (%s)", m_path.utf8().data(),
++                m_module->errorString().toLatin1().constData());
++        return false;
++    }
++
++    m_isLoaded = true;
++
++    NP_InitializeFuncPtr NP_Initialize;
++    NPError npErr;
++
++    NP_Initialize = (NP_InitializeFuncPtr)m_module->resolve("NP_Initialize");
++    m_NPP_Shutdown = (NPP_ShutdownProcPtr)m_module->resolve("NP_Shutdown");
++
++    if (!NP_Initialize || !m_NPP_Shutdown) {
++        qDebug() << "didn't find Initialize/Shutdown symbols in plugin";
++        goto abort;
++    }
++
++    memset(&m_pluginFuncs, 0, sizeof(m_pluginFuncs));
++    m_pluginFuncs.size = sizeof(m_pluginFuncs);
++
++    initializeBrowserFuncs();
++
++#if defined(XP_UNIX)
++    npErr = NP_Initialize(&m_browserFuncs, &m_pluginFuncs);
++#else
++    npErr = NP_Initialize(&m_browserFuncs);
++#endif
++    if (npErr != NPERR_NO_ERROR) {
++        qDebug() << "NP_Initialize failed";
++        goto abort;
++    }
++
++    m_loadCount++;
++    return true;
++
++abort:
++    unloadWithoutShutdown();
++    return false;
++}
++
++uint16_t PluginPackage::NPVersion() const
++{
++    return NP_VERSION_MINOR;
++}
++
++void PluginPackage::setMIMEDescription(const String& mimeDescription)
++{
++    m_fullMIMEDescription = mimeDescription.lower();
++
++    Vector<String> types;
++    mimeDescription.lower().split(UChar(';'), false, types);
++    for (unsigned i = 0; i < types.size(); ++i) {
++        Vector<String> mime;
++        types[i].split(UChar(':'), true, mime);
++        if (mime.size() > 0) {
++            Vector<String> exts;
++            if (mime.size() > 1)
++                mime[1].split(UChar(','), false, exts);
++            determineQuirks(mime[0]);
++            m_mimeToExtensions.add(mime[0], exts);
++            if (mime.size() > 2)
++                m_mimeToDescriptions.add(mime[0], mime[2]);
++        }
++    }
++}
++
++}
+Index: qtwebkit/Source/WebCore/plugins/wndls/PluginViewWNDLS.cpp
+===================================================================
+--- /dev/null
++++ qtwebkit/Source/WebCore/plugins/wndls/PluginViewWNDLS.cpp
+@@ -0,0 +1,728 @@
++/*
++ * Copyright (C) 2006, 2007 Apple Inc.  All rights reserved.
++ * Copyright (C) 2008 Collabora Ltd. All rights reserved.
++ *
++ * Redistribution and use in source and binary forms, with or without
++ * modification, are permitted provided that the following conditions
++ * are met:
++ * 1. Redistributions of source code must retain the above copyright
++ *    notice, this list of conditions and the following disclaimer.
++ * 2. Redistributions in binary form must reproduce the above copyright
++ *    notice, this list of conditions and the following disclaimer in the
++ *    documentation and/or other materials provided with the distribution.
++ *
++ * THIS SOFTWARE IS PROVIDED BY APPLE COMPUTER, INC. ``AS IS'' AND ANY
++ * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
++ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
++ * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL APPLE COMPUTER, INC. OR
++ * CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
++ * EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
++ * PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
++ * PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY
++ * OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
++ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
++ * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
++ */
++
++#include "config.h"
++#include "PluginView.h"
++#include "PluginPackage.h"
++#include "PluginEventsWNDLS.h"
++#include "PluginGL.h"
++#include "PluginDebug.h"
++#include <strings.h>
++
++#include "HostWindow.h"
++#include "Frame.h"
++#include "FrameView.h"
++#include "FocusController.h"
++#include "GraphicsContext.h"
++#include "HTMLNames.h"
++#include "HTMLPlugInElement.h"
++#include "KeyboardEvent.h"
++#include "MouseEvent.h"
++#include "NotImplemented.h"
++#include "PlatformMouseEvent.h"
++#include "PlatformKeyboardEvent.h"
++#include "npruntime_impl.h"
++#include <runtime/JSLock.h>
++
++#include "Page.h"
++#include "NamedNodeMap.h"
++
++#include <QWebPageClient.h>
++#include <QPainter>
++#include <QWidget>
++#include <QRect>
++#include <QGLWidget>
++#include <QKeyEvent>
++
++#include <QGuiApplication>
++#include <qpa/qplatformnativeinterface.h>
++
++
++namespace WebCore {
++
++using namespace HTMLNames;
++
++/***********************************************************************/
++
++void PluginView::updatePluginWidget()
++{
++    // Nothing to do for windowless plugin
++}
++
++void PluginView::setFocus(bool b)
++{
++    // Eugene: FIX ME!!!
++    // if (platformPluginWidget())
++    //     platformPluginWidget()->setFocus(Qt::OtherFocusReason);
++    // else
++    // END OF FIX ME
++        Widget::setFocus(b);
++}
++
++void PluginView::show()
++{
++    setSelfVisible(true);
++
++    // Eugene: FIX ME!!!
++    // if (isParentVisible() && platformPluginWidget())
++    //     platformPluginWidget()->setVisible(true);
++    // END OF FIX ME
++
++    // do not call parent impl. here as it will set the platformWidget
++    // (same as platformPluginWidget in the Qt port) to visible, even
++    // when parent isn't visible.
++}
++
++void PluginView::hide()
++{
++    setSelfVisible(false);
++
++    // Eugene: FIX ME!!!
++    // if (isParentVisible() && platformPluginWidget())
++    //     platformPluginWidget()->setVisible(false);
++    // END OF FIX ME
++
++    // do not call parent impl. here as it will set the platformWidget
++    // (same as platformPluginWidget in the Qt port) to invisible, even
++    // when parent isn't visible.
++}
++
++void PluginView::paint(GraphicsContext* context, const IntRect& rect)
++{
++    printf("%s: %d,%d,%d,%d\n", __FUNCTION__, rect.x(), rect.y(), rect.width(), rect.height());
++    printf("%s: %d,%d,%d,%d\n", __FUNCTION__, m_dirtyRect.x(), m_dirtyRect.y(), m_dirtyRect.width(), m_dirtyRect.height());
++
++    if (!m_isStarted) {
++        paintMissingPluginIcon(context, rect);
++        return;
++    }
++
++    if (context->paintingDisabled())
++        return;
++
++    QPainter* painter = context->platformContext();
++    if (QInternal::Widget != painter->device()->devType()) {
++        fprintf(stderr, "PluginView::paint() error: Paint device is not a widget!\n");
++        return;
++    }
++
++    QRect glRect = ((QGLWidget*)painter->device())->rect();
++
++    // The event we'll pass to the plugin
++    PluginEvent event;
++    memset(&event, 0, sizeof(PluginEvent));
++    NPEvent pEvt = &event;	// NPEvent is typedef'd as void*
++
++    PluginView::setCurrentPluginView(this);
++    JSC::JSLock::DropAllLocks dropAllLocks(JSDOMWindowBase::commonJSGlobalData());
++
++    setCallingPlugin(true);
++
++    // TODO: handle fullscreen
++    event.type = PluginPaintEventType;
++    event.paint.bUseAccelBlit	= true;
++
++    // Invalidated rectangle
++    event.paint.inval.left      = rect.x();
++    event.paint.inval.top       = rect.y();
++    event.paint.inval.right     = rect.x() + rect.width();
++    event.paint.inval.bottom    = rect.y() + rect.height();
++
++    // Flash rectangle
++    event.paint.xoffset			= frameRect().x();
++    event.paint.yoffset			= frameRect().y();
++
++    // w,h are used for fullscreen player
++    event.paint.w				= glRect.width();
++    event.paint.h				= glRect.height();
++
++    // event.paint.pitch  - passed back to blit, not used there
++    // event.paint.depth  - not used
++
++    GLSurface surface;
++    memset(&surface, 0, sizeof(GLSurface));
++    qt_paint_info_t paint_info;
++    memset(&paint_info, 0, sizeof(qt_paint_info_t));
++    surface.paint_info      = &paint_info;
++    paint_info.qpainter     = context->platformContext();
++    paint_info.webviewRect  = &m_webviewRect;
++    paint_info.pluginRect	= &m_pluginRect;
++    paint_info.canvasRect	= &m_canvasRect;
++    paint_info.dirtyRect	= &m_dirtyRect;
++    paint_info.glRect       = &glRect;
++
++    // event.paint.pixels - passed back to blit as pvTarget
++    event.paint.pixels   = (uint8_t*)(&surface);
++
++    context->save();
++    m_plugin->pluginFuncs()->event(m_instance, pEvt);
++    context->restore();
++
++    setCallingPlugin(false);
++
++    m_dirtyRect = IntRect(0,0,0,0);
++}
++
++bool PluginView::dispatchNPEvent(void* event)
++{
++    if (!m_plugin->pluginFuncs()->event)
++        return false;
++
++    PluginView::setCurrentPluginView(this);
++    JSC::JSLock::DropAllLocks dropAllLocks(JSDOMWindowBase::commonJSGlobalData());
++
++    setCallingPlugin(true);
++    bool accepted = m_plugin->pluginFuncs()->event(m_instance, event);
++    setCallingPlugin(false);
++
++    return accepted;
++}
++
++void PluginView::handleKeyboardEvent(KeyboardEvent* event)
++{
++    PluginEvent evt;
++    memset(&evt, 0, sizeof(PluginEvent));
++    evt.type = PluginKeyEventType;
++
++    switch (event->keyEvent()->type()) {
++    case PlatformKeyboardEvent::RawKeyDown:
++        evt.key.state = PluginKeyDown;
++        break;
++    case PlatformKeyboardEvent::KeyUp:
++        evt.key.state = PluginKeyUp;
++        break;
++    default:
++        return;
++    }
++
++    evt.key.scancode	= event->keyCode();
++    evt.key.sym			= event->keyEvent()->windowsVirtualKeyCode();
++    evt.key.mod			= event->keyEvent()->modifiers();
++    evt.key.unicode		= event->keyEvent()->qtEvent()->key();
++
++    if (dispatchNPEvent(&evt))
++        event->setDefaultHandled();
++}
++
++void PluginView::handleMouseEvent(MouseEvent* event)
++{
++
++    FrameView* parentFrameView = static_cast<FrameView*>(parent());
++    IntPoint p = parentFrameView->contentsToWindow(IntPoint(event->pageX(), event->pageY()));
++    //fprintf(stderr, "PluginViewWNDLS:%s: event: %d %d\n", __FUNCTION__, p.x(), p.y());
++
++    // Move p to account for scrolling offset(s)
++    for (WebCore::ScrollView*  sv = parent(); sv != NULL; sv = sv->parent()) {
++        p.move(sv->scrollX(), sv->scrollY());
++        //fprintf(stderr, "\tscrolled: %d %d\n", p.x(), p.y());
++    }
++
++    // And translate to flash coordinates
++    p.move(-frameRect().x(), -frameRect().y());
++    //fprintf(stderr, "\ttranslated: %d %d\n", p.x(), p.y());
++
++    if (m_bScaled) {
++        float xscale = (float)m_pluginRect.width() / m_canvasRect.width();
++        float yscale = (float)m_pluginRect.height() / m_canvasRect.height();
++        p.setX((int)(p.x() / xscale));
++        p.setY((int)(p.y() / yscale));
++    }
++
++    // sometimes see small negative numbers, so let's be safe
++    if (p.x() < 0 || p.y() < 0)
++        return;
++
++    PluginEvent evt;
++    memset(&evt, 0, sizeof(PluginEvent));
++    evt.type = PluginMouseEventType;
++
++    int state = PluginMouseButtonMove;
++    if(event->type() == eventNames().mouseoverEvent) {
++        state = PluginMouseButtonMove;
++    }
++    else if(event->type() == eventNames().mousedownEvent) {
++        state = PluginMouseButtonDown;
++        if (Page* page = m_parentFrame->page())
++            page->focusController()->setFocusedFrame(m_parentFrame);
++        m_parentFrame->document()->setFocusedNode(m_element);
++    }
++    else if(event->type() == eventNames().mouseupEvent) {
++        state = PluginMouseButtonUp;
++    }
++    evt.mouse.state		= state;
++    evt.mouse.x			= p.x();
++    evt.mouse.y			= p.y();
++    evt.mouse.button	= event->button();
++
++    if (dispatchNPEvent(&evt))
++        event->setDefaultHandled();
++}
++
++void PluginView::setParent(ScrollView* parent)
++{
++    Widget::setParent(parent);
++
++    if (parent)
++        init();
++}
++
++void PluginView::setNPWindowRect(const IntRect& rect)
++{
++    if (!parent())
++        return;
++
++    QWebPageClient* pClient = root()->hostWindow()->platformPageClient();
++    m_webviewRect = IntRect(pClient->geometryRelativeToOwnerWidget());
++
++    // Get the plugin rectangle
++    IntRect newRect = ((WebCore::ScrollView*)parent())->contentsToScreen(rect);
++    newRect.move(m_webviewRect.x(), m_webviewRect.y());
++
++    // Is the plugin still in the same location as last time we checked?
++    if (newRect == m_pluginRect)
++        return;  // yes.  don't need to do anything.
++
++    //printf("%s: new rect = %d,%d,%d,%d\n", __FUNCTION__, newRect.x(), newRect.y(), newRect.width(), newRect.height());
++    m_pluginRect = newRect;
++
++    // Compute scale.  We may be doing 2 different types of scaling:
++    //  1. canvas scaling - canvasWidth/canvasHeight may be specified
++    //     in the HTML.  Idea here is that we can use a smaller canvas
++    //     for Flash games that use a lot of CPU.
++    //  2. screen scaling - entire screen may be scaled up by the
++    //     Comcast graphics driver.
++    float scaleWidth = 1.0, scaleHeight = 1.0;
++
++    if (m_canvasWidth != 0 && m_canvasHeight != 0) {
++        scaleWidth = (float)newRect.width() / m_canvasWidth;
++        scaleHeight = (float)newRect.height() / m_canvasHeight;
++        m_bScaled = true;
++    }
++    else if (m_canvasWidth != 0) {
++        scaleHeight = scaleWidth = (float)newRect.width() / m_canvasWidth;
++        m_bScaled = true;
++    }
++    else if (m_canvasHeight != 0) {
++        scaleWidth = scaleHeight = (float)newRect.height() / m_canvasHeight;
++        m_bScaled = true;
++    }
++    else {
++        m_canvasRect = newRect;
++        m_bScaled = false;
++    }
++
++    if (m_bScaled) {
++        m_canvasRect = IntRect(
++            newRect.x(),
++            newRect.y(),
++            (int)(newRect.width() / scaleWidth + 0.5),
++            (int)(newRect.height() / scaleHeight + 0.5));
++    }
++    else
++        m_canvasRect = newRect;
++
++    m_npWindow.x                = m_canvasRect.x();
++    m_npWindow.y                = m_canvasRect.y();
++    m_npWindow.width            = m_canvasRect.width();
++    m_npWindow.height           = m_canvasRect.height();
++
++    // inform the plugin about the canvas scaling
++    m_plugin->pluginFuncs()->setvalue(m_instance, (NPNVariable)NPPVpluginCanvasScaleWidth, (void*)(&scaleWidth));
++    m_plugin->pluginFuncs()->setvalue(m_instance, (NPNVariable)NPPVpluginCanvasScaleHeight, (void*)(&scaleHeight));
++
++    bool isTrueSD=false;
++    // Also take Comcast's upscaling into account in the scale
++    // variables we pass to the plugin, so that HW video can be
++    // positioned and sized correctly.
++    QSize windowSize; QSizeF displayUpscale; QSizeF graphicsUpscale;
++    #if defined(HAS_INTELCE_SCREEN)
++    isTrueSD = get_qt_screen()->getTrueSD();
++    get_qt_screen()->getWindowSizeAndUpscale(&windowSize, &displayUpscale, &graphicsUpscale);
++    #else
++    #warning "Getting the window size/upscale is not supported"
++    windowSize = QSize(1280,720);
++    displayUpscale = graphicsUpscale = QSizeF(1.0, 1.0);
++    #endif
++    float screenScaleWidth = displayUpscale.width();
++    float screenScaleHeight = displayUpscale.height();
++
++    int actualWindowWidth= (int)(windowSize.width()*displayUpscale.width()+0.5f);
++    int actualWindowHeight= (int)(windowSize.height()*displayUpscale.height()+0.5f);
++    if( actualWindowWidth==720 && actualWindowHeight==480 && graphicsUpscale.width()<1.0 && graphicsUpscale.height()<1.0 && isTrueSD)
++    {
++        screenScaleWidth = 720/640.0f;
++        screenScaleHeight = 1;
++    }
++    // adjust scale vars to include upscaling
++    scaleWidth *= screenScaleWidth;
++    scaleHeight *= screenScaleHeight;
++
++    // and inform the plugin about the screen scaling
++    m_plugin->pluginFuncs()->setvalue(m_instance, (NPNVariable)NPPVpluginScreenScaleWidth, (void*)(&screenScaleWidth));
++    m_plugin->pluginFuncs()->setvalue(m_instance, (NPNVariable)NPPVpluginScreenScaleHeight, (void*)(&screenScaleHeight));
++
++    if (m_plugin->pluginFuncs()->setwindow) {
++        PluginView::setCurrentPluginView(this);
++        JSC::JSLock::DropAllLocks dropAllLocks(JSDOMWindowBase::commonJSGlobalData());
++        setCallingPlugin(true);
++        m_plugin->pluginFuncs()->setwindow(m_instance, &m_npWindow);
++        setCallingPlugin(false);
++        PluginView::setCurrentPluginView(0);
++    }
++}
++
++void PluginView::setParentVisible(bool visible)
++{
++    if (isParentVisible() == visible)
++        return;
++
++    Widget::setParentVisible(visible);
++
++    // Eugene: FIX ME!!!
++    // if (isSelfVisible() && platformPluginWidget())
++    //     platformPluginWidget()->setVisible(visible);
++    // END OF FIX ME
++}
++
++NPError PluginView::handlePostReadFile(Vector<char>& buffer, uint32_t len, const char* buf)
++{
++    String filename(buf, len);
++
++    if (filename.startsWith("file:///"))
++        filename = filename.substring(8);
++
++    if (!fileExists(filename))
++        return NPERR_FILE_NOT_FOUND;
++
++    // FIXME - read the file data into buffer
++    FILE* fileHandle = fopen((filename.utf8()).data(), "r");
++
++    if (!fileHandle)
++        return NPERR_FILE_NOT_FOUND;
++
++    //buffer.resize();
++
++    int bytesRead = fread(buffer.data(), 1, 0, fileHandle);
++
++    fclose(fileHandle);
++
++    if (bytesRead <= 0)
++        return NPERR_FILE_NOT_FOUND;
++
++    return NPERR_NO_ERROR;
++}
++
++bool PluginView::platformGetValueStatic(NPNVariable variable, void* value, NPError* result)
++{
++    LOG(Plugins, "PluginView::getValueStatic(%s)", prettyNameForNPNVariable(variable).data());
++
++    switch (variable) {
++    case NPNVSupportsXEmbedBool:
++        *static_cast<NPBool*>(value) = false;
++        *result = NPERR_NO_ERROR;
++        return true;
++    case NPNVjavascriptEnabledBool:
++        *static_cast<NPBool*>(value) = true;
++        *result =  NPERR_NO_ERROR;
++        return true;
++    default:
++        *result =  NPERR_GENERIC_ERROR;
++        return false;
++    }
++}
++
++bool PluginView::platformGetValue(NPNVariable variable, void* value, NPError* result)
++{
++    LOG(Plugins, "PluginView::getValue(%s)", prettyNameForNPNVariable(variable).data());
++
++    switch (variable) {
++
++#if ENABLE(NETSCAPE_PLUGIN_API)
++    case NPNVWindowNPObject: {
++        if (m_isJavaScriptPaused)
++        {
++            *result = NPERR_GENERIC_ERROR;
++            return false;
++        }
++
++        NPObject* windowScriptObject = m_parentFrame->script()->windowScriptNPObject();
++
++        // Return value is expected to be retained, as described here: <http://www.mozilla.org/projects/plugin/npruntime.html>
++        if (windowScriptObject)
++            _NPN_RetainObject(windowScriptObject);
++
++        void** v = (void**)value;
++        *v = windowScriptObject;
++
++        *result = NPERR_NO_ERROR;
++        return true;
++    }
++
++    case NPNVPluginElementNPObject: {
++        if (m_isJavaScriptPaused)
++        {
++            *result = NPERR_GENERIC_ERROR;
++            return false;
++        }
++
++        NPObject* pluginScriptObject = 0;
++
++        if (m_element->hasTagName(appletTag) || m_element->hasTagName(embedTag) || m_element->hasTagName(objectTag))
++            pluginScriptObject = static_cast<HTMLPlugInElement*>(m_element)->getNPObject();
++
++        // Return value is expected to be retained, as described here: <http://www.mozilla.org/projects/plugin/npruntime.html>
++        if (pluginScriptObject)
++            _NPN_RetainObject(pluginScriptObject);
++
++        void** v = (void**)value;
++        *v = pluginScriptObject;
++
++        *result = NPERR_NO_ERROR;
++        return true;
++    }
++#endif
++
++    default:
++        return getValueStatic(variable, value);
++    }
++}
++
++void PluginView::invalidateRect(const IntRect& rect)
++{
++    //printf("%s: %d,%d,%d,%d\n", __FUNCTION__, rect.x(), rect.y(), rect.width(), rect.height());
++    // Eugene: FIX ME!!!
++    // if (platformWidget()) {
++    //     platformWidget()->update(rect);
++    //     return;
++    // }
++    // END OF FIX ME
++
++    m_dirtyRect.unite(rect);
++
++    invalidateWindowlessPluginRect(rect);
++}
++
++void PluginView::invalidateRect(NPRect* rect)
++{
++    if (!rect) {
++        //printf("%s: no rect\n", __FUNCTION__);
++        invalidate();
++        return;
++    }
++
++    IntRect r(rect->left, rect->top, rect->right - rect->left, rect->bottom - rect->top);
++    //printf("%s: %d,%d,%d,%d\n", __FUNCTION__, r.x(), r.y(), r.width(), r.height());
++
++    m_dirtyRect.unite(r);
++
++    // No need to send an event because one will be generated
++    //  by the invalidateWindowlessPluginRect call
++    invalidateWindowlessPluginRect(r);
++}
++
++void PluginView::invalidateRegion(NPRegion)
++{
++    notImplemented();
++}
++
++void PluginView::forceRedraw()
++{
++    notImplemented();
++}
++
++const String strCanvasWidth("canvaswidth");
++const String strCanvasHeight("canvasheight");
++
++bool PluginView::platformStart()
++{
++    ASSERT(m_isStarted);
++    ASSERT(m_status == PluginStatusLoadedSuccessfully);
++    ASSERT(m_plugin->pluginFuncs()->setvalue);
++
++    m_webviewRect = m_pluginRect = m_canvasRect = m_dirtyRect = IntRect(0,0,0,0);
++    m_bScaled = false; m_canvasWidth = 0; m_canvasHeight = 0;
++    m_pRMName=0;
++
++    if (m_element->hasAttribute(strCanvasWidth)) {
++        NamedNodeMap* attrs = m_element->attributes();
++        String strValue = attrs->getNamedItem(strCanvasWidth)->nodeValue();
++        int value = strValue.toInt();
++        if (value > 0 && value < 2000)
++            m_canvasWidth = value;
++    }
++    if (m_element->hasAttribute(strCanvasHeight)) {
++        NamedNodeMap* attrs = m_element->attributes();
++        String strValue = attrs->getNamedItem(strCanvasHeight)->nodeValue();
++        int value = strValue.toInt();
++        if (value > 0 && value < 2000)
++            m_canvasHeight = value;
++    }
++
++    GLInitOpenGLES();
++
++    // Set the Browser GL Drawing Funcs
++    GL_FuncTable *pTable = NULL;
++    GLGetFuncsOpenGLES(&pTable);
++    ASSERT(pTable);
++    m_plugin->pluginFuncs()->setvalue(m_instance, (NPNVariable)NPPVpluginDrawingFunctions, pTable);
++
++    // Eugene: FIX ME!!!
++    QObject* pWebView = root()->hostWindow()->platformPageClient()->pluginParent();
++    // QString pRMName = pWebView->url().toString();
++    QString pRMName;
++    // END OF FIX ME
++    pRMName.append(QString().sprintf("instance=%pview=%p", this, pWebView));
++    m_pRMName = new char[pRMName.length()+1];
++    strcpy(m_pRMName, pRMName.toLatin1().constData());
++    m_pRMName[pRMName.length()] = 0;
++
++    // Set the Comcast HRM interface
++    void* pRMFuncs = NULL;
++
++    void** hrmConsumerInterface = reinterpret_cast<void**>(qGuiApp->
++                                                      platformNativeInterface()->
++                                                      nativeResourceForIntegration(QByteArrayLiteral("hrmconsumerinterface")));
++
++    pRMFuncs = *hrmConsumerInterface;
++
++    if (pRMFuncs) {
++        m_plugin->pluginFuncs()->setvalue(m_instance, (NPNVariable)NPPVpluginResourceMgmtFunctions, pRMFuncs);
++        m_plugin->pluginFuncs()->setvalue(m_instance, (NPNVariable)NPPVpluginResourceMgmtName, (void*)m_pRMName);
++    }
++    else {
++        fprintf(stderr, "No resource manager found.  Assuming that Flash can use hardware resources.");
++    }
++
++    // Say hello!
++    show();
++
++    // We don't use m_npWindow.ws_info
++    m_npWindow.ws_info = NULL;
++
++    m_npWindow.type = NPWindowTypeDrawable;
++    m_npWindow.window = 0;
++    m_npWindow.width = -1;
++    m_npWindow.height = -1;
++    if (!(m_plugin->quirks().contains(PluginQuirkDeferFirstSetWindowCall)))
++        setNPWindowRect(frameRect());
++
++    return true;
++}
++
++void PluginView::platformDestroy()
++{
++    if (m_pRMName)
++    {
++        delete m_pRMName;
++        m_pRMName=0;
++    }
++
++    if (platformPluginWidget())
++        delete platformPluginWidget();
++}
++
++
++// NPN Timers for Flash
++static uint32_t gTimerID	= 100;
++
++PluginTimer::PluginTimer(NPP instance, bool repeat, TIMERFUNC timerFunc)
++: m_instance(instance)
++, m_timerFunc(timerFunc)
++, m_repeat(repeat)
++, m_next(NULL)
++, m_prev(NULL)
++{
++    // Get the next ID.
++    m_timerID = ++gTimerID;
++}
++
++PluginTimer::~PluginTimer()
++{
++}
++
++void PluginTimer::fired()
++{
++    if (m_timerFunc)
++        m_timerFunc(m_instance, m_timerID);
++}
++
++///////////////////////////////////////////////////////////////////////////
++
++PluginTimers::~PluginTimers()
++{
++    m_TimerList.Clear();
++}
++
++uint32_t PluginTimers::schedule(NPP instance, uint32_t interval, bool repeat, TIMERFUNC proc)
++{
++    PluginTimer* timer = new PluginTimer(instance, repeat, proc);
++    m_TimerList.Add(timer);
++
++    double dinterval = interval * 0.001;    // milliseconds to seconds
++    if (repeat) {
++        timer->startRepeating(dinterval);
++    } else {
++        timer->startOneShot(dinterval);
++    }
++    return timer->timerID();
++}
++
++void PluginTimers::unschedule(NPP, uint32_t timerID)
++{
++    PluginTimer* timer = m_TimerList.Find(timerID);
++    if (timer)
++        timer->stop();
++}
++
++// End NPN Timers for Flash
++
++uint32_t PluginView::scheduleTimer(NPP instance, uint32_t interval, bool repeat,
++                               void (*timerFunc)(NPP, uint32_t timerID))
++{
++    return m_Timers.schedule(instance, interval, repeat, timerFunc);
++}
++
++void PluginView::unscheduleTimer(NPP instance, uint32_t timerID)
++{
++    m_Timers.unschedule(instance, timerID);
++}
++
++void PluginView::handleFocusInEvent()
++{
++}
++
++void PluginView::handleFocusOutEvent()
++{
++}
++
++#if USE(ACCELERATED_COMPOSITING)
++PlatformLayer* PluginView::platformLayer() const
++{
++    return m_platformLayer.get();
++}
++#endif
++
++} // namespace WebCore
+Index: qtwebkit/Source/WebCore/Target.pri
+===================================================================
+--- qtwebkit/Source/WebCore/Target.pri
++++ qtwebkit/Source/WebCore/Target.pri
+@@ -2917,9 +2917,21 @@
+                 platform/mac/WebCoreNSStringExtras.mm \
+                 plugins/mac/PluginViewMac.mm
+         } else {
+-            SOURCES += \
+-                plugins/qt/PluginPackageQt.cpp \
+-                plugins/qt/PluginViewQt.cpp
++            enable?(WINDOWLESS_FLASH_PLUGIN) {
++                SOURCES += \
++                    plugins/wndls/PluginPackageWNDLS.cpp \
++                    plugins/wndls/PluginViewWNDLS.cpp \
++                    plugins/wndls/PluginGLOpenGLES.cpp
++
++                HEADERS += \
++                    plugins/wndls/PluginEventsWNDLS.h
++
++                INCLUDEPATH += $$EGL_PATH
++            } else {
++                SOURCES += \
++                    plugins/qt/PluginPackageQt.cpp \
++                    plugins/qt/PluginViewQt.cpp
++            }
+         }
+     }
+ 
+Index: qtwebkit/Source/WebCore/WebCore.pri
+===================================================================
+--- qtwebkit/Source/WebCore/WebCore.pri
++++ qtwebkit/Source/WebCore/WebCore.pri
+@@ -9,6 +9,11 @@
+ 
+ QT *= network sql core-private gui-private
+ 
++
++enable?(WINDOWLESS_FLASH_PLUGIN) {
++    QT *= opengl
++}
++
+ WEBCORE_GENERATED_SOURCES_DIR = $${ROOT_BUILD_DIR}/Source/WebCore/$${GENERATED_SOURCES_DESTDIR}
+ 
+ INCLUDEPATH += \
+Index: qtwebkit/Source/WebKit/qt/WebCoreSupport/DumpRenderTreeSupportQt.cpp
+===================================================================
+--- qtwebkit/Source/WebKit/qt/WebCoreSupport/DumpRenderTreeSupportQt.cpp
++++ qtwebkit/Source/WebKit/qt/WebCoreSupport/DumpRenderTreeSupportQt.cpp
+@@ -221,7 +221,7 @@
+ void DumpRenderTreeSupportQt::setDumpRenderTreeModeEnabled(bool b)
+ {
+     QWebPageAdapter::drtRun = b;
+-#if ENABLE(NETSCAPE_PLUGIN_API) && defined(XP_UNIX)
++#if ENABLE(NETSCAPE_PLUGIN_API) && defined(XP_UNIX) && !ENABLE(WINDOWLESS_FLASH_PLUGIN)
+     // PluginViewQt (X11) needs a few workarounds when running under DRT
+     PluginView::setIsRunningUnderDRT(b);
+ #endif
+Index: qtwebkit/Source/WebKit/qt/WebCoreSupport/FrameLoaderClientQt.cpp
+===================================================================
+--- qtwebkit/Source/WebKit/qt/WebCoreSupport/FrameLoaderClientQt.cpp
++++ qtwebkit/Source/WebKit/qt/WebCoreSupport/FrameLoaderClientQt.cpp
+@@ -1535,7 +1535,7 @@
+                 params.append("wmode");
+                 values.append("opaque");
+             } else if (equalIgnoringCase(values[wmodeIndex], "window"))
+-                values[wmodeIndex] = "opaque";
++            {  /*values[wmodeIndex] = "opaque";*/ }
+         }
+ 
+         RefPtr<PluginView> pluginView = PluginView::create(m_frame, pluginSize, element, url,
+Index: qtwebkit/Source/WebKit/qt/WidgetApi/qgraphicswebview.cpp
+===================================================================
+--- qtwebkit/Source/WebKit/qt/WidgetApi/qgraphicswebview.cpp
++++ qtwebkit/Source/WebKit/qt/WidgetApi/qgraphicswebview.cpp
+@@ -406,8 +406,9 @@
+     // Re-implemented in order to allows fixing event-related bugs in patch releases.
+ 
+     if (d->page) {
+-        if (event->type() == QEvent::PaletteChange)
+-            d->page->setPalette(palette());
++        //MARKR - overrides the palette set by calling setPalette inside CFlashItem (i.e. we loose the transparency we need).
++        //if (event->type() == QEvent::PaletteChange)
++        //    d->page->setPalette(palette());
+ #ifndef QT_NO_CONTEXTMENU
+         if (event->type() == QEvent::GraphicsSceneContextMenu) {
+             if (!isEnabled())
+Index: qtwebkit/Tools/qmake/mkspecs/features/features.prf
+===================================================================
+--- qtwebkit/Tools/qmake/mkspecs/features/features.prf
++++ qtwebkit/Tools/qmake/mkspecs/features/features.prf
+@@ -141,6 +141,8 @@
+     # Minibrowser must be able to query for QtTestSupport
+     build?(qttestsupport): WEBKIT_CONFIG += have_qttestsupport
+ 
++    enable_windowless_flash_plugin:  WEBKIT_CONFIG += windowless_flash_plugin
++
+     # ---------------- Sanitize features -------------------
+ 
+     export(WEBKIT_CONFIG)
+Index: qtwebkit/Tools/qmake/mkspecs/features/features.pri
+===================================================================
+--- qtwebkit/Tools/qmake/mkspecs/features/features.pri
++++ qtwebkit/Tools/qmake/mkspecs/features/features.pri
+@@ -82,7 +82,8 @@
+     ENABLE_MICRODATA=0 \
+     ENABLE_MUTATION_OBSERVERS=1 \
+     ENABLE_NAVIGATOR_CONTENT_UTILS=0 \
+-    ENABLE_NETSCAPE_PLUGIN_API=0 \
++    ENABLE_NETSCAPE_PLUGIN_API=1 \
++    ENABLE_WINDOWLESS_FLASH_PLUGIN=0 \
+     ENABLE_NETWORK_INFO=0 \
+     ENABLE_NOTIFICATIONS=1 \
+     ENABLE_ORIENTATION_EVENTS=0 \
+Index: qtwebkit/Source/WebCore/rendering/RenderWidget.cpp
+===================================================================
+--- qtwebkit/Source/WebCore/rendering/RenderWidget.cpp
++++ qtwebkit/Source/WebCore/rendering/RenderWidget.cpp
+@@ -288,6 +288,8 @@
+             paintInfo.context->translate(widgetPaintOffset);
+             paintRect.move(-widgetPaintOffset);
+         }
++        m_widget->move(roundToInt(adjustedPaintOffset.x() + borderLeft() + paddingLeft()),
++                       roundToInt(adjustedPaintOffset.y() + borderTop() + paddingTop()));
+         m_widget->paint(paintInfo.context, paintRect);
+ 
+         if (!widgetPaintOffset.isZero())
+Index: qtwebkit/Source/WebKit/qt/WidgetSupport/PageClientQt.cpp
+===================================================================
+--- qtwebkit/Source/WebKit/qt/WidgetSupport/PageClientQt.cpp
++++ qtwebkit/Source/WebKit/qt/WidgetSupport/PageClientQt.cpp
+@@ -245,9 +245,15 @@
+ 
+ QRect PageClientQGraphicsWidget::geometryRelativeToOwnerWidget() const
+ {
++#if ENABLE(WINDOWLESS_FLASH_PLUGIN)
++    QRect webviewRect = view->geometry().toRect();
++    webviewRect.moveTo((int)view->scenePos().x(), (int)view->scenePos().y());
++    return webviewRect;
++#else
+     if (QGraphicsView* graphicsView = firstGraphicsView())
+         return graphicsView->mapFromScene(view->boundingRect()).boundingRect();
+     return QRect();
++#endif
+ }
+ 
+ QPoint PageClientQGraphicsWidget::mapToOwnerWindow(const QPoint& point) const

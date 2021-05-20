@@ -1,0 +1,43 @@
+From 627114b0320831febb8b0d71ce25f0a7c615d2ba Mon Sep 17 00:00:00 2001
+From: Balaji Selvam <balaji_selvam@comcast.com>
+Date: Mon, 8 Jun 2020 17:34:46 +0000
+Subject: [PATCH] 
+ fixed build error when disabled WEB_AUDIO and enabled MEDIA_STREAM
+
+---
+ .../WebCore/platform/mediastream/MediaStreamTrackPrivate.cpp   | 3 +++
+ Source/WebCore/platform/mediastream/MediaStreamTrackPrivate.h  | 2 ++
+ 2 files changed, 5 insertions(+)
+
+diff --git a/Source/WebCore/platform/mediastream/MediaStreamTrackPrivate.cpp b/Source/WebCore/platform/mediastream/MediaStreamTrackPrivate.cpp
+index 5166de6f7fa1..680c7e5b9ef4 100644
+--- a/Source/WebCore/platform/mediastream/MediaStreamTrackPrivate.cpp
++++ b/Source/WebCore/platform/mediastream/MediaStreamTrackPrivate.cpp
+@@ -179,7 +179,10 @@ AudioSourceProvider* MediaStreamTrackPrivate::audioSourceProvider()
+     if (!m_audioSourceProvider)
+         m_audioSourceProvider = WebAudioSourceProviderAVFObjC::create(*this);
+ #endif
++#if ENABLE(WEB_AUDIO)
+     return m_audioSourceProvider.get();
++#endif
++    return nullptr;
+ }
+ 
+ void MediaStreamTrackPrivate::sourceStarted()
+diff --git a/Source/WebCore/platform/mediastream/MediaStreamTrackPrivate.h b/Source/WebCore/platform/mediastream/MediaStreamTrackPrivate.h
+index d190971badaa..777f612c608e 100644
+--- a/Source/WebCore/platform/mediastream/MediaStreamTrackPrivate.h
++++ b/Source/WebCore/platform/mediastream/MediaStreamTrackPrivate.h
+@@ -134,7 +134,9 @@ private:
+     bool m_isEnded { false };
+     bool m_haveProducedData { false };
+     HintValue m_contentHint { HintValue::Empty };
++#if ENABLE(WEB_AUDIO)
+     RefPtr<WebAudioSourceProvider> m_audioSourceProvider;
++#endif
+ };
+ 
+ typedef Vector<RefPtr<MediaStreamTrackPrivate>> MediaStreamTrackPrivateVector;
+-- 
+2.24.0
+

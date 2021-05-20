@@ -1,0 +1,118 @@
+From 8741ac7545a6529682174c878531dbd24e658ec4 Mon Sep 17 00:00:00 2001
+From: "eocanha@igalia.com"
+ <eocanha@igalia.com@268f45cc-cd09-0410-ab3c-d52691b4dbfc>
+Date: Wed, 8 Mar 2017 12:49:27 +0000
+Subject: [PATCH] [GStreamer][MSE] Actually implement flush() on playback
+ pipeline https://bugs.webkit.org/show_bug.cgi?id=169202
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Reviewed by Žan Doberšek.
+
+* platform/graphics/gstreamer/GRefPtrGStreamer.cpp: Added GRefPtr support for GstQuery.
+(WTF::adoptGRef):
+(WTF::refGPtr<GstQuery>):
+(WTF::derefGPtr<GstQuery>):
+* platform/graphics/gstreamer/GRefPtrGStreamer.h: Ditto.
+* platform/graphics/gstreamer/GUniquePtrGStreamer.h: Added GUniquePtr support for GstSegment.
+* platform/graphics/gstreamer/mse/MediaSourceClientGStreamerMSE.cpp:
+(WebCore::MediaSourceClientGStreamerMSE::flush): Only actually flush in the non-seek case. For the seek case,
+GStreamer seek will already do the flush.
+* platform/graphics/gstreamer/mse/PlaybackPipeline.cpp:
+(WebCore::PlaybackPipeline::addSourceBuffer): Configure appsrc to be time-based instead of bytes-based to ensure
+that the segments it produces are time-based.
+(WebCore::segmentFixerProbe): This captures the next segment in the stream and "fixes" its base time by setting
+it to the start time. This prevent audio/video desynchronizations.
+(WebCore::PlaybackPipeline::flush): Really implement flushing by sending flush start/stop events, reconfiguring
+appsrc with a new (seamless) segment (so it reconfigures the rest of the elements in that stream), and attached
+a segmentFixerProbe to fix the segment emitted by basesrc (appsrc). The current pipeline position is used as
+start time used for the new segment. This prevents displaying samples already displayed before flushing, while
+allowing the decoder to decode them as a base for future (dependent) p-frame and b-frame samples.
+
+git-svn-id: http://svn.webkit.org/repository/webkit/trunk@213572 268f45cc-cd09-0410-ab3c-d52691b4dbfc
+---
+ .../gstreamer/mse/PlaybackPipeline.cpp        | 54 +++++++++++++++++++
+ 1 file changed, 54 insertions(+)
+
+diff --git a/Source/WebCore/platform/graphics/gstreamer/mse/PlaybackPipeline.cpp b/Source/WebCore/platform/graphics/gstreamer/mse/PlaybackPipeline.cpp
+index e71348b47a4c..94c2942e7f89 100644
+--- a/Source/WebCore/platform/graphics/gstreamer/mse/PlaybackPipeline.cpp
++++ b/Source/WebCore/platform/graphics/gstreamer/mse/PlaybackPipeline.cpp
+@@ -307,6 +307,25 @@ void PlaybackPipeline::markEndOfStream(MediaSourcePrivate::EndOfStreamStatus)
+         gst_app_src_end_of_stream(appsrc);
+ }
+ 
++GstPadProbeReturn segmentFixerProbe(GstPad*, GstPadProbeInfo* info, gpointer)
++{
++    GstEvent* event = GST_EVENT(info->data);
++
++    if (GST_EVENT_TYPE(event) != GST_EVENT_SEGMENT)
++        return GST_PAD_PROBE_OK;
++
++    GstSegment* segment = nullptr;
++    gst_event_parse_segment(event, const_cast<const GstSegment**>(&segment));
++
++    GST_TRACE("Fixed segment base time from %" GST_TIME_FORMAT " to %" GST_TIME_FORMAT,
++        GST_TIME_ARGS(segment->base), GST_TIME_ARGS(segment->start));
++
++    segment->base = segment->start;
++    segment->flags = static_cast<GstSegmentFlags>(0);
++
++    return GST_PAD_PROBE_REMOVE;
++}
++
+ void PlaybackPipeline::flush(AtomicString trackId)
+ {
+     ASSERT(WTF::isMainThread());
+@@ -345,12 +364,47 @@ void PlaybackPipeline::flush(AtomicString trackId)
+         return;
+     }
+ 
++    double rate;
++    GstFormat format;
++    gint64 start = GST_CLOCK_TIME_NONE;
++    gint64 stop = GST_CLOCK_TIME_NONE;
++
++    query = adoptGRef(gst_query_new_segment(GST_FORMAT_TIME));
++    if (gst_element_query(pipeline(), query.get()))
++        gst_query_parse_segment(query.get(), &rate, &format, &start, &stop);
++
++    GST_TRACE("segment: [%" GST_TIME_FORMAT ", %" GST_TIME_FORMAT "], rate: %f",
++        GST_TIME_ARGS(start), GST_TIME_ARGS(stop), rate);
++
+     if (!gst_element_send_event(GST_ELEMENT(appsrc), gst_event_new_flush_start())) {
+         GST_WARNING("Failed to send flush-start event for trackId=%s", trackId.string().utf8().data());
++        return;
+     }
+ 
+     if (!gst_element_send_event(GST_ELEMENT(appsrc), gst_event_new_flush_stop(false))) {
+         GST_WARNING("Failed to send flush-stop event for trackId=%s", trackId.string().utf8().data());
++        return;
++    }
++
++    if (static_cast<guint64>(position) == GST_CLOCK_TIME_NONE || static_cast<guint64>(start) == GST_CLOCK_TIME_NONE)
++        return;
++
++    GUniquePtr<GstSegment> segment(gst_segment_new());
++    gst_segment_init(segment.get(), GST_FORMAT_TIME);
++    gst_segment_do_seek(segment.get(), rate, GST_FORMAT_TIME, GST_SEEK_FLAG_NONE,
++        GST_SEEK_TYPE_SET, position, GST_SEEK_TYPE_SET, stop, nullptr);
++
++    GRefPtr<GstPad> sinkPad = gst_element_get_static_pad(appsrc, "src");
++    GRefPtr<GstPad> srcPad = sinkPad ? gst_pad_get_peer(sinkPad.get()) : nullptr;
++    if (srcPad)
++        gst_pad_add_probe(srcPad.get(), GST_PAD_PROBE_TYPE_EVENT_DOWNSTREAM, segmentFixerProbe, nullptr, nullptr);
++
++    GST_TRACE("Sending new seamless segment: [%" GST_TIME_FORMAT ", %" GST_TIME_FORMAT "], rate: %f",
++        GST_TIME_ARGS(segment->start), GST_TIME_ARGS(segment->stop), segment->rate);
++
++    if (!gst_base_src_new_seamless_segment(GST_BASE_SRC(appsrc), segment->start, segment->stop, segment->start)) {
++        GST_WARNING("Failed to send seamless segment event for trackId=%s", trackId.string().utf8().data());
++        return;
+     }
+ 
+     GST_DEBUG("trackId=%s flushed", trackId.string().utf8().data());
+-- 
+2.24.0
+

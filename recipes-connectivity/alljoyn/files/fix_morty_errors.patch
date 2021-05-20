@@ -1,0 +1,45 @@
+Date: Dec 11, 2018 7:17 PM
+From: 30a1ea1f530b973d3e32588b74f5f1a8f89d1410 Dec 11, 2018 7:17 PM
+Subject: [PATCH] Fix alljoyn compile issue
+
+Fix morty specific issues
+
+Source: COMCAST
+License: ISC
+Upstream-Status: Pending
+Signed-off-by: Deva <Deva_Thiyagarajan2@comcast.com>
+---
+Index: source/core/alljoyn/build_core/conf/linux/arm/SConscript
+===================================================================
+--- source.orig/core/alljoyn/build_core/conf/linux/arm/SConscript
++++ source/core/alljoyn/build_core/conf/linux/arm/SConscript
+@@ -18,7 +18,7 @@ import os
+ 
+ # Linux specific flags
+ env.Append(CPPDEFINES=['QCC_CPU_ARM'])
+-env.Append(CPPFLAGS=['-march=armv6',
++env.Append(CPPFLAGS=['-march=armv7ve',
+                      '-mthumb-interwork'])
+ 
+ # Use the OpenEmbedded cross-compilation environment
+Index: source/core/alljoyn/build_core/conf/linux/SConscript
+===================================================================
+--- source.orig/core/alljoyn/build_core/conf/linux/SConscript
++++ source/core/alljoyn/build_core/conf/linux/SConscript
+@@ -25,7 +25,7 @@ Help(vars.GenerateHelpText(env))
+ 
+ # Linux specific flags
+ env.Append(CPPDEFINES = ['QCC_OS_LINUX'])
+-env.Append(CPPDEFINES = ['_GLIBCXX_USE_C99_FP_MACROS_DYNAMIC'])
++#env.Append(CPPDEFINES = ['_GLIBCXX_USE_C99_FP_MACROS_DYNAMIC'])
+ 
+ env.Append(CFLAGS = ['-Wall',
+                      '-Werror',
+@@ -52,6 +52,7 @@ env.Append(CXXFLAGS = ['-Wall',
+                        '-fPIC',
+                        '-Wno-long-long',
+                        '-Wno-deprecated',
++                       '-Wno-tautological-compare',
+                        '-Wno-unknown-pragmas'])
+ 
+ env.Append(JAVACFLAGS = ['-Xlint', '-Xlint:-serial'])

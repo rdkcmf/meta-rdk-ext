@@ -1,0 +1,28 @@
+From dd0d9b8e45e30643f8732e0a2f498417d52200cc Mon Sep 17 00:00:00 2001
+From: Eugene Mutavchi <Ievgen_Mutavchi@comcast.com>
+Date: Mon, 1 Feb 2021 16:51:24 +0000
+Subject: [PATCH] Fix ASAN build
+
+---
+ .../graphics/texmap/TextureMapperPlatformLayerBuffer.h      | 2 ++
+ Source/cmake/OptionsWPE.cmake                               | 6 ++++--
+ Source/cmake/WebKitCompilerFlags.cmake                      | 2 +-
+ 3 files changed, 7 insertions(+), 3 deletions(-)
+
+Index: git/Source/cmake/OptionsWPE.cmake
+===================================================================
+--- git.orig/Source/cmake/OptionsWPE.cmake
++++ git/Source/cmake/OptionsWPE.cmake
+@@ -244,8 +244,10 @@ if (COMPILER_IS_GCC_OR_CLANG AND UNIX AN
+     set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE}${CMAKE_COMPILER_SIZE_OPT_FLAGS} -ffunction-sections -fdata-sections")
+     set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE}${CMAKE_COMPILER_SIZE_OPT_FLAGS} -ffunction-sections -fdata-sections -fno-rtti")
+     set(CMAKE_SHARED_LINKER_FLAGS_RELEASE "${CMAKE_SHARED_LINKER_FLAGS_RELEASE} -Wl,--gc-sections")
+-    set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} -fno-stack-protector")
+-    set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -fno-stack-protector")
++    if (NOT ENABLE_ADDRESS_SANITIZER)
++        set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} -fno-stack-protector")
++        set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -fno-stack-protector")
++    endif()
+ endif ()
+ 
+ include(GStreamerChecks)

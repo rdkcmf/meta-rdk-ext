@@ -1,0 +1,28 @@
+From: ced1bae938e92f3d71de192d9b2c7b845fdb3024 Mon Sep 17 00:00:00 2001
+From: Ievgen Mutavchi <Ievgen_Mutavchi@comcast.com>
+Date: Sun, 26 Apr 2020 11:53:59 -0400
+Subject: [PATCH 77/93] [MSE] make lastEnqueuedPresentationTime be highest
+ enqueued PTS
+Source: COMCAST
+License: GPLV2
+Upstream-Status: None
+Signed-off-by: Eugene Mutavchi <Ievgen_Mutavchi@comcast.com>
+
+---
+ Source/WebCore/Modules/mediasource/SourceBuffer.cpp | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+Index: git/Source/WebCore/Modules/mediasource/SourceBuffer.cpp
+===================================================================
+--- git.orig/Source/WebCore/Modules/mediasource/SourceBuffer.cpp
++++ git/Source/WebCore/Modules/mediasource/SourceBuffer.cpp
+@@ -2156,7 +2156,8 @@ void SourceBuffer::provideMediaData(Trac
+         // Remove the sample from the decode queue now.
+         trackBuffer.decodeQueue.erase(trackBuffer.decodeQueue.begin());
+ 
+-        trackBuffer.lastEnqueuedPresentationTime = sample->presentationTime();
++        if (trackBuffer.lastEnqueuedPresentationTime.isInvalid() || sample->presentationTime() > trackBuffer.lastEnqueuedPresentationTime)
++            trackBuffer.lastEnqueuedPresentationTime = sample->presentationTime();
+         trackBuffer.lastEnqueuedDecodeKey = {sample->decodeTime(), sample->presentationTime()};
+         trackBuffer.lastEnqueuedDecodeDuration = sample->duration();
+         m_private->enqueueSample(sample.releaseNonNull(), trackID);

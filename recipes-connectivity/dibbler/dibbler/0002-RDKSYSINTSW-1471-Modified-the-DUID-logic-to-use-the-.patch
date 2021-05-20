@@ -1,0 +1,40 @@
+From f863ff3c14a9be9d151554b5b2238b224ef39125 Mon Sep 17 00:00:00 2001
+From: rdk_nodesetup_user <CCP_CPESIT@cable.comcast.com>
+Date: Wed, 19 Nov 2014 18:47:59 +0000
+Subject: [PATCH 2/9] RDKSYSINTSW-1471: Modified the DUID logic to use the
+ specified interface name. Interface name is hardcoded for testing, will bring
+ in a patch to use the interface name from client.conf
+
+Reason for change: Dibbler is using moca MAC address while DUID generation
+
+Test Procedure: Ensure the DUID value and ensure we have ESTB mac address there
+
+Risks: Low
+
+Change-Id: I41411688ec3374b9ead25e1d0d45790f347601ec
+Signed-off-by: rdk_nodesetup_user <CCP_CPESIT@cable.comcast.com>
+Signed-off-by: Sandeep <sandeepnair@tataelxsi.co.in>
+---
+ CfgMgr/CfgMgr.cpp | 6 ++++--
+ 1 file changed, 4 insertions(+), 2 deletions(-)
+
+diff --git a/CfgMgr/CfgMgr.cpp b/CfgMgr/CfgMgr.cpp
+index be61b18..a40488b 100644
+--- a/CfgMgr/CfgMgr.cpp
++++ b/CfgMgr/CfgMgr.cpp
+@@ -185,8 +185,10 @@ bool TCfgMgr::setDUID(const std::string& filename, TIfaceMgr & ifaceMgr) {
+ 
+         ifaceMgr.firstIface();
+     if (this->DUIDType == DUID_TYPE_EN) {
+-        realIface = ifaceMgr.getIface(); // use the first interface. It will be ignored anyway
+-        found = true;
++        //realIface = ifaceMgr.getIface(); // use the first interface. It will be ignored anyway
++        realIface = ifaceMgr.getIfaceByName("wan"); // use the first interface. It will be ignored anyway
++        
++	found = true;
+ 
+         if (!realIface) {
+             Log(Error) << "Unable to find any interfaces. Can't generate DUID" << LogEnd;
+-- 
+2.3.1
+

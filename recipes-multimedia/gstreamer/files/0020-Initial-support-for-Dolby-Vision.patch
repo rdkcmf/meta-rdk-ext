@@ -1,0 +1,94 @@
+From c86144e47a6568df4d0e8e78bef4dfe0cb6daf02 Mon Sep 17 00:00:00 2001
+From: Eugene Mutavchi <Ievgen_Mutavchi@comcast.com>
+Date: Fri, 22 Mar 2019 16:01:58 -0400
+Subject: [PATCH] Initial support for Dolby Vision
+
+For details see https://www.dolby.com/us/en/technologies/dolby-vision/dolby-vision-bitstreams-within-the-iso-base-media-file-format-v2.0.pdf
+---
+ gst/isomp4/fourcc.h        | 6 ++++++
+ gst/isomp4/qtdemux.c       | 9 +++++++++
+ gst/isomp4/qtdemux_types.c | 4 ++++
+ 3 files changed, 19 insertions(+)
+
+diff --git a/gst/isomp4/fourcc.h b/gst/isomp4/fourcc.h
+index c8d23ba..5f2ec3a 100644
+--- a/gst/isomp4/fourcc.h
++++ b/gst/isomp4/fourcc.h
+@@ -362,6 +362,12 @@ G_BEGIN_DECLS
+ #define FOURCC_cenc     GST_MAKE_FOURCC('c','e','n','c')
+ #define FOURCC_senc     GST_MAKE_FOURCC('s','e','n','c')
+ 
++/* Dolby Vision */
++#define FOURCC_dvh1     GST_MAKE_FOURCC('d','v','h','1')
++#define FOURCC_dvhe     GST_MAKE_FOURCC('d','v','h','e')
++#define FOURCC_dvcC     GST_MAKE_FOURCC('d','v','c','C')
++#define FOURCC_dvvC     GST_MAKE_FOURCC('d','v','v','C')
++
+ G_END_DECLS
+ 
+ #endif /* __FOURCC_H__ */
+diff --git a/gst/isomp4/qtdemux.c b/gst/isomp4/qtdemux.c
+index a6f1906..50d079b 100644
+--- a/gst/isomp4/qtdemux.c
++++ b/gst/isomp4/qtdemux.c
+@@ -7504,6 +7504,8 @@ qtdemux_parse_node (GstQTDemux * qtdemux, GNode * node, const guint8 * buffer,
+       case FOURCC_hev1:
+       case FOURCC_mjp2:
+       case FOURCC_encv:
++      case FOURCC_dvhe:
++      case FOURCC_dvh1:
+       {
+         guint32 version;
+         guint32 str_len;
+@@ -10291,6 +10293,8 @@ qtdemux_parse_trak (GstQTDemux * qtdemux, GNode * trak)
+         case FOURCC_H265:
+         case FOURCC_hvc1:
+         case FOURCC_hev1:
++        case FOURCC_dvhe:
++        case FOURCC_dvh1:
+         {
+           gint len = QT_UINT32 (stsd_data) - 0x66;
+           const guint8 *hevc_data = stsd_data + 0x66;
+@@ -10309,6 +10313,9 @@ qtdemux_parse_trak (GstQTDemux * qtdemux, GNode * trak)
+               break;
+ 
+             switch (QT_FOURCC (hevc_data + 0x4)) {
++              case FOURCC_dvcC:
++              case FOURCC_dvvC:
++                  break;
+               case FOURCC_hvcC:
+               {
+                 /* parse, if found */
+@@ -13641,12 +13648,14 @@ qtdemux_video_caps (GstQTDemux * qtdemux, QtDemuxStream * stream,
+       break;
+     case FOURCC_H265:
+     case FOURCC_hvc1:
++    case FOURCC_dvh1:
+       _codec ("H.265 / HEVC");
+       caps = gst_caps_new_simple ("video/x-h265",
+           "stream-format", G_TYPE_STRING, "hvc1",
+           "alignment", G_TYPE_STRING, "au", NULL);
+       break;
+     case FOURCC_hev1:
++    case FOURCC_dvhe:
+       _codec ("H.265 / HEVC");
+       caps = gst_caps_new_simple ("video/x-h265",
+           "stream-format", G_TYPE_STRING, "hev1",
+diff --git a/gst/isomp4/qtdemux_types.c b/gst/isomp4/qtdemux_types.c
+index 3e1f832..1bb23b9 100644
+--- a/gst/isomp4/qtdemux_types.c
++++ b/gst/isomp4/qtdemux_types.c
+@@ -205,6 +205,10 @@ static const QtNodeType qt_node_types[] = {
+   {FOURCC_tenc, "track encryption", 0},
+   {FOURCC_stpp, "XML subtitle sample entry", 0},
+   {FOURCC_senc, "sample encryption box", 0},
++  {FOURCC_dvh1, "Dolby Vision HVC1 codec", 0},
++  {FOURCC_dvhe, "Dolby Vision HEVC codec", 0},
++  {FOURCC_dvcC, "Dolby Vision HVC1 codec configuration", 0},
++  {FOURCC_dvvC, "Dolby Vision HEVC codec configuration", 0},
+   {0, "unknown", 0,},
+ };
+ 
+-- 
+2.7.4
+

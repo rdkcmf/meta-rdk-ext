@@ -1,0 +1,222 @@
+Copyright (C) 1989, 1991 Free Software Foundation, Inc.
+
+This program is free software; you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation; either version 2 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program; if not, write to the Free Software
+Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+
+Date: Jun 16, 2017 6:01 PM
+
+From: be8b3d877420cb932819a9dab69888416eb30162 Dec 9, 2017 12:12 AM
+
+Subject: [PATCH] RDKB-3293, RDKB-14901 : Poring samhain on RDK Broadband
+
+	Register for inotify events for file integrity checks for new mount points
+
+Source: COMCAST
+
+Upstream-Status: Pending
+
+Signed-off-by: gkrishnansubramanian <Gopi_KrishnanSubramanian@comcast.com>
+---
+
+diff --git a/include/sh_inotify.h b/include/sh_inotify.h
+index 21f661d..1768a29 100644
+--- a/include/sh_inotify.h
++++ b/include/sh_inotify.h
+@@ -18,6 +18,18 @@ typedef struct
+   int  max_count;
+ } sh_watches;
+ 
++typedef struct
++{
++  int    watch;
++  short  flag;
++  short  type;
++  int    class;
++  int    rdepth;
++  unsigned long check_mask;
++  char * file;
++} sh_watch;
++
++
+ /* #define SH_INOTIFY_INITIALIZER { { 0 }, { 0 }, { NULL}, 0, 0 } */
+ 
+ #define SH_INOTIFY_INITIALIZER { NULL, NULL, 0, 0 }
+@@ -33,6 +45,11 @@ int sh_inotify_rm_watch (sh_watches * watches, sh_watches * save, int wd);
+ int sh_inotify_add_watch(char * filename, sh_watches * watches, int  * errnum,
+ 			 int class, unsigned long check_mask, int type, int rdepth);
+ 
++int sh_inotify_add_dormant(sh_watches * watches, sh_watch * item);
++sh_watch * sh_inotify_create_watch(const char * file,
++                                   int nwatch, int flag);
++
++
+ int sh_inotify_add_watch_later(const char * filename, sh_watches * watches, 
+ 			       int  * errnum,
+ 			       int class, unsigned long check_mask, 
+@@ -51,6 +68,9 @@ char * sh_inotify_search_item(sh_watches * watches, int watch,
+ ssize_t sh_inotify_read(char * buffer, size_t count);
+ ssize_t sh_inotify_read_timeout(char * buffer, size_t count, int timeout);
+ int sh_inotify_recheck_watches (sh_watches * watches, sh_watches * save);
++int sh_inotify_mount_change (char * path, char * filename,
++                                      int class, unsigned long check_mask);
++
+ 
+ #define SH_INOTIFY_ERROR(a) (a != 0)
+ 
+diff --git a/src/sh_inotify.c b/src/sh_inotify.c
+index 40a65d0..7c683a8 100644
+--- a/src/sh_inotify.c
++++ b/src/sh_inotify.c
+@@ -127,17 +127,6 @@ static inline void sh_set_inotify_fd(int fd)
+ 
+ #include "zAVLTree.h"
+ 
+-typedef struct 
+-{
+-  int    watch;
+-  short  flag;
+-  short  type;
+-  int    class;
+-  int    rdepth;
+-  unsigned long check_mask;
+-  char * file;
+-} sh_watch;
+-
+ /**************************************************
+  *
+  * Get inotify fd, initialize inotify if necessary
+@@ -251,7 +240,7 @@ static void sh_inotify_free_watch(void * item)
+   return;
+ }
+ 
+-static sh_watch * sh_inotify_create_watch(const char * file, 
++sh_watch * sh_inotify_create_watch(const char * file, 
+ 					  int nwatch, int flag)
+ {
+   sh_watch * this = SH_ALLOC(sizeof(sh_watch));
+@@ -345,7 +334,7 @@ static sh_watch * sh_inotify_list_del_cur(sh_inotify_listCursor * listcursor,
+   return ret;
+ }
+ 
+-static int sh_inotify_add_dormant(sh_watches * watches, sh_watch * item)
++int sh_inotify_add_dormant(sh_watches * watches, sh_watch * item)
+ {
+   struct sh_inotify_litem * this;
+ 
+@@ -385,6 +374,7 @@ char * sh_inotify_pop_dormant(sh_watches * watches,
+       *rdepth = this->watch->rdepth;
+       *check_mask = this->watch->check_mask;
+       popret  = sh_util_strdup_track(this->watch->file, __FILE__, __LINE__);
++    
+ 
+       watches->dormant_watches = this->next;
+ 
+@@ -473,9 +463,11 @@ static int index_watched_file(char * filename, sh_watches * watches)
+   return -1;
+ }
+ 
++/*
+ #if !defined(IN_DONT_FOLLOW)
+ #define IN_DONT_FOLLOW 0
+ #endif
++*/
+ 
+ #define SH_INOTIFY_FILEFLAGS \
+   (IN_ATTRIB|IN_MODIFY|IN_DELETE_SELF|IN_MOVE_SELF|IN_UNMOUNT|IN_DONT_FOLLOW)
+@@ -518,7 +510,7 @@ int sh_inotify_rm_watch (sh_watches * watches, sh_watches * save, int wd)
+   
+       SH_MUTEX_LOCK(mutex_watches);
+       item = zAVLSearch(watches->list_of_watches, &wd);
+-      
++
+       if (item)
+ 	{
+ 	  zAVLDelete(watches->list_of_watches, &wd);
+@@ -818,7 +810,7 @@ int sh_inotify_wait_for_change(char * filename, sh_watches * watches,
+ 		    sh_inotify_add_dormant(watches, zitem);
+ 		    zitem->watch    = -1;
+ 		    flag |= SH_INOTIFY_REOPEN;
+-		  }
++		  } 
+ 	      }
+ 	    SH_MUTEX_UNLOCK(mutex_watches);
+ 	    
+@@ -852,6 +844,24 @@ int sh_inotify_wait_for_change(char * filename, sh_watches * watches,
+   return -1;
+ }
+ 
++int sh_inotify_mount_change (char * path, char * filename,
++                             int class, unsigned long check_mask )
++{
++  int    reported;
++  int ret;
++
++  if (S_FALSE == sh_ignore_chk_mod(path))
++    {
++      ret  = sh_files_search_file(path, &class, &check_mask, &reported);
++      sh_files_filecheck (class, check_mask, filename,
++                              NULL,
++                              &reported, 0);
++    }
++
++  return 0;
++}
++
++
+ 
+ /* !defined(HAVE_SYS_INOTIFY_H) */
+ #else
+diff --git a/src/sh_mounts.c b/src/sh_mounts.c
+index d8d01d3..e73605d 100644
+--- a/src/sh_mounts.c
++++ b/src/sh_mounts.c
+@@ -49,6 +49,9 @@
+ #include <time.h>
+ #endif
+ 
++#include "sh_inotify.h"
++#include "zAVLTree.h"
++
+ /* Prototypes for configuration functions */
+ int sh_mounts_config_activate (const char * opt);
+ int sh_mounts_config_timer    (const char * opt);
+@@ -59,6 +62,8 @@ int sh_mounts_config_sevopt   (const char * opt);
+ /* Prototype for the function to read info on mounted filesystems */
+ static struct sh_mounts_mnt *readmounts(void);
+ 
++extern sh_watches sh_file_watches;
++
+ /* Table for configuration options, and pointers to the functions that will
+  * configure them. Each function is passed the string resulting from stripping
+  * the option and the "equals" from the config file; e.g. MountCheckActive=1 in
+@@ -245,6 +250,19 @@ if(NULL!=mountlist)
+         }
+         else
+         {
++            /** New mount point detected . 
++             *  Register for inotify events for file integrity checks for new mount points
++             **/
++            sh_watch   * item;
++            item = sh_inotify_create_watch(cfgmnt1->path, -1, /* flag */ 0);
++            item->class      = 1;
++            item->type       = 0;
++            item->rdepth     = 10;
++            item->check_mask = 1;
++            sh_inotify_add_dormant(&sh_file_watches, item);
++            /** Initiating a immediate file hash check is also required **/
++            sh_inotify_mount_change (cfgmnt1->path, cfgmnt1->path, 1, 1 );
++
+             sh_error_handle(ShMountsSevOpt, FIL__, __LINE__, 0, MSG_MNT_NEWMOUNT,
+                                       cfgmnt1->path);
+         }

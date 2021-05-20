@@ -1,0 +1,42 @@
+Date: Jun 05 15:10:45 2015
+
+From: 936914d22ae0385004a2994ea892bddcb94685ac Jun 05 15:10:45 2015
+
+Subject: [PATCH] DELIA-6118,CISCOXID-1384: xupnp memory leak
+
+	messages , if non-NULL, will be set to point to a newly-allocated array 
+	of GSocketControlMessage instances or NULL if no such messages was received. 
+	These correspond to the control messages received from the kernel, one 
+	GSocketControlMessage per message from the kernel. This array is NULL-terminated
+	and must be freed by the caller using g_free() after calling g_object_unref() on 
+	each element. If messages is NULL, any control messages received will be discarded 
+	plug that by unref each message and free the array.
+	
+Source: COMCAST
+
+License: LGPL-2.0-or-later
+
+Upstream-Status: Pending
+
+Signed-off-by: tsilveria <Thomson_Silvera@cable.comcast.com>
+---
+
+Index: gssdp-0.14.10/libgssdp/gssdp-client.c
+===================================================================
+--- gssdp-0.14.10.orig/libgssdp/gssdp-client.c	2014-08-05 23:11:46.000000000 +0000
++++ gssdp-0.14.10/libgssdp/gssdp-client.c	2015-06-05 14:51:00.000000000 +0000
+@@ -1284,6 +1284,14 @@
+         if (address)
+                 g_object_unref (address);
+ 
++	if (messages) {
++                int i;
++                for (i = 0; i < num_messages; i++)
++                        g_object_unref (messages[i]);
++
++                g_free (messages);
++        }
++
+         return TRUE;
+ }
+ 

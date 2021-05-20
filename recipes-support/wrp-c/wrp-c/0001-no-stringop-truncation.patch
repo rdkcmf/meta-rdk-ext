@@ -1,0 +1,27 @@
+From 5ff6ccb63eee0e2f21b14c2afee8546df1d12b63 Mon Sep 17 00:00:00 2001
+From: Jaga <jagadheesan_duraisamy@comcast.com>
+Date: Wed, 19 Feb 2020 10:19:22 +0000
+Subject: [PATCH] no-stringop-truncation
+Source: COMCAST
+License: Apache-2.0
+Upstream-Status: Pending
+Reason for change: Fixed build issues triggered due to new compiler options 
+[-Werror=stringop-truncation] added with gcc 9.2
+Signed-off-by: Jaga <jagadheesan_duraisamy@comcast.com>
+---
+ CMakeLists.txt | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 48076f8..f5c74d6 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -19,7 +19,7 @@ include(ExternalProject)
+ include(CTest)
+ 
+ add_definitions(-std=c99)
+-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -std=c99 -g -Werror -Wall")
++set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -std=c99 -g -Werror -Wall -Wno-stringop-truncation")
+ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c99 -g -Werror -Wall")
+ 
+ if(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")

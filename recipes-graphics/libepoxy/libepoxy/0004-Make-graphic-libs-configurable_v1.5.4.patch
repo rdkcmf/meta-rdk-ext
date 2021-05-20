@@ -1,0 +1,47 @@
+From 6685a0621c0d1136690826f6366c96b3d28c9587 Mon Sep 17 00:00:00 2001
+From: Balaji Selvam <balaji_selvam@comcast.com>
+Date: Wed, 12 Aug 2020 11:00:43 +0000
+Source: Metrological
+License: LICENSE-LGPL-2.1
+Upstream-Status: Pending https://github.com/anholt/libepoxy/pull/144
+Date: Sat, 24 Nov 2018 20:03:05 -0800
+Subject: [PATCH] Make graphic libs configurable
+
+Co-authored-by: Bram Oosterhuis <b.oosterhuis@gmail.com>
+Signed-off-by: wouterlucas <wouter@wouterlucas.com>
+---
+ src/dispatch_common.c | 11 +++++++----
+ 1 file changed, 7 insertions(+), 4 deletions(-)
+
+diff --git a/src/dispatch_common.c b/src/dispatch_common.c
+index eca1813..9c030b8 100644
+--- a/src/dispatch_common.c
++++ b/src/dispatch_common.c
+@@ -174,6 +174,9 @@
+ 
+ #include "dispatch_common.h"
+ 
++#define xstr(a) str(a)
++#define str(a) #a
++
+ #if defined(__APPLE__)
+ #define GLX_LIB "/opt/X11/lib/libGL.1.dylib"
+ #define OPENGL_LIB "/System/Library/Frameworks/OpenGL.framework/Versions/Current/OpenGL"
+@@ -191,10 +194,10 @@
+ #define OPENGL_LIB "OPENGL32"
+ #else
+ #define GLVND_GLX_LIB "libGLX.so.1"
+-#define GLX_LIB "libGL.so.1"
+-#define EGL_LIB "libEGL.so.1"
+-#define GLES1_LIB "libGLESv1_CM.so.1"
+-#define GLES2_LIB "libGLESv2.so.2"
++#define GLX_LIB xstr(GLX_LIB_NAME)
++#define EGL_LIB xstr(EGL_LIB_NAME)
++#define GLES1_LIB xstr(GLES1_LIB_NAME)
++#define GLES2_LIB xstr(GLES2_LIB_NAME)
+ #define OPENGL_LIB "libOpenGL.so.0"
+ #endif
+ 
+-- 
+2.17.1
+

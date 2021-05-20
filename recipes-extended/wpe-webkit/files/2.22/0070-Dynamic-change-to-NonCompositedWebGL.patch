@@ -1,0 +1,56 @@
+From 2d97704064a48ad2dba5a4b395bd1c639ca3d41a Mon Sep 17 00:00:00 2001
+From: krishnapriya kanagaraj <krishnapriya_kanagaraj@comcast.com>
+Date: Tue, 18 Aug 2020 16:36:20 +0000
+Subject: [PATCH] DELIA-45032 : WPEWebProcess crashes in
+ lightningScreensaverApp app due to SIGABRT
+
+Reason for change : The dynamic change of NonCompositedWebGL for the webpage will be updated in drawingarea
+Test Procedure: Launch the Lightening ScreenSaver via device setting and observe any crashes.
+Try to start/close web app/lightening app multiple times and monitor for crashes
+Risks: Low
+Signed-off-by: Krishna Priya Kanagaraj <krishnapriya_kanagaraj@comcast.com>
+---
+ .../WebProcess/WebPage/AcceleratedDrawingArea.cpp       | 12 +++++++++++-
+ .../WebKit/WebProcess/WebPage/AcceleratedDrawingArea.h  |  2 ++
+ 2 files changed, 14 insertions(+), 1 deletion(-)
+
+diff --git a/Source/WebKit/WebProcess/WebPage/AcceleratedDrawingArea.cpp b/Source/WebKit/WebProcess/WebPage/AcceleratedDrawingArea.cpp
+index f16827ef728f..9b12fcd90b61 100644
+--- a/Source/WebKit/WebProcess/WebPage/AcceleratedDrawingArea.cpp
++++ b/Source/WebKit/WebProcess/WebPage/AcceleratedDrawingArea.cpp
+@@ -160,7 +160,17 @@ void AcceleratedDrawingArea::updatePreferences(const WebPreferencesStore& store)
+     bool forceCompositiongMode = store.getBoolValueForKey(WebPreferencesKey::forceCompositingModeKey());
+     settings.setForceCompositingMode(forceCompositiongMode);
+     settings.setAcceleratedCompositingForFixedPositionEnabled(forceCompositiongMode);
+-    settings.setNonCompositedWebGLEnabled(store.getBoolValueForKey(WebPreferencesKey::nonCompositedWebGLEnabledKey()));
++    
++    bool nonCompositedWebGLEnabled = store.getBoolValueForKey(WebPreferencesKey::nonCompositedWebGLEnabledKey());
++    if (nonCompositedWebGLEnabled != m_nonCompositedWebGLEnabled) {
++        if (m_layerTreeHost) {
++            exitAcceleratedCompositingModeNow();
++            discardPreviousLayerTreeHost();
++        }
++        m_nonCompositedWebGLEnabled = nonCompositedWebGLEnabled;
++        settings.setNonCompositedWebGLEnabled(nonCompositedWebGLEnabled);
++    }
++
+     if (!m_layerTreeHost)
+         enterAcceleratedCompositingMode(nullptr);
+ }
+diff --git a/Source/WebKit/WebProcess/WebPage/AcceleratedDrawingArea.h b/Source/WebKit/WebProcess/WebPage/AcceleratedDrawingArea.h
+index 4078c87e6a75..d8b0334154a8 100644
+--- a/Source/WebKit/WebProcess/WebPage/AcceleratedDrawingArea.h
++++ b/Source/WebKit/WebProcess/WebPage/AcceleratedDrawingArea.h
+@@ -126,6 +126,8 @@ protected:
+     // Whether painting is suspended. We'll still keep track of the dirty region but we
+     // won't paint until painting has resumed again.
+     bool m_isPaintingSuspended { false };
++    
++    bool m_nonCompositedWebGLEnabled { false };
+ 
+     RunLoop::Timer<AcceleratedDrawingArea> m_exitCompositingTimer;
+ 
+-- 
+2.14.2
+
+

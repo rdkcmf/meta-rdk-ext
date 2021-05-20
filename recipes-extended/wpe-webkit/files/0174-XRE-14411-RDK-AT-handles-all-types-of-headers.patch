@@ -1,0 +1,47 @@
+From c3792cdc1daf0175b4a06d306c68a903c19063e2 Mon Sep 17 00:00:00 2001
+License: LICENSE-LGPL-2.1
+From: amoham071 <ameerkhan_mohamedrafiq@comcast.com>
+Date: Fri, 6 Dec 2019 09:33:57 +0000
+Subject: [PATCH] XRE-14411: RDK AT handles all types of headers for
+ accessibility read out
+Source: Original
+Upstream-Status: Pending
+
+Reason for change: Fetching the text of sibling node to the grid/table row
+Risks: medium
+
+Test Procedure: As per jira ticket,
+i) Launch the mentioned html into the box
+ii) Observe whether rdkat reads out the  text highlighted in aquamarine color text box
+
+Change-Id: I1f091186c5b05b5f5ff0a25e306f9602ea05af55
+Signed-off-by: Ameerkhan <ameerkhan_mohamedrafiq@comcast.com>
+---
+ Source/WebCore/accessibility/AccessibilityNodeObject.cpp | 11 +++++++++++
+ 1 file changed, 11 insertions(+)
+
+diff --git a/Source/WebCore/accessibility/AccessibilityNodeObject.cpp b/Source/WebCore/accessibility/AccessibilityNodeObject.cpp
+index 40df7a45631..55c9f04f377 100644
+--- a/Source/WebCore/accessibility/AccessibilityNodeObject.cpp
++++ b/Source/WebCore/accessibility/AccessibilityNodeObject.cpp
+@@ -1432,6 +1432,18 @@ void AccessibilityNodeObject::visibleText(Vector<AccessibilityText>& textOrder)
+         if (!text.isEmpty())
+             textOrder.append(AccessibilityText(text, ChildrenText));
+     }
++
++    if(textOrder.size() == 0 && this->isTableRow()) {
++        AccessibilityObject* axObject = previousSibling();
++        if (axObject && axObject->isHeading()) {
++            AccessibilityTextUnderElementMode mode;
++            mode.includeFocusableContent = true;
++            String text = axObject->textUnderElement(mode);
++            if (!text.isEmpty()) {
++                textOrder.append(AccessibilityText(text, ChildrenText));
++            }
++        }
++    }
+ }
+ 
+ void AccessibilityNodeObject::helpText(Vector<AccessibilityText>& textOrder) const
+-- 
+2.14.2

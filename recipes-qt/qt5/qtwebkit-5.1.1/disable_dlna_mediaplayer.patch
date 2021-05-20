@@ -1,0 +1,29 @@
+Date: Nov 15 09:16:43 2013
+
+From: 50193b9fe48dbdef8b143a34ce48c80e959fb3dc Dec 12 15:26:52 2013
+
+Subject: [PATCH] qtwebkit 5.1.1: add RDK patches
+	
+	This commit adds the Qt qtwebkit 5.1.1 patches from RDK to OE's qtwebkit.
+
+Source: COMCAST
+
+License: LGPL-2.0-or-later
+
+Upstream-Status: Pending
+
+Signed-off-by: Trevor Woerner <trevor.woerner@linaro.org>
+---
+
+diff -ru qtwebkit-opensource-src-5.1.1/Source/WebCore/WebCore.pri qtwebkit-opensource-src-5.1.1/Source/WebCore/WebCore.pri
+--- qtwebkit-opensource-src-5.1.1/Source/WebCore/WebCore.pri	2014-02-04 19:33:12.099958982 -0800
++++ qtwebkit-opensource-src-5.1.1/Source/WebCore/WebCore.pri	2014-02-05 03:31:18.481357888 -0800
+@@ -10,7 +10,6 @@
+ QT *= network sql core-private gui-private
+ 
+ 
+-DEFINES += ENABLE_DLNA_VIDEO_PLAYER
+ enable?(WINDOWLESS_FLASH_PLUGIN) {
+     QT *= opengl
+ }
+

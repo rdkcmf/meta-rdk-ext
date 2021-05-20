@@ -1,0 +1,48 @@
+From fc662d6123464f0314d404fba56f3df11f5f88f0 Mon Sep 17 00:00:00 2001
+From: Ievgen Mutavchi <Ievgen_Mutavchi@comcast.com>
+Date: Sun, 26 Apr 2020 12:12:36 -0400
+Subject: [PATCH 85/93] Fixing memory leak issues in sample buffer
+Source: COMCAST
+License: GPLV2
+Upstream-Status: None
+Signed-off-by: Eugene Mutavchi <Ievgen_Mutavchi@comcast.com>
+
+---
+ Source/WebCore/Modules/mediasource/SourceBuffer.cpp | 6 ++++++
+ Source/WebCore/workers/WorkerThread.cpp             | 6 +++++-
+ 2 files changed, 11 insertions(+), 1 deletion(-)
+
+Index: git/Source/WebCore/Modules/mediasource/SourceBuffer.cpp
+===================================================================
+--- git.orig/Source/WebCore/Modules/mediasource/SourceBuffer.cpp
++++ git/Source/WebCore/Modules/mediasource/SourceBuffer.cpp
+@@ -388,6 +388,12 @@ void SourceBuffer::rangeRemoval(const Me
+     m_pendingRemoveStart = start;
+     m_pendingRemoveEnd = end;
+     m_removeTimer.startOneShot(0_s);
++
++    auto& buffered = m_buffered->ranges();
++    if (buffered.length() && buffered.start(0) >= m_pendingRemoveStart) {
++        LOG(MediaSource, "SourceBuffer::rangeRemoval(%p) - adjust start of range removal  %s -> 0", this, toString(m_pendingRemoveStart).utf8().data());
++        m_pendingRemoveStart = MediaTime::zeroTime();
++    }
+ }
+ 
+ void SourceBuffer::abortIfUpdating()
+Index: git/Source/WebCore/workers/WorkerThread.cpp
+===================================================================
+--- git.orig/Source/WebCore/workers/WorkerThread.cpp
++++ git/Source/WebCore/workers/WorkerThread.cpp
+@@ -310,7 +310,11 @@ void WorkerThread::releaseFastMallocFree
+     std::lock_guard<Lock> lock(threadSetMutex);
+ 
+     for (auto* workerThread : workerThreads()) {
+-        workerThread->runLoop().postTask([] (ScriptExecutionContext&) {
++        workerThread->runLoop().postTask([] (ScriptExecutionContext& context) {
++            JSC::JSLockHolder lock(context.vm());
++            if (!context.vm().heap.isCurrentThreadBusy()) {
++                context.vm().heap.collectNow(JSC::Sync, JSC::CollectionScope::Full);
++            }
+             WTF::releaseFastMallocFreeMemory();
+         });
+     }

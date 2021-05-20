@@ -1,0 +1,109 @@
+From 722501f739e69f26491cf2acb49c4fa29a1a1d1c Mon Sep 17 00:00:00 2001
+From: "mark.lam@apple.com"
+ <mark.lam@apple.com@268f45cc-cd09-0410-ab3c-d52691b4dbfc>
+Date: Wed, 5 Dec 2018 03:23:54 +0000
+Subject: [PATCH] DFG's StrengthReduction phase should not reduce Construct
+ into DirectContruct when the executable does not have constructAbility.
+ https://bugs.webkit.org/show_bug.cgi?id=192386 <rdar://problem/46445516>
+
+Source: Apple webkit https://github.com/WebKit/webkit/commit/b85119d646324e12df422e3705d6afb593074e6b
+License: GPLV2
+Upstream-Status: Submited
+Signed-off-by: Balaji Selvam <Balaji_Selvam.comcast.com>
+
+Reviewed by Saam Barati.
+
+JSTests:
+
+* stress/regress-192386.js: Added.
+
+Source/JavaScriptCore:
+
+This violates an invariant documented by a RELEASE_ASSERT in operationLinkDirectCall().
+
+* dfg/DFGStrengthReductionPhase.cpp:
+(JSC::DFG::StrengthReductionPhase::handleNode):
+
+git-svn-id: http://svn.webkit.org/repository/webkit/trunk@238884 268f45cc-cd09-0410-ab3c-d52691b4dbfc
+---
+ JSTests/ChangeLog                                   | 10 ++++++++++
+ JSTests/stress/regress-192386.js                    | 12 ++++++++++++
+ Source/JavaScriptCore/ChangeLog                     | 13 +++++++++++++
+ .../dfg/DFGStrengthReductionPhase.cpp               |  3 +++
+ 4 files changed, 38 insertions(+)
+ create mode 100644 JSTests/stress/regress-192386.js
+
+diff --git a/JSTests/ChangeLog b/JSTests/ChangeLog
+index 0e0f85e0f340..e1307c66e310 100644
+--- a/JSTests/ChangeLog
++++ b/JSTests/ChangeLog
+@@ -1,3 +1,13 @@
++2018-12-04  Mark Lam  <mark.lam@apple.com>
++
++        DFG's StrengthReduction phase should not reduce Construct into DirectContruct when the executable does not have constructAbility.
++        https://bugs.webkit.org/show_bug.cgi?id=192386
++        <rdar://problem/46445516>
++
++        Reviewed by Saam Barati.
++
++        * stress/regress-192386.js: Added.
++
+ 2018-01-27  Yusuke Suzuki  <utatane.tea@gmail.com>
+ 
+         DFG strength reduction fails to convert NumberToStringWithValidRadixConstant for 0 to constant '0'
+diff --git a/JSTests/stress/regress-192386.js b/JSTests/stress/regress-192386.js
+new file mode 100644
+index 000000000000..26276e053e35
+--- /dev/null
++++ b/JSTests/stress/regress-192386.js
+@@ -0,0 +1,12 @@
++//@ requireOptions("--jitPolicyScale=0")
++
++function foo(x) {
++    try {
++        new x();
++    } catch {
++    }
++}
++
++foo(function() {});
++for (let i = 0; i < 10000; ++i)
++    foo(() => undefined);
+diff --git a/Source/JavaScriptCore/ChangeLog b/Source/JavaScriptCore/ChangeLog
+index 74970b11d613..30aee7d80922 100644
+--- a/Source/JavaScriptCore/ChangeLog
++++ b/Source/JavaScriptCore/ChangeLog
+@@ -1,3 +1,16 @@
++2018-12-04  Mark Lam  <mark.lam@apple.com>
++
++        DFG's StrengthReduction phase should not reduce Construct into DirectContruct when the executable does not have constructAbility.
++        https://bugs.webkit.org/show_bug.cgi?id=192386
++        <rdar://problem/46445516>
++
++        Reviewed by Saam Barati.
++
++        This violates an invariant documented by a RELEASE_ASSERT in operationLinkDirectCall().
++
++        * dfg/DFGStrengthReductionPhase.cpp:
++        (JSC::DFG::StrengthReductionPhase::handleNode):
++
+ 2018-06-13  Keith Miller  <keith_miller@apple.com>
+ 
+         AutomaticThread should have a way to provide a thread name
+diff --git a/Source/JavaScriptCore/dfg/DFGStrengthReductionPhase.cpp b/Source/JavaScriptCore/dfg/DFGStrengthReductionPhase.cpp
+index f915841a9d46..85b34227933b 100644
+--- a/Source/JavaScriptCore/dfg/DFGStrengthReductionPhase.cpp
++++ b/Source/JavaScriptCore/dfg/DFGStrengthReductionPhase.cpp
+@@ -838,6 +838,9 @@ private:
+                 break;
+             
+             if (FunctionExecutable* functionExecutable = jsDynamicCast<FunctionExecutable*>(vm(), executable)) {
++                if (m_node->op() == Construct && functionExecutable->constructAbility() == ConstructAbility::CannotConstruct)
++                    break;
++
+                 // We need to update m_parameterSlots before we get to the backend, but we don't
+                 // want to do too much of this.
+                 unsigned numAllocatedArgs =
+-- 
+2.24.0
+

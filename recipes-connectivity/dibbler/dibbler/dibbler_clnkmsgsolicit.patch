@@ -1,0 +1,38 @@
+Date: Dec 4, 2015 9:48 PM
+
+From: 3c5809bff236bd0fe363d7f5c9cd1d78bd49ffc5 Dec 4, 2015 9:50 PM
+
+Subject: [PATCH] DELIA-11574: Dibbler crash
+
+	Added patch to avoid the crash in opensource code
+
+Source: COMCAST
+
+License: GPL-2.0-or-later
+
+Upstream-Status: Pending
+
+Signed-off-by: Vinu Palackal <Vinu_P@cable.comcast.com>
+---
+
+Index: dibbler-1.0.0RC2/ClntMessages/ClntMsgSolicit.cpp
+===================================================================
+--- dibbler-1.0.0RC2.orig/ClntMessages/ClntMsgSolicit.cpp
++++ dibbler-1.0.0RC2/ClntMessages/ClntMsgSolicit.cpp
+@@ -271,11 +271,12 @@ bool TClntMsgSolicit::shallRejectAnswer(
+ 
+             /// @todo: We should check all iaprefix instances, not just one.
+             /// We should accept the PD if there's at least one valid prefix.
+-            if (!pd->getOption(OPTION_IAPREFIX)->isValid()) {
+-                Log(Warning) << "IA_Prefix option is not valid." << LogEnd;
+-                pdOk = false;
++            if (pd->getOption(OPTION_IAPREFIX)) {
++                if (!pd->getOption(OPTION_IAPREFIX)->isValid()) {
++                    Log(Warning) << "IA_Prefix option is not valid." << LogEnd;
++                    pdOk = false;
++                }
+             }
+-
+ 	    SPtr<TClntOptStatusCode> st = (Ptr*)pd->getOption(OPTION_STATUS_CODE);
+ 	    if (st && st->getCode()!= STATUSCODE_SUCCESS) {
+ 		Log(Notice) << "IA_NA has status code!=SUCCESS: " << st->getCode()

@@ -1,0 +1,28 @@
+From 8d9d166f161c05711c5dbb7905513e6df314bbbe Mon Sep 17 00:00:00 2001
+From: Haifeng Yan <haifeng.yan@linaro.org>
+Date: Wed, 11 Sep 2013 10:37:54 +0800
+Subject: [PATCH] Fix compile error.
+
+Add original ${CMAKE_C_FLAGS} to CMAKE_C_FLAGS.
+
+Signed-off-by: Haifeng Yan <haifeng.yan@linaro.org>
+---
+ CMakeLists.txt |    2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 542a5d2..71557f1 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -42,7 +42,7 @@ IF (NOT CMAKE_BUILD_TYPE)
+   SET(CMAKE_BUILD_TYPE "Release")
+ ENDIF (NOT CMAKE_BUILD_TYPE)
+ 
+-SET(CMAKE_C_FLAGS "-Wall")
++SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall")
+ IF (WIN32) 
+   ADD_DEFINITIONS(-DWIN32)
+   SET(linkFlags "/PDB:NONE /INCREMENTAL:NO /OPT:NOREF /OPT:NOICF")
+-- 
+1.7.9.5
+

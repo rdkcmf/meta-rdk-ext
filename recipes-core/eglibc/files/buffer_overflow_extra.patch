@@ -1,0 +1,203 @@
+Date: Feb 26 17:13:35 2016
+
+From: 648f0fa11b9f2aa562dbe3ccd311aa2babb5b366 Feb 26 17:13:35 2016
+
+Subject: [PATCH] RDKSYSINTSW-2849, RDK-15439: Fixed Security vulnerability in dns resolution.
+
+	As mentioned in the ticket, client side dns resolver had
+        issues while processing two responses.
+        Backported the changes from glibc master branch.
+
+Source: COMCAST
+
+License: LGPL-2.1-or-later
+
+Upstream-Status: Pending
+
+Signed-off-by: Balaji Punnuru <balaji_punnuru@cable.comcast.com>
+
+---
+
+Index: libc/resolv/res_send.c
+===================================================================
+--- libc.orig/resolv/res_send.c
++++ libc/resolv/res_send.c
+@@ -754,9 +754,7 @@ send_vc(res_state statp,
+ 	const HEADER *hp2 = (HEADER *) buf2;
+ 	u_char *ans = *ansp;
+ 	int orig_anssizp = *anssizp;
+-	// XXX REMOVE
+-	// int anssiz = *anssizp;
+-	HEADER *anhp = (HEADER *) ans;
++	HEADER *anhp = (HEADER *) ansp;
+ 	struct sockaddr_in6 *nsap = EXT(statp).nsaddrs[ns];
+ 	int truncating, connreset, resplen, n;
+ 	struct iovec iov[4];
+@@ -870,32 +868,14 @@ send_vc(res_state statp,
+ 	u_char **thisansp;
+ 	int *thisresplenp;
+ 	if ((recvresp1 | recvresp2) == 0 || buf2 == NULL) {
++               /* We have not received any responses
++                  yet or we only have one response to
++                  receive.  */
+ 		thisanssizp = anssizp;
+ 		thisansp = anscp ?: ansp;
+ 		assert (anscp != NULL || ansp2 == NULL);
+ 		thisresplenp = &resplen;
+ 	} else {
+-		if (*anssizp != MAXPACKET) {
+-			/* No buffer allocated for the first
+-			   reply.  We can try to use the rest
+-			   of the user-provided buffer.  */
+-#ifdef _STRING_ARCH_unaligned
+-			*anssizp2 = orig_anssizp - resplen;
+-			*ansp2 = *ansp + resplen;
+-#else
+-			int aligned_resplen
+-			  = ((resplen + __alignof__ (HEADER) - 1)
+-			     & ~(__alignof__ (HEADER) - 1));
+-			*anssizp2 = orig_anssizp - aligned_resplen;
+-			*ansp2 = *ansp + aligned_resplen;
+-#endif
+-		} else {
+-			/* The first reply did not fit into the
+-			   user-provided buffer.  Maybe the second
+-			   answer will.  */
+-			*anssizp2 = orig_anssizp;
+-			*ansp2 = *ansp;
+-		}
+ 
+ 		thisanssizp = anssizp2;
+ 		thisansp = ansp2;
+@@ -904,10 +884,14 @@ send_vc(res_state statp,
+ 	anhp = (HEADER *) *thisansp;
+ 
+ 	*thisresplenp = rlen;
+-	if (rlen > *thisanssizp) {
+-		/* Yes, we test ANSCP here.  If we have two buffers
+-		   both will be allocatable.  */
+-		if (__builtin_expect (anscp != NULL, 1)) {
++       /* Is the answer buffer too small?  */
++       if (*thisanssizp < rlen) {
++               /* If the current buffer is not the the static
++                  user-supplied buffer then we can reallocate
++                  it.  */
++               if (thisansp != NULL && thisansp != ansp) {
++                       /* Always allocate MAXPACKET, callers expect
++                          this specific size.  */
+ 			u_char *newp = malloc (MAXPACKET);
+ 			if (newp == NULL) {
+ 				*terrno = ENOMEM;
+@@ -1351,32 +1335,14 @@ send_dg(res_state statp,
+ 		int *thisresplenp;
+ 
+ 		if ((recvresp1 | recvresp2) == 0 || buf2 == NULL) {
++                       /* We have not received any responses
++                          yet or we only have one response to
++                          receive.  */
+ 			thisanssizp = anssizp;
+ 			thisansp = anscp ?: ansp;
+ 			assert (anscp != NULL || ansp2 == NULL);
+ 			thisresplenp = &resplen;
+ 		} else {
+-			if (*anssizp != MAXPACKET) {
+-				/* No buffer allocated for the first
+-				   reply.  We can try to use the rest
+-				   of the user-provided buffer.  */
+-#ifdef _STRING_ARCH_unaligned
+-				*anssizp2 = orig_anssizp - resplen;
+-				*ansp2 = *ansp + resplen;
+-#else
+-				int aligned_resplen
+-				  = ((resplen + __alignof__ (HEADER) - 1)
+-				     & ~(__alignof__ (HEADER) - 1));
+-				*anssizp2 = orig_anssizp - aligned_resplen;
+-				*ansp2 = *ansp + aligned_resplen;
+-#endif
+-			} else {
+-				/* The first reply did not fit into the
+-				   user-provided buffer.  Maybe the second
+-				   answer will.  */
+-				*anssizp2 = orig_anssizp;
+-				*ansp2 = *ansp;
+-			}
+ 
+ 			thisanssizp = anssizp2;
+ 			thisansp = ansp2;
+@@ -1384,22 +1350,42 @@ send_dg(res_state statp,
+ 		}
+ 
+ 		if (*thisanssizp < MAXPACKET
+-		    /* Yes, we test ANSCP here.  If we have two buffers
+-		       both will be allocatable.  */
+-		    && anscp
++                   /* If the current buffer is not the the static
++                      user-supplied buffer then we can reallocate
++                      it.  */
++                   && (thisansp != NULL && thisansp != ansp)
+ #ifdef FIONREAD
++                    /* Is the size too small?  */
+ 		    && (ioctl (pfd[0].fd, FIONREAD, thisresplenp) < 0
+ 			|| *thisanssizp < *thisresplenp)
+ #endif
+                     ) {
++                       /* Always allocate MAXPACKET, callers expect
++                          this specific size.  */
+ 			u_char *newp = malloc (MAXPACKET);
+ 			if (newp != NULL) {
+-				*anssizp = MAXPACKET;
+-				*thisansp = ans = newp;
++                                *thisanssizp = MAXPACKET;
++                                *thisansp = newp;
+ 				if (thisansp == ansp2)
+ 				  *ansp2_malloced = 1;
+ 			}
+ 		}
++               /* We could end up with truncation if anscp was NULL
++                  (not allowed to change caller's buffer) and the
++                  response buffer size is too small.  This isn't a
++                  reliable way to detect truncation because the ioctl
++                  may be an inaccurate report of the UDP message size.
++                  Therefore we use this only to issue debug output.
++                  To do truncation accurately with UDP we need
++                  MSG_TRUNC which is only available on Linux.  We
++                  can abstract out the Linux-specific feature in the
++                  future to detect truncation.  */
++               if (__glibc_unlikely (*thisanssizp < *thisresplenp)) {
++                       Dprint(statp->options & RES_DEBUG,
++                              (stdout, ";; response may be truncated (UDP)\n")
++                       );
++               }
++
+ 		HEADER *anhp = (HEADER *) *thisansp;
+ 		socklen_t fromlen = sizeof(struct sockaddr_in6);
+ 		assert (sizeof(from) <= fromlen);
+@@ -1538,7 +1524,7 @@ send_dg(res_state statp,
+ 				? *thisanssizp : *thisresplenp);
+ 			goto next_ns;
+ 		}
+-		if (!(statp->options & RES_IGNTC) && anhp->tc) {
++		if (!(statp->options & RES_IGNTC) && anhp->tc && recvresp1 && recvresp2) {
+ 			/*
+ 			 * To get the rest of answer,
+ 			 * use TCP with same server.
+Index: libc/malloc/malloc.c
+===================================================================
+--- libc.orig/malloc/malloc.c
++++ libc/malloc/malloc.c
+@@ -1407,8 +1407,14 @@
+ #define unlink(P, BK, FD) {                                            \
+     FD = P->fd;								      \
+     BK = P->bk;								      \
+-    if (__builtin_expect (FD->bk != P || BK->fd != P, 0))		      \
++    if (__builtin_expect (FD->bk != P || BK->fd != P, 0))		    { \
++      const char *crash_on_runpod_corrupt = __libc_secure_getenv("RUNPOD_ABORT_ENABLE_");\
++      if(crash_on_runpod_corrupt) {\
++        const char *msg = "DELIA-26829-RUNPOD"; \
++        *((char *)0xbad) = msg[0]; \
++      }\
+       malloc_printerr (check_action, "corrupted double-linked list", P);      \
++    }\
+     else {								      \
+         FD->bk = BK;							      \
+         BK->fd = FD;							      \

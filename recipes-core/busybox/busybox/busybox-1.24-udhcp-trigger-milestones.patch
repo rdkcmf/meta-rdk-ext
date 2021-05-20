@@ -1,0 +1,38 @@
+Date: Feb 13, 2019 11:24 PM
+
+From: 289b0ff54029697f5cfaf0edf1c5b9ae69c55812 Feb 26, 2019 11:34 AM
+
+Subject: [PATCH] RDK-23485: Log milestones related to DHCP
+
+        udhcpc patch for busybox-1.22
+	Added logs for DHCP related
+
+Source: COMCAST
+
+License: GPL-2-or-later
+
+Upstream-Status: Pending
+
+Signed-off-by: ganesh <Ganesh_Kumar@comcast.com>
+---
+
+Index: busybox-1.24.1/networking/udhcp/dhcpc.c
+===================================================================
+--- busybox-1.24.1.orig/networking/udhcp/dhcpc.c
++++ busybox-1.24.1/networking/udhcp/dhcpc.c
+@@ -1514,6 +1514,7 @@ int udhcpc_main(int argc UNUSED_PARAM, c
+ 				if (!discover_retries || packet_num < discover_retries) {
+ 					/* send broadcast select packet */
+ 					send_select(xid, server_addr, requested_ip);
++					udhcp_run_script(NULL, "request");
+ 					timeout = discover_timeout;
+ 					packet_num++;
+ 					continue;
+@@ -1723,6 +1724,7 @@ int udhcpc_main(int argc UNUSED_PARAM, c
+ 				struct in_addr temp_addr;
+ 				uint8_t *temp;
+ 
++				udhcp_run_script(NULL, "reply");
+ 				temp = udhcp_get_option(&packet, DHCP_LEASE_TIME);
+ 				if (!temp) {
+ 					bb_error_msg("no lease time with ACK, using 1 hour lease");

@@ -1,0 +1,74 @@
+From 34e3e1562d0bf97f109ace8589a96ee8c9051559 Mon Sep 17 00:00:00 2001
+From: skv01 <shibukv@tataelxsi.co.in>
+Date: Fri, 28 Nov 2014 18:36:50 -0500
+Subject: [PATCH 3/9] RDKSYSINTSW-1471: Second set of changes in the Dibbler
+ client to generate DUID Reason for change: Dibbler client is DUID is
+ generated with moca mac instead of stb mac Test Procedure: Verify
+ /var/lib/dibbler/client-duid to verify whether the DUID is generated using
+ the eSTB MAC Address Risks: Low. Applicable for CPE IPV6 provisioned boxes.
+ Signed-off-by: skv01 <shibukv@tataelxsi.co.in>
+
+Change-Id: I2fbfc8fdba9a09ae05d188c4f1833ed27fdd2a82
+---
+ CfgMgr/CfgMgr.cpp | 36 ++++++++++++++++++++++++++++++++----
+ 1 file changed, 32 insertions(+), 4 deletions(-)
+
+diff --git a/CfgMgr/CfgMgr.cpp b/CfgMgr/CfgMgr.cpp
+index a40488b..f75e0b9 100644
+--- a/CfgMgr/CfgMgr.cpp
++++ b/CfgMgr/CfgMgr.cpp
+@@ -183,11 +183,39 @@ bool TCfgMgr::setDUID(const std::string& filename, TIfaceMgr & ifaceMgr) {
+ 
+     bool found=false;
+ 
++    const char *INTRFACE_SEARCH_STRING="iface";
++    FILE *dibblerClientConfPtr = NULL ;
++    char *line = NULL;
++    size_t len = 0;
++    char *interfaceName = NULL;
++    dibblerClientConfPtr = fopen( CLNTCONF_FILE , "r");
++    if ( NULL == dibblerClientConfPtr ) {
++        Log(Info) << "Unable to open client config file  " << CLNTCONF_FILE  << LogEnd;
++    } else {
++       while (getline(&line, &len, dibblerClientConfPtr) != -1) {
++           char *lineWithInterface = NULL ;
++           if ((lineWithInterface = strstr(line,INTRFACE_SEARCH_STRING))) {
++               char *tempConfigValue;
++               strtok_r(lineWithInterface, " ", &tempConfigValue);
++               interfaceName = strtok_r(NULL, " ", &tempConfigValue);
++               break ;
++           }
++           fclose(dibblerClientConfPtr);
++       }
++    }
++
++    if ( NULL != interfaceName ) {
++        ifaceMgr.getIfaceByName(interfaceName);
++    } else {
+         ifaceMgr.firstIface();
++    }
++
+     if (this->DUIDType == DUID_TYPE_EN) {
+-        //realIface = ifaceMgr.getIface(); // use the first interface. It will be ignored anyway
+-        realIface = ifaceMgr.getIfaceByName("wan"); // use the first interface. It will be ignored anyway
+-        
++        if ( NULL != interfaceName ) {
++            realIface = ifaceMgr.getIfaceByName(interfaceName);
++        } else {
++            realIface = ifaceMgr.getIface(); // use the first interface. It will be ignored anyway
++        }
+ 	found = true;
+ 
+         if (!realIface) {
+@@ -195,7 +223,7 @@ bool TCfgMgr::setDUID(const std::string& filename, TIfaceMgr & ifaceMgr) {
+             return false;
+         }
+     }
+-    while( (!found) && (realIface=ifaceMgr.getIface()) )
++    while( (!found) && (ifaceMgr.getIfaceByName(interfaceName)) )
+     {
+         realIface->firstLLAddress();
+         char buf[64];
+-- 
+2.3.1
+

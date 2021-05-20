@@ -1,0 +1,111 @@
+Date: Sep 27 00:12:36 2016
+
+From: 1326c0ad88fb2cbe2bad1bd98b641421474a2b44 Oct 13 01:15:15 2016
+
+Subject: [PATCH] RDK-17191 RDK-17271: getting ipaddress of devices
+
+	Added a patch in gupnp to get the unique ip address of comcast devices in home networking
+
+Source: COMCAST
+
+License: LGPL-2.0-or-later
+
+Upstream-Status: Pending
+
+Signed-off-by: tsilveria <Thomson_Silvera@cable.comcast.com>
+---
+
+diff -rupN gupnp-0.20.10/libgupnp/gupnp-service.c gupnp-0.20.10-latest/libgupnp/gupnp-service.c
+--- gupnp-0.20.10/libgupnp/gupnp-service.c	2014-02-03 15:55:37.000000000 +0000
++++ gupnp-0.20.10-latest/libgupnp/gupnp-service.c	2016-10-11 19:48:00.000000000 +0000
+@@ -49,6 +49,15 @@
+ 
+ #define SUBSCRIPTION_TIMEOUT 300 /* DLNA (7.2.22.1) enforced */
+ 
++#define MAX_IP_ADDR_SIZE 46
++#define UPNP_CLIENT_IP_FILE "/tmp/upnp_client_ipaddr.txt"
++#define TRIGGER_WAIT_SECONDS    60
++#define IPV6_PATH   "/tmp/estb_ipv6"
++#define STOP_XI_RECOVERY "/opt/stop_xi_recovery"
++
++GSource *srcTimeout=NULL;
++GList *ipaddr_list=NULL;
++
+ G_DEFINE_TYPE (GUPnPService,
+                gupnp_service,
+                GUPNP_TYPE_SERVICE_INFO);
+@@ -260,6 +269,28 @@ gupnp_service_action_get_type (void)
+         return our_type;
+ }
+ 
++
++static gboolean
++writeIpAddressToFile_cb(gpointer user_data)
++{
++        FILE *fptr;
++        GList *iterate;
++	g_message("\n XI-RECOVERY : Inside ipaddress callback \n ");
++        fptr=fopen(UPNP_CLIENT_IP_FILE,"w");
++        if(fptr==NULL){
++            g_message("\n XI-RECOVERY : UPNP_CLIENT_IP_FILE File Creation Failed \n ");
++        }
++        else
++        {
++            for (iterate = ipaddr_list; iterate != NULL; iterate = iterate->next) {
++                g_message("\n XI-RECOVERY : ip address written to file %s \n",g_strstrip(iterate->data));
++                fprintf(fptr,"%s\n",g_strstrip(iterate->data));
++            }
++        fclose(fptr);
++        }
++	return FALSE;
++}
++
+ static void
+ finalize_action (GUPnPServiceAction *action)
+ {
+@@ -1888,6 +1919,9 @@ notify_subscriber (G_GNUC_UNUSED gpointe
+         char *tmp;
+         SoupMessage *msg;
+         SoupSession *session;
++    	char ipAddr[MAX_IP_ADDR_SIZE];
++        GList *temp_list;
++
+ 
+         data = value;
+         property_set = user_data;
+@@ -1895,7 +1929,29 @@ notify_subscriber (G_GNUC_UNUSED gpointe
+         /* Subscriber called unsubscribe */
+         if (subscription_data_can_delete (data))
+                 return;
+-
++        if((access(IPV6_PATH, F_OK ) != -1 ) && (access(STOP_XI_RECOVERY, F_OK ) == -1 ) && (data->callbacks->data))
++        {
++            g_message("\n XI-RECOVERY : Inside Recovery Mechanism \n");
++            sscanf((char *)data->callbacks->data, "http://%99[^:]", ipAddr);
++            temp_list = g_list_find_custom(ipaddr_list,g_strstrip(ipAddr),(GCompareFunc) g_strcmp0);
++            if (temp_list == NULL) {
++                ipaddr_list = g_list_prepend (ipaddr_list,g_strdup(g_strstrip(ipAddr)));
++                g_message("\n XI-RECOVERY : upnp client devices in the list %s \n",ipAddr);
++	        if (srcTimeout) {
++		  if (!g_source_is_destroyed (srcTimeout))
++        	        g_source_destroy (srcTimeout);
++                 g_source_unref (srcTimeout);
++                 srcTimeout = NULL;
++        	}
++                srcTimeout = g_timeout_source_new_seconds (TRIGGER_WAIT_SECONDS);
++                g_source_set_callback (srcTimeout,writeIpAddressToFile_cb,user_data,NULL);
++                g_source_attach (srcTimeout, g_main_context_get_thread_default ());
++            }
++            else
++            {
++              g_message("\n XI-RECOVERY : ipAddr %s already in the list \n",ipAddr);
++            }          
++        }
+         /* Create message */
+         msg = soup_message_new (GENA_METHOD_NOTIFY, data->callbacks->data);
+         if (!msg) {
+@@ -2265,3 +2320,4 @@ gupnp_service_signals_autoconnect (GUPnP
+         g_module_close (module);
+         g_object_unref (introspection);
+ }
++

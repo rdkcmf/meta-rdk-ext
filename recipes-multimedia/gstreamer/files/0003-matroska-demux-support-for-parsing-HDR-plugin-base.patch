@@ -1,0 +1,732 @@
+Date: Tue, 27 Nov 2018 13:45:15 -0500
+
+From: ed6f9df41ba2615bfeb5ef2010b8d291e7cdde0d Mon Sep 17 00:00:00 2001
+
+Subject: [PATCH] DELIA-30250 : [Field] 4K HDR content using VP9.2 coded
+
+	matroska demux added support for parsing HDR information for webm/vp9
+
+	Currently matroska demux does not parse HDR information for webm/vp9
+	stream. Added this patch to support parsing of HDR information and
+	passing it as caps values downstream.
+
+	https://bugzilla.gnome.org/show_bug.cgi?id=790023
+	https://bugzilla.gnome.org/show_bug.cgi?id=790115
+
+Source: BUGZILLA
+
+License: LGPL-2.1-or-later
+
+Upstream-Status: Submitted [ https://bugzilla.gnome.org/show_bug.cgi?id=790023 ]
+
+Signed-off-by: aansar001c <AzamAyub_Ansari@cable.comcast.com>
+
+---
+ gst-libs/gst/video/Makefile.am       |   5 +-
+ gst-libs/gst/video/gstvideodecoder.c |  71 +++++++++++-
+ gst-libs/gst/video/gstvideoutils.c   |   2 +
+ gst-libs/gst/video/gstvideoutils.h   |   6 +-
+ gst-libs/gst/video/video-color.c     |  23 ++++
+ gst-libs/gst/video/video-color.h     |  15 ++-
+ gst-libs/gst/video/video-hdr.c       | 214 +++++++++++++++++++++++++++++++++++
+ gst-libs/gst/video/video-hdr.h       | 105 +++++++++++++++++
+ gst-libs/gst/video/video-prelude.h   |  34 ++++++
+ gst-libs/gst/video/video.h           |   1 +
+ 10 files changed, 471 insertions(+), 5 deletions(-)
+ create mode 100644 gst-libs/gst/video/video-hdr.c
+ create mode 100644 gst-libs/gst/video/video-hdr.h
+ create mode 100644 gst-libs/gst/video/video-prelude.h
+
+diff --git a/gst-libs/gst/video/Makefile.am b/gst-libs/gst/video/Makefile.am
+index 64f4978..90694fb 100644
+--- a/gst-libs/gst/video/Makefile.am
++++ b/gst-libs/gst/video/Makefile.am
+@@ -4,7 +4,7 @@ include $(top_srcdir)/common/orc.mak
+ 
+ glib_enum_headers = video.h video-format.h video-color.h video-info.h video-dither.h \
+ 			colorbalance.h navigation.h video-chroma.h video-tile.h video-converter.h \
+-			video-resampler.h video-frame.h video-scaler.h
++			video-resampler.h video-frame.h video-scaler.h video-hdr.h
+ glib_enum_define = GST_VIDEO
+ glib_gen_prefix = gst_video
+ glib_gen_basename = video
+@@ -28,6 +28,7 @@ libgstvideo_@GST_API_VERSION@_la_SOURCES = \
+ 	video-color.c         	\
+ 	video-converter.c    	\
+ 	video-dither.c    	\
++	video-hdr.c             \
+ 	video-info.c         	\
+ 	video-frame.c         	\
+ 	video-scaler.c          \
+@@ -65,9 +66,11 @@ libgstvideo_@GST_API_VERSION@include_HEADERS = \
+ 	video-color.h         	\
+ 	video-converter.h      	\
+ 	video-dither.h      	\
++	video-hdr.h             \
+ 	video-info.h         	\
+ 	video-frame.h         	\
+ 	video-scaler.h          \
++	video-prelude.h         \
+ 	video-tile.h         	\
+ 	gstvideosink.h 		\
+ 	gstvideofilter.h	\
+diff --git a/gst-libs/gst/video/gstvideodecoder.c b/gst-libs/gst/video/gstvideodecoder.c
+index fdbc7d2..6d8c6a7 100644
+--- a/gst-libs/gst/video/gstvideodecoder.c
++++ b/gst-libs/gst/video/gstvideodecoder.c
+@@ -608,7 +608,7 @@ _new_input_state (GstCaps * caps)
+   GstVideoCodecState *state;
+   GstStructure *structure;
+   const GValue *codec_data;
+-
++  const gchar *s;
+   state = g_slice_new0 (GstVideoCodecState);
+   state->ref_count = 1;
+   gst_video_info_init (&state->info);
+@@ -616,12 +616,28 @@ _new_input_state (GstCaps * caps)
+     goto parse_fail;
+   state->caps = gst_caps_ref (caps);
+ 
++  state->hdr_info = g_slice_new0 (GstVideoHDR);
++
+   structure = gst_caps_get_structure (caps, 0);
+ 
+   codec_data = gst_structure_get_value (structure, "codec_data");
+   if (codec_data && G_VALUE_TYPE (codec_data) == GST_TYPE_BUFFER)
+     state->codec_data = GST_BUFFER (g_value_dup_boxed (codec_data));
+ 
++   if ((s = gst_structure_get_string (structure, "mastering-display-metadata"))) {
++     if (!gst_video_mastering_display_metadata_from_caps_string
++         (&state->hdr_info->mastering_display_metadata, s)) {
++       GST_WARNING ("Could not parse mastering-display-metadata %s", s);
++     }
++   }
++
++   if ((s = gst_structure_get_string (structure, "content-light-level"))) {
++     if (!gst_video_content_light_level_from_caps_string
++         (&state->hdr_info->content_light_level, s)) {
++       GST_WARNING ("Could not parse content-light-level %s", s);
++     }
++   }
++
+   return state;
+ 
+ parse_fail:
+@@ -642,6 +658,8 @@ _new_output_state (GstVideoFormat fmt, guint width, guint height,
+   gst_video_info_init (&state->info);
+   gst_video_info_set_format (&state->info, fmt, width, height);
+ 
++  state->hdr_info = g_slice_new0 (GstVideoHDR);
++
+   if (reference) {
+     GstVideoInfo *tgt, *ref;
+ 
+@@ -677,6 +695,31 @@ _new_output_state (GstVideoFormat fmt, guint width, guint height,
+     }
+   }
+ 
++  if (reference->hdr_info) {
++    GstVideoMasteringDisplayMetadata *mastering =
++       &reference->hdr_info->mastering_display_metadata;
++    GstVideoContentLightLevel *level =
++       &reference->hdr_info->content_light_level;
++
++    if (gst_video_mastering_display_metadata_has_primaries (mastering) &&
++        gst_video_mastering_display_metadata_has_luminance (mastering)) {
++      gchar *str =
++      gst_video_mastering_display_metadata_to_caps_string (mastering);
++      GST_DEBUG ("reference mastering-display-metadata %s", str);
++      memcpy (&state->hdr_info->mastering_display_metadata, mastering,
++      sizeof (GstVideoMasteringDisplayMetadata));
++      g_free (str);
++    }
++
++    if (level->maxCLL && level->maxFALL) {
++         gchar *str = gst_video_content_light_level_to_caps_string (level);
++       GST_DEBUG ("reference content-light-level %s", str);
++       memcpy (&state->hdr_info->content_light_level, level,
++       sizeof (GstVideoContentLightLevel));
++       g_free (str);
++    }
++  }
++
+   GST_DEBUG ("reference par %d/%d fps %d/%d",
+       state->info.par_n, state->info.par_d,
+       state->info.fps_n, state->info.fps_d);
+@@ -3772,6 +3815,32 @@ gst_video_decoder_negotiate_default (GstVideoDecoder * decoder)
+   if (state->allocation_caps == NULL)
+     state->allocation_caps = gst_caps_ref (state->caps);
+ 
++  if (state->hdr_info) {
++    GstVideoMasteringDisplayMetadata *mastering =
++    &state->hdr_info->mastering_display_metadata;
++    GstVideoContentLightLevel *level = &state->hdr_info->content_light_level;
++
++    if (gst_video_mastering_display_metadata_has_primaries (mastering) &&
++        gst_video_mastering_display_metadata_has_luminance (mastering)) {
++      gchar *str =
++      gst_video_mastering_display_metadata_to_caps_string (mastering);
++
++      state->caps = gst_caps_make_writable (state->caps);
++      gst_caps_set_simple (state->caps, "mastering-display-metadata",
++          G_TYPE_STRING, str, NULL);
++      g_free (str);
++    }
++
++    if (level->maxCLL && level->maxFALL) {
++      gchar *str = gst_video_content_light_level_to_caps_string (level);
++
++      state->caps = gst_caps_make_writable (state->caps);
++      gst_caps_set_simple (state->caps, "content-light-level", G_TYPE_STRING,
++          str, NULL);
++      g_free (str);
++    }
++  }
++
+   GST_DEBUG_OBJECT (decoder, "setting caps %" GST_PTR_FORMAT, state->caps);
+ 
+   /* Push all pending pre-caps events of the oldest frame before
+diff --git a/gst-libs/gst/video/gstvideoutils.c b/gst-libs/gst/video/gstvideoutils.c
+index 8a3a230..c363c7d 100644
+--- a/gst-libs/gst/video/gstvideoutils.c
++++ b/gst-libs/gst/video/gstvideoutils.c
+@@ -166,6 +166,8 @@ _gst_video_codec_state_free (GstVideoCodecState * state)
+     gst_caps_unref (state->allocation_caps);
+   if (state->codec_data)
+     gst_buffer_unref (state->codec_data);
++  if (state->hdr_info)
++    g_slice_free (GstVideoHDR, state->hdr_info);
+   g_slice_free (GstVideoCodecState, state);
+ }
+ 
+diff --git a/gst-libs/gst/video/gstvideoutils.h b/gst-libs/gst/video/gstvideoutils.h
+index f7aed89..434889b 100644
+--- a/gst-libs/gst/video/gstvideoutils.h
++++ b/gst-libs/gst/video/gstvideoutils.h
+@@ -27,6 +27,7 @@
+ #define _GST_VIDEO_UTILS_H_
+ 
+ #include <gst/gst.h>
++#include <gst/video/video-hdr.h>
+ 
+ G_BEGIN_DECLS
+ #define GST_TYPE_VIDEO_CODEC_STATE \
+@@ -46,6 +47,7 @@ typedef struct _GstVideoCodecFrame GstVideoCodecFrame;
+  *     'codec_data' field of a stream, or NULL.
+  * @allocation_caps: The #GstCaps for allocation query and pool
+  *     negotiation. Since: 1.10
++ * @hdr_info: The #GstVideoHDR describing HDR related metadata
+  *
+  * Structure representing the state of an incoming or outgoing video
+  * stream for encoders and decoders.
+@@ -71,8 +73,10 @@ struct _GstVideoCodecState
+ 
+   GstCaps *allocation_caps;
+ 
++  GstVideoHDR *hdr_info;
++
+   /*< private >*/
+-  void         *padding[GST_PADDING_LARGE - 1];
++  void         *padding[GST_PADDING_LARGE - 2];
+ };
+ 
+ /**
+diff --git a/gst-libs/gst/video/video-color.c b/gst-libs/gst/video/video-color.c
+index 08513c8..52df40f 100644
+--- a/gst-libs/gst/video/video-color.c
++++ b/gst-libs/gst/video/video-color.c
+@@ -373,6 +373,7 @@ gst_video_color_matrix_get_Kr_Kb (GstVideoColorMatrix matrix, gdouble * Kr,
+       *Kb = 0.087;
+       break;
+     case GST_VIDEO_COLOR_MATRIX_BT2020:
++    case GST_VIDEO_COLOR_MATRIX_BT2020_CL:
+       *Kr = 0.2627;
+       *Kb = 0.0593;
+       break;
+@@ -424,6 +425,7 @@ gst_video_color_transfer_encode (GstVideoTransferFunction func, gdouble val)
+       res = pow (val, 1.0 / 2.2);
+       break;
+     case GST_VIDEO_TRANSFER_BT709:
++    case GST_VIDEO_TRANSFER_BT2020_10:
+       if (val < 0.018)
+         res = 4.5 * val;
+       else
+@@ -462,6 +464,16 @@ gst_video_color_transfer_encode (GstVideoTransferFunction func, gdouble val)
+       else
+         res = 1.0993 * pow (val, 0.45) - 0.0993;
+       break;
++    case GST_VIDEO_TRANSFER_SMPTE_ST_2084:
++        /* TODO: add the code to correctly return the transfer value */
++        res = val;
++      break;
++    case GST_VIDEO_TRANSFER_ARIB_STD_B67:
++      if (val <= 1)
++        res = 0.5 * sqrt(val);
++      else
++        res = 0.17883277 * log(val - 0.28466892) + 0.55991073;
++      break;
+     case GST_VIDEO_TRANSFER_ADOBERGB:
+       res = pow (val, 1.0 / 2.19921875);
+       break;
+@@ -512,6 +524,7 @@ gst_video_color_transfer_decode (GstVideoTransferFunction func, gdouble val)
+       res = pow (val, 2.2);
+       break;
+     case GST_VIDEO_TRANSFER_BT709:
++    case GST_VIDEO_TRANSFER_BT2020_10:
+       if (val < 0.081)
+         res = val / 4.5;
+       else
+@@ -550,6 +563,16 @@ gst_video_color_transfer_decode (GstVideoTransferFunction func, gdouble val)
+       else
+         res = pow ((val + 0.0993) / 1.0993, 1.0 / 0.45);
+       break;
++    case GST_VIDEO_TRANSFER_SMPTE_ST_2084:
++        /* TODO: add the code to correctly return the transfer value */
++        res = val;
++      break;
++    case GST_VIDEO_TRANSFER_ARIB_STD_B67:
++      if (val <= 0.5)
++        res = pow(val / 0.5, 2) ;
++      else
++        res = exp((val - 0.55991073)/0.17883277) + 0.28466892;
++      break;
+     case GST_VIDEO_TRANSFER_ADOBERGB:
+       res = pow (val, 2.19921875);
+       break;
+diff --git a/gst-libs/gst/video/video-color.h b/gst-libs/gst/video/video-color.h
+index 6dafdea..9ab1b12 100644
+--- a/gst-libs/gst/video/video-color.h
++++ b/gst-libs/gst/video/video-color.h
+@@ -50,7 +50,9 @@ typedef enum {
+  * @GST_VIDEO_COLOR_MATRIX_BT709: ITU-R BT.709 color matrix
+  * @GST_VIDEO_COLOR_MATRIX_BT601: ITU-R BT.601 color matrix
+  * @GST_VIDEO_COLOR_MATRIX_SMPTE240M: SMPTE 240M color matrix
+- * @GST_VIDEO_COLOR_MATRIX_BT2020: ITU-R BT.2020 color matrix. Since: 1.6.
++ * @GST_VIDEO_COLOR_MATRIX_SMPTE170M: SMPTE 170M color matrix
++ * @GST_VIDEO_COLOR_MATRIX_BT2020: ITU-R BT.2020 color matrix. Since: 1.6. Non-constant luminance
++ * @GST_VIDEO_COLOR_MATRIX_BT2020_CL: ITU-R BT.2020 color matrix. Since: 1.6. Constant luminance
+  *
+  * The color matrix is used to convert between Y'PbPr and
+  * non-linear RGB (R'G'B')
+@@ -62,7 +64,8 @@ typedef enum {
+   GST_VIDEO_COLOR_MATRIX_BT709,
+   GST_VIDEO_COLOR_MATRIX_BT601,
+   GST_VIDEO_COLOR_MATRIX_SMPTE240M,
+-  GST_VIDEO_COLOR_MATRIX_BT2020
++  GST_VIDEO_COLOR_MATRIX_BT2020,
++  GST_VIDEO_COLOR_MATRIX_BT2020_CL
+ } GstVideoColorMatrix;
+ 
+ gboolean gst_video_color_matrix_get_Kr_Kb (GstVideoColorMatrix matrix, gdouble * Kr, gdouble * Kb);
+@@ -85,9 +88,14 @@ gboolean gst_video_color_matrix_get_Kr_Kb (GstVideoColorMatrix matrix, gdouble *
+  *                             100:1 range
+  * @GST_VIDEO_TRANSFER_LOG316: Logarithmic transfer characteristic
+  *                             316.22777:1 range
++ * @GST_VIDEO_TRANSFER_BT2020_10: Gamma 2.2 curve with a linear segment in the lower
++ *                                range. Used for BT.2020 with 10 bits per
++ *                                component. Since: 1.6.
+  * @GST_VIDEO_TRANSFER_BT2020_12: Gamma 2.2 curve with a linear segment in the lower
+  *                                range. Used for BT.2020 with 12 bits per
+  *                                component. Since: 1.6.
++ * @GST_VIDEO_TRANSFER_SMPTE_ST_2084:  SMPTE ST2084 ITU-R  Report BT.2246-5.
++ * @GST_VIDEO_TRANSFER_ARIB_STD_B67: ARIB STD-B67 (HLG))
+  * @GST_VIDEO_TRANSFER_ADOBERGB: Gamma 2.19921875. Since: 1.8
+  *
+  * The video transfer function defines the formula for converting between
+@@ -105,7 +113,10 @@ typedef enum {
+   GST_VIDEO_TRANSFER_GAMMA28,
+   GST_VIDEO_TRANSFER_LOG100,
+   GST_VIDEO_TRANSFER_LOG316,
++  GST_VIDEO_TRANSFER_BT2020_10,
+   GST_VIDEO_TRANSFER_BT2020_12,
++  GST_VIDEO_TRANSFER_SMPTE_ST_2084,
++  GST_VIDEO_TRANSFER_ARIB_STD_B67,
+   GST_VIDEO_TRANSFER_ADOBERGB
+ } GstVideoTransferFunction;
+ 
+diff --git a/gst-libs/gst/video/video-hdr.c b/gst-libs/gst/video/video-hdr.c
+new file mode 100644
+index 0000000..f0bd1d9
+--- /dev/null
++++ b/gst-libs/gst/video/video-hdr.c
+@@ -0,0 +1,214 @@
++/* GStreamer
++ * Copyright (C) <2018> Seungha Yang <seungha.yang@navercorp.com>
++ *
++ * This library is free software; you can redistribute it and/or
++ * modify it under the terms of the GNU Library General Public
++ * License as published by the Free Software Foundation; either
++ * version 2 of the License, or (at your option) any later version.
++ *
++ * This library is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++ * Library General Public License for more details.
++ *
++ * You should have received a copy of the GNU Library General Public
++ * License along with this library; if not, write to the
++ * Free Software Foundation, Inc., 51 Franklin St, Fifth Floor,
++ * Boston, MA 02110-1301, USA.
++ */
++
++#ifdef HAVE_CONFIG_H
++#  include "config.h"
++#endif
++
++#include <string.h>
++#include <stdio.h>
++
++#include "video-hdr.h"
++
++/**
++ * gst_video_mastering_display_metadata_init:
++ * @minfo: a #GstVideoMasteringDisplayMetadata
++ *
++ * Initialize @minfo
++ */
++void
++gst_video_mastering_display_metadata_init (GstVideoMasteringDisplayMetadata *
++    minfo)
++{
++  g_return_if_fail (minfo != NULL);
++
++  memset (minfo, 0, sizeof (GstVideoMasteringDisplayMetadata));
++}
++
++/**
++ * gst_video_mastering_display_metadata_to_caps_string:
++ * @minfo: a #GstVideoMasteringDisplayMetadata
++ * Convert @minfo to its string representation.
++ *
++ * Returns: (transfer full): a pointer to string for
++ * mastering-display-metadata caps field
++ */
++gchar *
++gst_video_mastering_display_metadata_to_caps_string (const
++    GstVideoMasteringDisplayMetadata * minfo)
++{
++  g_return_val_if_fail (minfo != NULL, NULL);
++
++  return g_strdup_printf ("%lf:%lf:%lf:%lf:%lf:%lf:%lf:%lf:%lf:%lf",
++      minfo->Rx, minfo->Ry, minfo->Gx, minfo->Gy, minfo->Bx, minfo->By,
++      minfo->Wx, minfo->Wy, minfo->max_luma, minfo->min_luma);
++}
++
++/**
++ * gst_video_mastering_display_metadata_from_caps_string:
++ * @minfo: a #GstVideoMasteringDisplayMetadata
++ * @mastering: mastering-display-metadata field string from caps
++ *
++ * Parse the value of mastering-display-meta caps field and update @minfo
++ * with the parsed values.
++ *
++ * Returns: %TRUE if @mastering could be parsed
++ */
++gboolean
++    gst_video_mastering_display_metadata_from_caps_string
++    (GstVideoMasteringDisplayMetadata * minfo, const gchar * mastering) {
++  gdouble Rx, Ry;
++  gdouble Gx, Gy;
++  gdouble Bx, By;
++  gdouble Wx, Wy;
++  gdouble max_luma, min_luma;
++
++  g_return_val_if_fail (mastering != NULL, FALSE);
++
++  if (sscanf (mastering, "%lf:%lf:%lf:%lf:%lf:%lf:%lf:%lf:%lf:%lf",
++          &Rx, &Ry, &Gx, &Gy, &Bx, &By, &Wx, &Wy, &max_luma, &min_luma) == 10) {
++    minfo->Rx = Rx;
++    minfo->Ry = Ry;
++    minfo->Gx = Gx;
++    minfo->Gy = Gy;
++    minfo->Bx = Bx;
++    minfo->By = By;
++    minfo->Wx = Wx;
++    minfo->Wy = Wy;
++    minfo->max_luma = max_luma;
++    minfo->min_luma = min_luma;
++    return TRUE;
++  }
++
++  return FALSE;
++}
++
++/**
++ * gst_video_mastering_display_metadata_has_primaries:
++ * @minfo: a #GstVideoMasteringDisplayMetadata
++ *
++ * Validate primaries and white point values
++ *
++ * Returns: %TRUE if @minfo has valid primaries and white point values.
++ */
++gboolean
++gst_video_mastering_display_metadata_has_primaries (const
++    GstVideoMasteringDisplayMetadata * minfo)
++{
++  g_return_val_if_fail (minfo != NULL, FALSE);
++
++  return (minfo->Rx > 0 && minfo->Ry > 0 && minfo->Gx > 0 && minfo->Gy > 0 &&
++      minfo->Bx > 0 && minfo->By > 0 && minfo->Wx > 0 && minfo->Wy > 0);
++}
++
++/**
++ * gst_video_mastering_display_metadata_has_luminance:
++ * @minfo: a #GstVideoMasteringDisplayMetadata
++ *
++ * Validate display mastering luminance
++ *
++ * Returns: %TRUE if @minfo has valid display mastering luminance.
++ */
++gboolean
++gst_video_mastering_display_metadata_has_luminance (const
++    GstVideoMasteringDisplayMetadata * minfo)
++{
++  g_return_val_if_fail (minfo != NULL, FALSE);
++
++  return (minfo->max_luma > 0);
++}
++
++/**
++ * gst_video_mastering_display_metadata_is_equal:
++ * @minfo: a #GstVideoMasteringDisplayMetadata
++ * @other: a #GstVideoMasteringDisplayMetadata
++ *
++ * Checks equality between @minfo and @other.
++ *
++ * Returns: %TRUE if @minfo and @other are equal.
++ */
++gboolean
++gst_video_mastering_display_metadata_is_equal (const
++    GstVideoMasteringDisplayMetadata * minfo,
++    const GstVideoMasteringDisplayMetadata * other)
++{
++  g_return_val_if_fail (minfo != NULL, FALSE);
++  g_return_val_if_fail (other != NULL, FALSE);
++
++  return !memcmp (minfo, other, sizeof (GstVideoMasteringDisplayMetadata));
++}
++
++/**
++ * gst_video_content_light_level_init:
++ * @linfo: a #GstVideoContentLightLevel
++ *
++ * Initialize @linfo
++ */
++void
++gst_video_content_light_level_init (GstVideoContentLightLevel * linfo)
++{
++  g_return_if_fail (linfo != NULL);
++
++  memset (linfo, 0, sizeof (GstVideoContentLightLevel));
++}
++
++/**
++ * gst_video_content_light_level_to_caps_string:
++ * @linfo: a #GstVideoContentLightLevel
++ * Convert @linfo to its string representation.
++ *
++ * Returns: (transfer full): a pointer to string for
++ * content-light-level caps field
++ */
++gchar *
++gst_video_content_light_level_to_caps_string (const GstVideoContentLightLevel *
++    linfo)
++{
++  g_return_val_if_fail (linfo != NULL, NULL);
++
++  return g_strdup_printf ("%u:%u", linfo->maxCLL, linfo->maxFALL);
++}
++
++/**
++ * gst_video_content_light_level_from_caps_string:
++ * @linfo: a #GstVideoContentLightLevel
++ * @level: a content-light-level string from caps
++ *
++ * Parse the value of content-light-level caps field and update @minfo
++ * with the parsed values.
++ *
++ * Returns: %TRUE if @linfo points to valid #GstVideoContentLightLevel.
++ */
++gboolean
++gst_video_content_light_level_from_caps_string (GstVideoContentLightLevel *
++    linfo, const gchar * level)
++{
++  guint maxCLL;
++  guint maxFALL;
++
++  g_return_val_if_fail (level != NULL, FALSE);
++
++  if (sscanf (level, "%u:%u", &maxCLL, &maxFALL) == 2) {
++    linfo->maxCLL = maxCLL;
++    linfo->maxFALL = maxFALL;
++    return TRUE;
++  }
++
++  return FALSE;
++}
+diff --git a/gst-libs/gst/video/video-hdr.h b/gst-libs/gst/video/video-hdr.h
+new file mode 100644
+index 0000000..bdc5868
+--- /dev/null
++++ b/gst-libs/gst/video/video-hdr.h
+@@ -0,0 +1,105 @@
++/* GStreamer
++ * Copyright (C) <2018> Seungha Yang <seungha.yang@navercorp.com>
++ *
++ * This library is free software; you can redistribute it and/or
++ * modify it under the terms of the GNU Library General Public
++ * License as published by the Free Software Foundation; either
++ * version 2 of the License, or (at your option) any later version.
++ *
++ * This library is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++ * Library General Public License for more details.
++ *
++ * You should have received a copy of the GNU Library General Public
++ * License along with this library; if not, write to the
++ * Free Software Foundation, Inc., 51 Franklin St, Fifth Floor,
++ * Boston, MA 02110-1301, USA.
++ */
++
++#ifndef __GST_VIDEO_HDR_H__
++#define __GST_VIDEO_HDR_H__
++
++#include <gst/gst.h>
++#include <gst/video/video-prelude.h>
++
++G_BEGIN_DECLS
++
++typedef struct _GstVideoHDR GstVideoHDR;
++
++/**
++ * GstVideoMasteringDisplayMetadata:
++ * @Rx: red x coordinate
++ * @Ry: red y coordinate
++ * @Gx: green x coordinate
++ * @Gy: green y coordinate
++ * @Bx: blue x coordinate
++ * @By: blue y coordinate
++ * @Wx: white x coordinate
++ * @Wy: white y coordinate
++ * @max_luma: maximum display luminance
++ * @min_luma: minimum display luminance
++ *
++ * Mastering display color volume information defined by SMPTE ST 2086 (HDR meta).
++ */
++typedef struct {
++  gdouble Rx, Ry;
++  gdouble Gx, Gy;
++  gdouble Bx, By;
++  gdouble Wx, Wy;
++  gdouble max_luma, min_luma;
++} GstVideoMasteringDisplayMetadata;
++
++GST_VIDEO_API
++void      gst_video_mastering_display_metadata_init           (GstVideoMasteringDisplayMetadata * minfo);
++
++GST_VIDEO_API
++gchar *   gst_video_mastering_display_metadata_to_caps_string (const GstVideoMasteringDisplayMetadata * minfo);
++
++GST_VIDEO_API
++gboolean  gst_video_mastering_display_metadata_from_caps_string (GstVideoMasteringDisplayMetadata * minfo,
++                                                                 const gchar * mastering);
++
++GST_VIDEO_API
++gboolean  gst_video_mastering_display_metadata_has_primaries (const GstVideoMasteringDisplayMetadata * minfo);
++
++GST_VIDEO_API
++gboolean  gst_video_mastering_display_metadata_has_luminance (const GstVideoMasteringDisplayMetadata * minfo);
++
++GST_VIDEO_API
++gboolean  gst_video_mastering_display_metadata_is_equal      (const GstVideoMasteringDisplayMetadata * minfo,
++                                                              const GstVideoMasteringDisplayMetadata * other);
++
++/**
++ * GstVideoContentLightMeta:
++ * @maxCLL: Maximum Content Light Level (cd/m^2)
++ * @maxFALL: Maximum Frame-Average Light Leve (cd/m^2)
++ *
++ * Content light level information specified in CEA-861.3, Appendix A.
++ */
++typedef struct {
++  guint maxCLL;
++  guint maxFALL;
++} GstVideoContentLightLevel;
++
++void      gst_video_content_light_level_init                    (GstVideoContentLightLevel * linfo);
++
++GST_VIDEO_API
++gchar *   gst_video_content_light_level_to_caps_string    (const GstVideoContentLightLevel * linfo);
++
++GST_VIDEO_API
++gboolean  gst_video_content_light_level_from_caps_string  (GstVideoContentLightLevel * linfo,
++                                                           const gchar * level);
++
++struct _GstVideoHDR {
++  GstVideoMasteringDisplayMetadata mastering_display_metadata;
++  GstVideoContentLightLevel content_light_level;
++
++  /*< private >*/
++  /* Padding for future extension */
++  gpointer _gst_reserved[GST_PADDING];
++};
++
++G_END_DECLS
++
++#endif
+diff --git a/gst-libs/gst/video/video-prelude.h b/gst-libs/gst/video/video-prelude.h
+new file mode 100644
+index 0000000..f637215
+--- /dev/null
++++ b/gst-libs/gst/video/video-prelude.h
+@@ -0,0 +1,34 @@
++/* GStreamer Video Library
++ * Copyright (C) 2018 GStreamer developers
++ *
++ * video-prelude.h: prelude include header for gst-video library
++ *
++ * This library is free software; you can redistribute it and/or
++ * modify it under the terms of the GNU Library General Public
++ * License as published by the Free Software Foundation; either
++ * version 2 of the License, or (at your option) any later version.
++ *
++ * This library is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++ * Library General Public License for more details.
++ *
++ * You should have received a copy of the GNU Library General Public
++ * License along with this library; if not, write to the
++ * Free Software Foundation, Inc., 51 Franklin St, Fifth Floor,
++ * Boston, MA 02110-1301, USA.
++ */
++
++#ifndef __GST_VIDEO_PRELUDE_H__
++#define __GST_VIDEO_PRELUDE_H__
++
++#include <gst/gst.h>
++
++#ifdef BUILDING_GST_VIDEO
++#define GST_VIDEO_API GST_API_EXPORT         /* from config.h */
++#else
++//#define GST_VIDEO_API GST_API_IMPORT
++#define GST_VIDEO_API
++#endif
++
++#endif /* __GST_VIDEO_PRELUDE_H__ */
+diff --git a/gst-libs/gst/video/video.h b/gst-libs/gst/video/video.h
+index f890eae..d56c085 100644
+--- a/gst-libs/gst/video/video.h
++++ b/gst-libs/gst/video/video.h
+@@ -33,6 +33,7 @@ typedef struct _GstVideoAlignment GstVideoAlignment;
+ #include <gst/video/video-converter.h>
+ #include <gst/video/video-scaler.h>
+ #include <gst/video/video-multiview.h>
++#include <gst/video/video-hdr.h>
+ 
+ G_BEGIN_DECLS
+ 
+-- 
+1.9.1
+

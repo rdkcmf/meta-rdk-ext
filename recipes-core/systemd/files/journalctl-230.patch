@@ -1,0 +1,30 @@
+Date: May 08 08:19:02 2018
+
+From: 1c6933a3e3fc560c852f888b058fce7f51694281 May 09 20:55:06 2018
+
+Subject: [PATCH] DELIA-27630 : Correcting timestamp format for Morty builds
+
+	timestamp format was different in Daisy and Morty builds
+
+Source: COMCAST
+
+License: LGPL-2.1-or-later
+
+Upstream-Status: Pending
+
+Signed-off-by: gtheres <Geethu_TheresK2@comcast.com>
+---
+
+diff --git a/src/shared/logs-show.c b/src/shared/logs-show.c
+index 9351b85ee..2ff999352 100644
+--- a/src/shared/logs-show.c
++++ b/src/shared/logs-show.c
+@@ -358,7 +358,7 @@ static int output_short(
+                         break;
+ 
+                 case OUTPUT_SHORT_PRECISE:
+-                        r = strftime(buf, sizeof(buf), "%b %d %H:%M:%S", gettime_r(&t, &tm));
++                        r = strftime(buf, sizeof(buf), "%Y %b %d %H:%M:%S", localtime_r(&t, &tm));
+                         if (r > 0)
+                                 snprintf(buf + strlen(buf), sizeof(buf) - strlen(buf), ".%06llu", (unsigned long long) (x % USEC_PER_SEC));
+                         break;

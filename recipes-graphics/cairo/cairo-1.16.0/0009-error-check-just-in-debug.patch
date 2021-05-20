@@ -1,0 +1,31 @@
+From c9e645cd7a15d5a7079ae7402bab874bb707abab Wed Apr 06 11:19:01 2016
+From: wouterlucas <wouter@wouterlucas.com>
+Date:  	Wed Apr 06 11:19:01 2016 -0700
+Subject: [PATCH] cairo: cairo to check for gl errors only in debug mode
+Source: OPENSOURCE
+License: "(MPL-1.1 | LGPLv2.1) & GPLv3+"
+Upstream-Status: Backport
+Signed-off-by: mselva006c <mani_selvaraj@comcast.com>
+
+---
+diff --git a/src/cairo-gl-private.h b/src/cairo-gl-private.h
+index ab87de9..60b81f8 100644
+--- a/src/cairo-gl-private.h
++++ b/src/cairo-gl-private.h
+@@ -412,12 +412,16 @@ typedef struct _cairo_gl_font {
+ static cairo_always_inline GLenum
+ _cairo_gl_get_error (void)
+ {
++#if (DEBUG_GL)
+     GLenum err = glGetError();
+ 
+     if (unlikely (err))
+         while (glGetError ());
+ 
+     return err;
++#else
++    return 0;
++#endif
+ }
+ 
+ static inline cairo_device_t *

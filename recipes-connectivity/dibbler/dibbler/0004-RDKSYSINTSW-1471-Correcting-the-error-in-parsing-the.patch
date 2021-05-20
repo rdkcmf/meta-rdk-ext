@@ -1,0 +1,32 @@
+From 1421419431fbb0e12cf70e4ed5438db1339d934c Mon Sep 17 00:00:00 2001
+From: skv01 <shibukv@tataelxsi.co.in>
+Date: Mon, 1 Dec 2014 18:49:20 -0500
+Subject: [PATCH 4/9] RDKSYSINTSW-1471 : Correcting the error in parsing the
+ client.conf file Reason for change: Correcting the error in parsing the
+ client.conf file Test Procedure: Verify /var/lib/dibbler/client-duid to
+ verify whether the DUID is generated using the eSTB MAC Address Risks: Low.
+ Applicable only for eSTB IPV6 provisioned boxes. Signed-off-by: skv01
+ <shibukv@tataelxsi.co.in>
+
+Change-Id: I0a60f170229653e405954b303c81470084355039
+---
+ CfgMgr/CfgMgr.cpp | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/CfgMgr/CfgMgr.cpp b/CfgMgr/CfgMgr.cpp
+index f75e0b9..2ccba3d 100644
+--- a/CfgMgr/CfgMgr.cpp
++++ b/CfgMgr/CfgMgr.cpp
+@@ -200,8 +200,8 @@ bool TCfgMgr::setDUID(const std::string& filename, TIfaceMgr & ifaceMgr) {
+                interfaceName = strtok_r(NULL, " ", &tempConfigValue);
+                break ;
+            }
+-           fclose(dibblerClientConfPtr);
+        }
++       fclose(dibblerClientConfPtr);
+     }
+ 
+     if ( NULL != interfaceName ) {
+-- 
+2.3.1
+

@@ -1,0 +1,48 @@
+Date: 2016-09-12 05:07:03 +0900
+
+From: a8e5770edd2fb8e949129ec5f72b58c826a990c9 2016-09-19 15:41:16 +0900
+
+Subject: [PATCH] RDK-17052: Fixes building with musl libc 
+
+	Fixed a following build issue by including <limits.h> for UINT_MAX:
+	| key.dns_resolver.c: In function 'afsdb_hosts_to_addrs':
+	| key.dns_resolver.c:374:21: error: 'UINT_MAX' undeclared (first use in this
+	function)
+	|   unsigned int ttl = UINT_MAX, rr_ttl;
+	|                      ^~~~~~~~
+	| key.dns_resolver.c:374:21: note: each undeclared identifier is reported
+	only once for each function it appears in
+	| key.dns_resolver.c: In function 'dns_query_afsdb':
+	| key.dns_resolver.c:456:22: error: 'ULONG_MAX' undeclared (first use in
+	this function)
+	|   unsigned long ttl = ULONG_MAX;
+
+	This patch is back-ported from keyutils upstream, since the 1.5.9 is still
+	the latest release.
+
+Source: GITHUB
+
+License: LGPL-2.1-or-later
+
+Upstream-Status: Submitted [ http://git.yoctoproject.org/cgit/cgit.cgi/meta-ivi/commit/meta-ivi/recipes-support-ivi/keyutils/keyutils/0001-Include-limits.h-for-UINT_MAX.patch?id=a8e5770edd2fb8e949129ec5f72b58c826a990c9 ]
+
+Signed-off-by: Ming Liu <peter.x.liu@external.atlascopco.com>
+---
+ key.dns_resolver.c | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/key.dns_resolver.c b/key.dns_resolver.c
+index c2a9fe5..9c9d458 100644
+--- a/key.dns_resolver.c
++++ b/key.dns_resolver.c
+@@ -42,6 +42,7 @@
+ #include <netinet/in.h>
+ #include <arpa/nameser.h>
+ #include <arpa/inet.h>
++#include <limits.h>
+ #include <resolv.h>
+ #include <getopt.h>
+ #include <sys/types.h>
+-- 
+1.9.1
+

@@ -1,0 +1,98 @@
+Date: Jun 02 20:16:54 2017
+
+From: 9fd44b8e8495a06a52aa39dcd8f5957cb8c33e8d Jun 05 16:56:08 2017 
+
+Subject: [PATCH] RDK-18470,RDK-19106 : yocto 2.2: xfsprogs recipe is blacklisted
+
+	xfsprogs: drop configure check for aio
+	It's unused and breaks compilation with uclibc.
+
+Source: OPENEMBEDDED
+
+License: LGPL-2.1-or-later
+
+Upstream-Status: Submitted [ https://patches.linaro.org/patch/84111/ ] 
+
+Signed-off-by: Khem Raj <raj.khem@gmail.com>
+---
+Index: xfsprogs-4.8.0/libxcmd/Makefile
+===================================================================
+--- xfsprogs-4.8.0.orig/libxcmd/Makefile
++++ xfsprogs-4.8.0/libxcmd/Makefile
+@@ -30,10 +30,21 @@ LCFLAGS += -DENABLE_EDITLINE
+ LTLIBS += $(LIBEDITLINE) $(LIBTERMCAP)
+ endif
+ 
++ifeq ($(ENABLE_BLKID),yes)
++LCFLAGS += -DENABLE_BLKID
++LTLIBS += $(LIBBLKID)
++endif
++
++LTLIBS += $(LIBXFS)
++
+ default: ltdepend $(LTLIBRARY)
+ 
+ include $(BUILDRULES)
+ 
+-install install-dev: default
++install: default
++	$(INSTALL_LTLIB)
++
++install-dev: default
++	$(INSTALL_LTLIB_DEV)
+ 
+ -include .ltdep
+Index: xfsprogs-4.8.0/libxfs/Makefile
+===================================================================
+--- xfsprogs-4.8.0.orig/libxfs/Makefile
++++ xfsprogs-4.8.0/libxfs/Makefile
+@@ -137,6 +137,7 @@ include $(BUILDRULES)
+ 
+ install: default
+ 	$(INSTALL) -m 755 -d $(PKG_INC_DIR)
++	$(INSTALL_LTLIB)
+ 
+ install-headers: $(addsuffix -hdrs, $(PKGHFILES))
+ 
+Index: xfsprogs-4.8.0/libxlog/Makefile
+===================================================================
+--- xfsprogs-4.8.0.orig/libxlog/Makefile
++++ xfsprogs-4.8.0/libxlog/Makefile
+@@ -19,6 +19,10 @@ default: ltdepend $(LTLIBRARY)
+ 
+ include $(BUILDRULES)
+ 
+-install install-dev: default
++install: default
++	$(INSTALL_LTLIB)
++
++install-dev: default
++	$(INSTALL_LTLIB_DEV)
+ 
+ -include .ltdep
+Index: xfsprogs-4.8.0/io/Makefile
+===================================================================
+--- xfsprogs-4.8.0.orig/io/Makefile
++++ xfsprogs-4.8.0/io/Makefile
+@@ -13,7 +13,7 @@ CFILES = init.c \
+ 	mmap.c open.c parent.c pread.c prealloc.c pwrite.c seek.c shutdown.c \
+ 	sync.c truncate.c reflink.c
+ 
+-LLDLIBS = $(LIBXCMD) $(LIBHANDLE)
++LLDLIBS = $(LIBXCMD) $(LIBHANDLE) $(LIBUUID)
+ LTDEPENDENCIES = $(LIBXCMD) $(LIBHANDLE)
+ LLDFLAGS = -static-libtool-libs
+ 
+Index: xfsprogs-4.8.0/quota/Makefile
+===================================================================
+--- xfsprogs-4.8.0.orig/quota/Makefile
++++ xfsprogs-4.8.0/quota/Makefile
+@@ -14,7 +14,7 @@ CFILES += $(PKG_PLATFORM).c
+ PCFILES = darwin.c freebsd.c irix.c linux.c
+ LSRCFILES = $(shell echo $(PCFILES) | sed -e "s/$(PKG_PLATFORM).c//g")
+ 
+-LLDLIBS = $(LIBXCMD)
++LLDLIBS = $(LIBXCMD) $(LIBUUID)
+ LTDEPENDENCIES = $(LIBXCMD)
+ LLDFLAGS = -static
+ 

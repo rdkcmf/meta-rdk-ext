@@ -1,0 +1,83 @@
+From 52e5ea8a66d82a594927ef6e00671cabafd15531 Mon Sep 17 00:00:00 2001
+From: Gurdal Oruklu <gurdal_oruklu@comcast.com>
+Date: Fri, 21 Dec 2018 19:52:19 +0000
+Subject: [PATCH] [EME] add SVP support
+
+Signed-off-by: Gurdal Oruklu <gurdal_oruklu@comcast.com>
+---
+ .../gstreamer/MediaPlayerPrivateGStreamer.cpp      |   3 +
+ .../mse/MediaPlayerPrivateGStreamerMSE.cpp         |  19 +++-
+ Source/cmake/OptionsWPE.cmake                      |   6 ++
+ 3 files changed, 28 insertions(+), 1 deletions(-)
+
+diff --git a/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp b/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp
+index da04b4a524f..fac2b21ae3c 100644
+--- a/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp
++++ b/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp
+@@ -2436,6 +2436,9 @@ void MediaPlayerPrivateGStreamer::createGSTPlayBin()
+     m_videoSink = gst_element_factory_create(westerosfactory.get(), "WesterosVideoSink");
+     g_object_set(m_pipeline.get(), "video-sink", m_videoSink.get(), nullptr);
+     g_object_set(G_OBJECT(m_videoSink.get()), "zorder",0.0f, nullptr);
++#if USE(SVP)
++    g_object_set(G_OBJECT(m_videoSink.get()), "secure-video",true, nullptr);
++#endif
+ 
+     if (m_videoSink)
+ #if PLATFORM(INTEL_CE)
+diff --git a/Source/WebCore/platform/graphics/gstreamer/mse/MediaPlayerPrivateGStreamerMSE.cpp b/Source/WebCore/platform/graphics/gstreamer/mse/MediaPlayerPrivateGStreamerMSE.cpp
+index 5b3a68f56f8..b8d91e1b244 100644
+--- a/Source/WebCore/platform/graphics/gstreamer/mse/MediaPlayerPrivateGStreamerMSE.cpp
++++ b/Source/WebCore/platform/graphics/gstreamer/mse/MediaPlayerPrivateGStreamerMSE.cpp
+@@ -848,7 +848,22 @@ const static HashSet<AtomicString>& codecSet()
+             const char* capsString;
+             Vector<AtomicString> webkitCodecs;
+         };
+-
++#if USE(SVP)
++        std::array<GstCapsWebKitMapping, 11> mapping = { {
++            { VideoDecoder, "video/x-h264,  profile=(string){ constrained-baseline, baseline }", { "x-h264" } },
++            { VideoDecoder, "video/x-h264, stream-format=avc", { "avc*"} },
++            // An autoplugged h264parse in decodebin can convert from byte-stream to avc.
++            { VideoDecoder, "video/x-h264, stream-format=byte-stream", { "avc*"} },
++            { VideoDecoder, "video/x-h265", { "hev1*", "hvc1*", "x-h265"} },
++            { VideoDecoder, "video/mpeg, mpegversion=(int){1,2}, systemstream=(boolean)false", { "mpeg" } },
++            { VideoDecoder, "video/x-vp8", { "vp8", "x-vp8" } },
++            { VideoDecoder, "video/x-vp9", { "vp9", "x-vp9" } },
++            { AudioDecoder, "audio/x-vorbis", { "vorbis", "x-vorbis" } },
++            { AudioDecoder, "audio/x-opus", { "opus", "x-opus" } },
++            { AudioDecoder, "audio/x-ac3", { } },
++            { AudioDecoder, "audio/x-eac3", {"audio/x-ac3"} }
++        } };
++#else
+         std::array<GstCapsWebKitMapping, 8> mapping = { {
+             { VideoDecoder, "video/x-h264,  profile=(string){ constrained-baseline, baseline }", { "x-h264" } },
+             { VideoDecoder, "video/x-h264, stream-format=avc", { "avc*"} },
+@@ -860,7 +875,7 @@ const static HashSet<AtomicString>& codecSet()
+             { AudioDecoder, "audio/x-vorbis", { "vorbis", "x-vorbis" } },
+             { AudioDecoder, "audio/x-opus", { "opus", "x-opus" } }
+         } };
+-
++#endif
+         for (auto& current : mapping) {
+             GList* factories = nullptr;
+             switch (current.elementType) {
+diff --git a/Source/cmake/OptionsWPE.cmake b/Source/cmake/OptionsWPE.cmake
+index 369c6d86c02..1e11f34004a 100644
+--- a/Source/cmake/OptionsWPE.cmake
++++ b/Source/cmake/OptionsWPE.cmake
+@@ -148,6 +148,12 @@ if (ENABLE_SUBTLE_CRYPTO)
+     endif ()
+ endif ()
+ 
++if ( ENABLE_ENCRYPTED_MEDIA )
++    if (ENABLE_SVP)
++        add_definitions(-DUSE_SVP=1)
++    endif()
++endif ()
++
+ add_definitions(-DBUILDING_WPE__=1)
+ add_definitions(-DGETTEXT_PACKAGE="WPE")
+ add_definitions(-DDATA_DIR="${CMAKE_INSTALL_DATADIR}")
+-- 
+2.16.2
+

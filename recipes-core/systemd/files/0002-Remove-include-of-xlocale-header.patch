@@ -1,0 +1,28 @@
+From 25ece73913623df3b214cf0135c1e1f13efcb594 Mon Sep 17 00:00:00 2001
+From: mselva006c <mani_selvaraj@comcast.com>
+Date: Fri, 5 Mar 2021 21:02:17 +0000
+Subject: [PATCH] Remove include of xlocale header
+         
+         Remove include of xlocale.h as it it not provided by glibc 2.31         
+
+Source: COMCAST
+License: LGPL-2.1-or-later
+Upstream-Status: Inappropriate
+
+Signed-off-by: mselva006c <mani_selvaraj@comcast.com>
+---
+ src/basic/parse-util.c | 1 -
+ 1 file changed, 1 deletion(-)
+
+diff --git a/src/basic/parse-util.c b/src/basic/parse-util.c
+index 6c11b605a9..ef0b267e21 100644
+--- a/src/basic/parse-util.c
++++ b/src/basic/parse-util.c
+@@ -23,7 +23,6 @@
+ #include <stdio.h>
+ #include <stdlib.h>
+ #include <string.h>
+-#include <xlocale.h>
+ 
+ #include "alloc-util.h"
+ #include "extract-word.h"

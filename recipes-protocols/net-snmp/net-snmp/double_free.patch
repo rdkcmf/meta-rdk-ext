@@ -1,0 +1,189 @@
+Date: Jan 20 19:25:53 2016
+
+From: 364d23018cfd6a82d16a6d83529616ed07594cfd Jan 20 22:01:54 2016
+
+Subject: [PATCH] ARRISXB3-4114:Recreated patches from rdkb repo
+
+	Bringing in the patches from rdkb/ccsp repo.
+
+Source: COMCAST
+
+License: BSD-2-Clause
+
+Upstream-Status: Pending
+
+Signed-off-by: Balaji Punnuru <balaji_punnuru@cable.comcast.com>
+---
+
+Index: net-snmp-5.7.2/agent/mibgroup/agentx/subagent.c
+===================================================================
+--- net-snmp-5.7.2.orig/agent/mibgroup/agentx/subagent.c
++++ net-snmp-5.7.2/agent/mibgroup/agentx/subagent.c
+@@ -537,17 +537,18 @@ _invalid_op_and_magic(int op, ns_subagen
+ 
+ int
+ handle_subagent_response(int op, netsnmp_session * session, int reqid,
+-                         netsnmp_pdu *pdu, void *magic)
++                         netsnmp_pdu *_pdu, void *magic)
+ {
+     ns_subagent_magic *smagic = (ns_subagent_magic *) magic;
+     netsnmp_variable_list *u = NULL, *v = NULL;
+     int             rc = 0;
++    netsnmp_pdu *pdu=NULL;
+ 
+     if (_invalid_op_and_magic(op, magic)) {
+         return 1;
+     }
+ 
+-    pdu = snmp_clone_pdu(pdu);
++    pdu = snmp_clone_pdu(_pdu);
+     DEBUGMSGTL(("agentx/subagent",
+                 "handling AgentX response (cmd 0x%02x orig_cmd 0x%02x)"
+                 " (req=0x%x,trans=0x%x,sess=0x%x)\n",
+@@ -626,11 +627,12 @@ handle_subagent_response(int op, netsnmp
+ #ifndef NETSNMP_NO_WRITE_SUPPORT
+ int
+ handle_subagent_set_response(int op, netsnmp_session * session, int reqid,
+-                             netsnmp_pdu *pdu, void *magic)
++                             netsnmp_pdu *_pdu, void *magic)
+ {
+     netsnmp_session *retsess;
+     struct agent_netsnmp_set_info *asi;
+     int result;
++    netsnmp_pdu *pdu=NULL;
+ 
+     if (op != NETSNMP_CALLBACK_OP_RECEIVED_MESSAGE || magic == NULL) {
+         return 1;
+@@ -639,9 +641,9 @@ handle_subagent_set_response(int op, net
+     DEBUGMSGTL(("agentx/subagent",
+                 "handling agentx subagent set response (mode=%d,req=0x%x,"
+                 "trans=0x%x,sess=0x%x)\n",
+-                (unsigned)pdu->command, (unsigned)pdu->reqid,
+-		(unsigned)pdu->transid, (unsigned)pdu->sessid));
+-    pdu = snmp_clone_pdu(pdu);
++                (unsigned)_pdu->command, (unsigned)_pdu->reqid,
++		(unsigned)_pdu->transid, (unsigned)_pdu->sessid));
++    pdu = snmp_clone_pdu(_pdu);
+ 
+     asi = (struct agent_netsnmp_set_info *) magic;
+     retsess = asi->sess;
+@@ -674,13 +676,23 @@ handle_subagent_set_response(int op, net
+         snmp_free_varbind(pdu->variables);
+         pdu->variables = NULL;  /* the variables were added by us */
+     }
+-
+-    netsnmp_assert(retsess != NULL);
+-    pdu->command = AGENTX_MSG_RESPONSE;
+-    pdu->version = retsess->version;
+-
++    if(retsess != NULL)
++    {
++    	netsnmp_assert(retsess != NULL);
++        if(pdu != NULL)
++    	{
++	    	pdu->command = AGENTX_MSG_RESPONSE;
++	        pdu->version = retsess->version;
++		}
++		else
++		{
++			printf("SNMP : PDU NULL \n");
++		}
++    }
+     if (!snmp_send(retsess, pdu)) {
+-        snmp_free_pdu(pdu);
++        if(pdu != NULL)
++        	snmp_free_pdu(pdu);
++		pdu=NULL;
+     }
+     DEBUGMSGTL(("agentx/subagent", "  FINISHED\n"));
+     return 1;
+Index: net-snmp-5.7.2/snmplib/snmp_api.c
+===================================================================
+--- net-snmp-5.7.2.orig/snmplib/snmp_api.c
++++ net-snmp-5.7.2/snmplib/snmp_api.c
+@@ -5083,6 +5083,7 @@ void
+ snmp_free_pdu(netsnmp_pdu *pdu)
+ {
+     struct snmp_secmod_def *sptr;
++    static netsnmp_pdu *pdu_temp=NULL;
+ 
+     if (!pdu)
+         return;
+@@ -5111,6 +5112,18 @@ snmp_free_pdu(netsnmp_pdu *pdu)
+         sptr->pdu_free != NULL) {
+         (*sptr->pdu_free) (pdu);
+     }
++
++       /*Added below lines to make sure if pdu variable is zero or
++	equal to the previous one than no need to free it.*/
++
++	if(pdu->variables==0)
++	{
++	     return;
++	}
++	else if((pdu_temp) && (pdu_temp->variables==pdu->variables)&&(pdu_temp == pdu))
++	{
++    	     return;
++        }
+     snmp_free_varbind(pdu->variables);
+     SNMP_FREE(pdu->enterprise);
+     SNMP_FREE(pdu->community);
+@@ -5120,7 +5133,10 @@ snmp_free_pdu(netsnmp_pdu *pdu)
+     SNMP_FREE(pdu->securityName);
+     SNMP_FREE(pdu->transport_data);
+     memset(pdu, 0, sizeof(netsnmp_pdu));
++    pdu_temp = pdu;
++
+     free((char *) pdu);
++    return;
+ }
+ 
+ netsnmp_pdu    *
+@@ -6631,7 +6647,7 @@ netsnmp_oid_find_prefix(const oid * in_n
+     min_size = SNMP_MIN(len1, len2);
+     for(i = 0; i < (int)min_size; i++) {
+         if (in_name1[i] != in_name2[i])
+-            return i;    /* 'í' is the first differing subidentifier
++            return i;    /* '\ED' is the first differing subidentifier
+                             So the common prefix is 0..(i-1), of length i */
+     }
+     return min_size;	/* The shorter OID is a prefix of the longer, and
+Index: net-snmp-5.7.2/snmplib/snmp_client.c
+===================================================================
+--- net-snmp-5.7.2.orig/snmplib/snmp_client.c
++++ net-snmp-5.7.2/snmplib/snmp_client.c
+@@ -352,7 +352,7 @@ _clone_pdu_header(netsnmp_pdu *pdu)
+     struct snmp_secmod_def *sptr;
+     int ret;
+ 
+-    newpdu = (netsnmp_pdu *) malloc(sizeof(netsnmp_pdu));
++    newpdu = (netsnmp_pdu *) calloc(1, sizeof(netsnmp_pdu));
+     if (!newpdu)
+         return NULL;
+     memmove(newpdu, pdu, sizeof(netsnmp_pdu));
+@@ -554,6 +554,8 @@ _clone_pdu(netsnmp_pdu *pdu, int drop_er
+ {
+     netsnmp_pdu    *newpdu;
+     newpdu = _clone_pdu_header(pdu);
++    if(!newpdu)
++       return NULL;
+     newpdu = _copy_pdu_vars(pdu, newpdu, drop_err, 0, 10000);   /* skip none, copy all */
+ 
+     return newpdu;
+Index: net-snmp-5.7.2/agent/mibgroup/agentx/client.c
+===================================================================
+--- net-snmp-5.7.2.orig/agent/mibgroup/agentx/client.c
++++ net-snmp-5.7.2/agent/mibgroup/agentx/client.c
+@@ -118,11 +118,7 @@ agentx_open_session(netsnmp_session * ss
+         return 0;
+     timeout = netsnmp_ds_get_int(NETSNMP_DS_APPLICATION_ID,
+                                    NETSNMP_DS_AGENT_AGENTX_TIMEOUT);
+-    if (timeout < 0) 
+-    pdu->time = 0;
+-    else
+-	/* for master TIMEOUT is usec, but Agentx Open specifies sec */
+-    	pdu->time = timeout/ONE_SEC;
++    pdu->time = 20;
+ 
+     snmp_add_var(pdu, version_sysoid, version_sysoid_len,
+ 		 's', "Net-SNMP AgentX sub-agent");

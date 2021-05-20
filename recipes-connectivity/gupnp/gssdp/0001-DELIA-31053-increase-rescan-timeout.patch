@@ -1,0 +1,25 @@
+From d9a13bbbe1b3944b1ca8ce588edd942792668f01 Mon Sep 17 00:00:00 2001
+From: jkuria217 <Josekutty_Kuriakose@cable.comcast.com>
+Date: Fri, 5 Jun 2020 21:58:59 +0000
+Subject: [PATCH] DELIA-31053 increase rescan timeout
+
+---
+ libgssdp/gssdp-resource-browser.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/libgssdp/gssdp-resource-browser.c b/libgssdp/gssdp-resource-browser.c
+index 1b3966c..ad04042 100644
+--- a/libgssdp/gssdp-resource-browser.c
++++ b/libgssdp/gssdp-resource-browser.c
+@@ -43,9 +43,9 @@
+ #include <stdio.h>
+ #include <stdlib.h>
+ 
+-#define RESCAN_TIMEOUT 5 /* 5 seconds */
++#define RESCAN_TIMEOUT 8 /* 8 seconds */
+ #define MAX_DISCOVERY_MESSAGES 3
+-#define DISCOVERY_FREQUENCY    500 /* 500 ms */
++#define DISCOVERY_FREQUENCY    5000 /* 5000 ms */
+ 
+ struct _GSSDPResourceBrowserPrivate {
+         GSSDPClient *client;

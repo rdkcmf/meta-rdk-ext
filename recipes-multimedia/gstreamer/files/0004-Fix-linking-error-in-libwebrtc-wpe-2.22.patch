@@ -1,0 +1,37 @@
+From fffb9f40c058ea4437ef5a5a7f8ed25b2f27bd51 Mon Sep 17 00:00:00 2001
+From: Siva Sankar Raja <sivasankar_raja@comcast.com>
+Date: Fri, 5 Jul 2019 22:25:34 +0000
+Subject: [PATCH] Fix linking error in wpe-2.22
+Source: COMCAST
+License: GPLV2
+Upstream-Status: None
+Signed-off-by: Siva Sankar Raja <sivasankar_raja@comcast.com>
+
+---
+ gst-libs/gst/audio/audio-converter.h | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/gst-libs/gst/audio/audio-converter.h b/gst-libs/gst/audio/audio-converter.h
+index 1f6ddc5..b79095c 100644
+--- a/gst-libs/gst/audio/audio-converter.h
++++ b/gst-libs/gst/audio/audio-converter.h
+@@ -26,6 +26,8 @@
+ #include <gst/gst.h>
+ #include <gst/audio/audio.h>
+ 
++G_BEGIN_DECLS
++
+ typedef struct _GstAudioConverter GstAudioConverter;
+ 
+ /**
+@@ -107,5 +109,6 @@ gboolean             gst_audio_converter_samples         (GstAudioConverter * co
+                                                           GstAudioConverterFlags flags,
+                                                           gpointer in[], gsize in_frames,
+                                                           gpointer out[], gsize out_frames);
++G_END_DECLS
+ 
+ #endif /* __GST_AUDIO_CONVERTER_H__ */
+-- 
+2.14.2
+
+

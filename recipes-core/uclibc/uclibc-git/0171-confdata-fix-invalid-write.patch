@@ -1,0 +1,41 @@
+Date: Sat, 17 Oct 2015 11:58:44 -0400
+
+From: 34983ba9755185046484acafeedb8aae93de9951 Mon Sep 17 00:00:00 2001
+
+Subject: [PATCH 171/195] confdata: fix invalid write
+
+	stndup will copy *up to* the size parameter, not allocate a buffer of
+	that size, so the buffer is not necessarily large enough to fit the
+	".old" extension.
+
+	Caught with glibc's MALLOC_CHECK_=3.
+
+Source: OPENEMBEDDED
+
+License: LGPL-2.1-or-later
+
+Upstream-Status: Submitted [ https://mailman.uclibc-ng.org/pipermail/devel/2015-October/000523.html ]
+
+Signed-off-by: Ben Boeckel <mathstuf@gmail.com>
+---
+
+ extra/config/confdata.c | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/extra/config/confdata.c b/extra/config/confdata.c
+index 61c91c2..94c63c0 100644
+--- a/extra/config/confdata.c
++++ b/extra/config/confdata.c
+@@ -814,7 +814,8 @@ next:
+ 	fclose(out);
+ 
+ 	if (*tmpname) {
+-		dirname = strndup(basename, strlen(basename) + 4);
++		dirname = malloc(strlen(basename) + 4 + 1);
++		strcpy(dirname, basename);
+ 		strcat(dirname, ".old");
+ 		rename(newname, dirname);
+ 		free(dirname);
+-- 
+2.6.3
+

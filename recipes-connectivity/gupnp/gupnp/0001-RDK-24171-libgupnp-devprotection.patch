@@ -1,0 +1,358 @@
+From 460f22a060f6ea3439c6f9ee123068ee292ebd0a Mon Sep 17 00:00:00 2001
+From: jkuria217 <Josekutty_Kuriakose@cable.comcast.com>
+Date: Thu, 18 Jun 2020 03:18:48 +0000
+Subject: [PATCH] RDK-24171-libgupnp-devprotection
+
+---
+ libgupnp/gupnp-context.c | 190 +++++++++++++++++++++++++++++++++++++--
+ libgupnp/gupnp-context.h |  22 +++++
+ 2 files changed, 207 insertions(+), 5 deletions(-)
+
+Index: gupnp-1.2.2/libgupnp/gupnp-context.c
+===================================================================
+--- gupnp-1.2.2.orig/libgupnp/gupnp-context.c
++++ gupnp-1.2.2/libgupnp/gupnp-context.c
+@@ -62,6 +62,9 @@
+ 
+ #define GUPNP_CONTEXT_DEFAULT_LANGUAGE "en"
+ 
++char        *ssl_cert_file = NULL;
++char        *ssl_key_file  = NULL;
++
+ static void
+ gupnp_acl_server_handler (SoupServer *server,
+                           SoupMessage *msg,
+@@ -88,6 +91,8 @@ struct _GUPnPContextPrivate {
+         GList       *host_path_datas;
+ 
+         GUPnPAcl    *acl;
++        char        *ssl_cert_file;
++        char        *ssl_key_file;
+ };
+ typedef struct _GUPnPContextPrivate GUPnPContextPrivate;
+ 
+@@ -107,7 +112,9 @@ enum {
+         PROP_SESSION,
+         PROP_SUBSCRIPTION_TIMEOUT,
+         PROP_DEFAULT_LANGUAGE,
+-        PROP_ACL
++        PROP_ACL,
++        PROP_SSL_CERT,
++        PROP_SSL_KEY
+ };
+ 
+ typedef struct {
+@@ -164,6 +171,17 @@ make_server_id (GSSDPUDAVersion uda_vers
+                                 VERSION);
+ #endif
+ }
++
++
++void soup_err_log_func (SoupLogger *logger,
++                      SoupLoggerLogLevel level,
++                      char direction,
++                      const char *data,
++                      gpointer user_data)
++{
++     fprintf(stderr, "%c %s \n", direction, data);
++
++}
+ static void
+ gupnp_context_init (GUPnPContext *context)
+ {
+@@ -212,6 +230,10 @@ gupnp_context_initable_init (GInitable
+                 logger = soup_logger_new (SOUP_LOGGER_LOG_BODY, -1);
+                 soup_session_add_feature (priv->session,
+                                           SOUP_SESSION_FEATURE (logger));
++                soup_logger_set_printer (logger,
++                         soup_err_log_func,
++                         NULL,
++                         NULL);
+         }
+ 
+         /* Create the server already if the port is not null*/
+@@ -269,7 +291,12 @@ gupnp_context_set_property (GObject
+                 break;
+         case PROP_ACL:
+                 gupnp_context_set_acl (context, g_value_get_object (value));
+-
++                break;
++        case PROP_SSL_CERT:
++                priv->ssl_cert_file= g_value_get_string(value);
++                break;
++        case PROP_SSL_KEY:
++                priv->ssl_key_file= g_value_get_string(value);
+                 break;
+         default:
+                 G_OBJECT_WARN_INVALID_PROPERTY_ID (object, property_id, pspec);
+@@ -313,7 +340,14 @@ gupnp_context_get_property (GObject    *
+         case PROP_ACL:
+                 g_value_set_object (value,
+                                     gupnp_context_get_acl (context));
+-
++                break;
++        case PROP_SSL_CERT:
++                g_value_set_string (value,
++                                    gupnp_context_get_ssl_cert(context));
++                break;
++        case PROP_SSL_KEY:
++                g_value_set_string (value,
++                                    gupnp_context_get_ssl_key(context));
+                 break;
+         default:
+                 G_OBJECT_WARN_INVALID_PROPERTY_ID (object, property_id, pspec);
+@@ -369,11 +403,53 @@ gupnp_context_finalize (GObject *object)
+         if (priv->server_uri)
+                 soup_uri_free (priv->server_uri);
+ 
++        if (ssl_cert_file != NULL) {
++            g_free(ssl_cert_file);
++            ssl_cert_file = NULL;
++        }
++        if (ssl_key_file != NULL) {
++            g_free(ssl_key_file);
++            ssl_key_file = NULL;
++        }
++
+         /* Call super */
+         object_class = G_OBJECT_CLASS (gupnp_context_parent_class);
+         object_class->finalize (object);
+ }
+ 
++// Set context to do TLS handshake before connection.
++void
++gupnp_context_set_tls_params(GUPnPContext *context, const char *cert_file, const char *key_file, GTlsInteraction *xupnp_tlsinteraction)
++{
++        GObjectClass *object_class = NULL;
++        SoupSession *soup_session;
++        GValue value=G_VALUE_INIT;
++
++        if (cert_file) {
++           soup_session = gupnp_context_get_session(context);
++           g_value_init(&value, G_TYPE_STRING);
++           g_value_set_string (&value, cert_file);
++           soup_session_set_property_values(soup_session,SOUP_SESSION_SSL_CA_FILE,
++                          &value, NULL);
++           g_value_unset (&value);
++        }
++
++        g_value_init(&value, G_TYPE_BOOLEAN);
++        g_value_set_boolean(&value, TRUE);
++        soup_session_set_property_values(soup_session,SOUP_SESSION_SSL_STRICT,
++                          &value, NULL);
++        g_value_unset (&value);
++
++        if (xupnp_tlsinteraction) {
++           g_value_init(&value, G_TYPE_OBJECT);
++           g_value_set_object(&value, xupnp_tlsinteraction);
++           soup_session_set_property_values(soup_session,SOUP_SESSION_TLS_INTERACTION,
++                          &value, NULL);
++           g_value_unset (&value);
++       }
++}
++
++
+ static GObject *
+ gupnp_context_constructor (GType                  type,
+                            guint                  n_construct_params,
+@@ -537,6 +613,35 @@ gupnp_context_class_init (GUPnPContextCl
+                                       G_PARAM_CONSTRUCT |
+                                       G_PARAM_READWRITE |
+                                       G_PARAM_STATIC_STRINGS));
++
++
++        /**
++         * GUPnPContext:ssl_cert:
++         * Path to the ssl certificate file
++         **/
++        g_object_class_install_property
++                (object_class,
++                 PROP_SSL_CERT,
++                 g_param_spec_string ("ssl_cert_file",
++                                      "ssl_cert_file",
++                                      "ssl_cert_file",
++                                      "/mnt/nvram/xupnp/certificate.pem",
++                                      G_PARAM_READWRITE |
++                                      G_PARAM_CONSTRUCT ));
++        /**
++         * GUPnPContext:ssl_key
++         * Path to the ssl key file 
++         **/
++        g_object_class_install_property
++                (object_class,
++                 PROP_SSL_KEY,
++                 g_param_spec_string ("ssl_key_file",
++                                      "ssl_key_file",
++                                      "ssl_key_file",
++                                      "/mnt/nvram/xupnp/key.pem",
++                                      G_PARAM_READWRITE |
++                                      G_PARAM_CONSTRUCT));
++
+ }
+ 
+ /**
+@@ -588,6 +693,7 @@ SoupServer *
+ gupnp_context_get_server (GUPnPContext *context)
+ {
+         GUPnPContextPrivate *priv;
++        GTlsCertificate *cert;
+ 
+         g_return_val_if_fail (GUPNP_IS_CONTEXT (context), NULL);
+         priv = gupnp_context_get_instance_private (context);
+@@ -597,9 +703,20 @@ gupnp_context_get_server (GUPnPContext *
+                 GSocketAddress *addr = NULL;
+                 GInetAddress *inet_addr = NULL;
+                 GError *error = NULL;
++		SoupServerListenOptions listen_flags = 0;
+ 
+-                priv->server = soup_server_new (NULL, NULL);
++		if( NULL !=ssl_cert_file && NULL != ssl_key_file){
+ 
++			priv->server = soup_server_new
++                                 (
++                                 SOUP_SERVER_SSL_CERT_FILE, ssl_cert_file,
++				 SOUP_SERVER_SSL_KEY_FILE,  ssl_key_file,
++                                 NULL);
++		}
++		else
++		{
++			priv->server = soup_server_new ( NULL, NULL);
++		}
+                 soup_server_add_handler (priv->server,
+                                          NULL,
+                                          default_server_handler,
+@@ -623,9 +740,8 @@ gupnp_context_get_server (GUPnPContext *
+                                                           priv->port);
+                 }
+                 g_object_unref (inet_addr);
+-
+                 if (! soup_server_listen (priv->server,
+-                                          addr, (SoupServerListenOptions) 0, &error)) {
++                                          addr, listen_flags, &error)) {
+                         g_warning ("GUPnPContext: Unable to listen on %s:%u %s", ip, priv->port, error->message);
+                         g_error_free (error);
+                 }
+@@ -669,6 +785,51 @@ _gupnp_context_get_server_uri (GUPnPCont
+ }
+ 
+ /**
++ * gupnp_context_new_s:
++ * @main_context: (allow-none): Deprecated: 0.17.2: Always set to %NULL. If you
++ * want to use a different context, use g_main_context_push_thread_default().
++ * @iface: (allow-none): The network interface to use, or %NULL to
++ * auto-detect.
++ * @port: Port to run on, or 0 if you don't care what port is used.
++ * @error: A location to store a #GError, or %NULL
++ * @tlsCertificate: tls certificate of the https server
++ * @tlsKeyFile: tls key file of the https server
++ * Create a new #GUPnPContext with the specified @main_context, @iface and
++ * @port.
++ *
++ * Return value: A new #GUPnPContext object, or %NULL on an error
++ **/
++GUPnPContext *
++gupnp_context_new_s ( const char   *iface,
++                   guint         port,
++                   const char   *tlsCertFile,
++                   const char   *tlsKeyFile,
++                   GError      **error)
++{
++        if ((tlsCertFile != NULL) && (tlsKeyFile != NULL)) {
++                // HTTPS server
++                ssl_cert_file =  g_strdup(tlsCertFile);
++                ssl_key_file  =  g_strdup(tlsKeyFile);
++                return g_initable_new (GUPNP_TYPE_CONTEXT,
++                               NULL,
++                               error,
++                               "interface", iface,
++                               "port", port,
++                               "ssl_cert_file", tlsCertFile,
++                               "ssl_key_file", tlsKeyFile,
++                               NULL);
++       }
++       else {
++                return g_initable_new (GUPNP_TYPE_CONTEXT,
++                               NULL,
++                               error,
++                               "interface", iface,
++                               "port", port,
++                               NULL);
++       }
++}
++
++/**
+  * gupnp_context_new:
+  * @iface: (allow-none): The network interface to use, or %NULL to
+  * auto-detect.
+@@ -835,6 +996,24 @@ gupnp_context_get_default_language (GUPn
+         return priv->default_language;
+ }
+ 
++const char *
++gupnp_context_get_ssl_cert(GUPnPContext *context)
++{
++        GUPnPContextPrivate *priv;
++        g_return_val_if_fail (GUPNP_IS_CONTEXT (context), NULL);
++        priv = gupnp_context_get_instance_private (context);
++        return priv->ssl_cert_file;
++}
++
++const char *
++gupnp_context_get_ssl_key(GUPnPContext *context)
++{
++        GUPnPContextPrivate *priv;
++        g_return_val_if_fail (GUPNP_IS_CONTEXT (context), NULL);
++        priv = gupnp_context_get_instance_private (context);
++        return priv->ssl_key_file;
++}
++
+ /* Construct a local path from @requested path, removing the last slash
+  * if any to make sure we append the locale suffix in a canonical way. */
+ static char *
+Index: gupnp-1.2.2/libgupnp/gupnp-context.h
+===================================================================
+--- gupnp-1.2.2.orig/libgupnp/gupnp-context.h
++++ gupnp-1.2.2/libgupnp/gupnp-context.h
+@@ -46,6 +46,13 @@ struct _GUPnPContextClass {
+ };
+ 
+ GUPnPContext *
++gupnp_context_new_s                     (const char   *iface,
++                                        guint         port,
++                                        const char   *tlsCertFile,
++                                        const char   *tlsKeyFile,
++                                        GError      **error);
++
++GUPnPContext *
+ gupnp_context_new                      (const char   *iface,
+                                         guint         port,
+                                         GError      **error);
+@@ -73,6 +80,13 @@ gupnp_context_set_default_language     (
+ const char *
+ gupnp_context_get_default_language     (GUPnPContext *context);
+ 
++
++const char *
++gupnp_context_get_ssl_cert(GUPnPContext *context);
++
++const char *
++gupnp_context_get_ssl_key(GUPnPContext *context);
++
+ void
+ gupnp_context_host_path                (GUPnPContext *context,
+                                         const char   *local_path,
+@@ -110,6 +124,14 @@ gupnp_context_remove_server_handler    (
+ char *
+ gupnp_context_rewrite_uri              (GUPnPContext *context,
+                                         const char *uri);
++
++void
++gupnp_context_set_tls_params           (GUPnPContext *context,
++                                          const char * cert_file,
++                                          const char *key_file,
++                                          GTlsInteraction *xupnp_tlsinteraction);
++
++
+ G_END_DECLS
+ 
+ #endif /* GUPNP_CONTEXT_H */

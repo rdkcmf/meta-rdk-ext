@@ -1,0 +1,82 @@
+From 2d49a66c42497a3045f6f37bd5fe49d871c95c45 Mon Sep 17 00:00:00 2001
+From: Ievgen Mutavchi <Ievgen_Mutavchi@comcast.com>
+Date: Mon, 21 Oct 2019 10:22:47 -0400
+Subject: [MSE][SourceBuffer] Fix creating float PTS/DTS when dividing sample
+
+And disable partial appends to playback pipeline
+---
+ .../WebCore/Modules/mediasource/SourceBuffer.cpp   | 30 +++++++++++++---------
+ 1 file changed, 18 insertions(+), 12 deletions(-)
+
+diff --git a/Source/WebCore/Modules/mediasource/SourceBuffer.cpp b/Source/WebCore/Modules/mediasource/SourceBuffer.cpp
+index dd6aa59..46112bd 100644
+--- a/Source/WebCore/Modules/mediasource/SourceBuffer.cpp
++++ b/Source/WebCore/Modules/mediasource/SourceBuffer.cpp
+@@ -71,6 +71,19 @@ static inline bool mediaSourceLogEnabled()
+ #endif
+ }
+ 
++static inline MediaTime roundTowardsTimeScaleWithRoundingMargin(const MediaTime& time, uint32_t timeScale, const MediaTime& roundingMargin)
++{
++    while (true) {
++        if (time.timeScale() == timeScale)
++            return time;
++        MediaTime roundedTime = time.toTimeScale(timeScale);
++        if (abs(roundedTime - time) < roundingMargin || timeScale >= MediaTime::MaximumTimeScale)
++            return roundedTime;
++        if (!WTF::safeMultiply(timeScale, 2, timeScale) || timeScale > MediaTime::MaximumTimeScale)
++            timeScale = MediaTime::MaximumTimeScale;
++    }
++};
++
+ static const double ExponentialMovingAverageCoefficient = 0.1;
+ 
+ struct SourceBuffer::TrackBuffer {
+@@ -806,7 +819,9 @@ void SourceBuffer::removeCodedFrames(const MediaTime& start, const MediaTime& en
+             RefPtr<MediaSample> sample = sampleIterator->second;
+             if (!sample->isDivisable())
+                 return;
+-            std::pair<RefPtr<MediaSample>, RefPtr<MediaSample>> replacementSamples = sample->divide(time);
++            MediaTime microsecond(1, 1000000);
++            MediaTime roundedTime = roundTowardsTimeScaleWithRoundingMargin(time, sample->presentationTime().timeScale(), microsecond);
++            std::pair<RefPtr<MediaSample>, RefPtr<MediaSample>> replacementSamples = sample->divide(roundedTime);
+             if (!replacementSamples.first || !replacementSamples.second)
+                 return;
+             LOG(MediaSource, "SourceBuffer::removeCodedFrames(%p) - splitting sample (%s) into\n\t(%s)\n\t(%s)", this,
+@@ -1630,17 +1645,6 @@ void SourceBuffer::sourceBufferPrivateDidReceiveSample(MediaSample& sample)
+ 
+         MediaTime microsecond(1, 1000000);
+ 
+-        auto roundTowardsTimeScaleWithRoundingMargin = [] (const MediaTime& time, uint32_t timeScale, const MediaTime& roundingMargin) {
+-            while (true) {
+-                MediaTime roundedTime = time.toTimeScale(timeScale);
+-                if (abs(roundedTime - time) < roundingMargin || timeScale >= MediaTime::MaximumTimeScale)
+-                    return roundedTime;
+-
+-                if (!WTF::safeMultiply(timeScale, 2, timeScale) || timeScale > MediaTime::MaximumTimeScale)
+-                    timeScale = MediaTime::MaximumTimeScale;
+-            }
+-        };
+-
+         // 1.4 If timestampOffset is not 0, then run the following steps:
+         if (m_timestampOffset) {
+             if (!trackBuffer.roundedTimestampOffset.isValid() || presentationTimestamp.timeScale() != trackBuffer.lastFrameTimescale) {
+@@ -1918,6 +1922,7 @@ void SourceBuffer::sourceBufferPrivateDidReceiveSample(MediaSample& sample)
+     if (m_groupEndTimestamp > m_source->duration())
+         m_source->setDurationInternal(m_groupEndTimestamp);
+ 
++    #if 0
+     // To avoid playback pipeline starvation start providing media data as soon as we can
+     const auto& trackID = sample.trackID();
+     auto it = m_trackBufferMap.find(trackID);
+@@ -1930,6 +1935,7 @@ void SourceBuffer::sourceBufferPrivateDidReceiveSample(MediaSample& sample)
+             provideMediaData(trackBuffer, trackID);
+         }
+     }
++    #endif
+ }
+ 
+ bool SourceBuffer::hasAudio() const
+-- 
+2.7.4
+

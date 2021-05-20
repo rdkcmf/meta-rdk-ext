@@ -1,0 +1,31 @@
+From 4f5e7324ccb4daf72d9beb4e055564b117b61a5e Mon Sep 17 00:00:00 2001
+From: Eugene Mutavchi <Ievgen_Mutavchi@comcast.com>
+Date: Fri, 5 Feb 2021 15:11:47 +0000
+Subject: [PATCH 4/4] Enforce normal layer composition policy
+
+---
+ Source/WebCore/rendering/RenderLayerCompositor.cpp | 8 +++++++-
+ 1 file changed, 7 insertions(+), 1 deletion(-)
+
+diff --git a/Source/WebCore/rendering/RenderLayerCompositor.cpp b/Source/WebCore/rendering/RenderLayerCompositor.cpp
+index cafc42384126..0f1548f4c1b4 100644
+--- a/Source/WebCore/rendering/RenderLayerCompositor.cpp
++++ b/Source/WebCore/rendering/RenderLayerCompositor.cpp
+@@ -385,7 +385,13 @@ bool RenderLayerCompositor::updateCompositingPolicy()
+         m_compositingPolicy = page().compositingPolicyOverride().value();
+         return m_compositingPolicy != currentPolicy;
+     }
+-    
++
++    if (m_compositingPolicy != CompositingPolicy::Normal) {
++        m_compositingPolicy = CompositingPolicy::Normal;
++        return true;
++    }
++    return false;
++
+     auto memoryPolicy = MemoryPressureHandler::currentMemoryUsagePolicy();
+     m_compositingPolicy = memoryPolicy == WTF::MemoryUsagePolicy::Unrestricted ? CompositingPolicy::Normal : CompositingPolicy::Conservative;
+     return m_compositingPolicy != currentPolicy;
+-- 
+2.17.1
+

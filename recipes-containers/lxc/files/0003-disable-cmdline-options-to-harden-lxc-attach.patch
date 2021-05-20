@@ -1,0 +1,190 @@
+lxc: linux Container library
+
+This library is free software; you can redistribute it and/or
+modify it under the terms of the GNU Lesser General Public
+License as published by the Free Software Foundation; either
+version 2.1 of the License, or (at your option) any later version.
+
+This library is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+Lesser General Public License for more details.
+
+ou should have received a copy of the GNU Lesser General Public
+License along with this library; if not, write to the Free Software
+Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
+
+Date: Mar 29 10:17:37 2018
+
+From: 4c6a7646b7ff92f932a9b5dd71f71aa98b911435 Jun 06 21:22:24 2018
+
+Subject: [PATCH] ONEM-2912 [Containers Setup] Hardened of lxc-attach
+
+        Harden lxc-attach based on flasg NON_SECURE_LXC.
+
+Source: LGI
+
+Upstream-Status: Submitted
+
+Signed-off-by: Daniel Lezcano <daniel.lezcano@free.fr>
+---
+
+diff -ruN5 lxc-2.0.6/src/lxc/tools/lxc_attach.c lxc-2.0.6_patched/src/lxc/tools/lxc_attach.c
+--- lxc-2.0.6/src/lxc/tools/lxc_attach.c	2017-04-12 14:55:18.439692632 +0200
++++ lxc-2.0.6_patched/src/lxc/tools/lxc_attach.c	2017-04-14 12:43:43.696554486 +0200
+@@ -53,19 +53,23 @@
+ #endif
+ 
+ lxc_log_define(lxc_attach_ui, lxc);
+ 
+ static const struct option my_longopts[] = {
++#ifdef NON_SECURE_LXC	
+ 	{"elevated-privileges", optional_argument, 0, 'e'},
++#endif	
+ 	{"arch", required_argument, 0, 'a'},
++#ifdef NON_SECURE_LXC	
+ 	{"namespaces", required_argument, 0, 's'},
+ 	{"remount-sys-proc", no_argument, 0, 'R'},
+ 	/* TODO: decide upon short option names */
+ 	{"clear-env", no_argument, 0, 500},
+ 	{"keep-env", no_argument, 0, 501},
+ 	{"keep-var", required_argument, 0, 502},
+ 	{"set-var", required_argument, 0, 'v'},
++#endif	
+ 	{"pty-log", required_argument, 0, 'L'},
+ 	{"rcfile", required_argument, 0, 'f'},
+ 	{"uid", required_argument, 0, 'u'},
+ 	{"gid", required_argument, 0, 'g'},
+ 	LXC_COMMON_OPTIONS
+@@ -77,14 +81,19 @@
+ static int remount_sys_proc = 0;
+ static lxc_attach_env_policy_t env_policy = LXC_ATTACH_KEEP_ENV;
+ static uid_t uid = 0;
+ static gid_t gid = 0;
+ static char **extra_env = NULL;
++#ifdef NON_SECURE_LXC	
+ static ssize_t extra_env_size = 0;
++#endif
+ static char **extra_keep = NULL;
++#ifdef NON_SECURE_LXC	
+ static ssize_t extra_keep_size = 0;
++#endif
+ 
++#ifdef NON_SECURE_LXC	
+ static int add_to_simple_array(char ***array, ssize_t *capacity, char *value)
+ {
+ 	ssize_t count = 0;
+ 
+ 	assert(array);
+@@ -106,31 +115,37 @@
+ 	assert(*array);
+ 
+ 	(*array)[count] = value;
+ 	return 0;
+ }
++#endif
+ 
+ static int my_parser(struct lxc_arguments* args, int c, char* arg)
+ {
++#ifdef NON_SECURE_LXC
+ 	char **it;
+ 	char *del;
+ 	int ret;
++#endif	
+ 
+ 	switch (c) {
++#ifdef NON_SECURE_LXC
+ 	case 'e':
+ 		ret = lxc_fill_elevated_privileges(arg, &elevated_privileges);
+ 		if (ret)
+ 			return -1;
+ 		break;
+ 	case 'R': remount_sys_proc = 1; break;
++#endif	
+ 	case 'a':
+ 		new_personality = lxc_config_parse_arch(arg);
+ 		if (new_personality < 0) {
+ 			lxc_error(args, "invalid architecture specified: %s", arg);
+ 			return -1;
+ 		}
+ 		break;
++#ifdef NON_SECURE_LXC
+ 	case 's':
+ 		namespace_flags = 0;
+ 
+ 		/* The identifiers for namespaces used with lxc-attach as given
+ 		 * on the manpage do not align with the standard identifiers.
+@@ -179,10 +194,11 @@
+ 		if (ret < 0) {
+ 			lxc_error(args, "memory allocation error");
+ 			return -1;
+ 		}
+ 		break;
++#endif	
+ 	case 'L':
+ 		args->console_log = arg;
+ 		break;
+ 	case 'f':
+ 		args->rcfile = arg;
+@@ -204,22 +220,25 @@
+ --name=NAME [-- COMMAND]\n\
+ \n\
+ Execute the specified COMMAND - enter the container NAME\n\
+ \n\
+ Options :\n\
+-  -n, --name=NAME   NAME of the container\n\
+-  -e, --elevated-privileges=PRIVILEGES\n\
++  -n, --name=NAME   NAME of the container\n"
++#ifdef NON_SECURE_LXC
++"  -e, --elevated-privileges=PRIVILEGES\n\
+                     Use elevated privileges instead of those of the\n\
+                     container. If you don't specify privileges to be\n\
+                     elevated as OR'd list: CAP, CGROUP and LSM (capabilities,\n\
+                     cgroup and restrictions, respectively) then all of them\n\
+                     will be elevated.\n\
+                     WARNING: This may leak privileges into the container.\n\
+-                    Use with care.\n\
+-  -a, --arch=ARCH   Use ARCH for program instead of container's own\n\
+-                    architecture.\n\
+-  -s, --namespaces=FLAGS\n\
++                    Use with care.\n"
++#endif                    
++"  -a, --arch=ARCH   Use ARCH for program instead of container's own\n\
++                    architecture.\n"
++#ifdef NON_SECURE_LXC                    
++"  -s, --namespaces=FLAGS\n\
+                     Don't attach to all the namespaces of the container\n\
+                     but just to the following OR'd list of flags:\n\
+                     MOUNT, PID, UTSNAME, IPC, USER or NETWORK.\n\
+                     WARNING: Using -s implies -e with all privileges\n\
+                     elevated, it may therefore leak privileges into the\n\
+@@ -232,20 +251,23 @@
+       --clear-env   Clear all environment variables before attaching.\n\
+                     The attached shell/program will start with only\n\
+                     container=lxc set.\n\
+       --keep-env    Keep all current environment variables. This\n\
+                     is the current default behaviour, but is likely to\n\
+-                    change in the future.\n\
+-  -L, --pty-log=FILE\n\
+-                    Log pty output to FILE\n\
+-  -v, --set-var     Set an additional variable that is seen by the\n\
++                    change in the future.\n"
++#endif                    
++"  -L, --pty-log=FILE\n\
++                    Log pty output to FILE\n"
++#ifdef NON_SECURE_LXC                    
++"  -v, --set-var     Set an additional variable that is seen by the\n\
+                     attached program in the container. May be specified\n\
+                     multiple times.\n\
+       --keep-var    Keep an additional environment variable. Only\n\
+                     applicable if --clear-env is specified. May be used\n\
+-                    multiple times.\n\
+-  -f, --rcfile=FILE\n\
++                    multiple times.\n"
++#endif                    
++"  -f, --rcfile=FILE\n\
+                     Load configuration file FILE\n\
+ ",
+ 	.options  = my_longopts,
+ 	.parser   = my_parser,
+ 	.checker  = NULL,

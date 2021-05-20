@@ -1,0 +1,518 @@
+From d5047a3ced7d63186cfe228f2c0d594e9c07400a Mon Sep 17 00:00:00 2001
+From: mselva006c <mani_selvaraj@comcast.com>
+Date: Thu, 10 Dec 2020 23:19:27 +0000
+Subject: [PATCH] Subject: RDK-25249, RDK-25248: Implement curl to send ocsp
+ request directly to CA
+
+Signed-off-by: mselva006c <mani_selvaraj@comcast.com>
+---
+ lib/vtls/openssl.c | 482 ++++++++++++++++++++++++++++++++++++++++++++-
+ 1 file changed, 479 insertions(+), 3 deletions(-)
+
+diff --git a/lib/vtls/openssl.c b/lib/vtls/openssl.c
+index 1d09cad..bd745ca 100644
+--- a/lib/vtls/openssl.c
++++ b/lib/vtls/openssl.c
+@@ -238,6 +238,16 @@ struct ssl_backend_data {
+  */
+ #define RAND_LOAD_LENGTH 1024
+ 
++#if (OPENSSL_VERSION_NUMBER >= 0x0090808fL) && !defined(OPENSSL_NO_OCSP)
++#define FORMAT_UNDEF 0
++#define FORMAT_ASN1  1
++#define FORMAT_TEXT  2
++#define FORMAT_PEM   3
++
++#define openssl_fdset(a,b) FD_SET(a, b)
++#define OCSPSTAPLECA "/tmp/.EnableOCSPCA"
++#endif
++
+ #ifdef ENABLE_SSLKEYLOGFILE
+ /* The fp for the open SSLKEYLOGFILE, or NULL if not open */
+ static FILE *keylog_file_fp;
+@@ -1704,6 +1714,466 @@ static CURLcode verifyhost(struct connectdata *conn, X509 *server_cert)
+ 
+ #if (OPENSSL_VERSION_NUMBER >= 0x0090808fL) && !defined(OPENSSL_NO_TLSEXT) && \
+     !defined(OPENSSL_NO_OCSP)
++X509 *load_certs(BIO *err, const char *file, int format,
++        const char *pass, ENGINE *e, const char *cert_descrip)
++{
++    X509 *ox = NULL;
++    BIO *certs;
++
++    BIO_printf(err, "issuer format %d\n", format);
++
++    if ((certs = BIO_new(BIO_s_file())) == NULL) {
++        ERR_print_errors(err);
++        goto end;
++    }
++
++    if (file == NULL) {
++#ifdef _IONBF
++# ifndef OPENSSL_NO_SETVBUF_IONBF
++        setvbuf(stdin, NULL, _IONBF, 0);
++# endif                         /* ndef OPENSSL_NO_SETVBUF_IONBF */
++#endif
++        BIO_set_fp(certs, stdin, BIO_NOCLOSE);
++    } else {
++        if (BIO_read_filename(certs, file) <= 0) {
++            BIO_printf(err, "Error opening %s %s\n", cert_descrip, file);
++            ERR_print_errors(err);
++            goto end;
++        }
++    }
++    if (format == FORMAT_PEM) {
++        ox = PEM_read_bio_X509_AUX(certs, NULL,
++                (pem_password_cb *)passwd_callback, NULL);
++    } else {
++        BIO_printf(err, "bad input format specified for %s\n", cert_descrip);
++        goto end;
++    }
++
++end:
++    if (ox == NULL) {
++        BIO_printf(err, "unable to load certificate\n");
++        ERR_print_errors(err);
++    }
++    if (certs != NULL)
++        BIO_free(certs);
++    return (ox);
++}
++
++static int add_ocsp_cert(OCSP_REQUEST **request, X509 *cert,
++        const EVP_MD *cert_id_md, X509 *issuer1,
++        STACK_OF(OCSP_CERTID) *ids)
++{
++    OCSP_CERTID *id1;
++    BIO *bio_err = NULL;
++    if (!issuer1) {
++        BIO_printf(bio_err, "No issuer certificate specified\n");
++        return 0;
++    }
++    if (!*request)
++        *request = OCSP_REQUEST_new();
++    if (!*request)
++        goto err;
++    id1 = OCSP_cert_to_id(cert_id_md, cert, issuer1);
++    if (!id1 || !sk_OCSP_CERTID_push(ids, id1))
++        goto err;
++    if (!OCSP_request_add0_id(*request, id1))
++        goto err;
++    return 1;
++
++err:
++    BIO_printf(bio_err, "Error Creating OCSP request\n");
++    return 0;
++}
++
++static OCSP_REQUEST *prepare_ocsp_request(char *issuercert, char *servercert)
++{
++    OCSP_REQUEST *req = NULL;
++    X509 *issuer = NULL, *cert1 = NULL;
++    STACK_OF(OCSP_CERTID) *ids = NULL;
++    STACK_OF(OPENSSL_STRING) *reqnames = NULL;
++    ENGINE *e = NULL;
++    const EVP_MD *cert_id_md = NULL;
++    BIO *bio_err;
++
++    ids = sk_OCSP_CERTID_new_null();
++    reqnames = sk_OPENSSL_STRING_new_null();
++
++    issuer = load_certs(bio_err, issuercert, FORMAT_PEM,
++            NULL, e, "issuer certificate");
++    if(!issuer)
++        goto end;
++    cert1 = load_certs(bio_err, servercert, FORMAT_PEM,
++            NULL, e, "certificate");
++    if(!cert1)
++        goto end;
++    if (!cert_id_md)
++        cert_id_md = EVP_sha1();
++    if (!add_ocsp_cert(&req, cert1, cert_id_md, issuer, ids))
++        goto end;
++
++    if (!sk_OPENSSL_STRING_push(reqnames, "servercert"))
++        goto end;
++end:
++    X509_free(issuer);
++    X509_free(cert1);
++
++    return req;
++}
++
++char *SaveCerts(SSL* ssl, char *issuercert, char *servercert)
++{
++    X509 *peer = NULL;
++    STACK_OF(X509) *cert = NULL;
++    STACK_OF(OPENSSL_STRING) *aia = NULL;
++    BIO *outbio, *issuerbio, *servercertbio;
++    char *ocsp_uri;
++    char buf[BUFSIZ];
++    int i=0, j=0;
++
++    outbio  = BIO_new_fp(stdout, BIO_NOCLOSE);
++    issuerbio = BIO_new_file(issuercert, "w");
++
++    if(issuerbio == NULL) {
++        BIO_printf(outbio, "Could not open file\n");
++    }
++
++    servercertbio = BIO_new_file(servercert, "w");
++    if(servercertbio == NULL) {
++        BIO_printf(outbio, "Could not open file\n");
++    }
++
++    /* Get issuer/intermediate certs and store it in pem file*/
++    cert = SSL_get_peer_cert_chain(ssl);
++    if (cert != NULL) {
++        STACK_OF(X509) *r_sk = sk_X509_new_null();
++        sk_X509_push(r_sk, sk_X509_value(cert, 0));
++        /*BIO_printf(outbio, "---\nCertificate chain :%d\n", sk_X509_num(cert));*/
++        for (i = 1; i < sk_X509_num(cert); i++) {
++             X509 *prev = sk_X509_value(r_sk, i-1);
++             X509 *next = NULL;
++             for(j = 1; j < sk_X509_num(cert); j++) {
++                  X509 *cand = sk_X509_value(cert, j);
++                  if(!X509_NAME_cmp(X509_get_subject_name(cand), X509_get_issuer_name(prev)) || j == sk_X509_num(cert) - 1) {
++                      next = cand;
++                      PEM_write_bio_X509(issuerbio, sk_X509_value(cert, j));
++                      break;
++                  }
++             }
++
++             if(next) {
++                sk_X509_push(r_sk, next);
++             } else {
++                /* unable to figure out the correct stack, so just use the original one */
++                sk_X509_free(r_sk);
++                r_sk = sk_X509_dup(cert);
++                break;
++             }
++        }
++    }
++
++    /* Get server cert and store it in pem file*/
++    peer = SSL_get_peer_certificate(ssl);
++    if (peer != NULL) {
++        /* Redundant if we showed the whole chain */
++        PEM_write_bio_X509(servercertbio, peer);
++    }
++
++    /* To get ocsp uri */
++    aia = X509_get1_ocsp(peer);
++    ocsp_uri = malloc(sizeof(char *)*100);
++    for (j = 0; j < sk_OPENSSL_STRING_num(aia); j++)
++        strcpy(ocsp_uri, sk_OPENSSL_STRING_value(aia, j));
++    /*BIO_printf(outbio, "ocsp-uri is: %s\n", ocsp_uri);*/
++
++    BIO_free(issuerbio);
++    BIO_free(servercertbio);
++    X509_email_free(aia);
++    BIO_free(outbio);
++
++    return(ocsp_uri);
++}
++
++static OCSP_RESPONSE *query_to_responder(BIO *err, BIO *ocbio, const char *path, const STACK_OF(CONF_VALUE) *header, OCSP_REQUEST *request, int request_timeout)
++{
++    int fd, rv1, i;
++    OCSP_REQ_CTX *octx = NULL;
++    OCSP_RESPONSE *response = NULL;
++    fd_set confd;
++    struct timeval tval;
++
++    if (request_timeout != -1)
++        BIO_set_nbio(ocbio, 1);
++
++    rv1 = BIO_do_connect(ocbio);
++
++    if ((rv1 <= 0) && ((request_timeout == -1) || !BIO_should_retry(ocbio))) {
++        BIO_puts(err, "Error connecting BIO\n");
++        return NULL;
++    }
++
++    if (BIO_get_fd(ocbio, &fd) < 0) {
++        BIO_puts(err, "Can't get connection fd\n");
++        goto err;
++    }
++
++    if (request_timeout != -1 && rv1 <= 0) {
++        FD_ZERO(&confd);
++        openssl_fdset(fd, &confd);
++        tval.tv_usec = 0;
++        tval.tv_sec = request_timeout;
++        rv1 = select(fd + 1, NULL, (void *)&confd, NULL, &tval);
++        if (rv1 == 0) {
++            BIO_puts(err, "Timeout on connect\n");
++            return NULL;
++        }
++    }
++
++    octx = OCSP_sendreq_new(ocbio, path, NULL, -1);
++    if (!octx)
++        return NULL;
++
++    for (i = 0; i < sk_CONF_VALUE_num(header); i++) {
++        CONF_VALUE *hdr = sk_CONF_VALUE_value(header, i);
++        if (!OCSP_REQ_CTX_add1_header(octx, hdr->name, hdr->value))
++            goto err;
++    }
++
++    if (!OCSP_REQ_CTX_set1_req(octx, request))
++        goto err;
++
++    for (;;) {
++        rv1 = OCSP_sendreq_nbio(&response, octx);
++        if (rv1 != -1)
++            break;
++        if (request_timeout == -1)
++            continue;
++        FD_ZERO(&confd);
++        openssl_fdset(fd, &confd);
++        tval.tv_usec = 0;
++        tval.tv_sec = request_timeout;
++        if (BIO_should_read(ocbio))
++            rv1 = select(fd + 1, (void *)&confd, NULL, NULL, &tval);
++        else if (BIO_should_write(ocbio))
++            rv1 = select(fd + 1, NULL, (void *)&confd, NULL, &tval);
++        else {
++            BIO_puts(err, "Unexpected retry condition\n");
++            goto err;
++        }
++        if (rv1 == 0) {
++            BIO_puts(err, "Timeout on request\n");
++            break;
++        }
++        if (rv1 == -1) {
++            BIO_puts(err, "Select error\n");
++            break;
++        }
++
++    }
++err:
++    if (octx)
++        OCSP_REQ_CTX_free(octx);
++
++    return response;
++}
++
++OCSP_RESPONSE *process_ocsp_responder(BIO *err, OCSP_REQUEST *req, const char *host, const char *path, const char *port, int use_ssl,
++        const STACK_OF(CONF_VALUE) *headers1,
++        int request_timeout)
++{
++    BIO *ocbio = NULL;
++    SSL_CTX *octx = NULL;
++    OCSP_RESPONSE *response = NULL;
++    ocbio = BIO_new_connect(host);
++    BIO_printf(err, "in process responder host: %s\t port:%d\t path:%s\t use_ssl:%d\n", host, atoi(port), path, use_ssl);
++    if (!ocbio) {
++        BIO_printf(err, "Error creating connect BIO\n");
++        goto end;
++    }
++    if (port)
++        BIO_set_conn_port(ocbio, port);
++    if (use_ssl == 1) {
++        BIO *osbio;
++        octx = SSL_CTX_new(SSLv23_client_method());
++        if (octx == NULL) {
++            BIO_printf(err, "Error creating SSL context.\n");
++            goto end;
++        }
++        SSL_CTX_set_mode(octx, SSL_MODE_AUTO_RETRY);
++        osbio = BIO_new_ssl(octx, 1);
++        ocbio = BIO_push(osbio, ocbio);
++    }
++    response = query_to_responder(err, ocbio, path, headers1, req, request_timeout);
++    if (!response)
++        BIO_printf(err, "Error querying OCSP responder\n");
++end:
++    if (ocbio)
++        BIO_free_all(ocbio);
++    if (octx)
++        SSL_CTX_free(octx);
++    return response;
++}
++
++static OCSP_RESPONSE *get_ocspresponse_from_CA(SSL *ssl, OCSP_REQUEST *req, int req_timeout, char *ocspuri)
++{
++    OCSP_RESPONSE *resp = NULL;
++    STACK_OF(CONF_VALUE) *headers = NULL;
++    char *host = NULL, *port = NULL, *path = "/";
++    int use_ssl = -1;
++    BIO *bio_err;
++
++    if (!OCSP_parse_url(ocspuri, &host, &port, &path, &use_ssl)) {
++        printf("Error parsing URL\n");
++        goto end;
++    }
++
++    if (!X509V3_add_value("Host", host, &headers))
++        goto end;
++
++    /*processing ocsp query for ocsp responder*/
++    resp = process_ocsp_responder(bio_err, req, host, path,
++            port, use_ssl, headers, req_timeout);
++    if (resp == NULL) {
++        /* printf("ocsp Response NULL\n"); */
++        goto end;
++    }
++end:
++    return resp;
++}
++
++static CURLcode verifyStatusDirectlyFromCA(struct connectdata *conn, struct ssl_connect_data *connssl)
++{
++    int i, ocsp_status, timeout=2;
++    char *ocsp_uri = NULL;
++    CURLcode result = CURLE_OK;
++    struct Curl_easy *data = conn->data;
++
++    OCSP_RESPONSE *response = NULL;
++    OCSP_REQUEST *request   = NULL;
++    OCSP_BASICRESP *br1      = NULL;
++    X509_STORE     *st1      = NULL;
++    STACK_OF(X509) *ch1      = NULL;
++    BIO *outbio = NULL, *issuerbio, *servercertbio;
++    char issuercertname[] = "/tmp/issuerXXXXXX";
++    char servercertname[] = "/tmp/serverXXXXXX";
++    int issuerfd, serverfd;
++
++    issuerfd = mkstemp(issuercertname);
++    if(!issuerfd)
++       goto end;
++    serverfd = mkstemp(servercertname);
++    if(!serverfd)
++       goto end;
++
++    outbio = BIO_new_fp(stdout, BIO_NOCLOSE);
++
++    ocsp_uri = SaveCerts(BACKEND->handle, issuercertname, servercertname);
++    if(!ocsp_uri)
++       goto end;
++
++    request = prepare_ocsp_request(issuercertname, servercertname);
++    if(!request)
++       goto end;
++    /* OCSP_REQUEST_print(outbio, request, 0); */
++
++    response = get_ocspresponse_from_CA(BACKEND->handle, request, timeout, ocsp_uri);
++    if(!response)
++       goto end;
++       /* OCSP_RESPONSE_print(outbio, response, 0); */
++
++       ocsp_status = OCSP_response_status(response);
++       if(ocsp_status != OCSP_RESPONSE_STATUS_SUCCESSFUL) {
++           failf(data, "invalid ocsp response: %s (%d)", OCSP_response_status_str(ocsp_status), ocsp_status);
++           result = CURLE_SSL_INVALIDCERTSTATUS;
++           goto end;
++       }
++
++    br1 = OCSP_response_get1_basic(response);
++    if(!br1) {
++       failf(data, "Invalid OCSP response");
++       result = CURLE_SSL_INVALIDCERTSTATUS;
++       goto end;
++    }
++
++    ch1 = SSL_get_peer_cert_chain(BACKEND->handle);
++    st1 = SSL_CTX_get_cert_store(BACKEND->ctx);
++
++    #if ((OPENSSL_VERSION_NUMBER <= 0x1000201fL) /* Fixed after 1.0.2a */ || \
++        defined(LIBRESSL_VERSION_NUMBER))
++    /* The authorized responder cert in the OCSP response MUST be signed by the
++     * peer cert's issuer (see RFC6960 section 4.2.2.2). If that's a root cert,
++     * no problem, but if it's an intermediate cert OpenSSL has a bug where it
++     * expects this issuer to be present in the chain embedded in the OCSP
++     * response. So we add it if necessary. */
++
++    /* First make sure the peer cert chain includes both a peer and an issuer,
++     * and the OCSP response contains a responder cert. */
++    if(sk_X509_num(ch1) >= 2 && sk_X509_num(br1->certs) >= 1) {
++        X509 *responder = sk_X509_value(br1->certs, sk_X509_num(br1->certs) - 1);
++
++        /* Find issuer of responder cert and add it to the OCSP response chain */
++        for(i = 0; i < sk_X509_num(ch1); i++) {
++            X509 *issuer1 = sk_X509_value(ch1, i);
++            if(X509_check_issued(issuer1, responder) == X509_V_OK) {
++               if(!OCSP_basic_add1_cert(br1, issuer1)) {
++                  failf(data, "Could not add issuer cert to OCSP response");
++                  result = CURLE_SSL_INVALIDCERTSTATUS;
++                  goto end;
++               }
++            }
++        }
++    }
++    #endif
++
++    if(OCSP_basic_verify(br1, ch1, st1, 0) <= 0) {
++        failf(data, "OCSP response verification failed");
++        result = CURLE_SSL_INVALIDCERTSTATUS;
++        goto end;
++    }
++    for(i=0; i<OCSP_resp_count(br1); i++) {
++        int cert_status1, crl_reason1;
++        OCSP_SINGLERESP *single1 = NULL;
++
++        ASN1_GENERALIZEDTIME *rev1, *thisupd1, *nextupd1;
++
++        single1 = OCSP_resp_get0(br1, i);
++        if(!single1)
++           continue;
++
++        cert_status1 = OCSP_single_get0_status(single1, &crl_reason1, &rev1, &thisupd1, &nextupd1);
++        if(!OCSP_check_validity(thisupd1, nextupd1, 300L, -1L)) {
++           failf(data, "OCSP response was expired");
++           result = CURLE_SSL_INVALIDCERTSTATUS;
++           goto end;
++        }
++
++        infof(data, "SSL certificate status1: %s (%d)\n", OCSP_cert_status_str(cert_status1), cert_status1);
++
++        switch(cert_status1) {
++           case V_OCSP_CERTSTATUS_GOOD:
++                break;
++
++           case V_OCSP_CERTSTATUS_REVOKED:
++                result = CURLE_SSL_INVALIDCERTSTATUS;
++                failf(data, "SSL certification reason: %s (%d)", OCSP_crl_reason_str(crl_reason1), crl_reason1);
++                goto end;
++
++           case V_OCSP_CERTSTATUS_UNKNOWN:
++                result = CURLE_SSL_INVALIDCERTSTATUS;
++                goto end;
++           }
++     }
++
++end:
++    free(ocsp_uri);
++    if(issuercertname) remove(issuercertname);
++    if(servercertname) remove(servercertname);
++    if(br1) OCSP_BASICRESP_free(br1);
++    OCSP_REQUEST_free(request);
++    OCSP_RESPONSE_free(response);
++
++    return result;
++}
++
+ static CURLcode verifystatus(struct connectdata *conn,
+                              struct ssl_connect_data *connssl)
+ {
+@@ -1721,9 +2191,15 @@ static CURLcode verifystatus(struct connectdata *conn,
+   long len = SSL_get_tlsext_status_ocsp_resp(BACKEND->handle, &status);
+ 
+   if(!status) {
+-    failf(data, "No OCSP response received");
+-    result = CURLE_SSL_INVALIDCERTSTATUS;
+-    goto end;
++   if(access(OCSPSTAPLECA, F_OK) != -1) {
++       failf(data, "No OCSP response received, getting response from CA");
++       result = verifyStatusDirectlyFromCA(conn, connssl);
++       goto end;
++    } else {
++       failf(data, "No OCSP response received, ocsp staple soft fail support");
++       result = 0;
++       goto end;
++   }
+   }
+   p = status;
+   rsp = d2i_OCSP_RESPONSE(NULL, &p, len);

@@ -1,0 +1,3051 @@
+Date: Dec 26 14:04:33 2014
+
+From: ebe2fb32c1964e3c8e7fe5f333546cc22d984fa3 Dec 26 14:04:33 2014
+
+Subject: [PATCH] RDKSYSINTSW-1535: Patched webkit required for ave
+
+        AVE needs to webkit patches to extract java script object.
+        and operate directly on it.
+
+Source: COMCAST
+
+License: LGPL-2.0-or-later
+
+Upstream-Status: Pending
+
+Signed-off-by: Balaji Punnuru <balaji_punnuru@cable.comcast.com>
+---
+
+Index: qtwebkit-opensource-src-5.1.1/Source/WebCore/platform/graphics/dlna/MediaPlayerPrivateDLNA.cpp
+===================================================================
+--- /dev/null
++++ qtwebkit-opensource-src-5.1.1/Source/WebCore/platform/graphics/dlna/MediaPlayerPrivateDLNA.cpp
+@@ -0,0 +1,1650 @@
++//COMCAST MODIFICATION BEGIN [DLNA]
++/*
++ * Copyright (C) 2007, 2009 Apple Inc.  All rights reserved.
++ * Copyright (C) 2007 Collabora Ltd.  All rights reserved.
++ * Copyright (C) 2007 Alp Toker <alp@atoker.com>
++ * Copyright (C) 2009 Gustavo Noronha Silva <gns@gnome.org>
++ * Copyright (C) 2009, 2010 Igalia S.L
++ *
++ * This library is free software; you can redistribute it and/or
++ * modify it under the terms of the GNU Library General Public
++ * License as published by the Free Software Foundation; either
++ * version 2 of the License, or (at your option) any later version.
++ *
++ * This library is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++ * Library General Public License for more details.
++ *
++ * You should have received a copy of the GNU Library General Public License
++ * aint with this library; see the file COPYING.LIB.  If not, write to
++ * the Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
++ * Boston, MA 02110-1301, USA.
++ */
++
++#include "config.h"
++
++#include "MediaPlayerPrivateDLNA.h"
++
++#include "ColorSpace.h"
++#include "CSSStyleDeclaration.h"
++#include "Document.h"
++#include "Frame.h"
++#include "FrameView.h"
++#include "GraphicsContext.h"
++#include "GraphicsTypes.h"
++#include "HTMLMediaElement.h"
++#include "ImageGStreamer.h"
++#include "IntRect.h"
++#include "KURL.h"
++#include "Logging.h"
++#include "MIMETypeRegistry.h"
++#include "MediaPlayer.h"
++#include "NotImplemented.h"
++#include "RenderStyle.h"
++#include "SecurityOrigin.h"
++#include "TimeRanges.h"
++#include "WebKitWebSourceGStreamer.h"
++#include <algorithm>
++#include <gst/gst.h>
++#include <gst/interfaces/streamvolume.h>
++#include <gst/video/video.h>
++#include <limits>
++#include <math.h>
++#include <QObject>
++
++#define HEADER_NAME_SEEK_RANGE "availableSeekRange.dlna.org"
++#define RMF_VOD_BEGIN_PLAYBACK  7
++#define RMF_VOD_BAD_START_POSITION_VAL  0x7FFFFFFFu
++
++using namespace std;
++
++namespace WebCore {
++
++class MediaEvents: public IRMFMediaEvents
++{
++public:
++    MediaEvents(MediaPlayerPrivateDLNA* player)
++    :   m_player(player)
++    {
++    }
++
++    /*virtual*/ void playing()
++    {
++        m_player->onPlay();
++    }
++
++    /*virtual*/ void paused()
++    {
++        m_player->onPause();
++    }
++    /*virtual*/ void stopped()
++    {
++        m_player->onStop();
++    }
++
++    /*virtual*/ void complete()
++    {
++        LOG(Media, "DLNA player: End of Stream");
++        m_player->didEnd();
++    }
++
++    /*virtual*/ void error(RMFResult err, const char* msg)
++    {
++        g_print("DLNA player: Error %s (%d)\n", msg, (int) err);
++
++        String tmp = String (msg);
++        m_player->setMediaErrorMessage(tmp);
++        m_player->loadingFailed(MediaPlayer::DecodeError);
++    }
++
++private:
++    MediaPlayerPrivateDLNA* m_player;
++};
++
++static void mediaPlayerPrivateVolumeChangedCallback(void* player)
++{
++    // This is called when playbin receives the notify::volume signal.
++    static_cast<MediaPlayerPrivateDLNA*>(player)->volumeChanged();
++}
++
++static gboolean mediaPlayerPrivateVolumeChangeTimeoutCallback(void* player)
++{
++    // This is the callback of the timeout source created in ::volumeChanged.
++    static_cast<MediaPlayerPrivateDLNA*>(player)->notifyPlayerOfVolumeChange();
++    return FALSE;
++}
++
++static void mediaPlayerPrivateMuteChangedCallback(void* player)
++{
++    // This is called when playbin receives the notify::mute signal.
++    static_cast<MediaPlayerPrivateDLNA*>(player)->muteChanged();
++}
++
++static void mediaPlayerPrivateHaveVideoCallback(void* player)
++{
++    LOG(Media, "Got video");
++    static_cast<MediaPlayerPrivateDLNA*>(player)->notifyPlayerOfVideoAsync();
++}
++
++static void mediaPlayerPrivateHaveAudioCallback(void* player)
++{
++    LOG(Media, "Got audio");
++    static_cast<MediaPlayerPrivateDLNA*>(player)->notifyPlayerOfAudioAsync();
++}
++
++static gboolean mediaPlayerPrivateMuteChangeTimeoutCallback(void* player)
++{
++    // This is the callback of the timeout source created in ::muteChanged.
++    static_cast<MediaPlayerPrivateDLNA*>(player)->notifyPlayerOfMute();
++    return FALSE;
++}
++
++static gboolean mediaPlayerPrivateVideoNotifyTimeoutCallback(void* player)
++{
++    static_cast<MediaPlayerPrivateDLNA*>(player)->notifyPlayerOfVideo();
++    return FALSE;
++}
++
++static gboolean mediaPlayerPrivateAudioNotifyTimeoutCallback(void* player)
++{
++    static_cast<MediaPlayerPrivateDLNA*>(player)->notifyPlayerOfAudio();
++    return FALSE;
++}
++
++static void mediaPlayerPrivateAudioNotifyFirstFrameCallback(void* player)
++{
++    static_cast<MediaPlayerPrivateDLNA*>(player)->notifyPlayerOfFirstAudioFrame();
++}
++
++static void mediaPlayerPrivateNotifyMediaWarningCallback(void* player)
++{
++    static_cast<MediaPlayerPrivateDLNA*>(player)->notifyPlayerOfMediaWarning();
++}
++
++static void mediaPlayerPrivateVideoNotifyFirstFrameCallback(void* player)
++{
++    static_cast<MediaPlayerPrivateDLNA*>(player)->notifyPlayerOfFirstVideoFrame();
++}
++
++PassOwnPtr<MediaPlayerPrivateInterface> MediaPlayerPrivateDLNA::create(MediaPlayer* player)
++{
++    return adoptPtr(new MediaPlayerPrivateDLNA(player));
++}
++
++void MediaPlayerPrivateDLNA::registerMediaEngine(MediaEngineRegistrar registrar)
++{
++    if (isAvailable())
++        registrar(create, getSupportedTypes, supportsType, 0, 0, 0);
++}
++
++//-- MediaPlayerPrivateDLNA ---------------------------------------------------
++
++bool MediaPlayerPrivateDLNA::isAvailable()
++{
++    // TODO: verify all the needed Gstreamer elements are available
++    return true;
++}
++
++bool MediaPlayerPrivateDLNA::isMpegTS() const
++{
++    return m_url.endsWith(".ts") ||
++        m_url.contains("/vldms/") ||
++        m_url.contains("profile=MPEG_TS");
++}
++
++MediaPlayerPrivateDLNA::MediaPlayerPrivateDLNA(MediaPlayer* player)
++    : m_player(player)
++    , m_source(0)
++    , m_sink(0)
++    , m_dfsink(0)
++    , m_events(new MediaEvents(this))
++    , m_changingRate(false)
++    , m_endTime(numeric_limits<float>::infinity())
++    , m_networkState(MediaPlayer::Empty)
++    , m_readyState(MediaPlayer::HaveNothing)
++    , m_isStreaming(false)
++    , m_size(IntSize())
++    , m_paused(true)
++    , m_pausedInternal(true)
++    , m_seeking(false)
++    , m_buffering(false)
++    , m_playbackRate(1)
++    , m_errorOccured(false)
++    , m_mediaDuration(0)
++    , m_startedBuffering(false)
++    , m_fillTimer(this, &MediaPlayerPrivateDLNA::fillTimerFired)
++    , m_maxTimeLoaded(0)
++    , m_bufferingPercentage(0)
++    , m_preload(MediaPlayer::Auto)
++    , m_delayingLoad(false)
++    , m_mediaDurationKnown(false)
++    , m_volumeTimerHandler(0)
++    , m_muteTimerHandler(0)
++    , m_hasVideo(false)
++    , m_hasAudio(false)
++    , m_videoTimerHandler(0)
++    , m_audioTimerHandler(0)
++    , m_lastKnownRect(0,0,0,0)
++    , m_currentPosition(0)
++    , m_isVOnlyOnce(true)
++    , m_isAOnlyOnce(true)
++    , m_isEndReached(false)
++    , m_isInProgressRecording (false)
++    , m_errorMsg("")
++    , m_progressTimer(this, &MediaPlayerPrivateDLNA::onProgressTimerTimeout)
++    , m_networkAccessManager(new QNetworkAccessManager())
++    , m_baseSeekTime(0.0)
++    , m_currentProgressTime (0.0)
++    , m_rmfMediaWarnMsg("")
++    , m_networkBufferSize(0)
++    , m_restartPlaybackCount(0)
++{
++    LOG(Media, "DLNA video player created");
++    connect(m_networkAccessManager, SIGNAL(finished(QNetworkReply*)), this, SLOT(onReplyFinished(QNetworkReply*)));
++
++    connect(this, SIGNAL(emitVideoFrameReceived()), this, SLOT(onFirstVideoFrame()));
++    connect(this, SIGNAL(emitAudioFrameReceived()), this, SLOT(onFirstAudioFrame()));
++    connect(this, SIGNAL(emitMediaWarningReceived()), this, SLOT(onMediaWarningReceived()));
++
++    char *pVODKeepPipelinePlaying = NULL;
++
++    pVODKeepPipelinePlaying = getenv("RMF_VOD_KEEP_PIPELINE");
++    if ((pVODKeepPipelinePlaying != NULL) && (strcasecmp(pVODKeepPipelinePlaying, "TRUE") == 0)) {
++        m_VODKeepPipelinePlaying = true;
++    }
++    else if ((pVODKeepPipelinePlaying != NULL) && (strcasecmp(pVODKeepPipelinePlaying, "FALSE") == 0)) {
++        m_VODKeepPipelinePlaying = false;
++    }
++    else {
++        m_VODKeepPipelinePlaying = true;
++    }
++
++    if (m_VODKeepPipelinePlaying) {
++        m_fetchTrickModeHeaders = false;
++        m_EOSPending = false;
++    }
++}
++
++MediaPlayerPrivateDLNA::~MediaPlayerPrivateDLNA()
++{
++    if (m_fillTimer.isActive())
++        m_fillTimer.stop();
++
++    if (m_progressTimer.isActive())
++        m_progressTimer.stop();
++
++    if (m_networkAccessManager != NULL)
++        delete m_networkAccessManager;
++
++    m_networkAccessManager = NULL;
++
++    stop();
++
++    m_player = 0;
++    delete m_events;
++
++    if (m_muteTimerHandler)
++        g_source_remove(m_muteTimerHandler);
++
++    if (m_volumeTimerHandler)
++        g_source_remove(m_volumeTimerHandler);
++
++    if (m_videoTimerHandler)
++        g_source_remove(m_videoTimerHandler);
++
++    if (m_audioTimerHandler)
++        g_source_remove(m_audioTimerHandler);
++
++    ASSERT(!m_sink);
++    ASSERT(!m_dfsink);
++    ASSERT(!m_source);
++
++    LOG(Media, "DLNA video player destroyed");
++}
++
++void MediaPlayerPrivateDLNA::fetchHeaders(void)
++{
++    QUrl url(m_url);
++    QNetworkRequest request(url);
++
++    request.setRawHeader("getAvailableSeekRange.dlna.org", "1");
++    QNetworkReply *reply = m_networkAccessManager->head(request);
++    connect(reply, SIGNAL(error(QNetworkReply::NetworkError)), this, SLOT(onReplyError(QNetworkReply::NetworkError)));
++}
++
++void
++MediaPlayerPrivateDLNA::time_to_hms (
++    float       time,
++    unsigned&   h,
++    unsigned&   m,
++    float&      s
++) {
++    if (time < 0)
++        time = 0;
++
++    h = time / 3600;
++    m = (time - h * 3600) / 60;
++    s = time - h * 3600 - m * 60;
++}
++
++void
++MediaPlayerPrivateDLNA::fetchHeadersForTrickMode (
++    float speed,
++    double pos
++) {
++    m_fetchTrickModeHeaders = true;
++
++    QUrl url(m_url);
++    QNetworkRequest request(url);
++
++    char speed_str[64];
++    char time_str[64];
++
++    snprintf(speed_str, sizeof(speed_str), "speed=%f", speed);
++    g_print("MediaPlayerPrivateDLNA: fetchHeadersForTrickMode speed: [%s]\n", speed_str);
++
++    unsigned h = 0, m = 0;
++    float s = 0;
++    time_to_hms(pos, h, m, s);
++
++    snprintf(time_str, sizeof(time_str), "npt=%02u:%02u:%.2f-", h, m, s);
++    g_print("MediaPlayerPrivateDLNA: fetchHeadersForTrickMode position: [%s] (%f)\n", time_str, pos);
++
++    request.setRawHeader("getAvailableSeekRange.dlna.org", "1");
++    request.setRawHeader("PlaySpeed.dlna.org", speed_str);
++    request.setRawHeader("TimeSeekRange.dlna.org", time_str);
++    QNetworkReply *reply = m_networkAccessManager->head(request);
++    connect(reply, SIGNAL(error(QNetworkReply::NetworkError)), this, SLOT(onReplyError(QNetworkReply::NetworkError)));
++}
++
++void MediaPlayerPrivateDLNA::onReplyError(QNetworkReply::NetworkError)
++{
++    setMediaErrorMessage("VOD:: MediaStreamer is not reachable");
++    loadingFailed(MediaPlayer::NetworkError);
++    m_progressTimer.startOneShot(0);
++}
++
++void MediaPlayerPrivateDLNA::onReplyFinished(QNetworkReply *reply)
++{
++    if (reply == NULL)
++        return;
++
++    if (reply->hasRawHeader(HEADER_NAME_SEEK_RANGE))
++    {
++        QString seekHeader(reply->rawHeader(HEADER_NAME_SEEK_RANGE));
++        /* Split the response to get the NPT value */
++        QStringList firstSplit = seekHeader.split(" ");
++        int numberOfValues = firstSplit.length();
++        String abc (seekHeader);
++        printf ("MediaPlayerPrivateDLNA:: Header Response:: Seek range header: %s\n", abc.utf8().data());
++        for (int i = 0; i < numberOfValues; i++)
++        {
++            QString param = firstSplit.at(i);
++
++            /* When you get the string with NPT, start further processing */
++            if (param.contains("npt="))
++            {
++                /* This NPT has start time and end time. Take the end time becoz the recording  start time is zero. Split again */
++                QStringList npt = param.split("=");
++                QString nptString = npt.at((1));
++
++                QStringList secondSplit = nptString.split("-");
++
++                /* The start time is in the format of hh:mm:ss per DLNA standard. */
++                QString newParam = secondSplit.at((0));
++                QStringList thirdSplit = newParam.split(":");
++                int length = thirdSplit.length();
++                /* The length must be 3 bcoz the format hh:mm:ss per standard */
++                if (3 == length)
++                {
++                    bool ok;
++                    int hour   = thirdSplit.at(0).toInt (&ok, 10);
++                    int minute = thirdSplit.at(1).toInt (&ok, 10);
++                    int second = thirdSplit.at(2).toInt (&ok, 10);
++
++                    unsigned int seekTime = (hour * 3600) + (minute * 60) + second;
++                    printf ("MediaPlayerPrivateDLNA:: Received lastStartNPT is %u\n", seekTime);
++                    m_baseSeekTime =  seekTime;
++
++                    break;
++                }
++            }
++        }
++    }
++
++    reply->deleteLater();
++
++    if (m_VODKeepPipelinePlaying) {
++        if (m_url.contains("vod://") && (m_baseSeekTime == RMF_VOD_BAD_START_POSITION_VAL/1000u)) {
++            printf ("MediaPlayerPrivateDLNA:: VOD EOS Pending\n");
++            m_EOSPending = true;
++        }
++        else if (!m_paused) {
++            m_progressTimer.startOneShot(1.0);
++        }
++    }
++    else {
++        m_progressTimer.startOneShot(1.0);
++    }
++}
++
++void MediaPlayerPrivateDLNA::onProgressTimerTimeout(Timer<MediaPlayerPrivateDLNA>*)
++{
++    m_currentProgressTime += m_playbackRate;
++
++    /* This logic may be extended for Live and recorded video also; But for VOD; the rate is 8.0 by the vod server; so to avoid wrong calculation, use conditional check */
++    if (m_url.contains("vod://"))
++    {
++        if ((m_playbackRate == 4.0) || (m_playbackRate == -4.0))
++            m_currentProgressTime += m_playbackRate;
++    }
++
++    m_progressTimer.startOneShot(1.0);
++
++#if 1
++    if ((m_playbackRate < 0) && (playbackPosition() == 0))
++    {
++        m_restartPlaybackCount++;
++        if (m_restartPlaybackCount > RMF_VOD_BEGIN_PLAYBACK)
++        {
++            m_restartPlaybackCount = 0;
++            didEnd();
++        }
++    }
++#endif
++
++}
++
++void MediaPlayerPrivateDLNA::load(const String& url)
++{
++    LOG(Media, "LOAD IS CALLED (%s)", url.utf8().data());
++    m_url = url;
++
++    m_source = new HNSource();
++    m_sink = new MediaPlayerSink();
++    if(getenv("USE_SINK_DUMP"))
++    {
++        g_print("######################### Adding dump file sink ##########################\n");
++        m_dfsink = new DumpFileSink();
++    }
++
++    if (m_source->init() != RMF_RESULT_SUCCESS ||
++        m_source->open(m_url.utf8().data(), NULL) != RMF_RESULT_SUCCESS) {
++        g_print("Failed to initialize HN source\n");
++        return;
++    }
++
++    if (m_sink->init() != RMF_RESULT_SUCCESS) {
++        g_print("Failed to initialize video sink\n");
++        return;
++    }
++
++    if(m_dfsink)
++    {
++        char url[1024];
++        char ipaddr[20];
++        char location[100];
++        strcpy(url, m_url.utf8().data());
++        strcpy(ipaddr, "127.0.0.1");
++        char *ip_start_pos=strstr(url, "http://")+strlen("http://");
++        if(NULL != ip_start_pos)
++        {
++            char *ip_end_pos=strstr(ip_start_pos, ":");
++            if(NULL != ip_end_pos)
++            {
++                strncpy(ipaddr, ip_start_pos, ip_end_pos - ip_start_pos);
++                ipaddr[ip_end_pos - ip_start_pos] = 0;
++            }
++        }
++        sprintf(location, "/opt/SNK_IN_%s.ts", ipaddr);
++
++        if (m_dfsink->init() != RMF_RESULT_SUCCESS) {
++            g_print("Failed to initialize video sink\n");
++            return;
++        }
++
++        m_dfsink->setLocation(location);
++
++        m_dfsink->setSource(m_source);
++    }
++    m_sink->setSource(m_source);
++    m_source->setEvents(m_events);
++
++    m_sink->setHaveVideoCallback(mediaPlayerPrivateHaveVideoCallback, this);
++    m_sink->setHaveAudioCallback(mediaPlayerPrivateHaveAudioCallback, this);
++    m_sink->setVolumeChangedCallback(mediaPlayerPrivateVolumeChangedCallback, this);
++    m_sink->setMuteChangedCallback(mediaPlayerPrivateMuteChangedCallback, this);
++    m_sink->setVideoPlayingCallback(mediaPlayerPrivateVideoNotifyFirstFrameCallback, this);
++    m_sink->setAudioPlayingCallback(mediaPlayerPrivateAudioNotifyFirstFrameCallback, this);
++    m_sink->setMediaWarningCallback(mediaPlayerPrivateNotifyMediaWarningCallback, this);
++
++    if (m_preload == MediaPlayer::None) {
++        LOG_VERBOSE(Media, "Delaying load.");
++        m_delayingLoad = true;
++    }
++
++    if (!m_delayingLoad)
++        commitLoad();
++    else
++        LOG(Media, "Not committing load");
++
++    LOG(Media, "LOAD FINISHED");
++}
++
++void MediaPlayerPrivateDLNA::commitLoad()
++{
++    ASSERT(!m_delayingLoad);
++    LOG(Media, "Committing load.");
++    updateStates();
++}
++
++float MediaPlayerPrivateDLNA::playbackPosition() const
++{
++    if (m_url.contains("vod://"))
++    {
++        float pos = m_baseSeekTime + m_currentProgressTime;
++        if (pos >= 0)
++            return pos;
++        else
++            return 0.f;
++    }
++    else
++    {
++        double pos = 0.0;
++
++        if (!m_source ||
++            m_source->getMediaTime(pos) != RMF_RESULT_SUCCESS) {
++            return 0.f;
++        }
++
++        return (float) pos;
++    }
++}
++
++void MediaPlayerPrivateDLNA::prepareToPlay()
++{
++    if (m_delayingLoad) {
++        m_delayingLoad = false;
++        commitLoad();
++    }
++}
++
++void MediaPlayerPrivateDLNA::play()
++{
++    LOG(Media, "PLAY IS CALLED");
++    m_isEndReached = false;
++    m_paused = false;
++
++    if ((m_networkBufferSize) && (m_isVOnlyOnce))
++    {
++        m_sink->setNetWorkBufferSize (m_networkBufferSize);
++    }
++
++    if (m_VODKeepPipelinePlaying) {
++        if (m_url.contains("vod://") && !m_EOSPending && !m_isAOnlyOnce) {
++            fetchHeadersForTrickMode(getRate(), m_baseSeekTime);
++        }
++    }
++
++    if (m_source->play() == RMF_RESULT_SUCCESS) {
++        LOG(Media, "Play");
++    }
++    else {
++        loadingFailed(MediaPlayer::Empty);
++    }
++}
++
++void MediaPlayerPrivateDLNA::pause()
++{
++    LOG(Media, "PAUSE IS CALLED");
++    if (!m_source) return;
++    if (m_isEndReached) return;
++
++    m_paused = true;
++    if (!m_pausedInternal)
++    {
++        float speed = 0.0; /* Pause is called internally when speed is called with 0 */
++        double time = 0.0; /* Time is not used when the speed is 0.0; */
++
++        if (m_VODKeepPipelinePlaying) {
++            if (m_url.contains("vod://") && !m_EOSPending && !m_isAOnlyOnce) {
++                fetchHeadersForTrickMode(speed, time);
++            }
++        }
++
++        if (m_source->play (speed, time) == RMF_RESULT_SUCCESS)
++            LOG(Media, "Pause");
++
++        if (m_progressTimer.isActive())
++            m_progressTimer.stop();
++
++        if (m_url.contains("vod://")) {
++            m_baseSeekTime = playbackPosition();
++            m_currentProgressTime = 0;
++        }
++    }
++    else
++        printf ("Pause Ignored. We are still in the process of trick mode...\n");
++}
++
++void MediaPlayerPrivateDLNA::stop()
++{
++    LOG(Media, "STOP IS CALLED");
++
++
++    if (!m_sink) return;
++
++    m_source->removeEventHandler(m_events);
++    m_source->term();
++    m_sink->term();
++    if(m_dfsink)
++        m_dfsink->term();
++    delete m_source;
++    delete m_sink;
++    if(m_dfsink)
++        delete m_dfsink;
++    m_dfsink = NULL;
++    m_sink = NULL;
++    m_source = NULL;
++
++    m_paused = true;
++    m_hasVideo = false;
++    m_hasAudio = false;
++
++    LOG(Media, "Stop");
++}
++
++
++float MediaPlayerPrivateDLNA::duration() const
++{
++    if (!m_source)
++        return 0.0f;
++
++    if (m_errorOccured)
++        return 0.0f;
++
++    // Media duration query failed already, don't attempt new useless queries.
++    if (!m_mediaDurationKnown)
++        return numeric_limits<float>::infinity();
++
++    return m_mediaDuration;
++}
++
++float MediaPlayerPrivateDLNA::currentTime() const
++{
++    if (m_errorOccured)
++        return 0.0f;
++
++    return playbackPosition();
++}
++
++/****************************************************************
++*                  Comcast customized changes                  *
++****************************************************************/
++unsigned long MediaPlayerPrivateDLNA::getCCDecoderHandle () const
++{
++    if(m_sink)
++        return m_sink->getVideoDecoderHandle();
++
++    return 0;
++}
++
++void MediaPlayerPrivateDLNA::setAudioLanguage (const String& audioLang)
++{
++    if(m_sink)
++        m_sink->setAudioLanguage (audioLang.utf8().data());
++
++    return;
++}
++
++void MediaPlayerPrivateDLNA::setVideoZoom (unsigned short zoomVal)
++{
++    if(m_sink)
++        m_sink->setVideoZoom (zoomVal);
++
++    return;
++}
++
++void MediaPlayerPrivateDLNA::setVideoBufferLength (float bufferLength)
++{
++    m_mediaDuration = true;
++    m_mediaDuration = bufferLength;
++    if (m_source)
++        m_source->setVideoLength(m_mediaDuration);
++}
++
++void MediaPlayerPrivateDLNA::setIsInProgressRecording (bool isInProgress)
++{
++    m_isInProgressRecording = isInProgress;
++}
++
++void MediaPlayerPrivateDLNA::setMediaErrorMessage (const String& errorMsg)
++{
++    m_errorMsg = errorMsg;
++    return;
++}
++
++/* This is to seek to the live point of Linear; must be used for linear only */
++void MediaPlayerPrivateDLNA::seekToLivePosition(void)
++{
++    m_playbackRate = 1.0f;
++    m_currentPosition = m_mediaDuration - 1.0;
++    m_source->playAtLivePosition(m_mediaDuration);
++    return;
++}
++
++/* This is to seek to the beginning of the VOD asset; as of for VOD only. can be extended for recording as well */
++void MediaPlayerPrivateDLNA::seekToStartPosition (void)
++{
++    m_playbackRate = 1.0f;
++    m_currentPosition = 0.0;
++
++    if (m_url.contains("vod://")) {
++        m_currentProgressTime = 0;
++        m_baseSeekTime = 0.0;
++
++        if (m_VODKeepPipelinePlaying) {
++            m_fetchTrickModeHeaders = false;
++            m_isAOnlyOnce = true;
++        }
++
++        if (m_progressTimer.isActive())
++            m_progressTimer.stop();
++    }
++
++    m_source->playAtLivePosition(m_currentPosition);
++    return;
++}
++
++String MediaPlayerPrivateDLNA::getMediaErrorMessage (void)
++{
++    return m_errorMsg;
++}
++
++String MediaPlayerPrivateDLNA::getRMFMediaWarnMsg (void)
++{
++    if (m_sink)
++        m_rmfMediaWarnMsg = String (m_sink->getMediaWarningString());
++    return m_rmfMediaWarnMsg;
++}
++
++short MediaPlayerPrivateDLNA::getBufferedMediaSize(void)
++{
++    if (m_sink)
++        return m_sink->getMediaBufferSize();
++    return 0;
++}
++
++void MediaPlayerPrivateDLNA::setNetworkBufferSize (int bufferSize)
++{
++    m_networkBufferSize = bufferSize;
++    return;
++}
++
++void MediaPlayerPrivateDLNA::seek(float time)
++{
++    LOG(Media, "SEEK(%.2f)", time);
++
++    if (m_isEndReached)
++    {
++        g_print ("Ignore the seek() as it is being called after receiving EOS.. Duration = %f\n", duration());
++        return;
++    }
++
++    // Avoid useless seeking.
++    if (time == playbackPosition())
++        return;
++
++    if (m_VODKeepPipelinePlaying) {
++        if ((m_url.contains("vod://")) && (m_paused == true)) {
++            m_pausedInternal = true;
++        }
++    }
++
++    m_paused = false;
++
++    if (!m_source) {
++        LOG(Media, "No source, not seeking");
++        return;
++    }
++
++    if (m_errorOccured) {
++        LOG(Media, "Error occurred, not seeking");
++        return;
++    }
++
++    if (m_VODKeepPipelinePlaying) {
++        if (m_url.contains("vod://") && !m_EOSPending && !m_isAOnlyOnce) {
++            if (m_progressTimer.isActive())
++                m_progressTimer.stop();
++
++            m_playbackRate = 1.0;
++            m_player->rateChanged(1.0f);
++            fetchHeadersForTrickMode(m_playbackRate, time);
++        }
++    }
++
++    if (m_source->setMediaTime(time) == RMF_RESULT_SUCCESS)
++    {
++        m_playbackRate = 1.0f;
++        m_player->rateChanged(1.0f);
++
++        if (m_VODKeepPipelinePlaying) {
++            if (m_url.contains("vod://")) {
++                m_currentPosition = time;
++                LOG(Media, "m_seeking - no change - fake seek");
++                m_seeking = false;
++                m_currentProgressTime = 0;
++                m_baseSeekTime = time;
++                m_player->timeChanged();
++                m_pausedInternal = false;
++            }
++            else {
++                m_currentPosition = time;
++                LOG(Media, "m_seeking = true");
++                m_seeking = true;
++                m_currentProgressTime = 0;
++                m_baseSeekTime = time;
++                if (m_progressTimer.isActive())
++                    m_progressTimer.stop();
++            }
++        }
++        else {
++            m_currentPosition = time;
++            LOG(Media, "m_seeking = true");
++            m_seeking = true;
++            m_currentProgressTime = 0;
++            m_baseSeekTime = time;
++            if (m_progressTimer.isActive())
++                m_progressTimer.stop();
++        }
++    }
++    else
++    {
++        LOG(Media, "Seek failed");
++        updateStates(); // tell the HTML element we're not seeking anymore
++    }
++}
++
++bool MediaPlayerPrivateDLNA::paused() const
++{
++    if (m_isEndReached)
++        return true;
++
++    return m_paused;
++}
++
++bool MediaPlayerPrivateDLNA::seeking() const
++{
++    return m_seeking;
++}
++
++// Returns the size of the video
++IntSize MediaPlayerPrivateDLNA::naturalSize() const
++{
++    if (!m_sink || !hasVideo())
++    {
++        //LOG(Media, "Cannot determine natural size: no video");
++        return IntSize();
++    }
++
++    /* The natural video size set to minimum value & keep the aspect ratio.
++       The paint method of the plugin will take care of setting the video window to the expected size */
++    int tempWidth = 320;
++    int tempHeight = 176;
++    return IntSize(tempWidth, tempHeight);
++}
++
++// Schedules a notifyPlayerOfVideo() call from the GUI thread.
++// This is needed to avoid a timer-related debug assertion in WebCore::FrameView::layoutPending().
++void MediaPlayerPrivateDLNA::notifyPlayerOfVideoAsync()
++{
++    if (m_videoTimerHandler)
++        g_source_remove(m_videoTimerHandler);
++    m_videoTimerHandler = g_timeout_add(0,
++        reinterpret_cast<GSourceFunc>(mediaPlayerPrivateVideoNotifyTimeoutCallback), this);
++}
++
++void MediaPlayerPrivateDLNA::notifyPlayerOfVideo()
++{
++    m_hasVideo = true;
++    m_player->mediaPlayerClient()->mediaPlayerEngineUpdated(m_player);
++}
++
++void MediaPlayerPrivateDLNA::notifyPlayerOfAudioAsync()
++{
++    if (m_audioTimerHandler)
++        g_source_remove(m_audioTimerHandler);
++    m_audioTimerHandler = g_timeout_add(0,
++        reinterpret_cast<GSourceFunc>(mediaPlayerPrivateAudioNotifyTimeoutCallback), this);
++}
++
++void MediaPlayerPrivateDLNA::notifyPlayerOfAudio()
++{
++    m_hasAudio = true;
++    m_player->mediaPlayerClient()->mediaPlayerEngineUpdated(m_player);
++}
++
++void MediaPlayerPrivateDLNA::notifyPlayerOfFirstVideoFrame()
++{
++    Q_EMIT emitVideoFrameReceived();
++}
++
++void MediaPlayerPrivateDLNA::onFirstVideoFrame()
++{
++    if (m_isVOnlyOnce)
++        g_print ("Received First Video Frame for the playback of the URL=%s with play speed = %f time position = %f\n", m_url.utf8().data(),  m_playbackRate,  m_currentPosition);
++    else
++        g_print ("Received First Video Frame for the trickmode in the URL=%s with play speed = %f time position = %f\n", m_url.utf8().data(),  m_playbackRate,  m_currentPosition);
++
++    onFrameReceived();
++    m_isVOnlyOnce = false;
++
++    if (m_VODKeepPipelinePlaying) {
++        if (m_url.contains("vod://") && !m_EOSPending && !m_fetchTrickModeHeaders) {
++            fetchHeaders();
++        }
++    }
++    else {
++        if (m_url.contains("vod://"))
++            fetchHeaders();
++    }
++}
++
++void MediaPlayerPrivateDLNA::notifyPlayerOfFirstAudioFrame()
++{
++    Q_EMIT emitAudioFrameReceived();
++}
++
++void MediaPlayerPrivateDLNA::onFirstAudioFrame()
++{
++    if (m_isAOnlyOnce)
++        g_print ("Received First Audio Sample for the playback of URL=%s with play speed = %f time position = %f\n",m_url.utf8().data(),  m_playbackRate,  m_currentPosition);
++    else
++        g_print ("Received First Audio Sample for the trickmode in URL=%s with play speed = %f time position = %f\n",m_url.utf8().data(),  m_playbackRate,  m_currentPosition);
++
++    onFrameReceived();
++    m_isAOnlyOnce = false;
++}
++
++
++void MediaPlayerPrivateDLNA::onFrameReceived()
++{
++    /* Report First Frame received only once in the beginning */
++    if (m_isVOnlyOnce & m_isAOnlyOnce)
++        m_player->mediaFrameReceived();
++}
++
++void MediaPlayerPrivateDLNA::notifyPlayerOfMediaWarning()
++{
++    Q_EMIT emitMediaWarningReceived();
++}
++
++void MediaPlayerPrivateDLNA::onMediaWarningReceived()
++{
++    if (m_sink)
++        m_player->mediaWarningReceived();
++}
++
++void MediaPlayerPrivateDLNA::onPlay()
++{
++    LOG(Media, "DLNA player: on play");
++    m_isEndReached = false;
++
++    /* Adjust the video window to the same size once again..
++     * There are platforms which is taking the rectangle param only at playing state.. */
++    m_sink->setVideoRectangle(m_lastKnownRect.x(), m_lastKnownRect.y(), m_lastKnownRect.width(), m_lastKnownRect.height(), true);
++
++    /* Just make sure that the AV is muted on the blocked content */
++    // Grab the client media element
++    HTMLMediaElement* element = static_cast<HTMLMediaElement*>(m_player->mediaPlayerClient());
++    if (element->muted())
++        m_sink->setMuted(true);
++
++    timeChanged();
++    updateStates();
++}
++
++void MediaPlayerPrivateDLNA::onPause()
++{
++    LOG(Media, "DLNA player: on pause");
++    m_player->timeChanged();
++    updateStates();
++}
++
++void MediaPlayerPrivateDLNA::onStop()
++{
++    LOG(Media, "DLNA player: on stop");
++    updateStates();
++}
++
++void MediaPlayerPrivateDLNA::setVolume(float volume)
++{
++    if (!m_sink)
++        return;
++
++    if (wantAudio())
++        m_sink->setVolume(volume);
++}
++
++void MediaPlayerPrivateDLNA::notifyPlayerOfVolumeChange()
++{
++    m_volumeTimerHandler = 0;
++
++    if (!m_player || !m_sink)
++        return;
++
++    float volume = 1.0f;
++    if (wantAudio())
++        volume = m_sink->getVolume();
++
++    // get_volume() can return values superior to 1.0 if the user
++    // applies software user gain via third party application (GNOME
++    // volume control for instance).
++    volume = CLAMP(volume, 0.0, 1.0);
++    m_player->volumeChanged(volume);
++}
++
++void MediaPlayerPrivateDLNA::volumeChanged()
++{
++    if (m_volumeTimerHandler)
++        g_source_remove(m_volumeTimerHandler);
++    m_volumeTimerHandler = g_timeout_add(0, reinterpret_cast<GSourceFunc>(mediaPlayerPrivateVolumeChangeTimeoutCallback), this);
++}
++
++void MediaPlayerPrivateDLNA::setRate(float rate)
++{
++    LOG(Media, "setRate called new speed=%f previous speed=%f pos=%f", rate, getRate(), playbackPosition());
++    changeSpeed (rate, 0);
++}
++
++void MediaPlayerPrivateDLNA::changeSpeed(float rate, short overShootTime)
++{
++    LOG(Media, "changeSpeed called new speed=%f previous speed=%f pos=%f, overShootTime=%d", rate, getRate(), playbackPosition(), overShootTime);
++
++    if (m_playbackRate == rate)
++        return;
++
++    m_playbackRate = rate;
++    m_paused = false;
++    m_pausedInternal = true;
++    m_changingRate = true;
++
++    if (m_isEndReached)
++    {
++        g_print ("setRate/changeSpeed called internally after receiving EOS..\n");
++
++        if (m_url.contains("ocap://") && m_isInProgressRecording)
++            seekToLivePosition();
++        else if (m_url.contains("vod://")) {
++            g_print("MediaPlayerPrivateDLNA: VOD BEGINNING REACHED - RESTART\n");
++            seekToStartPosition();
++        }
++        else if (m_isInProgressRecording)
++        {
++            /* Update the position as 1 sec less than the duration */
++            m_currentPosition = m_mediaDuration - 1.0;
++            m_source->setMediaTime(m_currentPosition);
++        }
++    }
++    else
++    {
++        m_currentPosition = currentTime();
++        m_currentPosition += overShootTime;
++
++        if (m_currentPosition < 0)
++            m_currentPosition = 0;
++
++        double position = m_currentPosition;
++
++        if (m_url.contains("vod://"))
++        {
++            m_currentProgressTime = 0;
++            m_baseSeekTime = m_currentPosition;
++            if (m_progressTimer.isActive())
++                m_progressTimer.stop();
++
++            if (m_VODKeepPipelinePlaying) {
++                if (!m_EOSPending && !m_isAOnlyOnce) {
++                    fetchHeadersForTrickMode(rate, position);
++                    m_pausedInternal = false;
++                    m_player->timeChanged();
++                }
++            }
++
++            m_source->play (rate, position);
++        }
++        else
++        {
++            m_source->play (rate, position);
++            //m_source->setSpeed(rate);
++        }
++    }
++    m_player->timeChanged();
++}
++
++MediaPlayer::NetworkState MediaPlayerPrivateDLNA::networkState() const
++{
++    return m_networkState;
++}
++
++MediaPlayer::ReadyState MediaPlayerPrivateDLNA::readyState() const
++{
++    return m_readyState;
++}
++
++PassRefPtr<TimeRanges> MediaPlayerPrivateDLNA::buffered() const
++{
++    RefPtr<TimeRanges> timeRanges = TimeRanges::create();
++    if (m_errorOccured || m_isStreaming)
++        return timeRanges.release();
++
++    HNSource::range_list_t ranges;
++    if (m_source) {
++        m_source->getBufferedRanges(ranges);
++        for (HNSource::range_list_t::const_iterator it = ranges.begin(); it != ranges.end(); ++it) {
++            //LOG(Media, "Adding range: %f..%f", it->first, it->second);
++            timeRanges->add(it->first, it->second);
++        }
++    }
++
++    if (ranges.size() == 0)
++        if (float loaded = maxTimeLoaded()) {
++            //LOG(Media, "Adding max range: 0..%f", loaded);
++            timeRanges->add(0, loaded);
++        }
++
++    return timeRanges.release();
++}
++
++void MediaPlayerPrivateDLNA::fillTimerFired(Timer<MediaPlayerPrivateDLNA>*)
++{
++    gint64 stop = 0;
++    if (!m_source) return;
++
++    HNSource::range_list_t buffered_ranges;
++    m_source->getBufferedRanges(buffered_ranges);
++    if (!buffered_ranges.empty()) {
++        //start = buffered_ranges.begin()->first; // do we need the start position?
++        stop = buffered_ranges.begin()->second;
++    }
++
++    gdouble fillStatus = 100.0;
++    if (stop != -1)
++        fillStatus = 100.0 * stop / GST_FORMAT_PERCENT_MAX;
++
++    LOG_VERBOSE(Media, "[Buffering] Download buffer filled up to %f%%", fillStatus);
++
++    if (!m_mediaDuration)
++        durationChanged();
++
++    // Update maxTimeLoaded only if the media duration is
++    // available. Otherwise we can't compute it.
++    if (m_mediaDuration) {
++        if (fillStatus == 100.0)
++            m_maxTimeLoaded = m_mediaDuration;
++        else
++            m_maxTimeLoaded = static_cast<float>((fillStatus * m_mediaDuration) / 100.0);
++        LOG_VERBOSE(Media, "[Buffering] Updated maxTimeLoaded: %f", m_maxTimeLoaded);
++    }
++
++    if (fillStatus != 100.0) {
++        updateStates();
++        return;
++    }
++
++    // Media is now fully loaded. It will play even if network
++    // connection is cut. Buffering is done, remove the fill source
++    // from the main loop.
++    m_fillTimer.stop();
++    m_startedBuffering = false;
++    updateStates();
++}
++
++float MediaPlayerPrivateDLNA::maxTimeSeekable() const
++{
++    LOG(Media, "maxTimeSeekable(): duration = %.2f, m_errorOccured = %d", duration(), m_errorOccured);
++
++    if (m_errorOccured)
++        return 0.0f;
++
++    //LOG_VERBOSE(Media, "maxTimeSeekable");
++    // infinite duration means live stream
++    if (isinf(duration()))
++#if 1 // HACK to enable seek for live streams.
++        return  7.0f*24*60*60; // 1 week
++#else
++        return 0.0f;
++#endif
++
++    return duration();
++}
++
++float MediaPlayerPrivateDLNA::maxTimeLoaded() const
++{
++    if (m_errorOccured)
++        return 0.0f;
++
++    float loaded = m_maxTimeLoaded;
++    if (!loaded && !m_fillTimer.isActive())
++        loaded = duration();
++    //LOG(Media, "maxTimeLoaded(): %f", loaded);
++    return loaded;
++}
++
++unsigned MediaPlayerPrivateDLNA::videoDecodedByteCount() const
++{
++    if (!m_sink)
++        return 0;
++
++    double pos = 0.0;
++    m_sink->getMediaTime(pos);
++
++    return (unsigned)pos;
++}
++
++void MediaPlayerPrivateDLNA::cancelLoad()
++{
++    if (m_networkState < MediaPlayer::Loading || m_networkState == MediaPlayer::Loaded)
++        return;
++
++    stop();
++}
++
++void MediaPlayerPrivateDLNA::updateStates()
++{
++    if (!m_source)
++        return;
++
++    if (m_errorOccured)
++    {
++        g_warning("error occured\n");
++        return;
++    }
++
++    MediaPlayer::NetworkState oldNetworkState = m_networkState;
++    MediaPlayer::ReadyState oldReadyState = m_readyState;
++    RMFState state;
++    RMFState pending;
++
++    RMFStateChangeReturn ret = m_source->getState(&state, &pending);
++//    LOG(Media, "updateStates(): state: %s, pending: %s, ret = %s",
++//      gst_element_state_get_name((GstState) state),
++//      gst_element_state_get_name((GstState) pending),
++//      gst_element_state_change_return_get_name((GstStateChangeReturn) ret));
++
++    bool shouldUpdateAfterSeek = false;
++    switch (ret) {
++    case RMF_STATE_CHANGE_SUCCESS:
++//        LOG(Media, "State: %s, pending: %s",
++//            gst_element_state_get_name((GstState) state),
++//            gst_element_state_get_name((GstState) pending));
++
++        // Try to figure out ready and network states.
++        if (state == RMF_STATE_READY) {
++            m_readyState = MediaPlayer::HaveMetadata;
++            m_networkState = MediaPlayer::Empty;
++            // Cache the duration without emiting the durationchange
++            // event because it's taken care of by the media element
++            // in this precise case.
++            cacheDuration();
++        } else if (maxTimeLoaded() == duration()) {
++            m_networkState = MediaPlayer::Loaded;
++            m_readyState = MediaPlayer::HaveEnoughData;
++        } else {
++            m_readyState = currentTime() < maxTimeLoaded() ? MediaPlayer::HaveFutureData : MediaPlayer::HaveCurrentData;
++            m_networkState = MediaPlayer::Loading;
++        }
++
++        if (m_buffering && state != RMF_STATE_READY) {
++            m_readyState = MediaPlayer::HaveCurrentData;
++            m_networkState = MediaPlayer::Loading;
++        }
++
++        // Now let's try to get the states in more detail using
++        // information from GStreamer, while we sync states where
++        // needed.
++        if (state == RMF_STATE_PAUSED) {
++            if (m_buffering && m_bufferingPercentage == 100) {
++                m_buffering = false;
++                m_bufferingPercentage = 0;
++                m_readyState = MediaPlayer::HaveEnoughData;
++
++                LOG_VERBOSE(Media, "[Buffering] Complete.");
++
++                if (!m_pausedInternal) {
++                    LOG_VERBOSE(Media, "[Buffering] Restarting playback.");
++                    m_source->pause();
++                }
++            } else if (!m_buffering && (currentTime() < duration())) {
++                m_pausedInternal = true;
++            }
++        } else if (state == RMF_STATE_PLAYING) {
++            m_readyState = MediaPlayer::HaveEnoughData;
++            m_pausedInternal = false;
++
++            // HACK? handle seeks made by re-creating pipeline
++            {
++                m_player->timeChanged();
++                m_seeking = false;
++            }
++
++            if (m_buffering) {
++                m_readyState = MediaPlayer::HaveCurrentData;
++                m_networkState = MediaPlayer::Loading;
++
++                LOG_VERBOSE(Media, "[Buffering] Pausing stream for buffering.");
++                m_source->pause();
++            }
++        } else
++            m_pausedInternal = true;
++
++        // Is on-disk buffering in progress?
++        if (m_fillTimer.isActive())
++            m_networkState = MediaPlayer::Loading;
++
++        if (m_changingRate) {
++            m_player->rateChanged();
++            m_changingRate = false;
++        }
++
++        if (seeking()) {
++            shouldUpdateAfterSeek = true;
++            m_seeking = false;
++        }
++
++        break;
++    case RMF_STATE_CHANGE_ASYNC:
++//        LOG(Media, "Async: State: %s, pending: %s",
++//            gst_element_state_get_name(state),
++//            gst_element_state_get_name(pending));
++        // Change in progress
++
++        if (!m_isStreaming && !m_buffering)
++            return;
++
++        if (seeking()) {
++            shouldUpdateAfterSeek = true;
++            m_seeking = false;
++        }
++        break;
++    case RMF_STATE_CHANGE_FAILURE:
++        LOG_VERBOSE(Media, "Failure: State: %s, pending: %s",
++            gst_element_state_get_name((GstState)state),
++            gst_element_state_get_name((GstState)pending));
++        // Change failed
++        return;
++    case RMF_STATE_CHANGE_NO_PREROLL:
++        LOG_VERBOSE(Media, "No preroll: State: %s, pending: %s",
++            gst_element_state_get_name((GstState)state),
++            gst_element_state_get_name((GstState)pending));
++
++        if (state == RMF_STATE_READY)
++            m_readyState = MediaPlayer::HaveNothing;
++        else if (state == RMF_STATE_PAUSED) {
++            m_readyState = MediaPlayer::HaveEnoughData;
++            m_pausedInternal = true;
++            // Live pipelines go in PAUSED without prerolling.
++            m_isStreaming = true;
++        } else if (state == RMF_STATE_PLAYING)
++            m_pausedInternal = false;
++
++        if (seeking()) {
++            shouldUpdateAfterSeek = true;
++            m_seeking = false;
++            if (!m_pausedInternal)
++                m_source->play();
++        } else if (!m_pausedInternal)
++            m_source->play();
++
++        m_networkState = MediaPlayer::Loading;
++        break;
++    default:
++        LOG_VERBOSE(Media, "Else : %d", ret);
++        break;
++    }
++
++    if (seeking())
++        m_readyState = MediaPlayer::HaveNothing;
++
++    if (shouldUpdateAfterSeek)
++        timeChanged();
++
++    if (m_networkState != oldNetworkState) {
++        LOG(Media, "Network State Changed from %u to %u",
++            oldNetworkState, m_networkState);
++        m_player->networkStateChanged();
++    }
++    if (m_readyState != oldReadyState) {
++        LOG(Media, "Ready State Changed from %u to %u",
++            oldReadyState, m_readyState);
++        m_player->readyStateChanged();
++    }
++}
++
++void MediaPlayerPrivateDLNA::timeChanged()
++{
++    updateStates();
++    m_player->timeChanged();
++}
++
++void MediaPlayerPrivateDLNA::didEnd()
++{
++    if (m_progressTimer.isActive())
++        m_progressTimer.stop();
++
++    if (m_playbackRate < 0)
++    {
++        if (m_url.contains("vod://")) {
++            g_print("MediaPlayerPrivateDLNA: We have hit VOD starting point when rewinding\n");
++            m_isEndReached = true;
++        }
++        // Grab the client media element
++        HTMLMediaElement* element = static_cast<HTMLMediaElement*>(m_player->mediaPlayerClient());
++        /* Update the speed to 1.0 */
++        element->setPlaybackRate(1.0);
++        return;
++    }
++    else if ((m_isInProgressRecording) && (m_playbackRate > 1))
++    {
++
++        m_isEndReached = true;
++        // Grab the client media element
++        HTMLMediaElement* element = static_cast<HTMLMediaElement*>(m_player->mediaPlayerClient());
++        /* Update the speed to 1.0 */
++        element->setPlaybackRate(1.0);
++        return;
++    }
++
++    m_isEndReached = true;
++    // EOS was reached but in case of reverse playback the position is
++    // not always 0. So to not confuse the HTMLMediaElement we
++    // synchronize position and duration values.
++    float now = currentTime();
++    if (now > 0) {
++        m_mediaDuration = now;
++        m_mediaDurationKnown = true;
++        m_player->durationChanged();
++    }
++
++    timeChanged();
++}
++
++void MediaPlayerPrivateDLNA::cacheDuration()
++{
++    if (0 == m_mediaDuration)
++        m_mediaDuration = currentTime();
++
++    m_mediaDurationKnown = !isinf(m_mediaDuration);
++}
++
++void MediaPlayerPrivateDLNA::durationChanged()
++{
++    float previousDuration = m_mediaDuration;
++
++    cacheDuration();
++    // Avoid emiting durationchanged in the case where the previous
++    // duration was 0 because that case is already handled by the
++    // HTMLMediaElement.
++    if (previousDuration && m_mediaDuration != previousDuration)
++        m_player->durationChanged();
++}
++
++bool MediaPlayerPrivateDLNA::supportsMuting() const
++{
++    return true;
++}
++
++void MediaPlayerPrivateDLNA::setMuted(bool muted)
++{
++    if (!m_sink)
++        return;
++
++    m_sink->setMuted(muted);
++}
++
++void MediaPlayerPrivateDLNA::notifyPlayerOfMute()
++{
++    m_muteTimerHandler = 0;
++
++    if (!m_player || !m_sink)
++        return;
++
++    m_player->muteChanged(m_sink->getMuted());
++}
++
++void MediaPlayerPrivateDLNA::muteChanged()
++{
++    if (m_muteTimerHandler)
++        g_source_remove(m_muteTimerHandler);
++    m_muteTimerHandler = g_timeout_add(0, reinterpret_cast<GSourceFunc>(mediaPlayerPrivateMuteChangeTimeoutCallback), this);
++}
++
++void MediaPlayerPrivateDLNA::loadingFailed(MediaPlayer::NetworkState error)
++{
++    m_errorOccured = true;
++    if (m_networkState != error) {
++        m_networkState = error;
++        m_player->networkStateChanged();
++    }
++    if (m_readyState != MediaPlayer::HaveNothing) {
++        m_readyState = MediaPlayer::HaveNothing;
++        m_player->readyStateChanged();
++    }
++}
++
++void MediaPlayerPrivateDLNA::setSize(const IntSize& size)
++{
++    m_size = size;
++}
++
++void MediaPlayerPrivateDLNA::setVisible(bool visible)
++{
++}
++
++void MediaPlayerPrivateDLNA::triggerRepaint(GstBuffer* buffer)
++{
++    m_player->repaint();
++}
++
++void MediaPlayerPrivateDLNA::paint(GraphicsContext* context, const IntRect& rect)
++{
++    int x, y, w, h;
++    if (context->paintingDisabled())
++        return;
++
++    if (!m_player->visible())
++        return;
++
++    // Convert rect to absolute coordinates by adding the QGraphicsWebView origin.
++    const QMatrix& matrix = static_cast<QPainter*>(context->platformContext())->matrix();
++    x= rect.x() + matrix.dx();
++    y= rect.y() + matrix.dy();
++    w= rect.width();
++    h= rect.height();
++    if ( x < 0 ) x= 0;
++    if ( y < 0 ) y= 0;
++
++    IntRect temp (x,y,w,h);
++    if(m_lastKnownRect != temp)
++    {
++        m_lastKnownRect = temp;
++        m_sink->setVideoRectangle(x, y, w, h, true);
++    }
++
++    context->clearRect( FloatRect(rect) );
++}
++
++static HashSet<String> mimeTypeCache()
++{
++    DEFINE_STATIC_LOCAL(HashSet<String>, cache, ());
++    static bool typeListInitialized = false;
++
++    if (!typeListInitialized) {
++        cache.add("video/x-m2ts");
++        typeListInitialized = true;
++    }
++
++    return cache;
++}
++
++void MediaPlayerPrivateDLNA::getSupportedTypes(HashSet<String>& types)
++{
++    types = mimeTypeCache();
++}
++
++MediaPlayer::SupportsType MediaPlayerPrivateDLNA::supportsType(const String& type, const String& codecs, const KURL&)
++{
++    if (type.isNull() || type.isEmpty())
++        return MediaPlayer::IsNotSupported;
++
++    if (type == "video/x-m2ts")
++        return MediaPlayer::IsSupported;
++
++    // spec says we should not return "probably" if the codecs string is empty
++    if (mimeTypeCache().contains(type))
++        return codecs.isEmpty() ? MediaPlayer::MayBeSupported : MediaPlayer::IsSupported;
++    return MediaPlayer::IsNotSupported;
++}
++
++bool MediaPlayerPrivateDLNA::hasSingleSecurityOrigin() const
++{
++    return true;
++}
++
++bool MediaPlayerPrivateDLNA::supportsFullscreen() const
++{
++#if defined(BUILDING_ON_LEOPARD)
++    // See <rdar://problem/7389945>
++    return false;
++#else
++    return true;
++#endif
++}
++
++PlatformMedia MediaPlayerPrivateDLNA::platformMedia() const
++{
++    PlatformMedia p;
++    p.type = PlatformMedia::None;
++    p.media.gstreamerGWorld = NULL;
++    return p;
++}
++
++void MediaPlayerPrivateDLNA::setPreload(MediaPlayer::Preload preload)
++{
++    // FIXME: implement this?
++    LOG(Media, "setPreload(%s) NOT IMPLEMENTED",
++        preload == MediaPlayer::Auto ? "Auto" : preload == MediaPlayer::None ? "None" : "MetaData");
++    //LOG(Media, "m_delayingLoad = %d m_preload = %d", m_delayingLoad, m_preload);
++    if (m_delayingLoad && m_preload != MediaPlayer::None)
++    {
++        m_delayingLoad = false;
++        commitLoad();
++    }
++}
++
++}
++
++#include "moc_MediaPlayerPrivateDLNA.cpp"
++//COMCAST MODIFICATION END [DLNA]
+Index: qtwebkit-opensource-src-5.1.1/Source/WebCore/platform/graphics/dlna/MediaPlayerPrivateDLNA.h
+===================================================================
+--- /dev/null
++++ qtwebkit-opensource-src-5.1.1/Source/WebCore/platform/graphics/dlna/MediaPlayerPrivateDLNA.h
+@@ -0,0 +1,256 @@
++//COMCAST MODIFICATION BEGIN [DLNA]
++/*
++ * Copyright (C) 2007, 2009 Apple Inc.  All rights reserved.
++ * Copyright (C) 2007 Collabora Ltd. All rights reserved.
++ * Copyright (C) 2007 Alp Toker <alp@atoker.com>
++ * Copyright (C) 2009, 2010 Igalia S.L
++ *
++ * This library is free software; you can redistribute it and/or
++ * modify it under the terms of the GNU Library General Public
++ * License as published by the Free Software Foundation; either
++ * version 2 of the License, or (at your option) any later version.
++ *
++ * This library is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++ * Library General Public License for more details.
++ *
++ * You should have received a copy of the GNU Library General Public License
++ * aint with this library; see the file COPYING.LIB.  If not, write to
++ * the Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
++ * Boston, MA 02110-1301, USA.
++ */
++
++#ifndef MediaPlayerPrivateDLNA_h
++#define MediaPlayerPrivateDLNA_h
++
++#include "MediaPlayerPrivate.h"
++#include <QNetworkAccessManager>
++#include <QNetworkRequest>
++#include <QNetworkReply>
++#include <QObject>
++#include <QMutex>
++#include <QMutexLocker>
++#include <QThread>
++#include <QSharedPointer>
++#include <gst/gst.h>
++#include "hnsource.h"
++#include "mediaplayersink.h"
++#include "dumpfilesink.h"
++#include <wtf/OwnPtr.h>
++#include "Timer.h"
++
++typedef struct _WebKitVideoSink WebKitVideoSink;
++typedef struct _GstBuffer GstBuffer;
++typedef struct _GstMessage GstMessage;
++typedef struct _GstElement GstElement;
++
++class HNSource;
++class MediaPlayerSink;
++class DumpFileSink;
++
++namespace WebCore {
++
++class GraphicsContext;
++class IntSize;
++class IntRect;
++class MediaPlayerPrivateDLNA;
++class MediaEvents;
++
++class MediaPlayerPrivateDLNA : public QObject, public MediaPlayerPrivateInterface
++{
++        Q_OBJECT;
++        public:
++            ~MediaPlayerPrivateDLNA();
++            static void registerMediaEngine(MediaEngineRegistrar);
++
++            IntSize naturalSize() const;
++            bool hasVideo() const { return m_hasVideo; }
++            bool hasAudio() const { return m_hasAudio; }
++
++            void load(const String &url);
++            void commitLoad();
++            void cancelLoad();
++
++            const String& getURL() const { return m_url; }
++            void prepareToPlay();
++            void play();
++            void pause();
++            void stop(); // XXX missing in the interface
++
++            bool paused() const;
++            bool seeking() const;
++
++            float duration() const;
++            float currentTime() const;
++            void seek(float);
++
++            void setRate(float speed);
++            float getRate() const { return m_playbackRate; }
++
++            void setVolume(float);
++            void volumeChanged();
++            void notifyPlayerOfVolumeChange();
++
++            bool supportsMuting() const;
++            void setMuted(bool);
++            void muteChanged();
++            void notifyPlayerOfMute();
++
++            void setPreload(MediaPlayer::Preload);
++            void fillTimerFired(Timer<MediaPlayerPrivateDLNA>*);
++
++            static void setDlnaHeaders(GstElement* src, float speed, float pos);
++            void setRateInternal();
++            MediaPlayer::NetworkState networkState() const;
++            MediaPlayer::ReadyState readyState() const;
++
++            PassRefPtr<TimeRanges> buffered() const;
++            float maxTimeSeekable() const;
++
++            void setVisible(bool);
++            void triggerRepaint(GstBuffer* buffer);
++            void setSize(const IntSize&);
++
++            virtual bool didLoadingProgress() const { return false; }
++
++            void timeChanged();
++            void didEnd();
++            void durationChanged();
++            void loadingFailed(MediaPlayer::NetworkState);
++
++            void paint(GraphicsContext*, const IntRect&);
++
++            bool hasSingleSecurityOrigin() const;
++
++            bool supportsFullscreen() const;
++            PlatformMedia platformMedia() const;
++
++            void notifyPlayerOfVideoAsync();
++            void notifyPlayerOfVideo();
++            void notifyPlayerOfAudioAsync();
++            void notifyPlayerOfAudio();
++
++            void notifyPlayerOfFirstAudioFrame();
++            void notifyPlayerOfFirstVideoFrame();
++            void notifyPlayerOfMediaWarning();
++            void onPlay();
++            void onPause();
++            void onStop();
++
++            unsigned videoDecodedByteCount() const;
++
++            /****************************************************************
++            *                  Comcast customized changes                  *
++            ****************************************************************/
++            unsigned long getCCDecoderHandle () const;
++            void setAudioLanguage (const String& audioLang);
++            void setVideoZoom (unsigned short zoomVal);
++            void setVideoBufferLength (float bufferLength);
++            void setIsInProgressRecording (bool isInProgress);
++            String getMediaErrorMessage (void);
++            void setMediaErrorMessage (const String &);
++            void seekToLivePosition(void);
++            void seekToStartPosition(void);
++            void changeSpeed(float, short);
++            String getRMFMediaWarnMsg (void);
++            short getBufferedMediaSize (void);
++            void setNetworkBufferSize (int bufferSize);
++
++        private:
++            MediaPlayerPrivateDLNA(MediaPlayer*);
++
++            static PassOwnPtr<MediaPlayerPrivateInterface> create(MediaPlayer*);
++
++            static void getSupportedTypes(HashSet<String>&);
++            static MediaPlayer::SupportsType supportsType(const String& type, const String& codecs, const KURL&);
++            static bool isAvailable();
++
++            bool isMpegTS() const;
++            bool wantAudio() const { return getRate() == 1; } // no audio when seeking
++
++            float playbackPosition() const;
++
++            void cacheDuration();
++            void updateStates();
++            float maxTimeLoaded() const;
++
++            void readMetadata();
++
++            MediaPlayer* m_player;
++            HNSource* m_source;
++            MediaPlayerSink* m_sink;
++            DumpFileSink* m_dfsink;
++            MediaEvents* m_events;
++
++            String m_url;
++            bool m_changingRate;
++            float m_endTime;
++            MediaPlayer::NetworkState m_networkState;
++            MediaPlayer::ReadyState m_readyState;
++            mutable bool m_isStreaming;
++            IntSize m_size;
++            bool m_paused;
++            bool m_pausedInternal;
++            bool m_seeking;
++            bool m_buffering;
++            float m_playbackRate;
++            bool m_errorOccured;
++            gfloat m_mediaDuration;
++            bool m_startedBuffering;
++            Timer<MediaPlayerPrivateDLNA> m_fillTimer;
++            float m_maxTimeLoaded;
++            int m_bufferingPercentage;
++            MediaPlayer::Preload m_preload;
++            bool m_delayingLoad;
++            bool m_mediaDurationKnown;
++            guint m_volumeTimerHandler;
++            guint m_muteTimerHandler;
++            bool m_hasVideo;
++            bool m_hasAudio;
++
++            guint m_videoTimerHandler;
++            guint m_audioTimerHandler;
++            IntRect m_lastKnownRect;
++            float m_currentPosition;
++            bool m_isVOnlyOnce;
++            bool m_isAOnlyOnce;
++            bool m_isEndReached;
++            bool m_isInProgressRecording;
++            String m_errorMsg;
++            Timer<MediaPlayerPrivateDLNA> m_progressTimer;
++            QNetworkAccessManager* m_networkAccessManager;
++            float m_baseSeekTime;
++            float m_currentProgressTime;
++            String m_rmfMediaWarnMsg;
++            int m_networkBufferSize;
++            unsigned char m_restartPlaybackCount;
++
++
++            void onProgressTimerTimeout(Timer<MediaPlayerPrivateDLNA>*);
++            void fetchHeaders(void);
++
++            void time_to_hms(float time, unsigned& h, unsigned& m, float& s);
++            void fetchHeadersForTrickMode(float speed, double time);
++            bool m_fetchTrickModeHeaders;
++            bool m_EOSPending;
++			bool m_VODKeepPipelinePlaying;
++
++            void onFrameReceived(void);
++
++        Q_SIGNALS:
++            void emitVideoFrameReceived();
++            void emitAudioFrameReceived();
++            void emitMediaWarningReceived();
++
++        private Q_SLOTS:
++            void onReplyFinished(QNetworkReply *reply);
++            void onReplyError(QNetworkReply::NetworkError);
++            void onFirstVideoFrame();
++            void onFirstAudioFrame();
++            void onMediaWarningReceived();
++    };
++}
++
++#endif
++//COMCAST MODIFICATION END [DLNA]
+Index: qtwebkit-opensource-src-5.1.1/Source/WebCore/platform/graphics/MediaPlayer.cpp
+===================================================================
+--- qtwebkit-opensource-src-5.1.1.orig/Source/WebCore/platform/graphics/MediaPlayer.cpp
++++ qtwebkit-opensource-src-5.1.1/Source/WebCore/platform/graphics/MediaPlayer.cpp
+@@ -48,11 +48,28 @@
+ #include <QtGlobal>
+ #endif
+ 
++//COMCAST MODIFICATION BEGIN [WEBRTC]
++#if ENABLE(MEDIA_STREAM)
++#include "MediaStreamDescriptor.h"
++#include "MediaStreamRegistry.h"
++#include "MediaPlayerPrivateMS.h"
++#endif
++//COMCAST MODIFICATION END [WEBRTC]
++
+ #if USE(GSTREAMER)
+ #include "MediaPlayerPrivateGStreamer.h"
+ #define PlatformMediaEngineClassName MediaPlayerPrivateGStreamer
++//COMCAST MODIFICATION BEGIN [DLNA]
++#if ENABLE(DLNA_VIDEO_PLAYER)
++#include "MediaPlayerPrivateDLNA.h"
++#endif
++//COMCAST MODIFICATION END [DLNA]
+ #endif
+ 
++//COMCAST MODIFICATION BEGIN [AVE]
++#include "MediaPlayerPrivateExternalVideo.h"
++//COMCAST MODIFICATION END [AVE]
++
+ #if PLATFORM(MAC) || (PLATFORM(QT) && USE(QTKIT))
+ #include "MediaPlayerPrivateQTKit.h"
+ #if USE(AVFOUNDATION)
+@@ -128,6 +145,20 @@ public:
+     virtual bool hasClosedCaptions() const { return false; }
+     virtual void setClosedCaptionsVisible(bool) { };
+ 
++//COMCAST MODIFICATION BEGIN
++    virtual unsigned long getCCDecoderHandle () const { return 0; }
++    virtual void setAudioLanguage (const String& audioLang) {}
++    virtual void setVideoZoom (unsigned short zoomval) {}
++    virtual void setVideoBufferLength (float bufferLength) {}
++    virtual void setIsInProgressRecording (bool isInProgress) {}
++    virtual String getMediaErrorMessage (void)  {return ""; }
++    virtual void seekToLivePosition (void) {}
++    virtual String getRMFMediaWarnMsg (void)  {return ""; }
++    virtual short getBufferedMediaSize (void) {return 0;}
++    virtual void setNetworkBufferSize (int buffersize) {}
++    virtual void changeSpeed(float speed, short overShootTime) {}
++//COMCAST MODIFICATION END
++
+     virtual MediaPlayer::NetworkState networkState() const { return MediaPlayer::Empty; }
+     virtual MediaPlayer::ReadyState readyState() const { return MediaPlayer::HaveNothing; }
+ 
+@@ -226,6 +257,29 @@ static Vector<MediaPlayerFactory*>& inst
+ #if defined(PlatformMediaEngineClassName)
+         PlatformMediaEngineClassName::registerMediaEngine(addMediaEngine);
+ #endif
++
++//COMCAST MODIFICATION BEGIN [WEBRTC]
++#if ENABLE(MEDIA_STREAM)
++        MediaPlayerPrivateMS::registerMediaEngine(addMediaEngine);
++#endif
++//COMCAST MODIFICATION END [WEBRTC]
++
++//COMCAST MODIFICATION BEGIN [DLNA]
++#if ENABLE(DLNA_VIDEO_PLAYER)
++        MediaPlayerPrivateDLNA::registerMediaEngine(addMediaEngine);
++#endif
++//COMCAST MODIFICATION END [DLNA]
++
++//COMCAST MODIFICATION BEGIN [AVE]
++		MediaPlayerPrivateExternalVideo::registerMediaEngine(addMediaEngine);
++//COMCAST MODIFICATION END [AVE]
++
++//COMCAST MODIFICATION BEGIN [WEBRTC]
++#if ENABLE(MEDIA_STREAM)
++        MediaPlayerPrivateMS::registerMediaEngine(addMediaEngine);
++#endif
++//COMCAST MODIFICATION END [WEBRTC]
++
+     }
+ 
+     return installedEngines;
+@@ -298,6 +352,13 @@ static MediaPlayerFactory* bestMediaEngi
+         }
+     }
+ 
++//COMCAST MODIFICATION BEGIN [DLNA]
++#if ENABLE(DLNA_VIDEO_PLAYER)
++    if (!engine) {
++        g_print("WARNING: Engine for MIME type [%s] not found\n", type.utf8().data());
++    }
++#endif
++//COMCAST MODIFICATION END [DLNA]
+     return engine;
+ }
+ 
+@@ -351,12 +412,27 @@ MediaPlayer::MediaPlayer(MediaPlayerClie
+ 
+ MediaPlayer::~MediaPlayer()
+ {
++//COMCAST MODIFICATION BEGIN
++    if (m_mediaPlayerClient)
++        m_mediaPlayerClient->mediaPlayerEngineUpdated(this);
++//COMCAST MODIFICATION END
+     m_mediaPlayerClient = 0;
+ }
+ 
+ bool MediaPlayer::load(const KURL& url, const ContentType& contentType, const String& keySystem)
+ {
+     m_contentMIMEType = contentType.type().lower();
++
++//COMCAST MODIFICATION BEGIN [DLNA]
++#if ENABLE(DLNA_VIDEO_PLAYER)
++    // Force to handling MediaStreamer URLs with the DLNA player.
++    if (url.string().contains("/vldms/") || url.string().contains("profile=MPEG_TS") || url.string().contains("/hnStreamStart")) {
++        m_contentMIMEType = "video/x-m2ts";
++        g_print("Detected DLNA stream, assuming %s\n", m_contentMIMEType.utf8().data());
++    }
++#endif
++//COMCAST MODIFICATION END [DLNA]
++
+     m_contentTypeCodecs = contentType.parameter(codecs());
+     m_url = url;
+     m_keySystem = keySystem.lower();
+@@ -388,6 +464,16 @@ void MediaPlayer::loadWithNextMediaEngin
+ {
+     MediaPlayerFactory* engine = 0;
+ 
++//COMCAST MODIFICATION BEGIN [WEBRTC]
++#if ENABLE(MEDIA_STREAM)
++    if (MediaStreamRegistry::registry().lookupMediaStreamDescriptor(m_url) != NULL) {
++        Vector<MediaPlayerFactory*>& engines = installedMediaEngines();
++        engine = engines[engines.size() -1]; // use MediaPlayerPrivateMS for media streams
++    } else
++#endif
++//COMCAST MODIFICATION END [WEBRTC]
++
++
+     if (!m_contentMIMEType.isEmpty())
+         engine = bestMediaEngineForTypeAndCodecs(m_contentMIMEType, m_contentTypeCodecs, m_keySystem, m_url, current);
+ 
+@@ -660,6 +746,73 @@ void MediaPlayer::setClosedCaptionsVisib
+     m_private->setClosedCaptionsVisible(closedCaptionsVisible);
+ }
+ 
++//COMCAST MODIFICATION BEGIN
++unsigned long MediaPlayer::getCCDecoderHandle () const
++{
++    return m_private->getCCDecoderHandle();
++}
++
++void MediaPlayer::setAudioLanguage (const String& audioLang)
++{
++    m_private->setAudioLanguage (audioLang);
++    return;
++}
++
++void MediaPlayer::setVideoZoom (unsigned short zoomVal)
++{
++    m_private->setVideoZoom(zoomVal);
++    return;
++}
++
++void MediaPlayer::setVideoBufferLength (float bufferLength)
++{
++    m_private->setVideoBufferLength(bufferLength);
++    return;
++}
++
++void MediaPlayer::setIsInProgressRecording (bool isInProgress)
++{
++    m_private->setIsInProgressRecording(isInProgress);
++    return;
++}
++
++String MediaPlayer::getMediaErrorMessage (void)
++{
++    return m_private->getMediaErrorMessage();
++}
++
++void MediaPlayer::seekToLivePosition(void)
++{
++    m_rate = 1.0f;
++    m_private->seekToLivePosition();
++    return;
++}
++
++void MediaPlayer::changeSpeed(float speed, short overShootTime)
++{
++    m_rate = speed;
++    m_private->changeSpeed(speed, overShootTime);
++    return;
++}
++
++String MediaPlayer::getRMFMediaWarnMsg (void)
++{
++    return m_private->getRMFMediaWarnMsg();
++}
++
++short MediaPlayer::getBufferedMediaSize(void)
++{
++    return m_private->getBufferedMediaSize();
++}
++
++void MediaPlayer::setNetworkBufferSize (short bufferSize)
++{
++    m_private->setNetworkBufferSize (bufferSize);
++    return;
++}
++
++//COMCAST MODIFICATION END
++
+ float MediaPlayer::rate() const
+ {
+     return m_rate;
+@@ -975,6 +1128,29 @@ void MediaPlayer::readyStateChanged()
+         m_mediaPlayerClient->mediaPlayerReadyStateChanged(this);
+ }
+ 
++//COMCAST MODIFICATION BEGIN
++void MediaPlayer::mediaFrameReceived()
++{
++    if (m_mediaPlayerClient)
++        m_mediaPlayerClient->mediaPlayerMediaFrameReceived(this);
++}
++
++void MediaPlayer::mediaWarningReceived()
++{
++    if (m_mediaPlayerClient)
++        m_mediaPlayerClient->mediaPlayerMediaWarningReceived(this);
++}
++
++void MediaPlayer::rateChanged(float givenRate)
++{
++    if (m_rate != givenRate)
++    {
++        m_rate = givenRate;
++        rateChanged();
++    }
++}
++//COMCAST MODIFICATION END
++
+ void MediaPlayer::volumeChanged(float newVolume)
+ {
+     m_volume = newVolume;
+Index: qtwebkit-opensource-src-5.1.1/Source/WebCore/html/HTMLMediaElement.cpp
+===================================================================
+--- qtwebkit-opensource-src-5.1.1.orig/Source/WebCore/html/HTMLMediaElement.cpp
++++ qtwebkit-opensource-src-5.1.1/Source/WebCore/html/HTMLMediaElement.cpp
+@@ -211,6 +211,16 @@ HTMLMediaElement::HTMLMediaElement(const
+     , m_playedTimeRanges()
+     , m_asyncEventQueue(GenericEventQueue::create(this))
+     , m_playbackRate(1.0f)
++//COMCAST MODIFICATION BEGIN
++    , m_audioLanguage("")
++    , m_videoZoom(0)
++    , m_videoBufferLength(0.0)
++    , m_isInProgressRecording(false)
++    , m_jumpToLive(false)
++    , m_errorMsg("")
++    , m_rmfMediaWarnMsg("")
++    , m_networkBufferSize(0)
++//COMCAST MODIFICATION END
+     , m_defaultPlaybackRate(1.0f)
+     , m_webkitPreservesPitch(true)
+     , m_networkState(NETWORK_EMPTY)
+@@ -451,6 +461,13 @@ void HTMLMediaElement::parseAttribute(co
+         setAttributeEventListener(eventNames().webkitbeginfullscreenEvent, createAttributeEventListener(this, name, value));
+     else if (name == onwebkitendfullscreenAttr)
+         setAttributeEventListener(eventNames().webkitendfullscreenEvent, createAttributeEventListener(this, name, value));
++
++//COMCAST MODIFICATION BEGIN
++    else if (name == onmediaframereceivedAttr)
++        setAttributeEventListener(eventNames().mediaframereceivedEvent, createAttributeEventListener(this, name, value));
++    else if (name == onmediawarningAttr)
++        setAttributeEventListener(eventNames().mediawarningEvent, createAttributeEventListener(this, name, value));
++//COMCAST MODIFICATION END
+     else
+         HTMLElement::parseAttribute(name, value);
+ }
+@@ -1550,6 +1567,31 @@ void HTMLMediaElement::mediaPlayerNetwor
+     endProcessingMediaPlayerCallback();
+ }
+ 
++//COMCAST MODIFICATION BEGIN
++void HTMLMediaElement::mediaPlayerMediaFrameReceived(MediaPlayer*)
++{
++    beginProcessingMediaPlayerCallback();
++
++    if (m_player) {
++        scheduleEvent(eventNames().mediaframereceivedEvent);
++    }
++
++    endProcessingMediaPlayerCallback();
++}
++
++void HTMLMediaElement::mediaPlayerMediaWarningReceived (MediaPlayer*)
++{
++    beginProcessingMediaPlayerCallback();
++
++    if (m_player) {
++        m_rmfMediaWarnMsg = m_player->getRMFMediaWarnMsg();
++        scheduleEvent(eventNames().mediawarningEvent);
++    }
++
++    endProcessingMediaPlayerCallback();
++}
++//COMCAST MODIFICATION END
++
+ static void logMediaLoadRequest(Page* page, const String& mediaEngine, const String& errorMessage, bool succeeded)
+ {
+     if (!page || !page->settings()->diagnosticLoggingEnabled())
+@@ -1638,6 +1680,9 @@ void HTMLMediaElement::setNetworkState(M
+     }
+ 
+     if (state == MediaPlayer::FormatError || state == MediaPlayer::NetworkError || state == MediaPlayer::DecodeError) {
++//COMCAST MODIFICATION BEGIN
++        m_errorMsg = m_player->getMediaErrorMessage();
++//COMCAST MODIFICATION END
+         mediaLoadingFailed(state);
+         return;
+     }
+@@ -2213,6 +2258,15 @@ void HTMLMediaElement::setCurrentTime(fl
+     seek(time, ec);
+ }
+ 
++//COMCAST MODIFICATION BEGIN
++unsigned long HTMLMediaElement::vidHandle() const
++{
++    if (!m_player)
++        return 0;
++    return m_player->getCCDecoderHandle();
++}
++//COMCAST MODIFICATION END
++
+ float HTMLMediaElement::startTime() const
+ {
+     if (!m_player)
+@@ -2276,6 +2330,154 @@ void HTMLMediaElement::setPlaybackRate(f
+         m_player->setRate(rate);
+ }
+ 
++//COMCAST MODIFICATION BEGIN
++const String& HTMLMediaElement::errorMsg() const
++{
++    return m_errorMsg;
++}
++
++bool HTMLMediaElement::isInProgressRecording() const
++{
++    return m_isInProgressRecording;
++}
++
++void HTMLMediaElement::setIsInProgressRecording(bool isInProgress)
++{
++    LOG(Media, "HTMLMediaElement::setIsInProgressRecording (%d)", isInProgress);
++    if ((m_player) && (m_isInProgressRecording != isInProgress))
++    {
++        m_isInProgressRecording = isInProgress;
++        m_player->setIsInProgressRecording (m_isInProgressRecording);
++    }
++
++    return;
++}
++
++bool HTMLMediaElement::jumpToLive() const
++{
++    return m_jumpToLive;
++}
++
++void HTMLMediaElement::setJumpToLive (bool seekToLive)
++{
++    LOG(Media, "HTMLMediaElement::setJumpToLive (%d)", seekToLive);
++    if (m_player && m_isInProgressRecording && seekToLive)
++    {
++        if (m_playbackRate != 1.0) {
++            m_playbackRate = 1.0;
++            invalidateCachedTime();
++            scheduleEvent(eventNames().ratechangeEvent);
++        }
++        m_player->seekToLivePosition();
++    }
++
++    return;
++}
++
++void HTMLMediaElement::changeSpeed(float speed, short overShootTime)
++{
++    LOG(Media, "HTMLMediaElement::changeSpeed (%f, %d)", speed, overShootTime);
++    if (m_player && m_player->rate() != speed && !m_mediaController)
++    {
++        if (m_playbackRate != speed)
++        {
++            m_playbackRate = speed;
++            if (m_paused)
++                m_paused = false;
++
++            invalidateCachedTime();
++            scheduleEvent(eventNames().ratechangeEvent);
++
++            m_player->changeSpeed(speed, overShootTime);
++        }
++    }
++    return;
++}
++
++float HTMLMediaElement::videoBufferLength () const
++{
++    return m_videoBufferLength;
++}
++
++void HTMLMediaElement::setVideoBufferLength (float bufferLength)
++{
++    LOG(Media, "HTMLMediaElement::setBufferLength(%f)", bufferLength);
++    if ((m_player) && (m_videoBufferLength != bufferLength))
++    {
++        m_videoBufferLength = bufferLength;
++        m_player->setVideoBufferLength (bufferLength);
++    }
++
++    return;
++}
++
++unsigned short HTMLMediaElement::videoZoom() const
++{
++    return m_videoZoom;
++}
++
++void HTMLMediaElement::setVideoZoom(unsigned short zoomVal)
++{
++    LOG(Media, "HTMLMediaElement::setVideoZoom (%u)", zoomVal);
++
++    if (m_player)
++    {
++        m_videoZoom = zoomVal;
++        m_player->setVideoZoom (zoomVal);
++    }
++
++    return;
++}
++
++const String& HTMLMediaElement::audioLanguage() const
++{
++    return m_audioLanguage;
++}
++
++void HTMLMediaElement::setAudioLanguage(const String& language)
++{
++    LOG(Media, "HTMLMediaElement::setAudioLanguage(%s)", language.utf8().data());
++
++    if (m_audioLanguage != language) {
++        m_audioLanguage = language;
++    }
++
++    if (m_player)
++        m_player->setAudioLanguage (language);
++}
++
++short HTMLMediaElement::networkBufferSize() const
++{
++    return m_networkBufferSize;
++}
++
++const String& HTMLMediaElement::rmfMediaWarnMsg() const
++{
++    return m_rmfMediaWarnMsg;
++}
++
++short HTMLMediaElement::bufferedMediaSize() const
++{
++    if (m_player)
++        return m_player->getBufferedMediaSize();
++
++    return 0;
++}
++
++void HTMLMediaElement::setNetworkBufferSize (short networkBufferSize)
++{
++    LOG(Media, "HTMLMediaElement::setNetworkBufferSize (%d)", networkBufferSize);
++
++    if (m_player)
++    {
++        m_networkBufferSize = networkBufferSize;
++        m_player->setNetworkBufferSize (networkBufferSize);
++    }
++
++    return;
++}
++//COMCAST MODIFICATION END
++
+ void HTMLMediaElement::updatePlaybackRate()
+ {
+     float effectiveRate = m_mediaController ? m_mediaController->playbackRate() : m_playbackRate;
+@@ -3805,15 +4007,27 @@ void HTMLMediaElement::stop()
+     
+     // Stop the playback without generating events
+     m_playing = false;
+-    setPausedInternal(true);
+-    
++//COMCAST MODIFICATION BEGIN
++    //setPausedInternal(true);
++    stopPeriodicTimers();
++    if (hasMediaControls())
++        mediaControls()->playbackStopped();
++//COMCAST MODIFICATION END
++
+     if (renderer())
+         renderer()->updateFromElement();
+     
+-    stopPeriodicTimers();
++//COMCAST MODIFICATION BEGIN
++    //stopPeriodicTimers();
++//COMCAST MODIFICATION END
+     cancelPendingEventsAndCallbacks();
+ 
+     m_asyncEventQueue->close();
++
++    //COMCAST MODIFICATION BEGIN
++    // Once an active DOM object has been stopped it will not be restarted, so we can deallocate the media player now.
++    m_player.clear();
++    //COMCAST MODIFICATION END
+ }
+ 
+ void HTMLMediaElement::suspend(ReasonForSuspension why)
+Index: qtwebkit-opensource-src-5.1.1/Source/WebCore/html/HTMLMediaElement.h
+===================================================================
+--- qtwebkit-opensource-src-5.1.1.orig/Source/WebCore/html/HTMLMediaElement.h
++++ qtwebkit-opensource-src-5.1.1/Source/WebCore/html/HTMLMediaElement.h
+@@ -165,6 +165,28 @@ public:
+     void play();
+     void pause();
+ 
++//COMCAST MODIFICATION BEGIN
++    const String& errorMsg() const;
++    bool isInProgressRecording() const;
++    void setIsInProgressRecording(bool);
++    float videoBufferLength() const;
++    void setVideoBufferLength(float);
++    bool jumpToLive() const;
++    void setJumpToLive(bool);
++    unsigned short videoZoom() const;
++    void setVideoZoom(unsigned short);
++    unsigned long vidHandle() const;
++    const String& audioLanguage() const;
++    void setAudioLanguage(const String&);
++    short networkBufferSize() const;
++    const String& rmfMediaWarnMsg() const;
++    short bufferedMediaSize() const;
++    void setNetworkBufferSize (short);
++    DEFINE_ATTRIBUTE_EVENT_LISTENER(mediaframereceived);
++    DEFINE_ATTRIBUTE_EVENT_LISTENER(mediawarning);
++    void changeSpeed(float speed, short overShootTime);
++//COMCAST MODIFICATION END
++
+ // captions
+     bool webkitHasClosedCaptions() const;
+     bool webkitClosedCaptionsVisible() const;
+@@ -398,6 +420,10 @@ private:
+ 
+     virtual Document* mediaPlayerOwningDocument();
+     virtual void mediaPlayerNetworkStateChanged(MediaPlayer*);
++//COMCAST MODIFICATION BEGIN
++    virtual void mediaPlayerMediaFrameReceived(MediaPlayer*);
++    virtual void mediaPlayerMediaWarningReceived(MediaPlayer*);
++//COMCAST MODIFICATION END
+     virtual void mediaPlayerReadyStateChanged(MediaPlayer*);
+     virtual void mediaPlayerTimeChanged(MediaPlayer*);
+     virtual void mediaPlayerVolumeChanged(MediaPlayer*);
+@@ -572,6 +598,16 @@ private:
+     OwnPtr<GenericEventQueue> m_asyncEventQueue;
+ 
+     float m_playbackRate;
++//COMCAST MODIFICATION BEGIN
++    String m_audioLanguage;
++    unsigned short m_videoZoom;
++    float m_videoBufferLength;
++    bool m_isInProgressRecording;
++    bool m_jumpToLive;
++    String m_errorMsg;
++    String m_rmfMediaWarnMsg;
++    short m_networkBufferSize;
++//COMCAST MODIFICATION END
+     float m_defaultPlaybackRate;
+     bool m_webkitPreservesPitch;
+     NetworkState m_networkState;
+Index: qtwebkit-opensource-src-5.1.1/Source/WebCore/html/HTMLMediaElement.idl
+===================================================================
+--- qtwebkit-opensource-src-5.1.1.orig/Source/WebCore/html/HTMLMediaElement.idl
++++ qtwebkit-opensource-src-5.1.1/Source/WebCore/html/HTMLMediaElement.idl
+@@ -83,6 +83,22 @@ attribute float volume
+ attribute boolean muted;
+ attribute [Reflect=muted] boolean defaultMuted;
+ 
++//COMCAST MODIFICATION BEGIN
++readonly attribute unsigned long vidHandle;
++attribute DOMString audioLanguage;
++attribute unsigned short videoZoom;
++attribute boolean isInProgressRecording;
++attribute boolean jumpToLive;
++attribute float videoBufferLength;
++readonly attribute DOMString errorMsg;
++[NotEnumerable] attribute EventListener onmediaframereceived;
++[NotEnumerable] attribute EventListener onmediawarning;
++readonly attribute DOMString rmfMediaWarnMsg;
++readonly attribute short bufferedMediaSize;
++attribute short networkBufferSize;
++void changeSpeed(in float speed, in short overShootTime);
++//COMCAST MODIFICATION END
++
+ // WebKit extensions
+ attribute boolean webkitPreservesPitch;
+ 
+Index: qtwebkit-opensource-src-5.1.1/Source/WebCore/platform/graphics/MediaPlayerPrivate.h
+===================================================================
+--- qtwebkit-opensource-src-5.1.1.orig/Source/WebCore/platform/graphics/MediaPlayerPrivate.h
++++ qtwebkit-opensource-src-5.1.1/Source/WebCore/platform/graphics/MediaPlayerPrivate.h
+@@ -89,6 +89,20 @@ public:
+     virtual bool hasClosedCaptions() const { return false; }    
+     virtual void setClosedCaptionsVisible(bool) { }
+ 
++//COMCAST MODIFICATION BEGIN
++    virtual unsigned long getCCDecoderHandle () const { return 0; };
++    virtual void setAudioLanguage (const String& audioLang) {}
++    virtual void setVideoZoom (unsigned short zoomval) {}
++    virtual void setVideoBufferLength (float bufferLength) {}
++    virtual void setIsInProgressRecording (bool isInProgress) {}
++    virtual String getMediaErrorMessage (void)  {return ""; }
++    virtual void seekToLivePosition (void) {}
++    virtual String getRMFMediaWarnMsg (void)  {return ""; }
++    virtual short getBufferedMediaSize(void) {return 0;}
++    virtual void setNetworkBufferSize (short buffersize) {}
++    virtual void changeSpeed(float speed, short overShootTime) {}
++//COMCAST MODIFICATION END
++
+     virtual MediaPlayer::NetworkState networkState() const = 0;
+     virtual MediaPlayer::ReadyState readyState() const = 0;
+ 
+Index: qtwebkit-opensource-src-5.1.1/Source/WebCore/platform/graphics/MediaPlayer.h
+===================================================================
+--- qtwebkit-opensource-src-5.1.1.orig/Source/WebCore/platform/graphics/MediaPlayer.h
++++ qtwebkit-opensource-src-5.1.1/Source/WebCore/platform/graphics/MediaPlayer.h
+@@ -122,6 +122,14 @@ public:
+     // the network state has changed
+     virtual void mediaPlayerNetworkStateChanged(MediaPlayer*) { }
+ 
++//COMCAST MODIFICATION BEGIN
++    // the media frame received
++    virtual void mediaPlayerMediaFrameReceived(MediaPlayer*) { }
++
++    // the media warning received
++    virtual void mediaPlayerMediaWarningReceived(MediaPlayer*) { }
++//COMCAST MODIFICATION END
++
+     // the ready state has changed
+     virtual void mediaPlayerReadyStateChanged(MediaPlayer*) { }
+ 
+@@ -324,6 +332,21 @@ public:
+     bool hasClosedCaptions() const;
+     void setClosedCaptionsVisible(bool closedCaptionsVisible);
+ 
++//COMCAST MODIFICATION BEGIN
++    unsigned long getCCDecoderHandle () const;
++    void setAudioLanguage (const String& audioLang);
++    void setVideoZoom (unsigned short zoomVal);
++    void setVideoBufferLength (float bufferLength);
++    void setIsInProgressRecording (bool isInProgress);
++    String getMediaErrorMessage (void);
++    void seekToLivePosition (void);
++    String getRMFMediaWarnMsg(void);
++    short getBufferedMediaSize (void);
++    void setNetworkBufferSize (short);
++    void changeSpeed(float, short);
++    void rateChanged(float givenRate);
++//COMCAST MODIFICATION END
++
+     bool autoplay() const;    
+     void setAutoplay(bool);
+ 
+@@ -345,6 +368,10 @@ public:
+ 
+     void networkStateChanged();
+     void readyStateChanged();
++//COMCAST MODIFICATION BEGIN
++    void mediaFrameReceived();
++    void mediaWarningReceived();
++//COMCAST MODIFICATION END
+     void volumeChanged(float);
+     void muteChanged(bool);
+     void timeChanged();
+Index: qtwebkit-opensource-src-5.1.1/Source/WebCore/platform/graphics/qt/MediaPlayerPrivateExternalVideo.cpp
+===================================================================
+--- /dev/null
++++ qtwebkit-opensource-src-5.1.1/Source/WebCore/platform/graphics/qt/MediaPlayerPrivateExternalVideo.cpp
+@@ -0,0 +1,292 @@
++//COMCAST MODIFICATION BEGIN [AVE]
++
++#include "config.h"
++#include "MediaPlayerPrivateExternalVideo.h"
++
++#include "ColorSpace.h"
++#include "GraphicsContext.h"
++#include "GraphicsTypes.h"
++#include "IntRect.h"
++#include "KURL.h"
++#include "MIMETypeRegistry.h"
++#include "MediaPlayer.h"
++#include "NotImplemented.h"
++#include "TimeRanges.h"
++
++#include <wtf/Assertions.h>
++#include <wtf/text/CString.h>
++#include "MediaStreamDescriptor.h"
++#include "MediaStreamRegistry.h"
++
++using namespace WTF;
++
++namespace WebCore {
++
++
++PassOwnPtr<MediaPlayerPrivateInterface> MediaPlayerPrivateExternalVideo::create(MediaPlayer* player)
++{
++    return adoptPtr(new MediaPlayerPrivateExternalVideo(player));
++}
++
++void MediaPlayerPrivateExternalVideo::registerMediaEngine(MediaEngineRegistrar registrar)
++{
++    registrar(create, getSupportedTypes, supportsType, 0, 0, 0);
++}
++
++void MediaPlayerPrivateExternalVideo::getSupportedTypes(HashSet<String> &supported)
++{
++    static HashSet<String> supportedTypes;
++    if (supportedTypes.isEmpty()) {
++    	supportedTypes.add(String("video/ave"));
++    }
++    supported = supportedTypes;
++}
++
++MediaPlayer::SupportsType MediaPlayerPrivateExternalVideo::supportsType(const String& mime, const String& codec, const KURL&)
++{
++    if (mime.isEmpty())
++        return MediaPlayer::IsNotSupported;
++
++    HashSet<String> supportedTypes;
++    getSupportedTypes(supportedTypes);
++    if (supportedTypes.contains(mime))
++        return codec.isEmpty() ? MediaPlayer::MayBeSupported : MediaPlayer::IsSupported;
++    return MediaPlayer::IsNotSupported;
++}
++
++MediaPlayerPrivateExternalVideo::MediaPlayerPrivateExternalVideo(MediaPlayer* player)
++    : m_networkState(MediaPlayer::Empty)
++    , m_readyState(MediaPlayer::HaveNothing)
++	, m_currentSize(0,0)
++    , m_isVisible(true)
++	, m_composited(false)
++{
++}
++
++MediaPlayerPrivateExternalVideo::~MediaPlayerPrivateExternalVideo()
++{
++}
++
++bool MediaPlayerPrivateExternalVideo::hasVideo() const
++{
++	return true;
++}
++
++bool MediaPlayerPrivateExternalVideo::hasAudio() const
++{
++    return true;
++}
++
++void MediaPlayerPrivateExternalVideo::load(const String& url)
++{
++    // We are now loading
++    if (m_networkState != MediaPlayer::Loading) {
++        m_networkState = MediaPlayer::Loading;
++    }
++
++    // And we don't have any data yet
++    if (m_readyState != MediaPlayer::HaveNothing) {
++        m_readyState = MediaPlayer::HaveNothing;
++    }
++}
++
++void MediaPlayerPrivateExternalVideo::cancelLoad()
++{
++    updateStates();
++}
++
++void MediaPlayerPrivateExternalVideo::play()
++{
++
++}
++
++void MediaPlayerPrivateExternalVideo::pause()
++{
++
++}
++
++bool MediaPlayerPrivateExternalVideo::paused() const
++{
++	return false;
++}
++
++void MediaPlayerPrivateExternalVideo::seek(float position)
++{
++}
++
++bool MediaPlayerPrivateExternalVideo::seeking() const
++{
++    return false;
++}
++
++float MediaPlayerPrivateExternalVideo::duration() const
++{
++    if (m_readyState < MediaPlayer::HaveMetadata)
++        return 0.0f;
++
++    float duration = -1000.0 / 1000.0f;
++
++    // We are streaming
++    if (duration <= 0.0f)
++        duration = std::numeric_limits<float>::infinity();
++
++    return duration;
++}
++
++float MediaPlayerPrivateExternalVideo::currentTime() const
++{
++    return 0;
++}
++
++PassRefPtr<TimeRanges> MediaPlayerPrivateExternalVideo::buffered() const
++{
++    RefPtr<TimeRanges> buffered = TimeRanges::create();
++    return buffered;
++}
++
++float MediaPlayerPrivateExternalVideo::maxTimeSeekable() const
++{
++	return 0;
++}
++
++unsigned MediaPlayerPrivateExternalVideo::bytesLoaded() const
++{
++    unsigned percentage = 100;
++
++    if (percentage == 100) {
++        if (m_networkState != MediaPlayer::Idle) {
++            m_networkState = MediaPlayer::Idle;
++        }
++        if (m_readyState != MediaPlayer::HaveEnoughData) {
++            m_readyState = MediaPlayer::HaveEnoughData;
++        }
++    }
++
++    return percentage;
++}
++
++unsigned MediaPlayerPrivateExternalVideo::totalBytes() const
++{
++    return 100;
++}
++
++void MediaPlayerPrivateExternalVideo::setRate(float rate)
++{
++}
++
++void MediaPlayerPrivateExternalVideo::setVolume(float volume)
++{
++}
++
++bool MediaPlayerPrivateExternalVideo::supportsMuting() const
++{
++    return true;
++}
++
++void MediaPlayerPrivateExternalVideo::setMuted(bool muted)
++{
++}
++
++MediaPlayer::NetworkState MediaPlayerPrivateExternalVideo::networkState() const
++{
++    return m_networkState;
++}
++
++MediaPlayer::ReadyState MediaPlayerPrivateExternalVideo::readyState() const
++{
++    return m_readyState;
++}
++
++void MediaPlayerPrivateExternalVideo::setVisible(bool visible)
++{
++    m_isVisible = visible;
++}
++
++void MediaPlayerPrivateExternalVideo::queuedSeekTimeout()
++{
++}
++
++void MediaPlayerPrivateExternalVideo::seekTimeout()
++{
++}
++
++void MediaPlayerPrivateExternalVideo::positionChanged(qint64)
++{
++}
++
++void MediaPlayerPrivateExternalVideo::durationChanged(qint64)
++{
++}
++
++void MediaPlayerPrivateExternalVideo::volumeChanged(int volume)
++{
++}
++
++void MediaPlayerPrivateExternalVideo::mutedChanged(bool muted)
++{
++}
++
++void MediaPlayerPrivateExternalVideo::updateStates()
++{
++}
++
++void MediaPlayerPrivateExternalVideo::setSize(const IntSize& size)
++{
++    if (size == m_currentSize)
++        return;
++
++    m_currentSize = size;
++}
++
++IntSize MediaPlayerPrivateExternalVideo::naturalSize() const
++{
++    if (!hasVideo() || m_readyState < MediaPlayer::HaveMetadata)
++        return IntSize();
++
++    return m_currentSize;
++}
++
++void MediaPlayerPrivateExternalVideo::paint(GraphicsContext* context, const IntRect& rect)
++{
++#if USE(ACCELERATED_COMPOSITING)
++    if (m_composited)
++        return;
++#endif
++    if (context->paintingDisabled())
++        return;
++
++    if (!m_isVisible)
++        return;
++
++	// Draw transparency
++	context->clearRect(FloatRect(rect));
++}
++
++void MediaPlayerPrivateExternalVideo::repaint()
++{
++}
++
++bool MediaPlayerPrivateExternalVideo::didLoadingProgress() const
++{
++    return true;
++}
++
++#if USE(ACCELERATED_COMPOSITING)
++void MediaPlayerPrivateExternalVideo::acceleratedRenderingStateChanged()
++{
++    bool composited = false;
++    if (composited == m_composited)
++        return;
++
++    m_composited = composited;
++}
++
++PlatformLayer* MediaPlayerPrivateExternalVideo::platformLayer() const
++{
++    return  NULL;
++}
++#endif
++
++} // namespace WebCore
++
++//COMCAST MODIFICATION END [AVE]
+Index: qtwebkit-opensource-src-5.1.1/Source/WebCore/platform/graphics/qt/MediaPlayerPrivateExternalVideo.h
+===================================================================
+--- /dev/null
++++ qtwebkit-opensource-src-5.1.1/Source/WebCore/platform/graphics/qt/MediaPlayerPrivateExternalVideo.h
+@@ -0,0 +1,95 @@
++//COMCAST MODIFICATION BEGIN [AVE]
++
++#ifndef MediaPlayerPrivateExternalVideo_h
++#define MediaPlayerPrivateExternalVideo_h
++
++#include "MediaPlayerPrivate.h"
++
++namespace WebCore {
++
++class MediaPlayerPrivateExternalVideo : public MediaPlayerPrivateInterface {
++public:
++    ~MediaPlayerPrivateExternalVideo();
++
++    static void registerMediaEngine(MediaEngineRegistrar registrar);
++    static PassOwnPtr<MediaPlayerPrivateInterface> create(MediaPlayer* player);
++    static void getSupportedTypes(HashSet<String>&);
++    static MediaPlayer::SupportsType supportsType(const String&, const String&, const KURL&);
++
++    bool hasVideo() const;
++    bool hasAudio() const;
++
++    void load(const String &url);
++    void cancelLoad();
++
++    void play();
++    void pause();
++
++    bool paused() const;
++    bool seeking() const;
++
++    float duration() const;
++    float currentTime() const;
++    void seek(float);
++
++    void setRate(float);
++    void setVolume(float);
++
++    bool supportsMuting() const;
++    void setMuted(bool);
++
++    MediaPlayer::NetworkState networkState() const;
++    MediaPlayer::ReadyState readyState() const;
++
++    PassRefPtr<TimeRanges> buffered() const;
++    float maxTimeSeekable() const;
++    unsigned bytesLoaded() const;
++    unsigned totalBytes() const;
++
++    void setVisible(bool);
++
++    IntSize naturalSize() const;
++    void setSize(const IntSize&);
++
++    void paint(GraphicsContext*, const IntRect&);
++
++    bool supportsFullscreen() const { return false; }
++    virtual bool didLoadingProgress() const;
++
++#if USE(ACCELERATED_COMPOSITING)
++    // whether accelerated rendering is supported by the media engine for the current media.
++    virtual bool supportsAcceleratedRendering() const { return false; }
++    // called when the rendering system flips the into or out of accelerated rendering mode.
++    virtual void acceleratedRenderingStateChanged();
++    // returns an object that can be directly composited via GraphicsLayerQt (essentially a QGraphicsItem*)
++    virtual PlatformLayer* platformLayer() const;
++#endif
++
++private:
++    void nativeSizeChanged(const QSizeF&);
++    void queuedSeekTimeout();
++    void seekTimeout();
++    void positionChanged(qint64);
++    void durationChanged(qint64);
++    void volumeChanged(int);
++    void mutedChanged(bool);
++    void repaint();
++
++private:
++    void updateStates();
++
++private:
++    MediaPlayerPrivateExternalVideo(MediaPlayer*);
++
++    mutable MediaPlayer::NetworkState m_networkState;
++    mutable MediaPlayer::ReadyState m_readyState;
++
++    IntSize m_currentSize;
++    bool m_isVisible;
++    bool m_composited;
++};
++
++}
++
++#endif // MediaPlayerPrivateExternalVideo_h
++//COMCAST MODIFICATION END [AVE]
+Index: qtwebkit-opensource-src-5.1.1/Source/WebCore/html/HTMLAttributeNames.in
+===================================================================
+--- qtwebkit-opensource-src-5.1.1.orig/Source/WebCore/html/HTMLAttributeNames.in
++++ qtwebkit-opensource-src-5.1.1/Source/WebCore/html/HTMLAttributeNames.in
+@@ -205,6 +205,8 @@ onload
+ onloadeddata
+ onloadedmetadata
+ onloadstart
++onmediaframereceived
++onmediawarning
+ onmousedown
+ onmousemove
+ onmouseout
+Index: qtwebkit-opensource-src-5.1.1/Source/WebCore/dom/EventNames.h
+===================================================================
+--- qtwebkit-opensource-src-5.1.1.orig/Source/WebCore/dom/EventNames.h
++++ qtwebkit-opensource-src-5.1.1/Source/WebCore/dom/EventNames.h
+@@ -247,6 +247,11 @@ namespace WebCore {
+     macro(autocomplete) \
+     macro(autocompleteerror) \
+     \
++/* COMCAST MODIFICATION BEGIN */ \
++    macro(mediaframereceived)    \
++    macro(mediawarning)          \
++/* COMCAST MODIFICATION END   */ \
++    \
+ 
+ // end of DOM_EVENT_NAMES_FOR_EACH
+ 

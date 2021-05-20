@@ -1,0 +1,78 @@
+From 50aad010f374a269f20f28ec6569b741db5dfa79 Mon Sep 17 00:00:00 2001
+From: mgopalakirshnan <manigandan.gopalakrishnan@lnttechservices.com>
+Date: Tue, 6 Feb 2018 14:06:01 +0000
+Subject: [PATCH] comcast Internet Audio live streaming issues fixed
+
+Signed-off-by: mgopalakirshnan <manigandan.gopalakrishnan@lnttechservices.com>
+---
+ .../gstreamer/MediaPlayerPrivateGStreamer.cpp        | 20 ++++++++++++++++++--
+ .../graphics/gstreamer/MediaPlayerPrivateGStreamer.h |  1 +
+ 2 files changed, 19 insertions(+), 2 deletions(-)
+
+diff --git a/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp b/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp
+index 34eb03f69e8..5eb18b04226 100644
+--- a/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp
++++ b/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp
+@@ -819,6 +819,18 @@ void MediaPlayerPrivateGStreamer::audioChangedCallback(MediaPlayerPrivateGStream
+     player->m_notifier->notify(MainThreadNotification::AudioChanged, [player] { player->notifyPlayerOfAudio(); });
+ }
+ 
++void MediaPlayerPrivateGStreamer::mediaPlayerPrivateElementAddedCallback(GstBin* /*bin*/, GstElement* element, gpointer /*user_data*/)
++{
++    if ((g_strrstr (GST_ELEMENT_NAME (element), "uridecodebin")) || (g_strrstr (GST_ELEMENT_NAME (element), "decodebin2"))) {
++        g_signal_connect (element, "element-added", G_CALLBACK (mediaPlayerPrivateElementAddedCallback), NULL);
++    } else if (g_strrstr (GST_ELEMENT_NAME (element), "queue2")) {
++        g_object_set(G_OBJECT(element), "temp-template", NULL, NULL);
++
++        // This fixes huge buffering delays when playing internet radio (XONE-13260).
++        g_object_set(G_OBJECT(element), "use-buffering", 0, NULL);
++    }
++}
++
+ void MediaPlayerPrivateGStreamer::notifyPlayerOfAudio()
+ {
+     if (UNLIKELY(!m_pipeline || !m_source))
+@@ -2203,15 +2215,18 @@ void MediaPlayerPrivateGStreamer::setDownloadBuffering()
+         return;
+ 
+     bool shouldDownload = !isLiveStream() && m_preload == MediaPlayer::Auto && !isMediaDiskCacheDisabled();
++#if 0
+     if (shouldDownload) {
+         GST_DEBUG("Enabling on-disk buffering");
+         g_object_set(m_pipeline.get(), "flags", flags | flagDownload, nullptr);
+         m_fillTimer.startRepeating(200_ms);
+     } else {
+-        GST_DEBUG("Disabling on-disk buffering");
++#else
++        GST_WARNING("Disabling on-disk buffering");
+         g_object_set(m_pipeline.get(), "flags", flags & ~flagDownload, nullptr);
+         m_fillTimer.stop();
+-    }
++//    }
++#endif
+ }
+ 
+ void MediaPlayerPrivateGStreamer::setPreload(MediaPlayer::Preload preload)
+@@ -2381,6 +2396,7 @@ void MediaPlayerPrivateGStreamer::createGSTPlayBin()
+     g_signal_connect_swapped(m_pipeline.get(), "notify::source", G_CALLBACK(sourceChangedCallback), this);
+     g_signal_connect_swapped(m_pipeline.get(), "video-changed", G_CALLBACK(videoChangedCallback), this);
+     g_signal_connect_swapped(m_pipeline.get(), "audio-changed", G_CALLBACK(audioChangedCallback), this);
++    g_signal_connect(m_pipeline.get(), "element-added", G_CALLBACK(mediaPlayerPrivateElementAddedCallback), NULL);
+ 
+ #if ENABLE(VIDEO_TRACK)
+     g_signal_connect_swapped(m_pipeline.get(), "text-changed", G_CALLBACK(textChangedCallback), this);
+diff --git a/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.h b/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.h
+index ccf508666c2..4cc0243bfc8 100644
+--- a/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.h
++++ b/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.h
+@@ -223,6 +223,7 @@ protected:
+     static void videoChangedCallback(MediaPlayerPrivateGStreamer*);
+     static void videoSinkCapsChangedCallback(MediaPlayerPrivateGStreamer*);
+     static void audioChangedCallback(MediaPlayerPrivateGStreamer*);
++    static void mediaPlayerPrivateElementAddedCallback(GstBin* /*bin*/, GstElement* element, gpointer /*user_data*/);
+ #if ENABLE(VIDEO_TRACK)
+     static void textChangedCallback(MediaPlayerPrivateGStreamer*);
+     static GstFlowReturn newTextSampleCallback(MediaPlayerPrivateGStreamer*);
+-- 
+2.14.2
+

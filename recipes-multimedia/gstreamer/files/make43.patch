@@ -1,0 +1,50 @@
+Date: Mar 28, 2020 1:41 AM
+From: Khem Raj <khem_raj@comcast.com>
+Subject: gst-plugins-base: Fix for >=make-4.3
+
+Account for make 4.3 backward incompatible change https://git.savannah.gnu.org/cgit/make.git/tree/NEWS#n27
+
+Source: https://bugs.gentoo.org/705974
+License: LGPL-2.1
+Upstream-Status: Backport [https://bugs.gentoo.org/705974]
+Signed-off-by: Khem Raj <khem_raj@comcast.com>
+
+Index: gst-plugins-base-1.10.4/common/glib-gen.mak
+===================================================================
+--- gst-plugins-base-1.10.4.orig/common/glib-gen.mak
++++ gst-plugins-base-1.10.4/common/glib-gen.mak
+@@ -1,11 +1,13 @@
+ # these are the variables your Makefile.am should set
+ # the example is based on the colorbalance interface
+ 
++H := \#
++
+ #glib_enum_headers=$(colorbalance_headers)
+ #glib_enum_define=GST_COLOR_BALANCE
+ #glib_enum_prefix=gst_color_balance
+ 
+-enum_headers=$(foreach h,$(glib_enum_headers),\n\#include \"$(h)\")
++enum_headers=$(foreach h,$(glib_enum_headers),\n$(H)include \"$(h)\")
+ 
+ # these are all the rules generating the relevant files
+ %-marshal.h: %-marshal.list
+Index: gst-plugins-base-1.10.4/common/gst-glib-gen.mak
+===================================================================
+--- gst-plugins-base-1.10.4.orig/common/gst-glib-gen.mak
++++ gst-plugins-base-1.10.4/common/gst-glib-gen.mak
+@@ -1,12 +1,14 @@
+ # these are the variables your Makefile.am should set
+ # the example is based on the colorbalance interface
+ 
++H := \#
++
+ #glib_enum_headers=$(colorbalance_headers)
+ #glib_enum_define=GST_COLOR_BALANCE
+ #glib_gen_prefix=gst_color_balance
+ #glib_gen_basename=colorbalance
+ 
+-enum_headers=$(foreach h,$(glib_enum_headers),\n\#include \"$(h)\")
++enum_headers=$(foreach h,$(glib_enum_headers),\n$(H)include \"$(h)\")
+ 
+ # these are all the rules generating the relevant files
+ $(glib_gen_basename)-marshal.h: $(glib_gen_basename)-marshal.list

@@ -1,0 +1,74 @@
+Date: Thu, 3 Dec 2015 11:53:05 +0900
+
+From: 5ce0bec36d55fdb2923d15426b35f869e39c73ef Mon Sep 17 00:00:00 2001
+
+Subject: [PATCH] XRE-9097 : EOS Netflix fixes (appsrc patch)
+
+	appsrc: Clear is_eos flag when receiving the flush event
+
+	The EOS event can be propagated to the downstream plugins when
+	is_eos flag remains set even after leaving the flushing state.
+	This fix allows this element to normally restart the streaming
+	after receiving the flush event by clearing the is_eos flag.
+
+Source: GITHUB
+
+License: LGPL-2.1-or-later
+
+Upstream-Status: Submitted [ https://gitlab.freedesktop.org/gstreamer/gst-plugins-base/commit/d43f1b2a5a4361f156ab1281f7e4442a899d4de7 ]
+
+Signed-off-by: Kazunori Kobayashi <kkobayas@igel.co.jp>
+---
+
+
+diff --git a/gst-libs/gst/app/gstappsrc.c b/gst-libs/gst/app/gstappsrc.c
+index 16c2955..923e204 100644
+--- a/gst-libs/gst/app/gstappsrc.c
++++ b/gst-libs/gst/app/gstappsrc.c
+@@ -234,6 +234,7 @@ static gboolean gst_app_src_do_seek (GstBaseSrc * src, GstSegment * segment);
+ static gboolean gst_app_src_is_seekable (GstBaseSrc * src);
+ static gboolean gst_app_src_do_get_size (GstBaseSrc * src, guint64 * size);
+ static gboolean gst_app_src_query (GstBaseSrc * src, GstQuery * query);
++static gboolean gst_app_src_event (GstBaseSrc * src, GstEvent * event);
+ 
+ static GstFlowReturn gst_app_src_push_buffer_action (GstAppSrc * appsrc,
+     GstBuffer * buffer);
+@@ -525,6 +526,7 @@ gst_app_src_class_init (GstAppSrcClass * klass)
+   basesrc_class->is_seekable = gst_app_src_is_seekable;
+   basesrc_class->get_size = gst_app_src_do_get_size;
+   basesrc_class->query = gst_app_src_query;
++  basesrc_class->event = gst_app_src_event;
+ 
+   klass->push_buffer = gst_app_src_push_buffer_action;
+   klass->push_sample = gst_app_src_push_sample_action;
+@@ -774,6 +776,7 @@ gst_app_src_send_event (GstElement * element, GstEvent * event)
+     case GST_EVENT_FLUSH_STOP:
+       g_mutex_lock (&priv->mutex);
+       gst_app_src_flush_queued (appsrc, TRUE);
++      priv->is_eos = FALSE;
+       g_mutex_unlock (&priv->mutex);
+       break;
+     default:
+@@ -1913,3 +1916,22 @@ gst_app_src_uri_handler_init (gpointer g_iface, gpointer iface_data)
+   iface->get_uri = gst_app_src_uri_get_uri;
+   iface->set_uri = gst_app_src_uri_set_uri;
+ }
++
++static gboolean
++gst_app_src_event (GstBaseSrc * src, GstEvent * event)
++{
++  GstAppSrc *appsrc = GST_APP_SRC_CAST (src);
++  GstAppSrcPrivate *priv = appsrc->priv;
++
++  switch (GST_EVENT_TYPE (event)) {
++    case GST_EVENT_FLUSH_STOP:
++      g_mutex_lock (&priv->mutex);
++      priv->is_eos = FALSE;
++      g_mutex_unlock (&priv->mutex);
++      break;
++    default:
++      break;
++  }
++
++  return GST_BASE_SRC_CLASS (parent_class)->event (src, event);
++}

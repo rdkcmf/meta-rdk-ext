@@ -1,0 +1,27 @@
+From 4749a9973a5f1a1ee59b2a26c6b5e791bdd7db55 Mon Sep 17 00:00:00 2001
+From: Ievgen Mutavchi <Ievgen_Mutavchi@comcast.com>
+Date: Fri, 25 Oct 2019 11:11:33 -0400
+Subject: [PATCH 1/2] [MSE] make lastEnqueuedPresentationTime be highest
+ enqueued PTS
+
+---
+ Source/WebCore/Modules/mediasource/SourceBuffer.cpp | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/Source/WebCore/Modules/mediasource/SourceBuffer.cpp b/Source/WebCore/Modules/mediasource/SourceBuffer.cpp
+index a91e02d..477a966 100644
+--- a/Source/WebCore/Modules/mediasource/SourceBuffer.cpp
++++ b/Source/WebCore/Modules/mediasource/SourceBuffer.cpp
+@@ -2144,7 +2144,8 @@ void SourceBuffer::provideMediaData(TrackBuffer& trackBuffer, const AtomicString
+             break;
+ 
+         trackBuffer.decodeQueue.erase(trackBuffer.decodeQueue.begin());
+-        trackBuffer.lastEnqueuedPresentationTime = sample->presentationTime();
++        if (trackBuffer.lastEnqueuedPresentationTime.isInvalid() || sample->presentationTime() > trackBuffer.lastEnqueuedPresentationTime)
++            trackBuffer.lastEnqueuedPresentationTime = sample->presentationTime();
+         trackBuffer.lastEnqueuedDecodeKey = {sample->decodeTime(), sample->presentationTime()};
+         trackBuffer.lastEnqueuedDecodeDuration = sample->duration();
+         m_private->enqueueSample(sample.releaseNonNull(), trackID);
+-- 
+2.7.4
+

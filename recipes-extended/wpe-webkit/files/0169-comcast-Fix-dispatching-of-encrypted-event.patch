@@ -1,0 +1,53 @@
+From 10788340c588c37333704d581345cfab9a5d5228 Mon Sep 17 00:00:00 2001
+From: Ievgen Mutavchi <Ievgen_Mutavchi@comcast.com>
+License: GPLV2
+Date: Fri, 15 Nov 2019 09:34:02 -0500
+From: ebecd56aaa2727b6305d39c69951fbdc8740f800 Oct 31, 2018 11:56 PM
+Source: COMCAST
+Upstream-Status: None
+Signed-off-by: Eugene Mutavchi <Ievgen_Mutavchi@comcast.com>
+Subject: [PATCH] Fix dispatching of 'encrypted' event
+
+---
+ Source/WebCore/html/HTMLMediaElement.cpp                            | 3 ++-
+ .../platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp     | 6 ++++--
+ 2 files changed, 6 insertions(+), 3 deletions(-)
+
+diff --git a/Source/WebCore/html/HTMLMediaElement.cpp b/Source/WebCore/html/HTMLMediaElement.cpp
+index 8984d48..bddf843 100644
+--- a/Source/WebCore/html/HTMLMediaElement.cpp
++++ b/Source/WebCore/html/HTMLMediaElement.cpp
+@@ -2700,7 +2700,8 @@ void HTMLMediaElement::mediaPlayerInitializationDataEncountered(const String& in
+ void HTMLMediaElement::mediaPlayerDecryptErrorEncountered()
+ {
+     m_error = MediaError::create(MediaError::MEDIA_ERR_ENCRYPTED);
+-    scheduleEvent(eventNames().errorEvent);
++    if (!m_asyncEventQueue.hasPendingEventsOfType(eventNames().errorEvent))
++        scheduleEvent(eventNames().errorEvent);
+ }
+ 
+ void HTMLMediaElement::attemptToDecrypt()
+diff --git a/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp b/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp
+index a181fd1..02ee823 100644
+--- a/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp
++++ b/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp
+@@ -2647,12 +2647,14 @@ void MediaPlayerPrivateGStreamer::handleDecryptionError(const GstStructure* stru
+ {
+     ASSERT(isMainThread());
+ 
+-    RunLoop::main().dispatch([weakThis = m_weakPtrFactory.createWeakPtr(*this)] {
++    RunLoop::main().dispatch([this, weakThis = m_weakPtrFactory.createWeakPtr(*this)] {
+         if (!weakThis)
+             return;
+ 
+         GST_WARNING("scheduling decryptionErrorEncountered event");
+-        weakThis->m_player->decryptErrorEncountered();
++        fprintf(stderr, "HTML5 video: Playback failed: Decryption error [%s]\n",m_url.string().utf8().data());
++        loadingFailed(MediaPlayer::FormatError);
++        m_player->decryptErrorEncountered(); // override the error code
+     });
+ }
+ 
+-- 
+2.7.4
+

@@ -1,0 +1,40 @@
+Date: Feb 25 21:05:51 2019
+
+From: 27e4cfe340d42078af57e83bac67578b761c2f59 Mar 30 05:19:51 2019
+
+Subject: [PATCH] RDKB-21133: Add RDKB-Fix-BindReuse-Bug.patch on top of dibbler 1.0.1
+
+	When BindReuse is set we allow multiple instances to run.
+	So we should return from TClntTransMgr::openLoopbackSocket() when BindReuse is set 
+	to true (instead we are erroneously returning when BindReuse is false) and should 
+	not proceed further to create a new open loopback socket.
+
+	Make dibbler-client provide IPv6 for erouter0 interface
+	while ti_dhcp6c is bound to wan0 interface.
+	Fixed a bug in dibbler open source that would allow option BINDREUSE
+	to be set for dibbler-client. This would allow dibbler-client to run along with ti_dhcp6c
+
+Source: GITHUB
+
+License: GPL-2.0-or-later
+
+Upstream-Status: Submitted [ https://github.com/tomaszmrugalski/dibbler/pull/36 ]
+
+Signed-off-by: Shilpa Seshadri <shilpa_seshadri@cable.comcast.com>
+---
+
+Index: dibbler-1.0.1/ClntTransMgr/ClntTransMgr.cpp
+===================================================================
+--- dibbler-1.0.1.orig/ClntTransMgr/ClntTransMgr.cpp
++++ dibbler-1.0.1/ClntTransMgr/ClntTransMgr.cpp
+@@ -382,7 +382,9 @@ void TClntTransMgr::checkDB()
+ bool TClntTransMgr::openLoopbackSocket() {
+     SPtr<TIfaceIface> ptrIface;
+ 
+-    if (!this->BindReuse)
++    Log(Notice) << "[RDKB-BINDREUSE-BUG-FIX] openLoopbackSocket() - proceed only if BindReuse flag is not set" << LogEnd;
++    //if (!this->BindReuse)
++    if (this->BindReuse)
+         return true;
+ 
+ #ifndef WIN32

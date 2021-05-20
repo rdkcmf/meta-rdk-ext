@@ -1,0 +1,35 @@
+From 35d1a0743aabcd0c8d4389aa9ec766594cc25742 Mon Sep 17 00:00:00 2001
+From: Eugene Mutavchi <Ievgen_Mutavchi@comcast.com>
+Date: Tue, 11 Dec 2018 15:07:58 -0500
+Subject: [PATCH] MIPS backport cacheFlush fixes
+
+---
+ Source/JavaScriptCore/assembler/MIPSAssembler.h | 5 ++---
+ 1 file changed, 2 insertions(+), 3 deletions(-)
+
+diff --git a/Source/JavaScriptCore/assembler/MIPSAssembler.h b/Source/JavaScriptCore/assembler/MIPSAssembler.h
+index 7a747a9..a33873d 100644
+--- a/Source/JavaScriptCore/assembler/MIPSAssembler.h
++++ b/Source/JavaScriptCore/assembler/MIPSAssembler.h
+@@ -939,8 +939,7 @@ public:
+         insn++;
+         ASSERT((*insn & 0xfc000000) == 0x34000000); // ori
+         *insn = (*insn & 0xffff0000) | (to & 0xffff);
+-        insn--;
+-        cacheFlush(insn, 2 * sizeof(MIPSWord));
++        cacheFlush(from, 2 * sizeof(MIPSWord));
+     }
+ 
+     static int32_t readInt32(void* from)
+@@ -1013,7 +1012,7 @@ public:
+             *insn = 0x00000000;
+             codeSize += sizeof(MIPSWord);
+         }
+-        cacheFlush(insn, codeSize);
++        cacheFlush(instructionStart, codeSize);
+     }
+ 
+     static void replaceWithJump(void* instructionStart, void* to)
+-- 
+2.7.4
+

@@ -1,0 +1,240 @@
+From aecdd5872421c96a62e401c7e5ffd2267bb33157 Mon Sep 17 00:00:00 2001
+From: Goutam Damodaran <Goutam_Damodaran@Comcast.com>
+Date: Fri, 6 Mar 2020 09:51:30 +0000
+Subject: [PATCH] client notify new
+Source: COMCAST
+License: GPLV2
+Upstream-Status: Pending
+Signed-off-by: Goutam Damodaran <Goutam_Damodaran@Comcast.com>
+---
+ Makefile      |   4 +-
+ src/dnsmasq.c |   6 +-
+ src/rfc2131.c | 149 +++++++++++++++++++++++++++++++++++++++++++++++++-
+ 3 files changed, 155 insertions(+), 4 deletions(-)
+
+diff --git a/Makefile b/Makefile
+index bd4bd47..60ca8cf 100644
+--- a/Makefile
++++ b/Makefile
+@@ -86,7 +86,7 @@ all : $(BUILDDIR)
+ 	@cd $(BUILDDIR) && $(MAKE) \
+  top="$(top)" \
+  build_cflags="$(version) $(dbus_cflags) $(idn2_cflags) $(idn_cflags) $(ct_cflags) $(lua_cflags) $(nettle_cflags)" \
+- build_libs="$(dbus_libs) $(idn2_libs) $(idn_libs) $(ct_libs) $(lua_libs) $(sunos_libs) $(nettle_libs) $(gmp_libs) $(ubus_libs)" \
++ build_libs="$(dbus_libs) $(idn2_libs) $(idn_libs) $(ct_libs) $(lua_libs) -lrt -pthread $(sunos_libs) $(nettle_libs) $(gmp_libs)" \
+  -f $(top)/Makefile dnsmasq 
+ 
+ mostly_clean :
+@@ -111,7 +111,7 @@ all-i18n : $(BUILDDIR)
+  top="$(top)" \
+  i18n=-DLOCALEDIR=\'\"$(LOCALEDIR)\"\' \
+  build_cflags="$(version) $(dbus_cflags) $(idn2_cflags) $(idn_cflags) $(ct_cflags) $(lua_cflags) $(nettle_cflags)" \
+- build_libs="$(dbus_libs) $(idn2_libs) $(idn_libs) $(ct_libs) $(lua_libs) $(sunos_libs) $(nettle_libs) $(gmp_libs)"  \
++ build_libs="$(dbus_libs) $(idn2_libs) $(idn_libs) $(ct_libs) $(lua_libs) $(sunos_libs) -lrt -pthread $(nettle_libs) $(gmp_libs)"  \
+  -f $(top)/Makefile dnsmasq
+ 	for f in `cd $(PO); echo *.po`; do \
+ 		cd $(top) && cd $(BUILDDIR) && $(MAKE) top="$(top)" -f $(top)/Makefile $${f%.po}.mo; \
+diff --git a/src/dnsmasq.c b/src/dnsmasq.c
+index 7fd33af..f2eff78 100644
+--- a/src/dnsmasq.c
++++ b/src/dnsmasq.c
+@@ -935,7 +935,11 @@ int main (int argc, char **argv)
+   /* Using inotify, have to select a resolv file at startup */
+   poll_resolv(1, 0, now);
+ #endif
+-  
++
++#ifdef HAVE_DHCP
++  create_event_handler(); // monitoring ipv4 device presence feature
++#endif
++
+   while (1)
+     {
+       int t, timeout = -1;
+diff --git a/src/rfc2131.c b/src/rfc2131.c
+index 97d5e77..74cc972 100644
+--- a/src/rfc2131.c
++++ b/src/rfc2131.c
+@@ -15,12 +15,43 @@
+ */
+ 
+ #include "dnsmasq.h"
++#include <pthread.h>
++#include <mqueue.h>
+ 
+ #ifdef HAVE_DHCP
+ 
+ #define option_len(opt) ((int)(((unsigned char *)(opt))[1]))
+ #define option_ptr(opt, i) ((void *)&(((unsigned char *)(opt))[2u+(unsigned int)(i)]))
+ 
++#define EVENT_QUEUE_NAME  "/dnsmasq_eventqueue"
++#define DNSMASQ_PRESENCE_QUEUE_NAME  "/presence_queue"
++#define MAX_SIZE    512
++#define MAX_SIZE_PRESENCE    512
++#define MSG_TYPE_DNSMASQ  6
++#define MSG_TYPE_DNS_PRESENCE 7
++
++#define CHECK(x) \
++    do { \
++        if (!(x)) { \
++            fprintf(stderr, "%s:%d: ", __func__, __LINE__); \
++            perror(#x); \
++            return; \
++        } \
++    } while (0) \
++
++
++typedef struct _EventQData
++{
++    char ip[64];
++    char enable[32];
++    char mac[32];
++    int MsgType;
++}DnsmasqEventQData;
++
++char src_ip[64];
++char presence_notify[32];
++int  unlink_status = 1;
++
+ #ifdef HAVE_SCRIPT
+ static void add_extradata_opt(struct dhcp_lease *lease, unsigned char *opt);
+ #endif
+@@ -66,6 +97,118 @@ struct dhcp_boot *find_boot(struct dhcp_netid *netid);
+ static int pxe_uefi_workaround(int pxe_arch, struct dhcp_netid *netid, struct dhcp_packet *mess, struct in_addr local, time_t now, int pxe);
+ static void apply_delay(u32 xid, time_t recvtime, struct dhcp_netid *netid);
+ 
++void Event_HandlerThread()
++{
++    mqd_t mq;
++    struct mq_attr attr;
++    char buffer[MAX_SIZE + 1];
++
++    /* initialize the queue attributes */
++    attr.mq_flags = 0;
++    attr.mq_maxmsg = 10;
++    attr.mq_msgsize = MAX_SIZE;
++    attr.mq_curmsgs = 0;
++
++    memset(src_ip,0,sizeof(src_ip));
++    memset(presence_notify,0,sizeof(presence_notify));
++    mq = mq_open(EVENT_QUEUE_NAME, O_CREAT | O_RDONLY, 0666, &attr);
++
++    do
++    {
++        ssize_t bytes_read;
++        DnsmasqEventQData EventMsg;
++
++        if (mq < 0)
++        {
++            mq = mq_open(EVENT_QUEUE_NAME, O_CREAT | O_RDONLY, 0666, &attr);
++        }
++        else
++        {
++
++            /* receive the message */
++            bytes_read = mq_receive(mq, buffer, MAX_SIZE, NULL);
++
++            if (bytes_read > 0)
++            {
++                buffer[bytes_read] = '\0';
++                memcpy(&EventMsg,buffer,sizeof(EventMsg));
++
++                if(EventMsg.MsgType == MSG_TYPE_DNSMASQ)
++                {
++                    strncpy(src_ip,EventMsg.ip,sizeof(EventMsg.ip));
++                    strncpy(presence_notify,EventMsg.enable,sizeof(EventMsg.enable));
++                }
++            }
++        }
++        sleep(1);
++    }while(1);
++}
++
++void create_event_handler()
++{
++    int res = 0;
++    pthread_t Event_HandlerThreadID;
++           my_syslog(LOG_WARNING, _("Event handler create"),__FUNCTION__);
++    res = pthread_create(&Event_HandlerThreadID, NULL, Event_HandlerThread, "Event_HandlerThread");
++    if(res != 0) {
++       printf("Create Event_HandlerThread error %d\n", res);
++    }
++}
++
++void Sendmsg_DevicePresence(char *mac)
++{
++    DnsmasqEventQData EventMsg;
++    mqd_t mq;
++    struct mq_attr attr;
++    char buffer[MAX_SIZE_PRESENCE + 1];
++
++    /* initialize the queue attributes */
++    attr.mq_flags = 0;
++    attr.mq_maxmsg = 10;
++    attr.mq_msgsize = MAX_SIZE_PRESENCE;
++    attr.mq_curmsgs = 0;
++
++    /* create the message queue */
++    mq = mq_open(DNSMASQ_PRESENCE_QUEUE_NAME, O_CREAT | O_WRONLY | O_NONBLOCK, 0666, &attr);
++
++    if (mac)
++    my_syslog(LOG_WARNING, _("%s msg_q = %d errno %d mac = %s"),__FUNCTION__,mq,errno,mac);
++
++    CHECK((mqd_t)-1 != mq);
++    memset(buffer, 0, MAX_SIZE_PRESENCE);
++    EventMsg.MsgType = MSG_TYPE_DNS_PRESENCE;
++
++    if (mac)
++    {
++        strcpy(EventMsg.mac,mac);
++    }
++    else
++    {
++        CHECK((mqd_t)-1 != mq_close(mq));
++        return;
++    }
++    memcpy(buffer,&EventMsg,sizeof(EventMsg));
++    my_syslog(LOG_WARNING, _("%s msg_q sent mac %s"),__FUNCTION__,EventMsg.mac);
++    CHECK(0 <= mq_send(mq, buffer, MAX_SIZE_PRESENCE, 0));
++    CHECK((mqd_t)-1 != mq_close(mq));
++}
++
++static void notify_connection(char *client_mac)
++{
++    my_syslog(LOG_WARNING, _("msg_q received %s presence enable %s ip %s mac %s"),__FUNCTION__,presence_notify,src_ip,client_mac);
++    if (!strcmp(presence_notify,"false"))
++    {
++        if (!unlink_status)
++        {
++            mq_unlink(DNSMASQ_PRESENCE_QUEUE_NAME);
++        }
++        unlink_status = 1;
++        return;
++    }
++    unlink_status = 0;
++    Sendmsg_DevicePresence(client_mac);
++}
++
+ size_t dhcp_reply(struct dhcp_context *context, char *iface_name, int int_index,
+ 		  size_t sz, time_t now, int unicast_dest, int loopback,
+ 		  int *is_inform, int pxe, struct in_addr fallback, time_t recvtime)
+@@ -1475,6 +1618,8 @@ size_t dhcp_reply(struct dhcp_context *context, char *iface_name, int int_index,
+ 	  daemon->metrics[METRIC_DHCPACK]++;
+ 	  log_packet("DHCPACK", &mess->yiaddr, emac, emac_len, iface_name, hostname, NULL, mess->xid);  
+ 
++          notify_connection(print_mac(daemon->namebuff, emac, emac_len));
++
+ 	  clear_packet(mess, end);
+ 	  option_put(mess, end, OPTION_MESSAGE_TYPE, 1, DHCPACK);
+ 	  option_put(mess, end, OPTION_SERVER_IDENTIFIER, INADDRSZ, ntohl(server_id(context, override, fallback).s_addr));
+@@ -1520,7 +1665,9 @@ size_t dhcp_reply(struct dhcp_context *context, char *iface_name, int int_index,
+       
+       daemon->metrics[METRIC_DHCPACK]++;
+       log_packet("DHCPACK", &mess->ciaddr, emac, emac_len, iface_name, hostname, NULL, mess->xid);
+-      
++
++      notify_connection(print_mac(daemon->namebuff, emac, emac_len));
++
+       if (lease)
+ 	{
+ 	  lease_set_interface(lease, int_index, now);

@@ -1,0 +1,40 @@
+Date: Jan 20 21:17:41 2015
+
+From: 6a6d4af16f776d35252995cd2b15fe2391805362 Jan 20 21:17:41 2015
+
+Subject: [PATCH] BPV-8657: Disable qtprintsupport from qtbase
+
+	Unused module in RDK and it reduces the code size further
+	
+Source: COMCAST
+
+Upstream-Status: Pending
+
+Signed-off-by: Khem Raj <khem_raj@cable.comcast.com>
+---
+
+Index: qtbase/src/src.pro
+===================================================================
+--- qtbase.orig/src/src.pro
++++ qtbase/src/src.pro
+@@ -90,10 +90,6 @@ src_openglextensions.subdir = $$PWD/open
+ src_openglextensions.target = sub-openglextensions
+ src_openglextensions.depends = src_gui
+ 
+-src_printsupport.subdir = $$PWD/printsupport
+-src_printsupport.target = sub-printsupport
+-src_printsupport.depends = src_corelib src_gui src_widgets src_tools_uic
+-
+ src_plugins.subdir = $$PWD/plugins
+ src_plugins.target = sub-plugins
+ src_plugins.depends = src_sql src_xml src_network
+Index: qtbase/src/plugins/plugins.pro
+===================================================================
+--- qtbase.orig/src/plugins/plugins.pro
++++ qtbase/src/plugins/plugins.pro
+@@ -4,5 +4,3 @@ SUBDIRS *= sqldrivers
+ qtHaveModule(network): SUBDIRS += bearer
+ qtHaveModule(gui): SUBDIRS *= imageformats platforms platforminputcontexts platformthemes generic
+ qtHaveModule(widgets): SUBDIRS += accessible
+-
+-!wince*:qtHaveModule(widgets): SUBDIRS += printsupport

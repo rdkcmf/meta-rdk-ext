@@ -1,0 +1,26 @@
+From 2b4ff902b433ebc11e97ea5ea005932bfa033258 Mon Sep 17 00:00:00 2001
+From: mgopalakirshnan <manigandan.gopalakrishnan@lnttechservices.com>
+Date: Fri, 5 Jan 2018 12:11:24 +0000
+Subject: [PATCH] 0028-comcast-detect-when-process-become-responsive
+
+---
+ Source/WebKit/UIProcess/WebPageProxy.cpp | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/Source/WebKit/UIProcess/WebPageProxy.cpp b/Source/WebKit/UIProcess/WebPageProxy.cpp
+index fc505d99f1e..99835380dab 100644
+--- a/Source/WebKit/UIProcess/WebPageProxy.cpp
++++ b/Source/WebKit/UIProcess/WebPageProxy.cpp
+@@ -5405,7 +5405,8 @@ void WebPageProxy::processDidBecomeResponsive()
+ 
+     if (m_navigationClient)
+         m_navigationClient->processDidBecomeResponsive(*this);
+-    else
++
++    if (m_loaderClient)
+         m_loaderClient->processDidBecomeResponsive(*this);
+ }
+ 
+-- 
+2.14.2
+

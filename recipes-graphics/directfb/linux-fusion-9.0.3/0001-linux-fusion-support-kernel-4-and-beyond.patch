@@ -1,0 +1,21 @@
+Date: Apr 20 2020, 5:11 AM 
+From: 8b3552a60afc19f74b9334ede23ddb273eda3faa Apr 20 2020, 5:11 AM
+Subject: linux-fusion-support-kernel-4-and-beyond
+Source: beechwoods.com
+License: GPL-2.0
+Upstream-Status: Pending
+Signed-off-by: herve.jourdain@beechwoods.com
+
+diff --git a/Makefile b/Makefile
+index 0115a44..e06fe34 100644
+--- a/Makefile
++++ b/Makefile
+@@ -62,7 +62,7 @@ ifeq ($(shell test -e $(KERNEL_BUILD)/include/linux/config.h && echo yes),yes)
+   CPPFLAGS += -DHAVE_LINUX_CONFIG_H
+ endif
+ 
+-ifeq ($(K_VERSION),3)
++ifeq ($(shell expr $(K_VERSION) \>= 3), 1)
+   KMAKEFILE = Makefile-2.6
+ else
+   KMAKEFILE = Makefile-2.$(K_PATCHLEVEL)

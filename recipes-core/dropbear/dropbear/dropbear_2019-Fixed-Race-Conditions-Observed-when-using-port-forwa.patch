@@ -1,0 +1,40 @@
+From 763686003636e7cf0a48d147b4dbdc0d3cc3caab Mon Sep 17 00:00:00 2001
+From: Balaji Punnuru <balaji_punnuru@cable.comcast.com>
+Date: Fri, 19 Apr 2019 16:30:18 -0400
+Subject: [PATCH] Fixed Race Conditions Observed when using port forwarding
+ functionality. We are returning early without setting up the local and remote
+ port forwarding, which is causing some timing delays for session
+ establishment.
+
+Signed-off-by: Balaji Punnuru <balaji_punnuru@cable.comcast.com>
+
+--- a/cli-session.c	2019-03-27 15:15:23.000000000 +0100
++++ b/cli-session.c	2020-01-25 15:35:26.740203741 +0100
+@@ -268,6 +269,13 @@
+ 			}
+ #endif
+ 
++#ifdef DROPBEAR_CLI_LOCALTCPFWD
++                       setup_localtcp();
++#endif
++#ifdef DROPBEAR_CLI_REMOTETCPFWD
++                       setup_remotetcp();
++#endif
++
+ 			if (cli_opts.backgrounded) {
+ 				int devnull;
+ 				/* keeping stdin open steals input from the terminal and
+@@ -293,13 +307,6 @@
+ 				cli_send_chansess_request();
+ 			}
+ 
+-#if DROPBEAR_CLI_LOCALTCPFWD
+-			setup_localtcp();
+-#endif
+-#if DROPBEAR_CLI_REMOTETCPFWD
+-			setup_remotetcp();
+-#endif
+-
+ 			TRACE(("leave cli_sessionloop: running"))
+ 			cli_ses.state = SESSION_RUNNING;
+ 			return;

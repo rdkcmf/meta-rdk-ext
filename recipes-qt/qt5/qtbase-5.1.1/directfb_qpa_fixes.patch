@@ -1,0 +1,77 @@
+Date: May 17 04:29:29 2014
+
+From: 5076fa0c75f613c67fbf6b104132f755ccbfffec May 17 04:29:29 2014
+
+Subject: [PATCH] qtbase_5.1.1.bbappend: Enable udev events
+	
+	JIRA: RDKSYSINTSW-635
+
+Source: COMCAST
+
+Upstream-Status: Pending
+
+Signed-off-by: Khem Raj <khem_raj@cable.comcast.com>
+---
+
+Index: qtbase-opensource-src-5.1.1/src/plugins/platforms/directfb/qdirectfbintegration.cpp
+===================================================================
+--- qtbase-opensource-src-5.1.1.orig/src/plugins/platforms/directfb/qdirectfbintegration.cpp
++++ qtbase-opensource-src-5.1.1/src/plugins/platforms/directfb/qdirectfbintegration.cpp
+@@ -124,6 +124,18 @@
+ 
+ QPlatformWindow *QDirectFbIntegration::createPlatformWindow(QWindow *window) const
+ {
++    //===============================================================
++    //FIX: QT applications display 640x480 on output instead of 1280x720 (full screen)
++    DFBDisplayLayerConfig layerConfig;
++    IDirectFBDisplayLayer *layer;
++
++    layer = toDfbScreen(window)->dfbLayer();
++    layer->GetConfiguration(layer, &layerConfig);
++
++    QRect rect(0, 0, layerConfig.width, layerConfig.height);
++    window->setGeometry(rect);
++    //===============================================================
++
+     QDirectFbWindow *dfbWindow = new QDirectFbWindow(window, m_input.data());
+     dfbWindow->createDirectFBWindow();
+     return dfbWindow;
+Index: qtbase-opensource-src-5.1.1/src/plugins/platforms/directfb/qdirectfbwindow.cpp
+===================================================================
+--- qtbase-opensource-src-5.1.1.orig/src/plugins/platforms/directfb/qdirectfbwindow.cpp
++++ qtbase-opensource-src-5.1.1/src/plugins/platforms/directfb/qdirectfbwindow.cpp
+@@ -87,6 +87,20 @@
+         DirectFBError("QDirectFbWindow: failed to create window", result);
+ 
+     m_dfbWindow->SetOpacity(m_dfbWindow.data(), 0xff);
++
++    /*
++       Add setVisible() call as an experimental tweak to fix "Cursor/keyboard issue with multiple windows" issue:
++
++       > When I click on any button in the menu toolbar(ex: Help/view etc..) or right click with the mouse directfb plugin creates another window with width and height of 640x480.
++       > After disabling that window (by clicking again) I am not able to use cursor/keyboard in the 640x480 region( not able click again on the menu toolbar/use keyboard to type any text).
++       > Cursor/keyboard works fine if the text box/address bar is outside of the 640x480 region.
++       > "createwindow" function is getting called from directfb plugin but "removewindow" function is not getting called(When we disable the another window).
++
++       Also seems to fix mouse clicks not being recognised in animatedtiles demo etc?
++       Fixme: needs review.
++    */
++    setVisible(window()->isVisible());
++
+     m_inputHandler->addWindow(m_dfbWindow.data(), window());
+ }
+ 
+@@ -100,7 +114,13 @@
+ {
+ //    bool isMoveOnly = (rect.topLeft() != geometry().topLeft()) && (rect.size() == geometry().size());
+ 
++    // Fixme: Function getting wrong width and height causing to display smaller window size at output.
++    // This function gets called when running animatedtiles example code, but it is not used for browser
++    // application. For now temporarily disable setGeometry function.
++#if 0
+     QPlatformWindow::setGeometry(rect);
++#endif
++
+     if (window()->isVisible()) {
+         m_dfbWindow->SetBounds(m_dfbWindow.data(), rect.x(),rect.y(),
+                                rect.width(), rect.height());

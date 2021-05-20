@@ -1,0 +1,28 @@
+Date: Oct 20 17:23:21 2014
+
+From: 8dd5dc558730b46d4ba0a4f1cb90b8d85c9adc12 Oct 20 17:23:21 2014
+
+Subject: [PATCH] RDKRIDP-363 openmax plugin changes for Audio
+	
+	Add the patch to libomxil to change the output buffersize 32k to 192k for audio
+
+Source: COMCAST
+
+License: LGPL-2.1-or-later
+
+Upstream-Status: Pending
+
+Signed-off-by: pnandyala <Pavan.Nandyala@LntTechservices.com>
+---
+
+--- a/src/base/omx_base_component.h	2014-10-15 15:43:21.132560795 +0000
++++ b/src/base/omx_base_component.h	2014-10-15 15:44:06.064564287 +0000
+@@ -53,7 +53,7 @@
+ /** Default size of the internal input buffer */
+ #define DEFAULT_IN_BUFFER_SIZE  4 * 1024
+ /** Default size of the internal output buffer */
+-#define DEFAULT_OUT_BUFFER_SIZE 32 * 1024 /*16 * 1024 */ // TODO - check this size is ok
++#define DEFAULT_OUT_BUFFER_SIZE 192 * 1024 /*16 * 1024 */ // TODO - check this size is ok
+ /** Default MIME string length */
+ #define DEFAULT_MIME_STRING_LENGTH 128
+ 

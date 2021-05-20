@@ -1,0 +1,57 @@
+From 43508a92339aca937af2389fa00877dfa1fb7a4d Mon Sep 17 00:00:00 2001
+From: Eugene Mutavchi <Ievgen_Mutavchi@comcast.com>
+Date: Mon, 4 Jan 2021 14:37:42 +0000
+Subject: [PATCH] Allow independed flushing of video buffer
+
+---
+ .../gstreamer/mse/PlaybackPipeline.cpp        | 41 +++++++++++++++----
+ .../mse/WebKitMediaSourceGStreamer.cpp        |  6 ++-
+ 2 files changed, 37 insertions(+), 10 deletions(-)
+
+Index: git/Source/WebCore/platform/graphics/gstreamer/mse/PlaybackPipeline.cpp
+===================================================================
+--- git.orig/Source/WebCore/platform/graphics/gstreamer/mse/PlaybackPipeline.cpp
++++ git/Source/WebCore/platform/graphics/gstreamer/mse/PlaybackPipeline.cpp
+@@ -381,14 +381,6 @@ void PlaybackPipeline::flush(AtomicStrin
+         return;
+     }
+ 
+-    if (!gst_element_send_event(GST_ELEMENT(appsrc), gst_event_new_flush_stop(false))) {
+-        GST_WARNING("Failed to send flush-stop event for trackId=%s", trackId.string().utf8().data());
+-        return;
+-    }
+-
+-    if (static_cast<guint64>(position) == GST_CLOCK_TIME_NONE || static_cast<guint64>(start) == GST_CLOCK_TIME_NONE)
+-        return;
+-
+     GUniquePtr<GstSegment> segment(gst_segment_new());
+     gst_segment_init(segment.get(), GST_FORMAT_TIME);
+     gst_segment_do_seek(segment.get(), rate, GST_FORMAT_TIME, GST_SEEK_FLAG_NONE,
+@@ -404,6 +396,10 @@ void PlaybackPipeline::flush(AtomicStrin
+ 
+     if (!gst_base_src_new_seamless_segment(GST_BASE_SRC(appsrc), segment->start, segment->stop, segment->start)) {
+         GST_WARNING("Failed to send seamless segment event for trackId=%s", trackId.string().utf8().data());
++    }
++
++    if (!gst_element_send_event(GST_ELEMENT(appsrc), gst_event_new_flush_stop(false))) {
++        GST_WARNING("Failed to send flush-stop event for trackId=%s", trackId.string().utf8().data());
+         return;
+     }
+ 
+Index: git/Source/WebCore/platform/graphics/gstreamer/mse/WebKitMediaSourceGStreamer.cpp
+===================================================================
+--- git.orig/Source/WebCore/platform/graphics/gstreamer/mse/WebKitMediaSourceGStreamer.cpp
++++ git/Source/WebCore/platform/graphics/gstreamer/mse/WebKitMediaSourceGStreamer.cpp
+@@ -249,8 +249,10 @@ static void webkit_media_src_class_init(
+ static GstFlowReturn webkitMediaSrcChain(GstPad* pad, GstObject* parent, GstBuffer* buffer)
+ {
+     GRefPtr<WebKitMediaSrc> self = adoptGRef(WEBKIT_MEDIA_SRC(gst_object_get_parent(parent)));
+-
+-    return gst_flow_combiner_update_pad_flow(self->priv->flowCombiner.get(), pad, gst_proxy_pad_chain_default(pad, GST_OBJECT(self.get()), buffer));
++    GstFlowReturn ret = gst_proxy_pad_chain_default(pad, GST_OBJECT(self.get()), buffer);
++    if (ret != GST_FLOW_FLUSHING)
++        return gst_flow_combiner_update_pad_flow(self->priv->flowCombiner.get(), pad, ret);
++    return ret;
+ }
+ 
+ static void webkit_media_src_init(WebKitMediaSrc* source)

@@ -1,0 +1,87 @@
+Date: Nov 15 01:07:18 2013
+
+From: ecf7073215f1c8c856031894fb7ee09a6698abf6 Dec 12 15:26:52 2013
+
+Subject: [PATCH] qtbase 5.1.1: add RDK patches
+
+        This patch adds the Qt qtbase 5.1.1 patches from RDK to OE's qtbase.
+
+Source: COMCAST
+
+Upstream-Status: Pending
+
+Signed-off-by: Trevor Woerner <trevor.woerner@linaro.org>
+---
+
+Index: qtbase-opensource-src-5.1.1/src/plugins/platforms/eglfs/qeglfswindow.cpp
+===================================================================
+--- qtbase-opensource-src-5.1.1.orig/src/plugins/platforms/eglfs/qeglfswindow.cpp
++++ qtbase-opensource-src-5.1.1/src/plugins/platforms/eglfs/qeglfswindow.cpp
+@@ -93,7 +93,7 @@ void QEglFSWindow::invalidateSurface()
+     m_window = 0;
+     if (m_surface != 0) {
+         EGLDisplay display = (static_cast<QEglFSScreen *>(window()->screen()->handle()))->display();
+-        eglDestroySurface(display, m_surface);
++        //eglDestroySurface(display, m_surface);
+         m_surface = 0;
+     }
+ }
+@@ -115,7 +115,7 @@ void QEglFSWindow::destroy()
+ {
+     if (m_surface) {
+         EGLDisplay display = static_cast<QEglFSScreen *>(screen())->display();
+-        eglDestroySurface(display, m_surface);
++        //eglDestroySurface(display, m_surface);
+         m_surface = 0;
+     }
+ 
+Index: qtbase-opensource-src-5.1.1/src/platformsupport/eglconvenience/qeglconvenience.cpp
+===================================================================
+--- qtbase-opensource-src-5.1.1.orig/src/platformsupport/eglconvenience/qeglconvenience.cpp
++++ qtbase-opensource-src-5.1.1/src/platformsupport/eglconvenience/qeglconvenience.cpp
+@@ -284,11 +284,11 @@ bool QEglConfigChooser::filterConfig(EGL
+     if (m_ignore)
+         return true;
+ 
+-    EGLint red = 0;
+-    EGLint green = 0;
+-    EGLint blue = 0;
+-    EGLint alpha = 0;
+-
++    EGLint red = 8;//0;
++    EGLint green = 8;//0;
++    EGLint blue = 8;//0;
++    EGLint alpha = 8;//0;
++/*
+     if (m_confAttrRed)
+         eglGetConfigAttrib(display(), config, EGL_RED_SIZE, &red);
+     if (m_confAttrGreen)
+@@ -297,7 +297,7 @@ bool QEglConfigChooser::filterConfig(EGL
+         eglGetConfigAttrib(display(), config, EGL_BLUE_SIZE, &blue);
+     if (m_confAttrAlpha)
+         eglGetConfigAttrib(display(), config, EGL_ALPHA_SIZE, &alpha);
+-
++*/
+     return red == m_confAttrRed && green == m_confAttrGreen
+            && blue == m_confAttrBlue && alpha == m_confAttrAlpha;
+ }
+Index: qtbase-opensource-src-5.1.1/src/plugins/platforms/eglfs/qeglfsintegration.cpp
+===================================================================
+--- qtbase-opensource-src-5.1.1.orig/src/plugins/platforms/eglfs/qeglfsintegration.cpp
++++ qtbase-opensource-src-5.1.1/src/plugins/platforms/eglfs/qeglfsintegration.cpp
+@@ -197,6 +197,15 @@ void *QEglFSIntegration::nativeResourceF
+     if (lowerCaseResource == "egldisplay")
+         return static_cast<QEglFSScreen *>(mScreen)->display();
+ 
++    static void* hrmConsumerInterface = 0;
++
++    if (lowerCaseResource == "hrmconsumerinterface") {
++
++        printf("returning &hrmConsumerInterface == 0x%08x, hrmConsumerInterface == 0x%08x\n", &hrmConsumerInterface, hrmConsumerInterface);
++
++        return static_cast<void**>(&hrmConsumerInterface);
++    }
++
+     return 0;
+ }
+ 

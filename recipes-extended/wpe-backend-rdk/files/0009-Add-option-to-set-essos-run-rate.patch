@@ -1,0 +1,71 @@
+From ebe10969e2a5aa750f7f25cc5436e0c5d8588aaf Mon Sep 17 00:00:00 2001
+From: Eugene Mutavchi <Ievgen_Mutavchi@comcast.com>
+Date: Wed, 24 Feb 2021 04:39:19 +0000
+Subject: [PATCH] Add option to set essos run rate
+​
+Also, flush display in wayland mode
+---
+ src/essos/CMakeLists.txt       |  2 +-
+ src/essos/renderer-backend.cpp | 20 ++++++++++++++++++--
+ 2 files changed, 19 insertions(+), 3 deletions(-)
+​
+diff --git a/src/essos/CMakeLists.txt b/src/essos/CMakeLists.txt
+index f136e7d..12593e1 100644
+--- a/src/essos/CMakeLists.txt
++++ b/src/essos/CMakeLists.txt
+@@ -24,7 +24,7 @@ list(APPEND WPE_PLATFORM_INCLUDE_DIRECTORIES
+ )
+ 
+ list(APPEND WPE_PLATFORM_LIBRARIES
+-    ${ESSOS_LIBRARIES}
++    ${ESSOS_LIBRARIES} -lwayland-client
+ )
+ 
+ list(APPEND WPE_PLATFORM_SOURCES
+diff --git a/src/essos/renderer-backend.cpp b/src/essos/renderer-backend.cpp
+index d9a0fc8..960d1ea 100644
+--- a/src/essos/renderer-backend.cpp
++++ b/src/essos/renderer-backend.cpp
+@@ -32,6 +32,11 @@
+ #define ERROR_LOG(fmt, ...) fprintf(stderr, "[essos:renderer-backend.cpp:%u:%s] *** " fmt "\n", __LINE__, __func__, ##__VA_ARGS__)
+ #define DEBUG_LOG(fmt, ...) if (enableDebugLogs()) fprintf(stderr, "[essos:renderer-backend.cpp:%u:%s] " fmt "\n", __LINE__, __func__, ##__VA_ARGS__)
+ 
++extern "C" {
++struct wl_display;
++int wl_display_flush (struct wl_display *display);
++}
++
+ namespace Essos {
+ 
+ static bool enableDebugLogs()
+@@ -227,8 +232,14 @@ void EGLTarget::initialize(Backend& backend, uint32_t width, uint32_t height)
+     pageHeight = height;
+ 
+     DEBUG_LOG("initial page size=%ux%u", width, height);
+-
+-    eventSource = g_timeout_source_new(16); // 60 FPS
++    static int fps = []() -> int {
++        int result = -1;
++        const char *env = getenv("WPE_ESSOS_CYCLES_PER_SECOND");
++        if (env)
++            result = atoi(env);
++        return result < 0 ? 60 : result;
++    }();
++    eventSource = g_timeout_source_new(1000 / fps);
+     g_source_set_callback(
+         eventSource,
+         [](gpointer data) -> gboolean {
+@@ -345,6 +356,11 @@ void EGLTarget::frameRendered()
+     ipcClient.sendMessage(IPC::Message::data(message), IPC::Message::size);
+ 
+     ++shouldDispatchFrameComplete;
++
++    if ( EssContextGetUseWayland(essosCtx) ) {
++        void* display = EssContextGetWaylandDisplay( essosCtx );
++        wl_display_flush( (wl_display*) display );
++    }
+ }
+ 
+ bool EGLTarget::updateKeyModifiers(unsigned int key, bool pressed)
+-- 
+2.17.1

@@ -1,0 +1,2287 @@
+Date: May 28 19:38:09 2014
+
+From: 105907cb3aeadba214530a500e427532544bb681 May 28 19:38:09 2014 
+
+Subject: [PATCH] Added new recipes for net-snmp, openssl-0.9, rmfgeneric, trm, rmfhalheaders, rmfpodmgrheaders, rmfpodmgr recipes
+
+	
+	Added patches for function implementation asn1_d2i_read_bio_buffer. 
+	
+Source: COMCAST
+
+License: Apache-2.0
+
+Upstream-Status: Pending
+
+Signed-off-by:	Balaji Punnuru <balaji_punnuru@cable.comcast.com>	
+---
+
+--- openssl-0.9.8j/crypto/asn1/a_d2i_fp.c.orig	2015-03-19 09:46:45.000000000 -0400
++++ openssl-0.9.8j/crypto/asn1/a_d2i_fp.c	2015-03-20 13:03:04.657911788 -0400
+@@ -63,6 +63,8 @@
+ #include <openssl/asn1_mac.h>
+ 
+ static int asn1_d2i_read_bio(BIO *in, BUF_MEM **pb);
++static int asn1_d2i_read_bio_buffer(int buffer_len, const char *buffer, BUF_MEM **pb);
++
+ 
+ #ifndef NO_OLD_ASN1
+ # ifndef OPENSSL_NO_FP_API
+@@ -104,6 +106,23 @@
+ 
+ #endif
+ 
++void *ASN1_item_d2i_bio_buffer(const ASN1_ITEM *it, int buffer_len, const char *buffer, void *x)
++	{
++	BUF_MEM *b = NULL;
++	unsigned char *p;
++	void *ret=NULL;
++	int len;
++
++	len = asn1_d2i_read_bio_buffer(buffer_len, buffer, &b);
++	if(len < 0) goto err;
++
++	p=(unsigned char *)b->data;
++	ret=ASN1_item_d2i(x,&p,len, it);
++err:
++	if (b != NULL) BUF_MEM_free(b);
++	return(ret);
++	}
++
+ void *ASN1_item_d2i_bio(const ASN1_ITEM *it, BIO *in, void *x)
+ {
+     BUF_MEM *b = NULL;
+@@ -266,3 +285,127 @@
+         BUF_MEM_free(b);
+     return -1;
+ }
++
++static int asn1_d2i_read_bio_buffer(int buffer_len, const char *buffer, BUF_MEM **pb)
++	{
++	BUF_MEM *b;
++	unsigned char *p;
++	int i;
++	int ret=-1;
++	ASN1_CTX c;
++	int want=HEADER_SIZE;
++	int eos=0;
++#if defined(__GNUC__) && defined(__ia64)
++	/* pathetic compiler bug in all known versions as of Nov. 2002 */
++	long off=0;
++#else
++	int off=0;
++#endif
++	int len=0;
++
++	b=BUF_MEM_new();
++	if (b == NULL)
++		{
++		ASN1err(ASN1_F_ASN1_D2I_READ_BIO,ERR_R_MALLOC_FAILURE);
++		return -1;
++		}
++
++	ERR_clear_error();
++	for (;;)
++		{
++		if (want >= (len-off))
++			{
++			want-=(len-off);
++
++			if (!BUF_MEM_grow_clean(b,len+want))
++				{
++				ASN1err(ASN1_F_ASN1_D2I_READ_BIO,ERR_R_MALLOC_FAILURE);
++				goto err;
++				}
++			//BSYT i=BIO_read(in,&(b->data[len]),want);
++			i = buf_read(buffer_len, buffer, &(b->data[len]),want);
++			if ((i < 0) && ((len-off) == 0))
++				{
++				ASN1err(ASN1_F_ASN1_D2I_READ_BIO,ASN1_R_NOT_ENOUGH_DATA);
++				goto err;
++				}
++			if (i > 0)
++				len+=i;
++			}
++		/* else data already loaded */
++
++		p=(unsigned char *)&(b->data[off]);
++		c.p=p;
++		c.inf=ASN1_get_object(&(c.p),&(c.slen),&(c.tag),&(c.xclass),
++			len-off);
++		if (c.inf & 0x80)
++			{
++			unsigned long e;
++
++			e=ERR_GET_REASON(ERR_peek_error());
++			if (e != ASN1_R_TOO_LONG)
++				goto err;
++			else
++				ERR_get_error(); /* clear error */
++			}
++		i=c.p-p;/* header length */
++		off+=i;	/* end of data */
++
++		if (c.inf & 1)
++			{
++			/* no data body so go round again */
++			eos++;
++			want=HEADER_SIZE;
++			}
++		else if (eos && (c.slen == 0) && (c.tag == V_ASN1_EOC))
++			{
++			/* eos value, so go back and read another header */
++			eos--;
++			if (eos <= 0)
++				break;
++			else
++				want=HEADER_SIZE;
++			}
++		else 
++			{
++			/* suck in c.slen bytes of data */
++			want=(int)c.slen;
++			if (want > (len-off))
++				{
++				want-=(len-off);
++				if (!BUF_MEM_grow_clean(b,len+want))
++					{
++					ASN1err(ASN1_F_ASN1_D2I_READ_BIO,ERR_R_MALLOC_FAILURE);
++					goto err;
++					}
++				while (want > 0)
++					{
++					//BSYT i=BIO_read(in,&(b->data[len]),want);
++					i = buf_read(buffer_len, buffer+len, &(b->data[len]),want);
++					if (i <= 0)
++						{
++						ASN1err(ASN1_F_ASN1_D2I_READ_BIO,
++						    ASN1_R_NOT_ENOUGH_DATA);
++						goto err;
++						}
++					len+=i;
++					want -= i;
++					}
++				}
++			off+=(int)c.slen;
++			if (eos <= 0)
++				{
++				break;
++				}
++			else
++				want=HEADER_SIZE;
++			}
++		}
++
++	*pb = b;
++	return off;
++err:
++	if (b != NULL) BUF_MEM_free(b);
++	return(ret);
++	}
++
+diff -aurN openssl-0.9.8j/crypto/asn1/asn1.h openssl-0.9.8j.patched/crypto/asn1/asn1.h
+--- openssl-0.9.8j/crypto/asn1/asn1.h	2008-05-20 08:10:28.000000000 -0400
++++ openssl-0.9.8j.patched/crypto/asn1/asn1.h	2014-04-14 11:18:43.000000000 -0400
+@@ -993,6 +993,7 @@
+                           CHECKED_PPTR_OF(type, x)))
+ 
+ void *ASN1_item_d2i_bio(const ASN1_ITEM *it, BIO *in, void *x);
++void *ASN1_item_d2i_bio_buffer(const ASN1_ITEM *it, int buffer_len, const char *buffer, void *x);
+ int ASN1_i2d_bio(i2d_of_void *i2d, BIO *out, unsigned char *x);
+ 
+ #  define ASN1_i2d_bio_of(type,i2d,out,x) \
+diff -aurN openssl-0.9.8j/crypto/bio/bio_lib.c openssl-0.9.8j.patched/crypto/bio/bio_lib.c
+--- openssl-0.9.8j/crypto/bio/bio_lib.c	2006-11-29 15:47:12.000000000 -0500
++++ openssl-0.9.8j.patched/crypto/bio/bio_lib.c	2014-04-14 11:18:43.000000000 -0400
+@@ -187,6 +187,13 @@
+     return b->method->type;
+ }
+ 
++// simulate BIO_read
++int buf_read (int buffer_len, const char *buffer, void *out, int outl)
++{
++	memcpy(out, buffer, outl);
++	return(outl);
++}
++
+ int BIO_read(BIO *b, void *out, int outl)
+ {
+     int i;
+diff -aurN openssl-0.9.8j/crypto/engine/eng_all.c openssl-0.9.8j.patched/crypto/engine/eng_all.c
+--- openssl-0.9.8j/crypto/engine/eng_all.c	2008-06-04 14:01:39.000000000 -0400
++++ openssl-0.9.8j.patched/crypto/engine/eng_all.c	2014-04-14 11:18:43.000000000 -0400
+@@ -70,7 +70,6 @@
+      */
+ #if 0
+     ENGINE_load_openssl();
+-#endif
+ #if !defined(OPENSSL_NO_HW) && !defined(OPENSSL_NO_HW_PADLOCK)
+     ENGINE_load_padlock();
+ #endif
+@@ -109,6 +108,7 @@
+     ENGINE_load_capi();
+ # endif
+ #endif
++#endif
+ #ifndef OPENSSL_NO_HW
+ # if defined(__OpenBSD__) || defined(__FreeBSD__) || defined(HAVE_CRYPTODEV)
+     ENGINE_load_cryptodev();diff -aurN openssl-0.9.8j/crypto/engine/engine.h openssl-0.9.8j.patched/crypto/engine/engine.h
+--- openssl-0.9.8j/crypto/engine/engine.h	2008-06-04 14:01:40.000000000 -0400
++++ openssl-0.9.8j.patched/crypto/engine/engine.h	2014-04-14 11:18:43.000000000 -0400
+@@ -384,7 +384,7 @@
+ void ENGINE_load_dynamic(void);
+ # ifndef OPENSSL_NO_STATIC_ENGINE
+ void ENGINE_load_4758cca(void);
++//void ENGINE_load_aep(void);
+-void ENGINE_load_aep(void);
+ void ENGINE_load_atalla(void);
+ void ENGINE_load_chil(void);
+ void ENGINE_load_cswift(void);diff -aurN openssl-0.9.8j/crypto/pem/pem.h openssl-0.9.8j.patched/crypto/pem/pem.h
+--- openssl-0.9.8j/crypto/pem/pem.h	2008-11-11 07:42:32.000000000 -0500
++++ openssl-0.9.8j.patched/crypto/pem/pem.h	2014-04-14 11:18:43.000000000 -0400
+@@ -213,7 +213,9 @@
+ # ifdef OPENSSL_NO_FP_API
+ 
+ #  define IMPLEMENT_PEM_read_fp(name, type, str, asn1) /**/
++#  define IMPLEMENT_PEM_read_fp_buffer(name, type, str, asn1) /**/
+ #  define IMPLEMENT_PEM_write_fp(name, type, str, asn1) /**/
++#  define IMPLEMENT_PEM_write_fp_buffer(name, type, str, asn1) /**/
+ #  define IMPLEMENT_PEM_write_fp_const(name, type, str, asn1) /**/
+ #  define IMPLEMENT_PEM_write_cb_fp(name, type, str, asn1) /**/
+ #  define IMPLEMENT_PEM_write_cb_fp_const(name, type, str, asn1) /**/
+@@ -228,6 +230,15 @@
+                                 cb, u); \
+ }
+ 
++#define IMPLEMENT_PEM_read_fp_buffer(name, type, str, asn1) \
++type *PEM_read_buffer_##name(FILE *fp, type **x, pem_password_cb *cb, void *u, unsigned long buffer_len, const char *buffer)\
++{ \
++return((type *)PEM_ASN1_read_buffer(CHECKED_D2I_OF(type, d2i_##asn1), \
++                          str,fp, \
++                          CHECKED_PPTR_OF(type,x), \
++                          cb,u, buffer_len, buffer)); \
++}
++
+ #  define IMPLEMENT_PEM_write_fp(name, type, str, asn1) \
+ int PEM_write_##name(FILE *fp, type *x) \
+ { \
+@@ -237,6 +248,15 @@
+                           NULL, NULL, 0, NULL, NULL); \
+ }
+ 
++#define IMPLEMENT_PEM_write_fp_buffer(name, type, str, asn1) \
++int PEM_write_buffer##name(FILE *fp, type *x) \
++{ \
++    return(PEM_ASN1_write_buffer(CHECKED_I2D_OF(type, i2d_##asn1), \
++                          str,fp, \
++                          CHECKED_PTR_OF(type, x), \
++                          NULL,NULL,0,NULL,NULL)); \
++}
++
+ #  define IMPLEMENT_PEM_write_fp_const(name, type, str, asn1) \
+ int PEM_write_##name(FILE *fp, const type *x) \
+ { \
+@@ -273,19 +293,38 @@
+ # define IMPLEMENT_PEM_read_bio(name, type, str, asn1) \
+ type *PEM_read_bio_##name(BIO *bp, type **x, pem_password_cb *cb, void *u)\
+ { \
+-    return (type*)PEM_ASN1_read_bio(CHECKED_D2I_OF(type, d2i_##asn1), \
+-                                    str, bp, \
+-                                    CHECKED_PPTR_OF(type, x), \
+-                                    cb, u); \
++    return((type*)PEM_ASN1_read_bio(CHECKED_D2I_OF(type, d2i_##asn1), \
++                                  str, bp, \
++                                  CHECKED_PPTR_OF(type, x), \
++                                  cb, u)); \
++}
++
++//BSYT
++#define IMPLEMENT_PEM_read_bio_buffer(name, type, str, asn1) \
++type *PEM_read_bio_buffer_##name(BIO *bp, type **x, pem_password_cb *cb, void *u, unsigned long  buffer_len, const char *buffer)\
++{ \
++    return((type*)PEM_ASN1_read_bio_buffer(CHECKED_D2I_OF(type, d2i_##asn1), \
++                                 str, bp, \
++                                 CHECKED_PPTR_OF(type, x), \
++                                 cb, u, buffer_len, buffer)); \
+ }
+ 
+ # define IMPLEMENT_PEM_write_bio(name, type, str, asn1) \
+ int PEM_write_bio_##name(BIO *bp, type *x) \
+ { \
+-    return PEM_ASN1_write_bio(CHECKED_I2D_OF(type, i2d_##asn1), \
++    return(PEM_ASN1_write_bio(CHECKED_I2D_OF(type, i2d_##asn1), \
+                               str, bp, \
+                               CHECKED_PTR_OF(type, x), \
+-                              NULL, NULL, 0, NULL, NULL); \
++			      NULL, NULL, 0, NULL, NULL)); \
++}
++
++#define IMPLEMENT_PEM_write_bio_buffer(name, type, str, asn1) \
++int PEM_write_bio_buffer_##name(BIO *bp, type *x) \
++{ \
++    return(PEM_ASN1_write_bio_buffer(CHECKED_I2D_OF(type, i2d_##asn1), \
++			      str, bp, \
++			      CHECKED_PTR_OF(type, x), \
++			      NULL, NULL, 0, NULL, NULL)); \
+ }
+ 
+ # define IMPLEMENT_PEM_write_bio_const(name, type, str, asn1) \
+@@ -319,7 +358,11 @@
+ 
+ # define IMPLEMENT_PEM_write(name, type, str, asn1) \
+         IMPLEMENT_PEM_write_bio(name, type, str, asn1) \
+-        IMPLEMENT_PEM_write_fp(name, type, str, asn1)
++	IMPLEMENT_PEM_write_fp(name, type, str, asn1)
++
++#define IMPLEMENT_PEM_write_buffer(name, type, str, asn1) \
++	IMPLEMENT_PEM_write_bio_buffer(name, type, str, asn1) \
++	IMPLEMENT_PEM_write_fp_buffer(name, type, str, asn1)
+ 
+ # define IMPLEMENT_PEM_write_const(name, type, str, asn1) \
+         IMPLEMENT_PEM_write_bio_const(name, type, str, asn1) \
+@@ -335,12 +378,21 @@
+ 
+ # define IMPLEMENT_PEM_read(name, type, str, asn1) \
+         IMPLEMENT_PEM_read_bio(name, type, str, asn1) \
+-        IMPLEMENT_PEM_read_fp(name, type, str, asn1)
++	IMPLEMENT_PEM_read_fp(name, type, str, asn1)
++
++
++#define IMPLEMENT_PEM_read_buffer(name, type, str, asn1) \
++	IMPLEMENT_PEM_read_bio_buffer(name, type, str, asn1) \
++	IMPLEMENT_PEM_read_fp_buffer(name, type, str, asn1)
+ 
+ # define IMPLEMENT_PEM_rw(name, type, str, asn1) \
+         IMPLEMENT_PEM_read(name, type, str, asn1) \
+         IMPLEMENT_PEM_write(name, type, str, asn1)
+ 
++#define IMPLEMENT_PEM_rw_buffer(name, type, str, asn1) \
++	IMPLEMENT_PEM_read_buffer(name, type, str, asn1) \
++	IMPLEMENT_PEM_write_buffer(name, type, str, asn1)
++
+ # define IMPLEMENT_PEM_rw_const(name, type, str, asn1) \
+         IMPLEMENT_PEM_read(name, type, str, asn1) \
+         IMPLEMENT_PEM_write_const(name, type, str, asn1)
+@@ -354,17 +406,26 @@
+ # if defined(OPENSSL_SYS_WIN16) || defined(OPENSSL_NO_FP_API)
+ 
+ #  define DECLARE_PEM_read_fp(name, type) /**/
++#  define DECLARE_PEM_read_fp_buffer(name, type) /**/
+ #  define DECLARE_PEM_write_fp(name, type) /**/
++#  define DECLARE_PEM_write_fp_buffer(name, type) /**/
+ #  define DECLARE_PEM_write_fp_const(name, type) /**/
+ #  define DECLARE_PEM_write_cb_fp(name, type) /**/
++#  define DECLARE_PEM_write_cb_fp_buffer(name, type) /**/
+ # else
+ 
+ #  define DECLARE_PEM_read_fp(name, type) \
+         type *PEM_read_##name(FILE *fp, type **x, pem_password_cb *cb, void *u);
+ 
++#  define DECLARE_PEM_read_fp_buffer(name, type) \
++	type *PEM_read_buffer_##name(FILE *fp, type **x, pem_password_cb *cb, void *u, unsigned long buffer_len, const char *buffer);
++
+ #  define DECLARE_PEM_write_fp(name, type) \
+         int PEM_write_##name(FILE *fp, type *x);
+ 
++#  define DECLARE_PEM_write_fp_buffer(name, type) \
++	int PEM_write_buffer_##name(FILE *fp, type *x);
++
+ #  define DECLARE_PEM_write_fp_const(name, type) \
+         int PEM_write_##name(FILE *fp, const type *x);
+ 
+@@ -372,15 +433,25 @@
+         int PEM_write_##name(FILE *fp, type *x, const EVP_CIPHER *enc, \
+              unsigned char *kstr, int klen, pem_password_cb *cb, void *u);
+ 
++#  define DECLARE_PEM_write_cb_fp_buffer(name, type) \
++	int PEM_write_##name(FILE *fp, type *x, const EVP_CIPHER *enc, \
++	     unsigned char *kstr, int klen, pem_password_cb *cb, void *u);
++
+ # endif
+ 
+ # ifndef OPENSSL_NO_BIO
+ #  define DECLARE_PEM_read_bio(name, type) \
+         type *PEM_read_bio_##name(BIO *bp, type **x, pem_password_cb *cb, void *u);
+ 
++#  define DECLARE_PEM_read_bio_buffer(name, type) \
++	type *PEM_read_bio_buffer_##name(BIO *bp, type **x, pem_password_cb *cb, void *u, unsigned long buffer_len, const char *buffer);
++
+ #  define DECLARE_PEM_write_bio(name, type) \
+         int PEM_write_bio_##name(BIO *bp, type *x);
+ 
++#  define DECLARE_PEM_write_bio_buffer(name, type) \
++	int PEM_write_bio_buffer_##name(BIO *bp, type *x);
++
+ #  define DECLARE_PEM_write_bio_const(name, type) \
+         int PEM_write_bio_##name(BIO *bp, const type *x);
+ 
+@@ -388,34 +459,56 @@
+         int PEM_write_bio_##name(BIO *bp, type *x, const EVP_CIPHER *enc, \
+              unsigned char *kstr, int klen, pem_password_cb *cb, void *u);
+ 
++#define DECLARE_PEM_write_cb_bio_buffer(name, type) \
++	int PEM_write_bio_##name(BIO *bp, type *x, const EVP_CIPHER *enc, \
++	     unsigned char *kstr, int klen, pem_password_cb *cb, void *u);
++
+ # else
+ 
+ #  define DECLARE_PEM_read_bio(name, type) /**/
++#  define DECLARE_PEM_read_bio_buffer(name, type) /**/
+ #  define DECLARE_PEM_write_bio(name, type) /**/
++#  define DECLARE_PEM_write_bio_buffer(name, type) /**/
+ #  define DECLARE_PEM_write_bio_const(name, type) /**/
+ #  define DECLARE_PEM_write_cb_bio(name, type) /**/
++#  define DECLARE_PEM_write_cb_bio_buffer(name, type) /**/
+ # endif
+ # define DECLARE_PEM_write(name, type) \
+         DECLARE_PEM_write_bio(name, type) \
+-        DECLARE_PEM_write_fp(name, type)
++	DECLARE_PEM_write_fp(name, type)
++#define DECLARE_PEM_write_buffer(name, type) \
++	DECLARE_PEM_write_bio_buffer(name, type) \
++	DECLARE_PEM_write_fp_buffer(name, type)
+ # define DECLARE_PEM_write_const(name, type) \
+         DECLARE_PEM_write_bio_const(name, type) \
+         DECLARE_PEM_write_fp_const(name, type)
+ # define DECLARE_PEM_write_cb(name, type) \
+         DECLARE_PEM_write_cb_bio(name, type) \
+-        DECLARE_PEM_write_cb_fp(name, type)
++	DECLARE_PEM_write_cb_fp(name, type)
++#define DECLARE_PEM_write_cb_buffer(name, type) \
++	DECLARE_PEM_write_cb_bio_buffer(name, type) \
++	DECLARE_PEM_write_cb_fp_buffer(name, type)
+ # define DECLARE_PEM_read(name, type) \
+         DECLARE_PEM_read_bio(name, type) \
+         DECLARE_PEM_read_fp(name, type)
++#define DECLARE_PEM_read_buffer(name, type) \
++	DECLARE_PEM_read_bio_buffer(name, type) \
++	DECLARE_PEM_read_fp_buffer(name, type)
+ # define DECLARE_PEM_rw(name, type) \
+         DECLARE_PEM_read(name, type) \
+         DECLARE_PEM_write(name, type)
++#define DECLARE_PEM_rw_buffer(name, type) \
++	DECLARE_PEM_read_buffer(name, type) \
++	DECLARE_PEM_write_buffer(name, type)
+ # define DECLARE_PEM_rw_const(name, type) \
+         DECLARE_PEM_read(name, type) \
+         DECLARE_PEM_write_const(name, type)
+ # define DECLARE_PEM_rw_cb(name, type) \
+         DECLARE_PEM_read(name, type) \
+         DECLARE_PEM_write_cb(name, type)
++#define DECLARE_PEM_rw_cb_buffer(name, type) \
++	DECLARE_PEM_read_buffer(name, type) \
++	DECLARE_PEM_write_cb_buffer(name, type)
+ # ifdef SSLEAY_MACROS
+ #  define PEM_write_SSL_SESSION(fp,x) \
+                 PEM_ASN1_write((int (*)())i2d_SSL_SESSION, \
+@@ -456,12 +549,16 @@
+         (char *(*)())d2i_SSL_SESSION,PEM_STRING_SSL_SESSION,fp,(char **)x,cb,u)
+ #  define PEM_read_X509(fp,x,cb,u) (X509 *)PEM_ASN1_read( \
+         (char *(*)())d2i_X509,PEM_STRING_X509,fp,(char **)x,cb,u)
++#define	PEM_read_buffer_X509(buffer_len, buffer,x,cb,u) (X509 *)PEM_ASN1_read_buffer( \
++	(char *(*)())d2i_X509,PEM_STRING_X509,fp,(char **)x,cb,u,buffer_len, buffer)
+ #  define PEM_read_X509_REQ(fp,x,cb,u) (X509_REQ *)PEM_ASN1_read( \
+         (char *(*)())d2i_X509_REQ,PEM_STRING_X509_REQ,fp,(char **)x,cb,u)
+ #  define PEM_read_X509_CRL(fp,x,cb,u) (X509_CRL *)PEM_ASN1_read( \
+         (char *(*)())d2i_X509_CRL,PEM_STRING_X509_CRL,fp,(char **)x,cb,u)
+ #  define PEM_read_RSAPrivateKey(fp,x,cb,u) (RSA *)PEM_ASN1_read( \
+         (char *(*)())d2i_RSAPrivateKey,PEM_STRING_RSA,fp,(char **)x,cb,u)
++#define	PEM_read_buffer_PrivateKey(buffer_len, buffer,x,cb,u) (EVP_PKEY *)PEM_ASN1_read_buffer( \
++	(char *(*)())d2i_PrivateKey,PEM_STRING_EVP_PKEY,fp,(char **)x,cb,u, buffer_len, buffer)
+ #  define PEM_read_RSAPublicKey(fp,x,cb,u) (RSA *)PEM_ASN1_read( \
+         (char *(*)())d2i_RSAPublicKey,PEM_STRING_RSA_PUBLIC,fp,(char **)x,cb,u)
+ #  define PEM_read_DSAPrivateKey(fp,x,cb,u) (DSA *)PEM_ASN1_read( \
+@@ -552,13 +649,20 @@
+ # ifndef OPENSSL_NO_BIO
+ int PEM_read_bio(BIO *bp, char **name, char **header,
+                  unsigned char **data, long *len);
++int PEM_read_bio_buffer(unsigned long buffer_len, const char *buffer, unsigned long *curr_pos, char **name,
++	char **header, unsigned char **data,
++	     long *len);
+ int PEM_write_bio(BIO *bp, const char *name, char *hdr, unsigned char *data,
+                   long len);
+ int PEM_bytes_read_bio(unsigned char **pdata, long *plen, char **pnm,
+                        const char *name, BIO *bp, pem_password_cb *cb,
+                        void *u);
++int PEM_bytes_read_bio_buffer(unsigned char **pdata, long *plen, char **pnm, const char *name, BIO *bp,
++	     pem_password_cb *cb, void *u, unsigned long buffer_len, const char *buffer);
+ void *PEM_ASN1_read_bio(d2i_of_void *d2i, const char *name, BIO *bp, void **x,
+                         pem_password_cb *cb, void *u);
++void *  PEM_ASN1_read_bio_buffer(d2i_of_void *d2i,const char *name,BIO *bp,
++			void **x, pem_password_cb *cb, void *u, unsigned long buffer_len, const char *buffer);
+ 
+ #  define PEM_ASN1_read_bio_of(type,d2i,name,bp,x,cb,u) \
+     ((type*)PEM_ASN1_read_bio(CHECKED_D2I_OF(type, d2i), \
+@@ -569,6 +673,9 @@
+ int PEM_ASN1_write_bio(i2d_of_void *i2d, const char *name, BIO *bp, char *x,
+                        const EVP_CIPHER *enc, unsigned char *kstr, int klen,
+                        pem_password_cb *cb, void *u);
++int	PEM_ASN1_write_bio_buffer(i2d_of_void *i2d,const char *name,BIO *bp,char *x,
++			   const EVP_CIPHER *enc,unsigned char *kstr,int klen,
++			   pem_password_cb *cb, void *u);
+ 
+ #  define PEM_ASN1_write_bio_of(type,i2d,name,bp,x,enc,kstr,klen,cb,u) \
+     (PEM_ASN1_write_bio(CHECKED_I2D_OF(type, i2d), \
+@@ -578,6 +684,7 @@
+ 
+ STACK_OF(X509_INFO) *PEM_X509_INFO_read_bio(BIO *bp, STACK_OF(X509_INFO) *sk,
+                                             pem_password_cb *cb, void *u);
++STACK_OF(X509_INFO) *PEM_X509_INFO_read_bio_from_buffer(unsigned long buffer_len, const char *buffer, STACK_OF(X509_INFO) *sk, pem_password_cb *cb, void *u);
+ int PEM_X509_INFO_write_bio(BIO *bp, X509_INFO *xi, EVP_CIPHER *enc,
+                             unsigned char *kstr, int klen,
+                             pem_password_cb *cd, void *u);
+@@ -589,11 +696,16 @@
+ int PEM_write(FILE *fp, char *name, char *hdr, unsigned char *data, long len);
+ void *PEM_ASN1_read(d2i_of_void *d2i, const char *name, FILE *fp, void **x,
+                     pem_password_cb *cb, void *u);
++void *	PEM_ASN1_read_buffer(d2i_of_void *d2i, const char *name, FILE *fp,void **x,
++			pem_password_cb *cb, void *u, unsigned long buffer_len, const char *buffer);
+ int PEM_ASN1_write(i2d_of_void *i2d, const char *name, FILE *fp,
+                    char *x, const EVP_CIPHER *enc, unsigned char *kstr,
+                    int klen, pem_password_cb *callback, void *u);
+ STACK_OF(X509_INFO) *PEM_X509_INFO_read(FILE *fp, STACK_OF(X509_INFO) *sk,
+                                         pem_password_cb *cb, void *u);
++int	PEM_ASN1_write_buffer(i2d_of_void *i2d,const char *name,FILE *fp,
++			   char *x,const EVP_CIPHER *enc,unsigned char *kstr,
++			   int klen,pem_password_cb *callback, void *u);
+ # endif
+ 
+ int PEM_SealInit(PEM_ENCODE_SEAL_CTX *ctx, EVP_CIPHER *type,
+@@ -618,7 +730,9 @@
+ #  include <openssl/symhacks.h>
+ 
+ DECLARE_PEM_rw(X509, X509)
++DECLARE_PEM_rw_buffer(X509, X509)
+ DECLARE_PEM_rw(X509_AUX, X509)
++DECLARE_PEM_rw_buffer(X509_AUX, X509)
+ DECLARE_PEM_rw(X509_CERT_PAIR, X509_CERT_PAIR)
+ DECLARE_PEM_rw(X509_REQ, X509_REQ)
+ DECLARE_PEM_write(X509_REQ_NEW, X509_REQ)
+@@ -646,6 +760,7 @@
+ DECLARE_PEM_rw_const(DHparams, DH)
+ #  endif
+ DECLARE_PEM_rw_cb(PrivateKey, EVP_PKEY)
++DECLARE_PEM_rw_cb_buffer(PrivateKey, EVP_PKEY)
+ DECLARE_PEM_rw(PUBKEY, EVP_PKEY)
+ 
+ int PEM_write_bio_PKCS8PrivateKey_nid(BIO *bp, EVP_PKEY *x, int nid,
+@@ -717,6 +832,11 @@
+ # define PEM_F_PEM_X509_INFO_READ                         115
+ # define PEM_F_PEM_X509_INFO_READ_BIO                     116
+ # define PEM_F_PEM_X509_INFO_WRITE_BIO                    117
++#define PEM_F_PEM_READ_BIO_BUFFER 	122
++#define PEM_F_PEM_ASN1_READ_BIO_BUFFER				 123
++#define PEM_F_PEM_ASN1_READ_BUFFER				 124
++#define PEM_F_PEM_ASN1_WRITE_BUFFER				 125
++#define PEM_F_PEM_ASN1_WRITE_BIO_BUFFER			 126
+ 
+ /* Reason codes. */
+ # define PEM_R_BAD_BASE64_DECODE                          100
+diff -aurN openssl-0.9.8j/crypto/pem/pem_info.c openssl-0.9.8j.patched/crypto/pem/pem_info.c
+--- openssl-0.9.8j/crypto/pem/pem_info.c	2007-12-16 11:38:21.000000000 -0500
++++ openssl-0.9.8j.patched/crypto/pem/pem_info.c	2014-04-14 11:18:43.000000000 -0400
+@@ -88,6 +88,202 @@
+ }
+ #endif
+ 
++// Modified PEM_X509_INFO_read_bio to create PEM_X509_INFO_read_bio_from_buffer
++	STACK_OF(X509_INFO) *PEM_X509_INFO_read_bio_from_buffer(unsigned long buffer_len, const char *buffer, 
++STACK_OF(X509_INFO) *sk, pem_password_cb *cb, void *u)
++	{
++	X509_INFO *xi=NULL;
++	char *name=NULL,*header=NULL,**pp;
++	unsigned char *data=NULL,*p;
++	long len,error=0;
++	int ok=0;
++	unsigned long curr_pos=0;
++	STACK_OF(X509_INFO) *ret=NULL;
++	unsigned int i,raw;
++	char *(*d2i)();
++
++	if (sk == NULL)
++		{
++		if ((ret=sk_X509_INFO_new_null()) == NULL)
++			{
++			PEMerr(PEM_F_PEM_X509_INFO_READ_BIO,ERR_R_MALLOC_FAILURE);
++			goto err;
++			}
++		}
++	else
++		ret=sk;
++
++	if ((xi=X509_INFO_new()) == NULL) goto err;
++	for (;;)
++		{
++		raw=0;
++		i=PEM_read_bio_buffer(buffer_len, buffer, &curr_pos, &name,&header,&data,&len);
++		if (i == 0)
++			{
++			error=ERR_GET_REASON(ERR_peek_last_error());
++			if (error == PEM_R_NO_START_LINE)
++				{
++				ERR_clear_error();
++				break;
++				}
++			goto err;
++			}
++start:
++		if (	(strcmp(name,PEM_STRING_X509) == 0) ||
++			(strcmp(name,PEM_STRING_X509_OLD) == 0))
++			{
++			d2i=(char *(*)())d2i_X509;
++			if (xi->x509 != NULL)
++				{
++				if (!sk_X509_INFO_push(ret,xi)) goto err;
++				if ((xi=X509_INFO_new()) == NULL) goto err;
++				goto start;
++				}
++			pp=(char **)&(xi->x509);
++			}
++		else if ((strcmp(name,PEM_STRING_X509_TRUSTED) == 0))
++			{
++			d2i=(char *(*)())d2i_X509_AUX;
++			if (xi->x509 != NULL)
++				{
++				if (!sk_X509_INFO_push(ret,xi)) goto err;
++				if ((xi=X509_INFO_new()) == NULL) goto err;
++				goto start;
++				}
++			pp=(char **)&(xi->x509);
++			}
++		else if (strcmp(name,PEM_STRING_X509_CRL) == 0)
++			{
++			d2i=(char *(*)())d2i_X509_CRL;
++			if (xi->crl != NULL)
++				{
++				if (!sk_X509_INFO_push(ret,xi)) goto err;
++				if ((xi=X509_INFO_new()) == NULL) goto err;
++				goto start;
++				}
++			pp=(char **)&(xi->crl);
++			}
++		else
++#ifndef OPENSSL_NO_RSA
++			if (strcmp(name,PEM_STRING_RSA) == 0)
++			{
++			d2i=(char *(*)())d2i_RSAPrivateKey;
++			if (xi->x_pkey != NULL) 
++				{
++				if (!sk_X509_INFO_push(ret,xi)) goto err;
++				if ((xi=X509_INFO_new()) == NULL) goto err;
++				goto start;
++				}
++
++			xi->enc_data=NULL;
++			xi->enc_len=0;
++
++			xi->x_pkey=X509_PKEY_new();
++			if ((xi->x_pkey->dec_pkey=EVP_PKEY_new()) == NULL)
++				goto err;
++			xi->x_pkey->dec_pkey->type=EVP_PKEY_RSA;
++			pp=(char **)&(xi->x_pkey->dec_pkey->pkey.rsa);
++			if ((int)strlen(header) > 10) /* assume encrypted */
++				raw=1;
++			}
++		else
++#endif
++#ifndef OPENSSL_NO_DSA
++			if (strcmp(name,PEM_STRING_DSA) == 0)
++			{
++			d2i=(char *(*)())d2i_DSAPrivateKey;
++			if (xi->x_pkey != NULL) 
++				{
++				if (!sk_X509_INFO_push(ret,xi)) goto err;
++				if ((xi=X509_INFO_new()) == NULL) goto err;
++				goto start;
++				}
++
++			xi->enc_data=NULL;
++			xi->enc_len=0;
++
++			xi->x_pkey=X509_PKEY_new();
++			if ((xi->x_pkey->dec_pkey=EVP_PKEY_new()) == NULL)
++				goto err;
++			xi->x_pkey->dec_pkey->type=EVP_PKEY_DSA;
++			pp=(char **)&(xi->x_pkey->dec_pkey->pkey.dsa);
++			if ((int)strlen(header) > 10) /* assume encrypted */
++				raw=1;
++			}
++		else
++#endif
++			{
++			d2i=NULL;
++			pp=NULL;
++			}
++
++		if (d2i != NULL)
++			{
++			if (!raw)
++				{
++				EVP_CIPHER_INFO cipher;
++
++				if (!PEM_get_EVP_CIPHER_INFO(header,&cipher))
++					goto err;
++				if (!PEM_do_header(&cipher,data,&len,cb,u))
++					goto err;
++				p=data;
++				if (d2i(pp,&p,len) == NULL)
++					{
++					PEMerr(PEM_F_PEM_X509_INFO_READ_BIO,ERR_R_ASN1_LIB);
++					goto err;
++					}
++				}
++			else
++				{ /* encrypted RSA data */
++				if (!PEM_get_EVP_CIPHER_INFO(header,
++					&xi->enc_cipher)) goto err;
++				xi->enc_data=(char *)data;
++				xi->enc_len=(int)len;
++				data=NULL;
++				}
++			}
++		else	{
++			/* unknown */
++			}
++		if (name != NULL) OPENSSL_free(name);
++		if (header != NULL) OPENSSL_free(header);
++		if (data != NULL) OPENSSL_free(data);
++		name=NULL;
++		header=NULL;
++		data=NULL;
++		}
++
++	/* if the last one hasn't been pushed yet and there is anything
++	 * in it then add it to the stack ... 
++	 */
++	if ((xi->x509 != NULL) || (xi->crl != NULL) ||
++		(xi->x_pkey != NULL) || (xi->enc_data != NULL))
++		{
++		if (!sk_X509_INFO_push(ret,xi)) goto err;
++		xi=NULL;
++		}
++	ok=1;
++err:
++	if (xi != NULL) X509_INFO_free(xi);
++	if (!ok)
++		{
++		for (i=0; ((int)i)<sk_X509_INFO_num(ret); i++)
++			{
++			xi=sk_X509_INFO_value(ret,i);
++			X509_INFO_free(xi);
++			}
++		if (ret != sk) sk_X509_INFO_free(ret);
++		ret=NULL;
++		}
++		
++	if (name != NULL) OPENSSL_free(name);
++	if (header != NULL) OPENSSL_free(header);
++	if (data != NULL) OPENSSL_free(data);
++	return(ret);
++	}
++
++
+ STACK_OF(X509_INFO) *PEM_X509_INFO_read_bio(BIO *bp, STACK_OF(X509_INFO) *sk,
+                                             pem_password_cb *cb, void *u)
+ {diff -aurN openssl-0.9.8j/crypto/pem/pem_lib.c openssl-0.9.8j.patched/crypto/pem/pem_lib.c
+--- openssl-0.9.8j/crypto/pem/pem_lib.c	2008-11-11 07:42:32.000000000 -0500
++++ openssl-0.9.8j.patched/crypto/pem/pem_lib.c	2014-04-14 11:18:43.000000000 -0400
+@@ -76,6 +76,22 @@
+ static int load_iv(char **fromp,unsigned char *to, int num);
+ static int check_pem(const char *nm, const char *name);
+ 
++// simulate fgets
++int buf_gets(char *result, unsigned int size, const char *source, unsigned long source_len)
++{
++   unsigned int count = 0;
++
++   while( (count < size) && (count <= source_len) ) {
++      result[count] = source[count];
++      if (source[count++] == '\n') {
++         break;
++      }
++   }
++   return count;
++
++}
++
++
+ int PEM_def_callback(char *buf, int num, int w, void *key)
+ 	{
+ #ifdef OPENSSL_NO_FP_API
+@@ -171,6 +187,23 @@
+     BIO_free(b);
+     return (ret);
+ }
++
++void *PEM_ASN1_read_buffer(d2i_of_void *d2i, const char *name, FILE *fp, void **x,
++		    pem_password_cb *cb, void *u, unsigned long buffer_len, const char *buffer)
++	{
++        BIO *b;
++        void *ret;
++
++        if ((b=BIO_new(BIO_s_file())) == NULL)
++		{
++		PEMerr(PEM_F_PEM_ASN1_READ,ERR_R_BUF_LIB);
++                return(0);
++		}
++        //BIO_set_fp(b,fp,BIO_NOCLOSE);
++        ret=PEM_ASN1_read_bio_buffer(d2i,name,b,x,cb,u,buffer_len, buffer);
++        BIO_free(b);
++        return(ret);
++	}
+ #endif
+ 
+ static int check_pem(const char *nm, const char *name)
+@@ -226,6 +259,51 @@
+     return 0;
+ }
+ 
++int PEM_bytes_read_bio_buffer(unsigned char **pdata, long *plen, char **pnm, const char *name, BIO *bp,
++							  
++	     pem_password_cb *cb, void *u, unsigned long buffer_len, const char *buffer)
++	{
++	EVP_CIPHER_INFO cipher;
++	char *nm=NULL,*header=NULL;
++	unsigned char *data=NULL;
++	long len;
++	int ret = 0;
++	unsigned long curr_pos =0;
++	//BSYT  bad
++	//unsigned char *pBuffer = NULL;
++	//int buffer_len = 0;
++
++	for (;;)
++		{
++		if (!PEM_read_bio_buffer(buffer_len, buffer, &curr_pos,&nm,&header,&data,&len)) {
++			if(ERR_GET_REASON(ERR_peek_error()) ==
++				PEM_R_NO_START_LINE)
++				ERR_add_error_data(2, "Expecting: ", name);
++			return 0;
++		}
++		if(check_pem(nm, name)) break;
++		OPENSSL_free(nm);
++		OPENSSL_free(header);
++		OPENSSL_free(data);
++		}
++	if (!PEM_get_EVP_CIPHER_INFO(header,&cipher)) goto err;
++	if (!PEM_do_header(&cipher,data,&len,cb,u)) goto err;
++
++	*pdata = data;
++	*plen = len;
++
++	if (pnm)
++		*pnm = nm;
++
++	ret = 1;
++
++err:
++	if (!ret || !pnm) OPENSSL_free(nm);
++	OPENSSL_free(header);
++	if (!ret) OPENSSL_free(data);
++	return ret;
++	}
++
+ int PEM_bytes_read_bio(unsigned char **pdata, long *plen, char **pnm,
+                        const char *name, BIO *bp, pem_password_cb *cb,
+                        void *u)
+@@ -287,6 +365,24 @@
+     BIO_free(b);
+     return (ret);
+ }
++
++int PEM_ASN1_write_buffer(i2d_of_void *i2d, const char *name, FILE *fp,
++		   char *x, const EVP_CIPHER *enc, unsigned char *kstr,
++		   int klen, pem_password_cb *callback, void *u)
++        {
++        BIO *b;
++        int ret;
++
++        if ((b=BIO_new(BIO_s_file())) == NULL)
++		{
++		PEMerr(PEM_F_PEM_ASN1_WRITE,ERR_R_BUF_LIB);
++                return(0);
++		}
++        BIO_set_fp(b,fp,BIO_NOCLOSE);
++        ret=PEM_ASN1_write_bio(i2d,name,b,x,enc,kstr,klen,callback,u);
++        BIO_free(b);
++        return(ret);
++        }
+ #endif
+ 
+ int PEM_ASN1_write_bio(i2d_of_void *i2d, const char *name, BIO *bp,
+@@ -619,6 +715,228 @@
+         }
+ #endif
+ 
++
++
++int PEM_read_bio_buffer(unsigned long buffer_len, const char *buffer, unsigned long *curr_pos, 
++char **name, char **header, unsigned char **data,
++	     long *len)
++	{
++	EVP_ENCODE_CTX ctx;
++	int end=0,i=0,k,bl=0,hl=0,nohead=0; // length=0;
++	char buf[256];
++    unsigned long SourceLen = buffer_len;
++	BUF_MEM *nameB;
++	BUF_MEM *headerB;
++	BUF_MEM *dataB,*tmpB;
++	
++	nameB=BUF_MEM_new();
++	headerB=BUF_MEM_new();
++	dataB=BUF_MEM_new();
++	if ((nameB == NULL) || (headerB == NULL) || (dataB == NULL))
++		{
++		PEMerr(PEM_F_PEM_READ_BIO,ERR_R_MALLOC_FAILURE);
++		return(0);
++		}
++
++	buf[254]='\0';
++	for (;;)
++		{
++		//BSYT i=BIO_gets(bp,buf,254);
++
++		if ((*curr_pos) >= buffer_len)
++			{
++			PEMerr(PEM_F_PEM_READ_BIO,PEM_R_NO_START_LINE);
++			goto err;
++			}
++
++        i = buf_gets(buf, 254, buffer+(*curr_pos), SourceLen);
++	(*curr_pos) += i;		
++        //length = i--;
++        //SourceLen -= length;
++        SourceLen -= i;
++        
++		buf[i] = '\0';
++
++		while ((i >= 0) && (buf[i] <= ' ')) i--;
++		buf[++i]='\n'; buf[++i]='\0';
++
++		if (strncmp(buf,"-----BEGIN ",11) == 0)
++			{
++			i=strlen(&(buf[11]));
++
++			if (strncmp(&(buf[11+i-6]),"-----\n",6) != 0)
++				continue;
++			if (!BUF_MEM_grow(nameB,i+9))
++				{
++				PEMerr(PEM_F_PEM_READ_BIO,ERR_R_MALLOC_FAILURE);
++				goto err;
++				}
++			memcpy(nameB->data,&(buf[11]),i-6);
++			nameB->data[i-6]='\0';
++			break;
++			}
++		}
++	hl=0;
++	if (!BUF_MEM_grow(headerB,256))
++		{ PEMerr(PEM_F_PEM_READ_BIO,ERR_R_MALLOC_FAILURE); goto err; }
++	headerB->data[0]='\0';
++	for (;;)
++		{
++		//BSYT i=BIO_gets(bp,buf,254);
++        //i = buf_gets(buf, 254, buffer+length, SourceLen);
++
++		if ((*curr_pos) >= buffer_len)
++			{
++			break;
++			}
++        i = buf_gets(buf, 254, buffer+(*curr_pos), SourceLen);
++        //length += i;
++	(*curr_pos) += i;	                
++        SourceLen -= i;
++
++        //if (SourceLen == 0)
++           buf[i] = '\0';
++		if (i <= 0) break;
++
++		while ((i >= 0) && (buf[i] <= ' ')) i--;
++		buf[++i]='\n'; buf[++i]='\0';
++
++		if (buf[0] == '\n') break;
++		if (!BUF_MEM_grow(headerB,hl+i+9))
++			{ PEMerr(PEM_F_PEM_READ_BIO,ERR_R_MALLOC_FAILURE); goto err; }
++		if (strncmp(buf,"-----END ",9) == 0)
++			{
++			nohead=1;
++			break;
++			}
++		memcpy(&(headerB->data[hl]),buf,i);
++		headerB->data[hl+i]='\0';
++
++		hl+=i;
++		}
++
++#ifdef BCM_POD_DEBUG
++{
++ int mycounter;
++ for (mycounter=0; mycounter<headerB->length; mycounter++) {
++
++   printf("%c", headerB->data[mycounter]);
++
++ }
++}
++#endif
++
++	bl=0;
++	if (!BUF_MEM_grow(dataB,1024))
++		{ PEMerr(PEM_F_PEM_READ_BIO,ERR_R_MALLOC_FAILURE); goto err; }
++	dataB->data[0]='\0';
++	if (!nohead)
++		{
++		for (;;)
++			{
++			//BSYT i=BIO_gets(bp,buf,254);
++				
++		if ((*curr_pos) >= buffer_len)
++			{
++			break;
++			}
++            i = buf_gets(buf, 254, buffer+(*curr_pos), SourceLen);
++           //length += i;
++  	   (*curr_pos) += i;	              
++           SourceLen -= i;
++	   
++           if (SourceLen == 0)
++              buf[i] = '\0';
++			//if (i <= 0) break;
++
++			while ((i >= 0) && (buf[i] <= ' ')) i--;
++			buf[++i]='\n'; buf[++i]='\0';
++
++			if (i != 65) end=1;
++			if (strncmp(buf,"-----END ",9) == 0)
++				break;
++			if (i > 65) break;
++			if (!BUF_MEM_grow_clean(dataB,i+bl+9))
++				{
++				PEMerr(PEM_F_PEM_READ_BIO,ERR_R_MALLOC_FAILURE);
++				goto err;
++				}
++			memcpy(&(dataB->data[bl]),buf,i);
++			dataB->data[bl+i]='\0';
++			bl+=i;
++			if (end)
++				{
++				buf[0]='\0';
++//BSYT 				i=BIO_gets(bp,buf,254);
++				if ((*curr_pos) >= buffer_len)
++				{
++					break;
++				}
++                i = buf_gets(buf, 254, buffer+(*curr_pos), SourceLen);
++				(*curr_pos) += i;	
++                 //length += i;
++                
++                 SourceLen -= i;				 
++                 if (SourceLen == 0)
++                    buf[i] = '\0';
++				if (i <= 0) break;
++
++				while ((i >= 0) && (buf[i] <= ' ')) i--;
++				buf[++i]='\n'; buf[++i]='\0';
++
++				break;
++				}
++			}
++		}
++	else
++		{
++		tmpB=headerB;
++		headerB=dataB;
++		dataB=tmpB;
++		bl=hl;
++		}
++	i=strlen(nameB->data);
++	if (	(strncmp(buf,"-----END ",9) != 0) ||
++		(strncmp(nameB->data,&(buf[9]),i) != 0) ||
++		(strncmp(&(buf[9+i]),"-----\n",6) != 0))
++		{
++		PEMerr(PEM_F_PEM_READ_BIO,PEM_R_BAD_END_LINE);
++		goto err;
++		}
++
++	EVP_DecodeInit(&ctx);
++	i=EVP_DecodeUpdate(&ctx,
++		(unsigned char *)dataB->data,&bl,
++		(unsigned char *)dataB->data,bl);
++	if (i < 0)
++		{
++		PEMerr(PEM_F_PEM_READ_BIO,PEM_R_BAD_BASE64_DECODE);
++		goto err;
++		}
++	i=EVP_DecodeFinal(&ctx,(unsigned char *)&(dataB->data[bl]),&k);
++	if (i < 0)
++		{
++		PEMerr(PEM_F_PEM_READ_BIO,PEM_R_BAD_BASE64_DECODE);
++		goto err;
++		}
++	bl+=k;
++
++	if (bl == 0) goto err;
++	*name=nameB->data;
++	*header=headerB->data;
++	*data=(unsigned char *)dataB->data;
++	*len=bl;
++	OPENSSL_free(nameB);
++	OPENSSL_free(headerB);
++	OPENSSL_free(dataB);
++	return(1);
++err:
++	BUF_MEM_free(nameB);
++	BUF_MEM_free(headerB);
++	BUF_MEM_free(dataB);
++	return(0);
++	}
++
+ int PEM_read_bio(BIO *bp, char **name, char **header, unsigned char **data,
+ 	     long *len)
+ 	{
+diff -aurN openssl-0.9.8j/crypto/pem/pem_oth.c openssl-0.9.8j.patched/crypto/pem/pem_oth.c
+--- openssl-0.9.8j/crypto/pem/pem_oth.c	2005-03-31 08:57:54.000000000 -0500
++++ openssl-0.9.8j.patched/crypto/pem/pem_oth.c	2014-04-14 11:18:43.000000000 -0400
+@@ -66,6 +66,29 @@
+ #include <openssl/pem.h>
+ 
+ /* Handle 'other' PEMs: not private keys */
++int PEM_ASN1_write_bio_buffer(i2d_of_void *i2d,const char *name,BIO *bp,char *x,
++                              const EVP_CIPHER *enc,unsigned char *kstr,int klen,
++                              pem_password_cb *cb, void *u)
++{
++    return 0;
++}
++void *PEM_ASN1_read_bio_buffer(d2i_of_void *d2i, const char *name, BIO *bp, void **x,
++	     pem_password_cb *cb, void *u, unsigned long buffer_len, const char *buffer)
++	{
++	const unsigned char *p=NULL;
++    unsigned char *data=NULL;
++	long len;
++	char *ret=NULL;
++
++    if (!PEM_bytes_read_bio_buffer(&data, &len, NULL, name, bp, cb, u,  buffer_len, buffer))
++		return NULL;
++	p = data;
++	ret=d2i(x,&p,len);
++	if (ret == NULL)
++		PEMerr(PEM_F_PEM_ASN1_READ_BIO,ERR_R_ASN1_LIB);
++	OPENSSL_free(data);
++	return(ret);
++	}
+ 
+ void *PEM_ASN1_read_bio(d2i_of_void *d2i, const char *name, BIO *bp, void **x,
+ 			pem_password_cb *cb, void *u)
+diff -aurN openssl-0.9.8j/crypto/pem/pem_pkey.c openssl-0.9.8j.patched/crypto/pem/pem_pkey.c
+--- openssl-0.9.8j/crypto/pem/pem_pkey.c	2007-02-21 08:48:49.000000000 -0500
++++ openssl-0.9.8j.patched/crypto/pem/pem_pkey.c	2014-04-14 11:18:43.000000000 -0400
+@@ -130,6 +130,62 @@
+ 	return(ret);
+ 	}
+ 
++EVP_PKEY *PEM_read_bio_buffer_PrivateKey(BIO *bp, EVP_PKEY **x, pem_password_cb *cb, void *u, 
++	unsigned long buffer_len, const char *buffer)
++	{
++	char *nm=NULL;
++	unsigned char *p=NULL,*data=NULL;
++	long len;
++	EVP_PKEY *ret=NULL;
++
++	if (!PEM_bytes_read_bio_buffer(&data, &len, &nm, PEM_STRING_EVP_PKEY, bp, cb, u, buffer_len, buffer))
++		return NULL;
++	p = data;
++
++	if (strcmp(nm,PEM_STRING_RSA) == 0)
++		ret=d2i_PrivateKey(EVP_PKEY_RSA,x,&p,len);
++	else if (strcmp(nm,PEM_STRING_DSA) == 0)
++		ret=d2i_PrivateKey(EVP_PKEY_DSA,x,&p,len);
++	else if (strcmp(nm,PEM_STRING_PKCS8INF) == 0) {
++		PKCS8_PRIV_KEY_INFO *p8inf;
++		p8inf=d2i_PKCS8_PRIV_KEY_INFO(NULL, &p, len);
++		if(!p8inf) goto p8err;
++		ret = EVP_PKCS82PKEY(p8inf);
++		PKCS8_PRIV_KEY_INFO_free(p8inf);
++	} else if (strcmp(nm,PEM_STRING_PKCS8) == 0) {
++		PKCS8_PRIV_KEY_INFO *p8inf;
++		X509_SIG *p8;
++		int klen;
++		char psbuf[PEM_BUFSIZE];
++		p8 = d2i_X509_SIG(NULL, &p, len);
++		if(!p8) goto p8err;
++		if (cb) klen=cb(psbuf,PEM_BUFSIZE,0,u);
++		else klen=PEM_def_callback(psbuf,PEM_BUFSIZE,0,u);
++		if (klen <= 0) {
++			PEMerr(PEM_F_PEM_ASN1_READ_BIO,
++					PEM_R_BAD_PASSWORD_READ);
++			X509_SIG_free(p8);
++			goto err;
++		}
++		p8inf = PKCS8_decrypt(p8, psbuf, klen);
++		X509_SIG_free(p8);
++		if(!p8inf) goto p8err;
++		ret = EVP_PKCS82PKEY(p8inf);
++		if(x) {
++			if(*x) EVP_PKEY_free((EVP_PKEY *)*x);
++			*x = ret;
++		}
++		PKCS8_PRIV_KEY_INFO_free(p8inf);
++	}
++p8err:
++	if (ret == NULL)
++		PEMerr(PEM_F_PEM_ASN1_READ_BIO,ERR_R_ASN1_LIB);
++err:
++	OPENSSL_free(nm);
++	OPENSSL_free(data);
++	return(ret);
++	}
++
+ #ifndef OPENSSL_NO_FP_API
+ EVP_PKEY *PEM_read_PrivateKey(FILE *fp, EVP_PKEY **x, pem_password_cb *cb, void *u)
+ 	{
+@@ -152,4 +208,23 @@
+     BIO_free(b);
+     return (ret);
+ }
++
++EVP_PKEY *PEM_read_buffer_PrivateKey(FILE *fp, EVP_PKEY **x, pem_password_cb *cb, void *u, 
++	unsigned long buffer_len, const char *buffer)
++	{
++        BIO *b;
++        EVP_PKEY *ret;
++
++        if ((b=BIO_new(BIO_s_file())) == NULL)
++		{
++		PEMerr(PEM_F_PEM_ASN1_READ,ERR_R_BUF_LIB);
++                return(0);
++		}
++        //BIO_set_fp(b,fp,BIO_NOCLOSE);
++        ret=PEM_read_bio_buffer_PrivateKey(b,x,cb,u, buffer_len, buffer);
++        BIO_free(b);
++        return(ret);
++	}
++
+ #endif
++
+diff -aurN openssl-0.9.8j/crypto/pem/pem_x509.c openssl-0.9.8j.patched/crypto/pem/pem_x509.c
+--- openssl-0.9.8j/crypto/pem/pem_x509.c	2008-11-05 13:36:45.000000000 -0500
++++ openssl-0.9.8j.patched/crypto/pem/pem_x509.c	2014-04-14 11:18:43.000000000 -0400
+@@ -67,3 +67,4 @@
+ #include <openssl/pem.h>
+ 
+ IMPLEMENT_PEM_rw(X509, X509, PEM_STRING_X509, X509)
++IMPLEMENT_PEM_rw_buffer(X509, X509, PEM_STRING_X509, X509)
+ 
+diff -aurN openssl-0.9.8j/crypto/pem/pem_xaux.c openssl-0.9.8j.patched/crypto/pem/pem_xaux.c
+--- openssl-0.9.8j/crypto/pem/pem_xaux.c	2008-11-05 13:36:45.000000000 -0500
++++ openssl-0.9.8j.patched/crypto/pem/pem_xaux.c	2014-04-14 11:18:43.000000000 -0400
+@@ -67,5 +67,6 @@
+ #include <openssl/pem.h>
+ 
+ IMPLEMENT_PEM_rw(X509_AUX, X509, PEM_STRING_X509_TRUSTED, X509_AUX)
++IMPLEMENT_PEM_rw_buffer(X509_AUX, X509, PEM_STRING_X509_TRUSTED, X509_AUX)
+ IMPLEMENT_PEM_rw(X509_CERT_PAIR, X509_CERT_PAIR, PEM_STRING_X509_PAIR,
+                  X509_CERT_PAIR)diff -aurN openssl-0.9.8j/crypto/x509/by_file.c openssl-0.9.8j.patched/crypto/x509/by_file.c
+--- openssl-0.9.8j/crypto/x509/by_file.c	2004-12-04 16:25:51.000000000 -0500
++++ openssl-0.9.8j.patched/crypto/x509/by_file.c	2014-04-14 11:18:43.000000000 -0400
+@@ -70,6 +70,10 @@
+ 
+ static int by_file_ctrl(X509_LOOKUP *ctx, int cmd, const char *argc,
+                         long argl, char **ret);
++
++static int by_buffer_ctrl(X509_LOOKUP *ctx, int cmd, const char *argc,
++	long argl, char **ret);
++
+ X509_LOOKUP_METHOD x509_file_lookup = {
+     "Load file into cache",
+     NULL,                       /* new */
+@@ -83,11 +87,48 @@
+     NULL,                       /* get_by_alias */
+ };
+ 
++X509_LOOKUP_METHOD x509_buffer_lookup=
++	{
++	"Load file into cache",
++	NULL,		/* new */
++	NULL,		/* free */
++	NULL, 		/* init */
++	NULL,		/* shutdown */
++	by_buffer_ctrl,	/* ctrl */
++	NULL,		/* get_by_subject */
++	NULL,		/* get_by_issuer_serial */
++	NULL,		/* get_by_fingerprint */
++	NULL,		/* get_by_alias */
++	};
++
++X509_LOOKUP_METHOD *X509_LOOKUP_buffer(void)
++	{
++	return(&x509_buffer_lookup);
++	}
++
+ X509_LOOKUP_METHOD *X509_LOOKUP_file(void)
+ {
+     return (&x509_file_lookup);
+ }
+ 
++static int by_buffer_ctrl(X509_LOOKUP *ctx, int buffer_len, const char *buffer, long argl,
++	     char **ret)
++	{
++	int ok=0;
++	//char *file;
++
++
++		
++	if(argl == X509_FILETYPE_PEM)
++		ok = (X509_load_cert_crl_buffer(ctx,buffer_len, buffer,  
++			X509_FILETYPE_PEM) != 0);
++	else
++		ok = (X509_load_cert_buffer(ctx,buffer_len, buffer,(int)argl) != 0);
++
++	
++	return(ok);
++	}
++
+ static int by_file_ctrl(X509_LOOKUP *ctx, int cmd, const char *argp,
+                         long argl, char **ret)
+ {
+@@ -122,6 +163,76 @@
+     return (ok);
+ }
+ 
++int X509_load_cert_buffer(X509_LOOKUP *ctx, int buffer_len, const char *buffer, int type)
++	{
++	int ret=0;
++	BIO *in=NULL;
++	int i,count=0;
++	X509 *x=NULL;
++
++	//if (file == NULL) return(1);
++	in=BIO_new(BIO_s_file_internal());
++
++/*
++	if ((in == NULL) || (BIO_read_filename(in,file) <= 0))
++		{
++		X509err(X509_F_X509_LOAD_CERT_FILE,ERR_R_SYS_LIB);
++		goto err;
++		}
++*/		
++
++	if (type == X509_FILETYPE_PEM)
++		{
++		for (;;)
++			{
++			x=PEM_read_bio_X509_AUX(in,NULL,NULL,NULL);
++			if (x == NULL)
++				{
++				if ((ERR_GET_REASON(ERR_peek_error()) ==
++					PEM_R_NO_START_LINE) && (count > 0))
++					{
++					ERR_clear_error();
++					break;
++					}
++				else
++					{
++					X509err(X509_F_X509_LOAD_CERT_FILE,
++						ERR_R_PEM_LIB);
++					goto err;
++					}
++				}
++			i=X509_STORE_add_cert(ctx->store_ctx,x);
++			if (!i) goto err;
++			count++;
++			X509_free(x);
++			x=NULL;
++			}
++		ret=count;
++		}
++	else if (type == X509_FILETYPE_ASN1)
++		{
++		x=d2i_X509_bio_buffer( buffer_len, buffer,NULL);
++		if (x == NULL)
++			{
++			X509err(X509_F_X509_LOAD_CERT_FILE,ERR_R_ASN1_LIB);
++			goto err;
++			}
++		i=X509_STORE_add_cert(ctx->store_ctx,x);
++		if (!i) goto err;
++		ret=i;
++		}
++	else
++		{
++		X509err(X509_F_X509_LOAD_CERT_FILE,X509_R_BAD_X509_FILETYPE);
++		goto err;
++		}
++err:
++	if (x != NULL) X509_free(x);
++	if (in != NULL) BIO_free(in);
++	return(ret);
++	}
++
++
+ int X509_load_cert_file(X509_LOOKUP *ctx, const char *file, int type)
+ {
+     int ret = 0;
+@@ -240,6 +351,52 @@
+     return (ret);
+ }
+ 
++int X509_load_cert_crl_buffer(X509_LOOKUP *ctx, int buffer_len, const char *buffer, int type)
++{
++	STACK_OF(X509_INFO) *inf;
++	X509_INFO *itmp;
++
++#if 0
++	BIO *in;
++#endif
++
++	int i, count = 0;
++
++#if 0
++	if(type != X509_FILETYPE_PEM)
++		return X509_load_cert_file(ctx, file, type);
++	in = BIO_new_file(file, "r");
++	if(!in) {
++		X509err(X509_F_X509_LOAD_CERT_CRL_FILE,ERR_R_SYS_LIB);
++		return 0;
++	}
++#endif
++
++	inf = PEM_X509_INFO_read_bio_from_buffer(buffer_len, buffer, NULL, NULL, NULL);
++
++#if 0
++	BIO_free(in);
++#endif
++
++	if(!inf) {
++		X509err(X509_F_X509_LOAD_CERT_CRL_FILE,ERR_R_PEM_LIB);
++		return 0;
++}
++	for(i = 0; i < sk_X509_INFO_num(inf); i++) {
++		itmp = sk_X509_INFO_value(inf, i);
++		if(itmp->x509) {
++			X509_STORE_add_cert(ctx->store_ctx, itmp->x509);
++			count++;
++		}
++		if(itmp->crl) {
++			X509_STORE_add_crl(ctx->store_ctx, itmp->crl);
++			count++;
++		}
++	}
++	sk_X509_INFO_pop_free(inf, X509_INFO_free);
++	return count;
++}
++
+ int X509_load_cert_crl_file(X509_LOOKUP *ctx, const char *file, int type)
+ {
+     STACK_OF(X509_INFO) *inf;
+diff -aurN openssl-0.9.8j/crypto/x509/x509.h openssl-0.9.8j.patched/crypto/x509/x509.h
+--- openssl-0.9.8j/crypto/x509/x509.h	2008-04-02 07:11:50.000000000 -0400
++++ openssl-0.9.8j.patched/crypto/x509/x509.h	2014-04-14 11:18:43.000000000 -0400
+@@ -592,6 +592,8 @@
+ #  define d2i_X509_bio(bp,x509) (X509 *)ASN1_d2i_bio((char *(*)())X509_new, \
+                 (char *(*)())d2i_X509, (bp),(unsigned char **)(x509))
+ #  define i2d_X509_bio(bp,x509) ASN1_i2d_bio(i2d_X509,bp,(unsigned char *)x509)
++#define d2i_X509_bio_buffer( buffer_len, buffer,x509) (X509 *)ASN1_d2i_bio_buffer((char *(*)())X509_new, \
++		(char *(*)())d2i_X509, int buffer_len, const char *buffer,(unsigned char **)(x509))		
+ 
+ #  define X509_CRL_dup(crl) (X509_CRL *)ASN1_dup((int (*)())i2d_X509_CRL, \
+                 (char *(*)())d2i_X509_CRL,(char *)crl)
+@@ -856,6 +858,10 @@
+ 
+ X509_NAME *X509_NAME_dup(X509_NAME *xn);
+ X509_NAME_ENTRY *X509_NAME_ENTRY_dup(X509_NAME_ENTRY *ne);
++#ifndef OPENSSL_NO_RSA
++RSA *RSAPublicKey_dup(RSA *rsa);
++RSA *RSAPrivateKey_dup(RSA *rsa);
++#endif
+ 
+ # endif                         /* !SSLEAY_MACROS */
+ 
+@@ -1330,6 +1336,7 @@
+ # define X509_F_X509_TRUST_ADD                            133
+ # define X509_F_X509_TRUST_SET                            141
+ # define X509_F_X509_VERIFY_CERT                          127
++#define X509_F_X509_LOAD_CERT_BUFFER                      148 //NANSSL:using the next avilable number
+ 
+ /* Reason codes. */
+ # define X509_R_BAD_X509_FILETYPE                         100
+diff -aurN openssl-0.9.8j/crypto/x509/x509_vfy.h openssl-0.9.8j.patched/crypto/x509/x509_vfy.h
+--- openssl-0.9.8j/crypto/x509/x509_vfy.h	2006-11-27 08:36:54.000000000 -0500
++++ openssl-0.9.8j.patched/crypto/x509/x509_vfy.h	2014-04-14 11:18:43.000000000 -0400
+@@ -294,6 +294,9 @@
+ # define X509_LOOKUP_load_file(x,name,type) \
+                 X509_LOOKUP_ctrl((x),X509_L_FILE_LOAD,(name),(long)(type),NULL)
+ 
++#define X509_LOOKUP_load_buffer(x,size,buffer,type) \
++		X509_LOOKUP_ctrl((x),(size),(buffer),(long)(type),NULL)
++
+ # define X509_LOOKUP_add_dir(x,name,type) \
+                 X509_LOOKUP_ctrl((x),X509_L_ADD_DIR,(name),(long)(type),NULL)
+ 
+@@ -423,6 +426,7 @@
+ 
+ X509_LOOKUP_METHOD *X509_LOOKUP_hash_dir(void);
+ X509_LOOKUP_METHOD *X509_LOOKUP_file(void);
++X509_LOOKUP_METHOD *X509_LOOKUP_buffer(void);
+ 
+ int X509_STORE_add_cert(X509_STORE *ctx, X509 *x);
+ int X509_STORE_add_crl(X509_STORE *ctx, X509_CRL *x);
+@@ -435,8 +439,10 @@
+ 
+ # ifndef OPENSSL_NO_STDIO
+ int X509_load_cert_file(X509_LOOKUP *ctx, const char *file, int type);
++int X509_load_cert_buffer(X509_LOOKUP *ctx, int buffer_len, const char *buffer, int type);
+ int X509_load_crl_file(X509_LOOKUP *ctx, const char *file, int type);
+ int X509_load_cert_crl_file(X509_LOOKUP *ctx, const char *file, int type);
++int X509_load_cert_crl_buffer(X509_LOOKUP *ctx, int buffer_len, const char *buffer, int type);
+ # endif
+ 
+ X509_LOOKUP *X509_LOOKUP_new(X509_LOOKUP_METHOD *method); 
+ 
+diff -aurN openssl-0.9.8j/crypto/x509/x_all.c openssl-0.9.8j.patched/crypto/x509/x_all.c
+--- openssl-0.9.8j/crypto/x509/x_all.c	2005-07-16 07:13:08.000000000 -0400
++++ openssl-0.9.8j.patched/crypto/x509/x_all.c	2014-04-14 11:18:43.000000000 -0400
+@@ -137,6 +137,11 @@
+ 	return ASN1_item_d2i_bio(ASN1_ITEM_rptr(X509), bp, x509);
+ 	}
+ 
++X509 *d2i_X509_bio_buffer(int buffer_len, const char *buffer, X509 **x509)
++	{
++	return ASN1_item_d2i_bio_buffer(ASN1_ITEM_rptr(X509), buffer_len, buffer, x509);
++	}
++
+ int i2d_X509_bio(BIO *bp, X509 *x509)
+ 	{
+ 	return ASN1_item_i2d_bio(ASN1_ITEM_rptr(X509), bp, x509);
+diff -aurN openssl-0.9.8j/engines/e_aep.c openssl-0.9.8j.patched/engines/e_aep.c
+--- openssl-0.9.8j/engines/e_aep.c	2008-12-30 08:30:57.000000000 -0500
++++ openssl-0.9.8j.patched/engines/e_aep.c	2014-04-14 11:18:43.000000000 -0400
+@@ -368,6 +368,7 @@
+     return ret;
+ }
+ 
++#if 0
+ void ENGINE_load_aep(void)
+ {
+     /* Copied from eng_[openssl|dyn].c */
+@@ -379,6 +380,7 @@
+     ERR_clear_error();
+ }
+ #  endif
++#  endif
+ 
+ /*
+  * This is a process-global DSO handle used for loading and unloading the Aep
+diff -aurN openssl-0.9.8j/include/openssl/e_os.h openssl-0.9.8j.patched/include/openssl/e_os.h
+--- openssl-0.9.8j/include/openssl/e_os.h	1969-12-31 19:00:00.000000000 -0500
++++ openssl-0.9.8j.patched/include/openssl/e_os.h	2014-04-14 11:18:43.000000000 -0400
+@@ -0,0 +1,711 @@
++/* e_os.h */
++/* Copyright (C) 1995-1998 Eric Young (eay@cryptsoft.com)
++ * All rights reserved.
++ *
++ * This package is an SSL implementation written
++ * by Eric Young (eay@cryptsoft.com).
++ * The implementation was written so as to conform with Netscapes SSL.
++ * 
++ * This library is free for commercial and non-commercial use as long as
++ * the following conditions are aheared to.  The following conditions
++ * apply to all code found in this distribution, be it the RC4, RSA,
++ * lhash, DES, etc., code; not just the SSL code.  The SSL documentation
++ * included with this distribution is covered by the same copyright terms
++ * except that the holder is Tim Hudson (tjh@cryptsoft.com).
++ * 
++ * Copyright remains Eric Young's, and as such any Copyright notices in
++ * the code are not to be removed.
++ * If this package is used in a product, Eric Young should be given attribution
++ * as the author of the parts of the library used.
++ * This can be in the form of a textual message at program startup or
++ * in documentation (online or textual) provided with the package.
++ * 
++ * Redistribution and use in source and binary forms, with or without
++ * modification, are permitted provided that the following conditions
++ * are met:
++ * 1. Redistributions of source code must retain the copyright
++ *    notice, this list of conditions and the following disclaimer.
++ * 2. Redistributions in binary form must reproduce the above copyright
++ *    notice, this list of conditions and the following disclaimer in the
++ *    documentation and/or other materials provided with the distribution.
++ * 3. All advertising materials mentioning features or use of this software
++ *    must display the following acknowledgement:
++ *    "This product includes cryptographic software written by
++ *     Eric Young (eay@cryptsoft.com)"
++ *    The word 'cryptographic' can be left out if the rouines from the library
++ *    being used are not cryptographic related :-).
++ * 4. If you include any Windows specific code (or a derivative thereof) from 
++ *    the apps directory (application code) you must include an acknowledgement:
++ *    "This product includes software written by Tim Hudson (tjh@cryptsoft.com)"
++ * 
++ * THIS SOFTWARE IS PROVIDED BY ERIC YOUNG ``AS IS'' AND
++ * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
++ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
++ * ARE DISCLAIMED.  IN NO EVENT SHALL THE AUTHOR OR CONTRIBUTORS BE LIABLE
++ * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
++ * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
++ * OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
++ * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
++ * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
++ * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
++ * SUCH DAMAGE.
++ * 
++ * The licence and distribution terms for any publically available version or
++ * derivative of this code cannot be changed.  i.e. this code cannot simply be
++ * copied and put under another distribution licence
++ * [including the GNU Public Licence.]
++ */
++
++#ifndef HEADER_E_OS_H
++#define HEADER_E_OS_H
++
++#include <openssl/opensslconf.h>
++
++#include <openssl/e_os2.h>
++/* <openssl/e_os2.h> contains what we can justify to make visible
++ * to the outside; this file e_os.h is not part of the exported
++ * interface. */
++
++#ifdef  __cplusplus
++extern "C" {
++#endif
++
++/* Used to checking reference counts, most while doing perl5 stuff :-) */
++#ifdef REF_PRINT
++#undef REF_PRINT
++#define REF_PRINT(a,b)	fprintf(stderr,"%08X:%4d:%s\n",(int)b,b->references,a)
++#endif
++
++#ifndef DEVRANDOM
++/* set this to a comma-separated list of 'random' device files to try out.
++ * My default, we will try to read at least one of these files */
++#define DEVRANDOM "/dev/urandom","/dev/random","/dev/srandom"
++#endif
++#ifndef DEVRANDOM_EGD
++/* set this to a comma-seperated list of 'egd' sockets to try out. These
++ * sockets will be tried in the order listed in case accessing the device files
++ * listed in DEVRANDOM did not return enough entropy. */
++#define DEVRANDOM_EGD "/var/run/egd-pool","/dev/egd-pool","/etc/egd-pool","/etc/entropy"
++#endif
++
++#if defined(OPENSSL_SYS_VXWORKS)
++#  define NO_SYS_PARAM_H
++#  define NO_CHMOD
++#  define NO_SYSLOG
++#endif
++  
++#if defined(OPENSSL_SYS_MACINTOSH_CLASSIC)
++# if macintosh==1
++#  ifndef MAC_OS_GUSI_SOURCE
++#    define MAC_OS_pre_X
++#    define NO_SYS_TYPES_H
++     typedef long ssize_t;
++#  endif
++#  define NO_SYS_PARAM_H
++#  define NO_CHMOD
++#  define NO_SYSLOG
++#  undef  DEVRANDOM
++#  define GETPID_IS_MEANINGLESS
++# endif
++#endif
++
++/********************************************************************
++ The Microsoft section
++ ********************************************************************/
++/* The following is used becaue of the small stack in some
++ * Microsoft operating systems */
++#if defined(OPENSSL_SYS_MSDOS) && !defined(OPENSSL_SYSNAME_WIN32)
++#  define MS_STATIC	static
++#else
++#  define MS_STATIC
++#endif
++
++#if defined(OPENSSL_SYS_WIN32) && !defined(WIN32)
++#  define WIN32
++#endif
++#if defined(OPENSSL_SYS_WIN16) && !defined(WIN16)
++#  define WIN16
++#endif
++#if defined(OPENSSL_SYS_WINDOWS) && !defined(WINDOWS)
++#  define WINDOWS
++#endif
++#if defined(OPENSSL_SYS_MSDOS) && !defined(MSDOS)
++#  define MSDOS
++#endif
++
++#if defined(MSDOS) && !defined(GETPID_IS_MEANINGLESS)
++#  define GETPID_IS_MEANINGLESS
++#endif
++
++#ifdef WIN32
++#define get_last_sys_error()	GetLastError()
++#define clear_sys_error()	SetLastError(0)
++#if !defined(WINNT)
++#define WIN_CONSOLE_BUG
++#endif
++#else
++#define get_last_sys_error()	errno
++#define clear_sys_error()	errno=0
++#endif
++
++#if defined(WINDOWS)
++#define get_last_socket_error()	WSAGetLastError()
++#define clear_socket_error()	WSASetLastError(0)
++#define readsocket(s,b,n)	recv((s),(b),(n),0)
++#define writesocket(s,b,n)	send((s),(b),(n),0)
++#define EADDRINUSE		WSAEADDRINUSE
++#elif defined(__DJGPP__)
++#define WATT32
++#define get_last_socket_error()	errno
++#define clear_socket_error()	errno=0
++#define closesocket(s)		close_s(s)
++#define readsocket(s,b,n)	read_s(s,b,n)
++#define writesocket(s,b,n)	send(s,b,n,0)
++#elif defined(MAC_OS_pre_X)
++#define get_last_socket_error()	errno
++#define clear_socket_error()	errno=0
++#define closesocket(s)		MacSocket_close(s)
++#define readsocket(s,b,n)	MacSocket_recv((s),(b),(n),true)
++#define writesocket(s,b,n)	MacSocket_send((s),(b),(n))
++#elif defined(OPENSSL_SYS_VMS)
++#define get_last_socket_error() errno
++#define clear_socket_error()    errno=0
++#define ioctlsocket(a,b,c)      ioctl(a,b,c)
++#define closesocket(s)          close(s)
++#define readsocket(s,b,n)       recv((s),(b),(n),0)
++#define writesocket(s,b,n)      send((s),(b),(n),0)
++#elif defined(OPENSSL_SYS_VXWORKS)
++#define get_last_socket_error()	errno
++#define clear_socket_error()	errno=0
++#define ioctlsocket(a,b,c)	    ioctl((a),(b),(int)(c))
++#define closesocket(s)		    close(s)
++#define readsocket(s,b,n)	    read((s),(b),(n))
++#define writesocket(s,b,n)	    write((s),(char *)(b),(n))
++#elif defined(OPENSSL_SYS_NETWARE)
++#if defined(NETWARE_BSDSOCK)
++#define get_last_socket_error() errno
++#define clear_socket_error()    errno=0
++#define closesocket(s)          close(s)
++#define ioctlsocket(a,b,c)      ioctl(a,b,c)
++#if defined(NETWARE_LIBC)
++#define readsocket(s,b,n)       recv((s),(b),(n),0)
++#define writesocket(s,b,n)      send((s),(b),(n),0)
++#else
++#define readsocket(s,b,n)       recv((s),(char*)(b),(n),0)
++#define writesocket(s,b,n)      send((s),(char*)(b),(n),0)
++#endif
++#else
++#define get_last_socket_error()	WSAGetLastError()
++#define clear_socket_error()	WSASetLastError(0)
++#define readsocket(s,b,n)		recv((s),(b),(n),0)
++#define writesocket(s,b,n)		send((s),(b),(n),0)
++#endif
++#else
++#define get_last_socket_error()	errno
++#define clear_socket_error()	errno=0
++#define ioctlsocket(a,b,c)	ioctl(a,b,c)
++#define closesocket(s)		close(s)
++#define readsocket(s,b,n)	read((s),(b),(n))
++#define writesocket(s,b,n)	write((s),(b),(n))
++#endif
++
++#ifdef WIN16
++#  define MS_CALLBACK	_far _loadds
++#  define MS_FAR	_far
++#else
++#  define MS_CALLBACK
++#  define MS_FAR
++#endif
++
++#ifdef OPENSSL_NO_STDIO
++#  undef OPENSSL_NO_FP_API
++#  define OPENSSL_NO_FP_API
++#endif
++
++#if (defined(WINDOWS) || defined(MSDOS))
++
++#  ifdef __DJGPP__
++#    include <unistd.h>
++#    include <sys/stat.h>
++#    include <sys/socket.h>
++#    include <tcp.h>
++#    include <netdb.h>
++#    define _setmode setmode
++#    define _O_TEXT O_TEXT
++#    define _O_BINARY O_BINARY
++#    undef DEVRANDOM
++#    define DEVRANDOM "/dev/urandom\x24"
++#  endif /* __DJGPP__ */
++
++#  ifndef S_IFDIR
++#    define S_IFDIR	_S_IFDIR
++#  endif
++
++#  ifndef S_IFMT
++#    define S_IFMT	_S_IFMT
++#  endif
++
++#  if !defined(WINNT) && !defined(__DJGPP__)
++#    define NO_SYSLOG
++#  endif
++#  define NO_DIRENT
++
++#  ifdef WINDOWS
++#    if !defined(_WIN32_WCE) && !defined(_WIN32_WINNT)
++       /*
++	* Defining _WIN32_WINNT here in e_os.h implies certain "discipline."
++	* Most notably we ought to check for availability of each specific
++	* routine with GetProcAddress() and/or quard NT-specific calls with
++	* GetVersion() < 0x80000000. One can argue that in latter "or" case
++	* we ought to /DELAYLOAD some .DLLs in order to protect ourselves
++	* against run-time link errors. This doesn't seem to be necessary,
++	* because it turned out that already Windows 95, first non-NT Win32
++	* implementation, is equipped with at least NT 3.51 stubs, dummy
++	* routines with same name, but which do nothing. Meaning that it's
++	* apparently appropriate to guard generic NT calls with GetVersion
++	* alone, while NT 4.0 and above calls ought to be additionally
++	* checked upon with GetProcAddress.
++	*/
++#      define _WIN32_WINNT 0x0400
++#    endif
++#    include <windows.h>
++#    include <stdio.h>
++#    include <stddef.h>
++#    include <errno.h>
++#    include <string.h>
++#    ifdef _WIN64
++#      define strlen(s) _strlen31(s)
++/* cut strings to 2GB */
++static unsigned int _strlen31(const char *str)
++	{
++	unsigned int len=0;
++	while (*str && len<0x80000000U) str++, len++;
++	return len&0x7FFFFFFF;
++	}
++#    endif
++#    include <malloc.h>
++#    if defined(_MSC_VER) && _MSC_VER<=1200 && defined(_MT) && defined(isspace)
++       /* compensate for bug in VC6 ctype.h */
++#      undef isspace
++#      undef isdigit
++#      undef isalnum
++#      undef isupper
++#      undef isxdigit
++#    endif
++#    if defined(_MSC_VER) && !defined(_DLL) && defined(stdin)
++#      if _MSC_VER>=1300
++#        undef stdin
++#        undef stdout
++#        undef stderr
++         FILE *__iob_func();
++#        define stdin  (&__iob_func()[0])
++#        define stdout (&__iob_func()[1])
++#        define stderr (&__iob_func()[2])
++#      elif defined(I_CAN_LIVE_WITH_LNK4049)
++#        undef stdin
++#        undef stdout
++#        undef stderr
++         /* pre-1300 has __p__iob(), but it's available only in msvcrt.lib,
++          * or in other words with /MD. Declaring implicit import, i.e.
++          * with _imp_ prefix, works correctly with all compiler options,
++          * but without /MD results in LINK warning LNK4049:
++          * 'locally defined symbol "__iob" imported'.
++          */
++         extern FILE *_imp___iob;
++#        define stdin  (&_imp___iob[0])
++#        define stdout (&_imp___iob[1])
++#        define stderr (&_imp___iob[2])
++#      endif
++#    endif
++#  endif
++#  include <io.h>
++#  include <fcntl.h>
++
++#  ifdef OPENSSL_SYS_WINCE
++#    include <winsock_extras.h>
++#  endif
++
++#  define ssize_t long
++
++#  if defined (__BORLANDC__)
++#    define _setmode setmode
++#    define _O_TEXT O_TEXT
++#    define _O_BINARY O_BINARY
++#    define _int64 __int64
++#    define _kbhit kbhit
++#  endif
++
++#  if defined(WIN16) && defined(SSLEAY) && defined(_WINEXITNOPERSIST)
++#    define EXIT(n) _wsetexit(_WINEXITNOPERSIST)
++#    define OPENSSL_EXIT(n) do { if (n == 0) EXIT(n); return(n); } while(0)
++#  else
++#    define EXIT(n) exit(n)
++#  endif
++#  define LIST_SEPARATOR_CHAR ';'
++#  ifndef X_OK
++#    define X_OK	0
++#  endif
++#  ifndef W_OK
++#    define W_OK	2
++#  endif
++#  ifndef R_OK
++#    define R_OK	4
++#  endif
++#  define OPENSSL_CONF	"openssl.cnf"
++#  define SSLEAY_CONF	OPENSSL_CONF
++#  define NUL_DEV	"nul"
++#  define RFILE		".rnd"
++#  ifdef OPENSSL_SYS_WINCE
++#    define DEFAULT_HOME  ""
++#  else
++#    define DEFAULT_HOME  "C:"
++#  endif
++
++#else /* The non-microsoft world world */
++
++#  ifdef OPENSSL_SYS_VMS
++#    define VMS 1
++  /* some programs don't include stdlib, so exit() and others give implicit 
++     function warnings */
++#    include <stdlib.h>
++#    if defined(__DECC)
++#      include <unistd.h>
++#    else
++#      include <unixlib.h>
++#    endif
++#    define OPENSSL_CONF	"openssl.cnf"
++#    define SSLEAY_CONF		OPENSSL_CONF
++#    define RFILE		".rnd"
++#    define LIST_SEPARATOR_CHAR ','
++#    define NUL_DEV		"NLA0:"
++  /* We don't have any well-defined random devices on VMS, yet... */
++#    undef DEVRANDOM
++  /* We need to do this since VMS has the following coding on status codes:
++
++     Bits 0-2: status type: 0 = warning, 1 = success, 2 = error, 3 = info ...
++               The important thing to know is that odd numbers are considered
++	       good, while even ones are considered errors.
++     Bits 3-15: actual status number
++     Bits 16-27: facility number.  0 is considered "unknown"
++     Bits 28-31: control bits.  If bit 28 is set, the shell won't try to
++                 output the message (which, for random codes, just looks ugly)
++
++     So, what we do here is to change 0 to 1 to get the default success status,
++     and everything else is shifted up to fit into the status number field, and
++     the status is tagged as an error, which I believe is what is wanted here.
++     -- Richard Levitte
++  */
++#    define EXIT(n)		do { int __VMS_EXIT = n; \
++                                     if (__VMS_EXIT == 0) \
++				       __VMS_EXIT = 1; \
++				     else \
++				       __VMS_EXIT = (n << 3) | 2; \
++                                     __VMS_EXIT |= 0x10000000; \
++				     exit(__VMS_EXIT); } while(0)
++#    define NO_SYS_PARAM_H
++
++#  elif defined(OPENSSL_SYS_NETWARE)
++#    include <fcntl.h>
++#    include <unistd.h>
++#    define NO_SYS_TYPES_H
++#    undef  DEVRANDOM
++#    ifdef NETWARE_CLIB
++#      define getpid GetThreadID
++       extern int GetThreadID(void);
++/* #      include <conio.h> */
++       extern int kbhit(void);
++       extern void delay(unsigned milliseconds);
++#    else
++#      include <screen.h>
++#    endif
++#    define NO_SYSLOG
++#    define _setmode setmode
++#    define _kbhit kbhit
++#    define _O_TEXT O_TEXT
++#    define _O_BINARY O_BINARY
++#    define OPENSSL_CONF   "openssl.cnf"
++#    define SSLEAY_CONF    OPENSSL_CONF
++#    define RFILE    ".rnd"
++#    define LIST_SEPARATOR_CHAR ';'
++#    define EXIT(n)  { if (n) printf("ERROR: %d\n", (int)n); exit(n); }
++
++#  else
++     /* !defined VMS */
++#    ifdef OPENSSL_SYS_MPE
++#      define NO_SYS_PARAM_H
++#    endif
++#    ifdef OPENSSL_UNISTD
++#      include OPENSSL_UNISTD
++#    else
++#      include <unistd.h>
++#    endif
++#    ifndef NO_SYS_TYPES_H
++#      include <sys/types.h>
++#    endif
++#    if defined(NeXT) || defined(OPENSSL_SYS_NEWS4)
++#      define pid_t int /* pid_t is missing on NEXTSTEP/OPENSTEP
++                         * (unless when compiling with -D_POSIX_SOURCE,
++                         * which doesn't work for us) */
++#    endif
++#    if defined(NeXT) || defined(OPENSSL_SYS_NEWS4) || defined(OPENSSL_SYS_SUNOS)
++#      define ssize_t int /* ditto */
++#    endif
++#    ifdef OPENSSL_SYS_NEWS4 /* setvbuf is missing on mips-sony-bsd */
++#      define setvbuf(a, b, c, d) setbuffer((a), (b), (d))
++       typedef unsigned long clock_t;
++#    endif
++
++#    define OPENSSL_CONF	"openssl.cnf"
++#    define SSLEAY_CONF		OPENSSL_CONF
++#    define RFILE		".rnd"
++#    define LIST_SEPARATOR_CHAR ':'
++#    define NUL_DEV		"/dev/null"
++#    define EXIT(n)		exit(n)
++#  endif
++
++#  define SSLeay_getpid()	getpid()
++
++#endif
++
++
++/*************/
++
++#ifdef USE_SOCKETS
++#  if defined(WINDOWS) || defined(MSDOS)
++      /* windows world */
++
++#    ifdef OPENSSL_NO_SOCK
++#      define SSLeay_Write(a,b,c)	(-1)
++#      define SSLeay_Read(a,b,c)	(-1)
++#      define SHUTDOWN(fd)		close(fd)
++#      define SHUTDOWN2(fd)		close(fd)
++#    elif !defined(__DJGPP__)
++#      include <winsock.h>
++extern HINSTANCE _hInstance;
++#      ifdef _WIN64
++/*
++ * Even though sizeof(SOCKET) is 8, it's safe to cast it to int, because
++ * the value constitutes an index in per-process table of limited size
++ * and not a real pointer.
++ */
++#        define socket(d,t,p)	((int)socket(d,t,p))
++#        define accept(s,f,l)	((int)accept(s,f,l))
++#      endif
++#      define SSLeay_Write(a,b,c)	send((a),(b),(c),0)
++#      define SSLeay_Read(a,b,c)	recv((a),(b),(c),0)
++#      define SHUTDOWN(fd)		{ shutdown((fd),0); closesocket(fd); }
++#      define SHUTDOWN2(fd)		{ shutdown((fd),2); closesocket(fd); }
++#    else
++#      define SSLeay_Write(a,b,c)	write_s(a,b,c,0)
++#      define SSLeay_Read(a,b,c)	read_s(a,b,c)
++#      define SHUTDOWN(fd)		close_s(fd)
++#      define SHUTDOWN2(fd)		close_s(fd)
++#    endif
++
++#  elif defined(MAC_OS_pre_X)
++
++#    include "MacSocket.h"
++#    define SSLeay_Write(a,b,c)		MacSocket_send((a),(b),(c))
++#    define SSLeay_Read(a,b,c)		MacSocket_recv((a),(b),(c),true)
++#    define SHUTDOWN(fd)		MacSocket_close(fd)
++#    define SHUTDOWN2(fd)		MacSocket_close(fd)
++
++#  elif defined(OPENSSL_SYS_NETWARE)
++         /* NetWare uses the WinSock2 interfaces by default, but can be configured for BSD
++         */
++#      if defined(NETWARE_BSDSOCK)
++#        include <sys/socket.h>
++#        include <netinet/in.h>
++#        include <sys/time.h>
++#        if defined(NETWARE_CLIB)
++#          include <sys/bsdskt.h>
++#        else
++#          include <sys/select.h>
++#        endif
++#        define INVALID_SOCKET (int)(~0)
++#      else
++#        include <novsock2.h>
++#      endif
++#      define SSLeay_Write(a,b,c)   send((a),(b),(c),0)
++#      define SSLeay_Read(a,b,c) recv((a),(b),(c),0)
++#      define SHUTDOWN(fd)    { shutdown((fd),0); closesocket(fd); }
++#      define SHUTDOWN2(fd)      { shutdown((fd),2); closesocket(fd); }
++
++#  else
++
++#    ifndef NO_SYS_PARAM_H
++#      include <sys/param.h>
++#    endif
++#    ifdef OPENSSL_SYS_VXWORKS
++#      include <time.h> 
++#    elif !defined(OPENSSL_SYS_MPE)
++#      include <sys/time.h> /* Needed under linux for FD_XXX */
++#    endif
++
++#    include <netdb.h>
++#    if defined(OPENSSL_SYS_VMS_NODECC)
++#      include <socket.h>
++#      include <in.h>
++#      include <inet.h>
++#    else
++#      include <sys/socket.h>
++#      ifdef FILIO_H
++#        include <sys/filio.h> /* Added for FIONBIO under unixware */
++#      endif
++#      include <netinet/in.h>
++#      include <arpa/inet.h>
++#    endif
++
++#    if defined(NeXT) || defined(_NEXT_SOURCE)
++#      include <sys/fcntl.h>
++#      include <sys/types.h>
++#    endif
++
++#    ifdef OPENSSL_SYS_AIX
++#      include <sys/select.h>
++#    endif
++
++#    ifdef __QNX__
++#      include <sys/select.h>
++#    endif
++
++#    if defined(sun)
++#      include <sys/filio.h>
++#    else
++#      ifndef VMS
++#        include <sys/ioctl.h>
++#      else
++	 /* ioctl is only in VMS > 7.0 and when socketshr is not used */
++#        if !defined(TCPIP_TYPE_SOCKETSHR) && defined(__VMS_VER) && (__VMS_VER > 70000000)
++#          include <sys/ioctl.h>
++#        endif
++#      endif
++#    endif
++
++#    ifdef VMS
++#      include <unixio.h>
++#      if defined(TCPIP_TYPE_SOCKETSHR)
++#        include <socketshr.h>
++#      endif
++#    endif
++
++#    define SSLeay_Read(a,b,c)     read((a),(b),(c))
++#    define SSLeay_Write(a,b,c)    write((a),(b),(c))
++#    define SHUTDOWN(fd)    { shutdown((fd),0); closesocket((fd)); }
++#    define SHUTDOWN2(fd)   { shutdown((fd),2); closesocket((fd)); }
++#    ifndef INVALID_SOCKET
++#    define INVALID_SOCKET	(-1)
++#    endif /* INVALID_SOCKET */
++#  endif
++#endif
++
++#if defined(__ultrix)
++#  ifndef ssize_t
++#    define ssize_t int 
++#  endif
++#endif
++
++#if defined(sun) && !defined(__svr4__) && !defined(__SVR4)
++  /* include headers first, so our defines don't break it */
++#include <stdlib.h>
++#include <string.h>
++  /* bcopy can handle overlapping moves according to SunOS 4.1.4 manpage */
++# define memmove(s1,s2,n) bcopy((s2),(s1),(n))
++# define strtoul(s,e,b) ((unsigned long int)strtol((s),(e),(b)))
++extern char *sys_errlist[]; extern int sys_nerr;
++# define strerror(errnum) \
++	(((errnum)<0 || (errnum)>=sys_nerr) ? NULL : sys_errlist[errnum])
++  /* Being signed SunOS 4.x memcpy breaks ASN1_OBJECT table lookup */
++#include "crypto/o_str.h"
++# define memcmp OPENSSL_memcmp
++#endif
++
++#ifndef OPENSSL_EXIT
++# if defined(MONOLITH) && !defined(OPENSSL_C)
++#  define OPENSSL_EXIT(n) return(n)
++# else
++#  define OPENSSL_EXIT(n) do { EXIT(n); return(n); } while(0)
++# endif
++#endif
++
++/***********************************************/
++
++/* do we need to do this for getenv.
++ * Just define getenv for use under windows */
++
++#ifdef WIN16
++/* How to do this needs to be thought out a bit more.... */
++/*char *GETENV(char *);
++#define Getenv	GETENV*/
++#define Getenv	getenv
++#else
++#define Getenv getenv
++#endif
++
++#define DG_GCC_BUG	/* gcc < 2.6.3 on DGUX */
++
++#ifdef sgi
++#define IRIX_CC_BUG	/* all version of IRIX I've tested (4.* 5.*) */
++#endif
++#ifdef OPENSSL_SYS_SNI
++#define IRIX_CC_BUG	/* CDS++ up to V2.0Bsomething suffered from the same bug.*/
++#endif
++
++#if defined(OPENSSL_SYS_WINDOWS)
++#  define strcasecmp _stricmp
++#  define strncasecmp _strnicmp
++#elif defined(OPENSSL_SYS_VMS)
++/* VMS below version 7.0 doesn't have strcasecmp() */
++#  include "o_str.h"
++#  define strcasecmp OPENSSL_strcasecmp
++#  define strncasecmp OPENSSL_strncasecmp
++#  define OPENSSL_IMPLEMENTS_strncasecmp
++#elif defined(OPENSSL_SYS_OS2) && defined(__EMX__)
++#  define strcasecmp stricmp
++#  define strncasecmp strnicmp
++#elif defined(OPENSSL_SYS_NETWARE)
++#  include <string.h>
++#  if defined(NETWARE_CLIB)
++#    define strcasecmp stricmp
++#    define strncasecmp strnicmp
++#  endif /* NETWARE_CLIB */
++#endif
++
++#if defined(OPENSSL_SYS_OS2) && defined(__EMX__)
++# include <io.h>
++# include <fcntl.h>
++# define NO_SYSLOG
++#endif
++
++/* vxworks */
++#if defined(OPENSSL_SYS_VXWORKS)
++#include <ioLib.h>
++#include <tickLib.h>
++#include <sysLib.h>
++
++#define TTY_STRUCT int
++
++#define sleep(a) taskDelay((a) * sysClkRateGet())
++
++#include <vxWorks.h>
++#include <sockLib.h>
++#include <taskLib.h>
++
++#define getpid taskIdSelf
++
++/* NOTE: these are implemented by helpers in database app!
++ * if the database is not linked, we need to implement them
++ * elswhere */
++struct hostent *gethostbyname(const char *name);
++struct hostent *gethostbyaddr(const char *addr, int length, int type);
++struct servent *getservbyname(const char *name, const char *proto);
++
++#endif
++/* end vxworks */
++
++#ifdef  __cplusplus
++}
++#endif
++
++#endif
++

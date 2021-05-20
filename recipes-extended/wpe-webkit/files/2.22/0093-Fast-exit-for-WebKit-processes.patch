@@ -1,0 +1,36 @@
+From 17f1f7f100a208dd915ad21c37d0ae146539bf9c Mon Sep 17 00:00:00 2001
+From: Ievgen Mutavchi <Ievgen_Mutavchi@comcast.com>
+Date: Sun, 26 Apr 2020 12:05:18 -0400
+Subject: [PATCH 82/93] Fast exit for WebKit processes
+Source: COMCAST
+License: GPLV2
+Upstream-Status: None
+Signed-off-by: Eugene Mutavchi <Ievgen_Mutavchi@comcast.com>
+
+---
+ Source/WebKit/Shared/unix/ChildProcessMain.h | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+Index: git/Source/WebKit/Shared/unix/ChildProcessMain.h
+===================================================================
+--- git.orig/Source/WebKit/Shared/unix/ChildProcessMain.h
++++ git/Source/WebKit/Shared/unix/ChildProcessMain.h
+@@ -30,6 +30,8 @@
+ #include "WebKit2Initialize.h"
+ #include <wtf/RunLoop.h>
+ 
++#include <unistd.h>
++
+ namespace WebKit {
+ 
+ class ChildProcessMainBase {
+@@ -61,6 +63,9 @@ int ChildProcessMain(int argc, char** ar
+     RunLoop::run();
+     childMain.platformFinalize();
+ 
++    if (!getenv("RDKBROWSER2_CLEAN_EXIT_WEBPROCESS"))
++        _exit(EXIT_SUCCESS);
++
+     return EXIT_SUCCESS;
+ }
+ 

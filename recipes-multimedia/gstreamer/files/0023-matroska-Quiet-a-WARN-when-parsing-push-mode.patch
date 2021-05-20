@@ -1,0 +1,27 @@
+From 1e1d77a18daea0cb3c499763897ead648696c539 Mon Sep 17 00:00:00 2001
+From: Jan Schmidt <jan@centricular.com>
+Date: Tue, 17 Jan 2017 10:48:57 +1100
+Subject: [PATCH] matroska: Quiet a WARN when parsing push mode
+
+This warning was noisy when returning EOS, which is
+just used to indicate more data is needed from upstream.
+---
+ gst/matroska/ebml-read.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/gst/matroska/ebml-read.c b/gst/matroska/ebml-read.c
+index 0df7086..64893f1 100644
+--- a/gst/matroska/ebml-read.c
++++ b/gst/matroska/ebml-read.c
+@@ -127,7 +127,7 @@ gst_ebml_peek_id_length (guint32 * _id, guint64 * _length, guint * _needed,
+   /* ERRORS */
+ peek_error:
+   {
+-    if (ret != GST_FLOW_FLUSHING)
++    if (ret != GST_FLOW_FLUSHING && ret != GST_FLOW_EOS)
+       GST_WARNING_OBJECT (el, "peek failed, ret = %s", gst_flow_get_name (ret));
+     else
+       GST_DEBUG_OBJECT (el, "peek failed, ret = %s", gst_flow_get_name (ret));
+-- 
+2.7.4
+

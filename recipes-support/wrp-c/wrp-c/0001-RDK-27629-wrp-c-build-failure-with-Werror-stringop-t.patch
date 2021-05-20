@@ -1,0 +1,31 @@
+From b5dcc2b1a628d19a1b470e9d98f6f54765ed8587 Mon Sep 17 00:00:00 2001
+From: mselva006c <mani_selvaraj@comcast.com>
+Date: Tue, 18 Feb 2020 18:45:19 +0000
+Subject: [PATCH] RDK-27629: wrp-c build failure with [-Werror=stringop-truncation]
+
+Reason for change: Replaced strncpy to memcpy
+
+Source: COMCAST
+
+License: Apache-2.0
+
+Upstream-Status: Pending
+
+Signed-off-by: mselva006c <mani_selvaraj@comcast.com>
+---
+ src/wrp-c.c | 0 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/wrp-c.c b/src/wrp-c.c
+index 5a2ed43..b729e5e 100644
+--- a/src/wrp-c.c
++++ b/src/wrp-c.c
+@@ -716,7 +716,7 @@ static ssize_t __wrp_keep_alive_to_string (char **bytes )
+         data = ( char* ) malloc( sizeof( char ) * ( length + 1 ) );   /* +1 for '\0' */
+ 
+         if( NULL != data ) {
+-            strncpy( data, keep_alive_fmt, length );
++            memcpy( data, keep_alive_fmt, length );
+             data[length] = '\0';
+             *bytes = data;
+         } else {

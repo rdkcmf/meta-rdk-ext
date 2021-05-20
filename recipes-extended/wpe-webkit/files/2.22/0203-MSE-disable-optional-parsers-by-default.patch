@@ -1,0 +1,25 @@
+From b3397413e6575294c1d9e75a1d0a7e7cbd30cb16 Mon Sep 17 00:00:00 2001
+From: Eugene Mutavchi <Ievgen_Mutavchi@comcast.com>
+Date: Thu, 20 Aug 2020 01:07:20 +0000
+Subject: [PATCH] [MSE] disable optional parsers by default
+
+---
+ .../WebCore/platform/graphics/gstreamer/mse/AppendPipeline.cpp  | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/Source/WebCore/platform/graphics/gstreamer/mse/AppendPipeline.cpp b/Source/WebCore/platform/graphics/gstreamer/mse/AppendPipeline.cpp
+index a86474a4e786..e73a2824d265 100644
+--- a/Source/WebCore/platform/graphics/gstreamer/mse/AppendPipeline.cpp
++++ b/Source/WebCore/platform/graphics/gstreamer/mse/AppendPipeline.cpp
+@@ -1030,7 +1030,7 @@ GstFlowReturn AppendPipeline::handleNewAppsinkSample(GstElement* appsink)
+ static GRefPtr<GstElement>
+ createOptionalParserForFormat(GstPad* demuxerSrcPad)
+ {
+-#if PLATFORM(BROADCOM)
++#if 1 // PLATFORM(BROADCOM)
+     return nullptr;
+ #endif
+     GRefPtr<GstCaps> padCaps = adoptGRef(gst_pad_get_current_caps(demuxerSrcPad));
+-- 
+2.24.0
+

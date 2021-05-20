@@ -1,0 +1,441 @@
+Date: May 22 13:52:21 2019
+
+From: 2a992944e052d34f4549aa463827552c0c2a1994 May 22 13:54:02 2019
+
+Subject: [PATCH] DELIA-35069: Crossy Road Free game is struck with loading screen
+
+	This issue is because of two commits in wpe webkit.
+       1. 9bdb033861b105b08dc9839d1458513155bcedab is backported from upstream and it
+          diverged the code lot. This change is not added properly.
+          So we are reverting this commit as part of 0136-Revert-GTK-WPE-Improve-the-way-request-displayRefres.patch.
+          Metro team is working on this commit and will remerge it cleanly.
+       2. And clientRendersNextFrame flag reset was missed in the commit 89f24352472e015403d45ccba0139df7b7bcd055.
+          So we are apply as part of 0137-Resetting-clientRenderNextFrame-flag.patch
+
+Source: COMCAST
+
+License: BSD-2-Clause
+
+Upstream-Status: Pending
+
+Signed-off-by: nrajan002c <nambi_rajang@cable.comcast.com>
+---
+ .../threadedcompositor/ThreadedCompositor.cpp      | 49 ++++++++++++++++++----
+ .../threadedcompositor/ThreadedCompositor.h        | 10 +++--
+ .../ThreadedDisplayRefreshMonitor.cpp              | 16 +++----
+ .../ThreadedDisplayRefreshMonitor.h                | 14 ++-----
+ .../CoordinatedLayerTreeHost.cpp                   | 15 +------
+ .../CoordinatedGraphics/CoordinatedLayerTreeHost.h |  4 +-
+ .../ThreadedCoordinatedLayerTreeHost.cpp           | 20 +--------
+ .../ThreadedCoordinatedLayerTreeHost.h             | 17 +-------
+ 8 files changed, 67 insertions(+), 78 deletions(-)
+
+diff --git a/Source/WebKit/Shared/CoordinatedGraphics/threadedcompositor/ThreadedCompositor.cpp b/Source/WebKit/Shared/CoordinatedGraphics/threadedcompositor/ThreadedCompositor.cpp
+index 3c5aef0d4bf..deb9878ffc9 100644
+--- a/Source/WebKit/Shared/CoordinatedGraphics/threadedcompositor/ThreadedCompositor.cpp
++++ b/Source/WebKit/Shared/CoordinatedGraphics/threadedcompositor/ThreadedCompositor.cpp
+@@ -44,22 +44,23 @@
+ #include <GL/gl.h>
+ #endif
+ 
+-namespace WebKit {
+ using namespace WebCore;
+ 
+-Ref<ThreadedCompositor> ThreadedCompositor::create(Client& client, ThreadedDisplayRefreshMonitor::Client& displayRefreshMonitorClient, WebPage& webPage, const IntSize& viewportSize, float scaleFactor, ShouldDoFrameSync doFrameSync, TextureMapper::PaintFlags paintFlags)
++namespace WebKit {
++
++Ref<ThreadedCompositor> ThreadedCompositor::create(Client& client, WebPage& webPage, const IntSize& viewportSize, float scaleFactor, ShouldDoFrameSync doFrameSync, TextureMapper::PaintFlags paintFlags)
+ {
+-    return adoptRef(*new ThreadedCompositor(client, displayRefreshMonitorClient, webPage, viewportSize, scaleFactor, doFrameSync, paintFlags));
++    return adoptRef(*new ThreadedCompositor(client, webPage, viewportSize, scaleFactor, doFrameSync, paintFlags));
+ }
+ 
+-ThreadedCompositor::ThreadedCompositor(Client& client, ThreadedDisplayRefreshMonitor::Client& displayRefreshMonitorClient, WebPage& webPage, const IntSize& viewportSize, float scaleFactor, ShouldDoFrameSync doFrameSync, TextureMapper::PaintFlags paintFlags)
++ThreadedCompositor::ThreadedCompositor(Client& client, WebPage& webPage, const IntSize& viewportSize, float scaleFactor, ShouldDoFrameSync doFrameSync, TextureMapper::PaintFlags paintFlags)
+     : m_client(client)
+     , m_doFrameSync(doFrameSync)
+     , m_paintFlags(paintFlags)
+     , m_nonCompositedWebGLEnabled(webPage.corePage()->settings().nonCompositedWebGLEnabled())
+     , m_compositingRunLoop(std::make_unique<CompositingRunLoop>([this] { renderLayerTree(); }))
+ #if USE(REQUEST_ANIMATION_FRAME_DISPLAY_MONITOR)
+-    , m_displayRefreshMonitor(ThreadedDisplayRefreshMonitor::create(displayRefreshMonitorClient))
++    , m_displayRefreshMonitor(ThreadedDisplayRefreshMonitor::create(*this))
+ #endif
+ {
+     {
+@@ -210,9 +211,12 @@ void ThreadedCompositor::renderNonCompositedWebGL()
+     {
+         LockHolder locker(m_attributes.lock);
+         states = WTFMove(m_attributes.states);
+-        m_attributes.clientRendersNextFrame = true;
+     }
+ 
++    RunLoop::main().dispatch([protectedThis = makeRef(*this)] {
++        protectedThis->renderNextFrame();
++    });
++
+     m_client.didRenderFrame();
+ }
+ 
+@@ -339,7 +343,22 @@ RefPtr<WebCore::DisplayRefreshMonitor> ThreadedCompositor::displayRefreshMonitor
+     return m_displayRefreshMonitor.copyRef();
+ }
+ 
+-void ThreadedCompositor::handleDisplayRefreshMonitorUpdate()
++void ThreadedCompositor::requestDisplayRefreshMonitorUpdate()
++{
++    // This is invoked by ThreadedDisplayRefreshMonitor when a fresh update is required.
++
++    LockHolder stateLocker(m_compositingRunLoop->stateLock());
++    {
++        // coordinateUpdateCompletionWithClient is set to true in order to delay the scene update
++        // completion until the DisplayRefreshMonitor is fired on the main thread after the composition
++        // is completed.
++        LockHolder locker(m_attributes.lock);
++        m_attributes.coordinateUpdateCompletionWithClient = true;
++    }
++    m_compositingRunLoop->scheduleUpdate(stateLocker);
++}
++
++void ThreadedCompositor::handleDisplayRefreshMonitorUpdate(bool hasBeenRescheduled)
+ {
+     // Retrieve coordinateUpdateCompletionWithClient.
+     bool coordinateUpdateCompletionWithClient { false };
+@@ -348,6 +367,12 @@ void ThreadedCompositor::handleDisplayRefreshMonitorUpdate()
+         coordinateUpdateCompletionWithClient = std::exchange(m_attributes.coordinateUpdateCompletionWithClient, false);
+     }
+ 
++    // The client is finally notified about the scene update nearing completion. The client will use this
++    // opportunity to clean up resources as appropriate. It can also perform any layer flush that was
++    // requested during the composition, or by any DisplayRefreshMonitor notifications that have been
++    // handled at this point.
++    m_client.renderNextFrame();
++
+     LockHolder stateLocker(m_compositingRunLoop->stateLock());
+ 
+     // If required, mark the current scene update as completed. CompositingRunLoop will take care of
+@@ -355,6 +380,16 @@ void ThreadedCompositor::handleDisplayRefreshMonitorUpdate()
+     // or DisplayRefreshMonitor notifications.
+     if (coordinateUpdateCompletionWithClient)
+         m_compositingRunLoop->updateCompleted(stateLocker);
++
++    // If the DisplayRefreshMonitor was scheduled again, we immediately demand the update completion
++    // coordination (like we do in requestDisplayRefreshMonitorUpdate()) and request an update.
++    if (hasBeenRescheduled) {
++        {
++            LockHolder locker(m_attributes.lock);
++            m_attributes.coordinateUpdateCompletionWithClient = true;
++        }
++        m_compositingRunLoop->scheduleUpdate(stateLocker);
++    }
+ }
+ #endif
+ 
+diff --git a/Source/WebKit/Shared/CoordinatedGraphics/threadedcompositor/ThreadedCompositor.h b/Source/WebKit/Shared/CoordinatedGraphics/threadedcompositor/ThreadedCompositor.h
+index d1a0f94b943..3b2b9e76af6 100644
+--- a/Source/WebKit/Shared/CoordinatedGraphics/threadedcompositor/ThreadedCompositor.h
++++ b/Source/WebKit/Shared/CoordinatedGraphics/threadedcompositor/ThreadedCompositor.h
+@@ -39,13 +39,14 @@
+ #include <wtf/ThreadSafeRefCounted.h>
+ 
+ #if USE(REQUEST_ANIMATION_FRAME_DISPLAY_MONITOR)
+-#include "ThreadedDisplayRefreshMonitor.h"
++#include <WebCore/DisplayRefreshMonitor.h>
+ #endif
+ 
+ namespace WebKit {
+ 
+ class CoordinatedGraphicsScene;
+ class CoordinatedGraphicsSceneClient;
++class ThreadedDisplayRefreshMonitor;
+ class WebPage;
+ 
+ class ThreadedCompositor : public CoordinatedGraphicsSceneClient, public ThreadSafeRefCounted<ThreadedCompositor> {
+@@ -66,7 +67,7 @@ public:
+ 
+     enum class ShouldDoFrameSync { No, Yes };
+ 
+-    static Ref<ThreadedCompositor> create(Client&, ThreadedDisplayRefreshMonitor::Client&, WebPage&, const WebCore::IntSize&, float scaleFactor, ShouldDoFrameSync = ShouldDoFrameSync::Yes, WebCore::TextureMapper::PaintFlags = 0);
++    static Ref<ThreadedCompositor> create(Client&, WebPage&, const WebCore::IntSize&, float scaleFactor, ShouldDoFrameSync = ShouldDoFrameSync::Yes, WebCore::TextureMapper::PaintFlags = 0);
+     virtual ~ThreadedCompositor();
+ 
+     void setNativeSurfaceHandleForCompositing(uint64_t);
+@@ -83,13 +84,14 @@ public:
+ 
+ #if USE(REQUEST_ANIMATION_FRAME_DISPLAY_MONITOR)
+     RefPtr<WebCore::DisplayRefreshMonitor> displayRefreshMonitor(WebCore::PlatformDisplayID);
+-    void handleDisplayRefreshMonitorUpdate();
++    void requestDisplayRefreshMonitorUpdate();
++    void handleDisplayRefreshMonitorUpdate(bool hasBeenRescheduled);
+ #endif
+ 
+     void frameComplete();
+ 
+ private:
+-    ThreadedCompositor(Client&, ThreadedDisplayRefreshMonitor::Client&, WebPage&, const WebCore::IntSize&, float scaleFactor, ShouldDoFrameSync, WebCore::TextureMapper::PaintFlags);
++    ThreadedCompositor(Client&, WebPage&, const WebCore::IntSize&, float scaleFactor, ShouldDoFrameSync, WebCore::TextureMapper::PaintFlags);
+ 
+     // CoordinatedGraphicsSceneClient
+     void renderNextFrame() override;
+diff --git a/Source/WebKit/Shared/CoordinatedGraphics/threadedcompositor/ThreadedDisplayRefreshMonitor.cpp b/Source/WebKit/Shared/CoordinatedGraphics/threadedcompositor/ThreadedDisplayRefreshMonitor.cpp
+index cd7c26ceb2a..5932ef8f2ad 100644
+--- a/Source/WebKit/Shared/CoordinatedGraphics/threadedcompositor/ThreadedDisplayRefreshMonitor.cpp
++++ b/Source/WebKit/Shared/CoordinatedGraphics/threadedcompositor/ThreadedDisplayRefreshMonitor.cpp
+@@ -34,10 +34,10 @@
+ 
+ namespace WebKit {
+ 
+-ThreadedDisplayRefreshMonitor::ThreadedDisplayRefreshMonitor(Client& client)
++ThreadedDisplayRefreshMonitor::ThreadedDisplayRefreshMonitor(ThreadedCompositor& compositor)
+     : WebCore::DisplayRefreshMonitor(0)
+     , m_displayRefreshTimer(RunLoop::main(), this, &ThreadedDisplayRefreshMonitor::displayRefreshCallback)
+-    , m_client(&client)
++    , m_compositor(&compositor)
+ {
+ #if USE(GLIB_EVENT_LOOP)
+     m_displayRefreshTimer.setPriority(RunLoopSourcePriority::DisplayRefreshMonitorTimer);
+@@ -47,7 +47,7 @@ ThreadedDisplayRefreshMonitor::ThreadedDisplayRefreshMonitor(Client& client)
+ 
+ bool ThreadedDisplayRefreshMonitor::requestRefreshCallback()
+ {
+-    if (!m_client)
++    if (!m_compositor)
+         return false;
+ 
+     bool previousFrameDone { false };
+@@ -61,7 +61,7 @@ bool ThreadedDisplayRefreshMonitor::requestRefreshCallback()
+     // refresh notifications under ThreadedDisplayRefreshMonitor::displayRefreshCallback().
+     // Any such schedule request is handled in that method after the notifications.
+     if (previousFrameDone)
+-        m_client->requestDisplayRefreshMonitorUpdate();
++        m_compositor->requestDisplayRefreshMonitorUpdate();
+ 
+     return true;
+ }
+@@ -74,7 +74,7 @@ bool ThreadedDisplayRefreshMonitor::requiresDisplayRefreshCallback()
+ 
+ void ThreadedDisplayRefreshMonitor::dispatchDisplayRefreshCallback()
+ {
+-    if (!m_client)
++    if (!m_compositor)
+         return;
+     m_displayRefreshTimer.startOneShot(0);
+ }
+@@ -82,7 +82,7 @@ void ThreadedDisplayRefreshMonitor::dispatchDisplayRefreshCallback()
+ void ThreadedDisplayRefreshMonitor::invalidate()
+ {
+     m_displayRefreshTimer.stop();
+-    m_client = nullptr;
++    m_compositor = nullptr;
+ }
+ 
+ void ThreadedDisplayRefreshMonitor::displayRefreshCallback()
+@@ -108,8 +108,8 @@ void ThreadedDisplayRefreshMonitor::displayRefreshCallback()
+     // Notify the compositor about the completed DisplayRefreshMonitor update, passing
+     // along information about any schedule request that might have occurred during
+     // the notification handling.
+-    if (m_client)
+-        m_client->handleDisplayRefreshMonitorUpdate(hasBeenRescheduled);
++    if (m_compositor)
++        m_compositor->handleDisplayRefreshMonitorUpdate(hasBeenRescheduled);
+ }
+ 
+ } // namespace WebKit
+diff --git a/Source/WebKit/Shared/CoordinatedGraphics/threadedcompositor/ThreadedDisplayRefreshMonitor.h b/Source/WebKit/Shared/CoordinatedGraphics/threadedcompositor/ThreadedDisplayRefreshMonitor.h
+index 4d484493344..8d46e3df745 100644
+--- a/Source/WebKit/Shared/CoordinatedGraphics/threadedcompositor/ThreadedDisplayRefreshMonitor.h
++++ b/Source/WebKit/Shared/CoordinatedGraphics/threadedcompositor/ThreadedDisplayRefreshMonitor.h
+@@ -36,15 +36,9 @@ class ThreadedCompositor;
+ 
+ class ThreadedDisplayRefreshMonitor : public WebCore::DisplayRefreshMonitor {
+ public:
+-    class Client {
+-    public:
+-        virtual void requestDisplayRefreshMonitorUpdate() = 0;
+-        virtual void handleDisplayRefreshMonitorUpdate(bool) = 0;
+-    };
+-
+-    static Ref<ThreadedDisplayRefreshMonitor> create(Client& client)
++    static Ref<ThreadedDisplayRefreshMonitor> create(ThreadedCompositor& compositor)
+     {
+-        return adoptRef(*new ThreadedDisplayRefreshMonitor(client));
++        return adoptRef(*new ThreadedDisplayRefreshMonitor(compositor));
+     }
+     virtual ~ThreadedDisplayRefreshMonitor() = default;
+ 
+@@ -55,11 +49,11 @@ public:
+     void invalidate();
+ 
+ private:
+-    ThreadedDisplayRefreshMonitor(Client&);
++    ThreadedDisplayRefreshMonitor(ThreadedCompositor&);
+ 
+     void displayRefreshCallback();
+     RunLoop::Timer<ThreadedDisplayRefreshMonitor> m_displayRefreshTimer;
+-    Client* m_client;
++    ThreadedCompositor* m_compositor;
+ };
+ 
+ } // namespace WebKit
+diff --git a/Source/WebKit/WebProcess/WebPage/CoordinatedGraphics/CoordinatedLayerTreeHost.cpp b/Source/WebKit/WebProcess/WebPage/CoordinatedGraphics/CoordinatedLayerTreeHost.cpp
+index ae035c0e31b..76581885704 100644
+--- a/Source/WebKit/WebProcess/WebPage/CoordinatedGraphics/CoordinatedLayerTreeHost.cpp
++++ b/Source/WebKit/WebProcess/WebPage/CoordinatedGraphics/CoordinatedLayerTreeHost.cpp
+@@ -146,7 +146,7 @@ void CoordinatedLayerTreeHost::setVisibleContentsRect(const FloatRect& rect, con
+     scheduleLayerFlush();
+ }
+ 
+-void CoordinatedLayerTreeHost::renderNextFrame(bool forceRepaint)
++void CoordinatedLayerTreeHost::renderNextFrame()
+ {
+     m_isWaitingForRenderer = false;
+     bool scheduledWhileWaitingForRenderer = std::exchange(m_scheduledWhileWaitingForRenderer, false);
+@@ -168,10 +168,8 @@ void CoordinatedLayerTreeHost::renderNextFrame(bool forceRepaint)
+         m_forceRepaintAsync.needsFreshFlush = false;
+     }
+ 
+-    if (scheduledWhileWaitingForRenderer || m_layerFlushTimer.isActive() || forceRepaint) {
++    if (scheduledWhileWaitingForRenderer || m_layerFlushTimer.isActive()) {
+         m_layerFlushTimer.stop();
+-        if (forceRepaint)
+-            m_coordinator.forceFrameSync();
+         layerFlushTimerFired();
+     }
+ }
+@@ -217,15 +215,6 @@ void CoordinatedLayerTreeHost::commitSceneState(const CoordinatedGraphicsState&
+     m_isWaitingForRenderer = true;
+ }
+ 
+-void CoordinatedLayerTreeHost::flushLayersAndForceRepaint()
+-{
+-    if (m_layerFlushTimer.isActive())
+-        m_layerFlushTimer.stop();
+-
+-    m_coordinator.forceFrameSync();
+-    layerFlushTimerFired();
+-}
+-
+ void CoordinatedLayerTreeHost::deviceOrPageScaleFactorChanged()
+ {
+     m_coordinator.deviceOrPageScaleFactorChanged();
+diff --git a/Source/WebKit/WebProcess/WebPage/CoordinatedGraphics/CoordinatedLayerTreeHost.h b/Source/WebKit/WebProcess/WebPage/CoordinatedGraphics/CoordinatedLayerTreeHost.h
+index 7ee12707981..c2df5057f22 100644
+--- a/Source/WebKit/WebProcess/WebPage/CoordinatedGraphics/CoordinatedLayerTreeHost.h
++++ b/Source/WebKit/WebProcess/WebPage/CoordinatedGraphics/CoordinatedLayerTreeHost.h
+@@ -60,7 +60,7 @@ protected:
+     void restoreBackgroundTransparency() override { };
+ 
+     void setVisibleContentsRect(const WebCore::FloatRect&, const WebCore::FloatPoint&);
+-    void renderNextFrame(bool);
++    void renderNextFrame();
+     void commitScrollOffset(uint32_t layerID, const WebCore::IntSize& offset);
+ 
+     WebCore::GraphicsLayerFactory* graphicsLayerFactory() override;
+@@ -74,8 +74,6 @@ protected:
+     void notifyFlushRequired() override { scheduleLayerFlush(); };
+     void commitSceneState(const WebCore::CoordinatedGraphicsState&) override;
+ 
+-    void flushLayersAndForceRepaint();
+-
+ private:
+     void layerFlushTimerFired();
+ 
+diff --git a/Source/WebKit/WebProcess/WebPage/CoordinatedGraphics/ThreadedCoordinatedLayerTreeHost.cpp b/Source/WebKit/WebProcess/WebPage/CoordinatedGraphics/ThreadedCoordinatedLayerTreeHost.cpp
+index ad5dcbbb4fe..d75e9397733 100644
+--- a/Source/WebKit/WebProcess/WebPage/CoordinatedGraphics/ThreadedCoordinatedLayerTreeHost.cpp
++++ b/Source/WebKit/WebProcess/WebPage/CoordinatedGraphics/ThreadedCoordinatedLayerTreeHost.cpp
+@@ -71,10 +71,10 @@ ThreadedCoordinatedLayerTreeHost::ThreadedCoordinatedLayerTreeHost(WebPage& webP
+         if (m_surface->shouldPaintMirrored())
+             paintFlags |= TextureMapper::PaintingMirrored;
+ 
+-        m_compositor = ThreadedCompositor::create(m_compositorClient, m_compositorClient, webPage, scaledSize, scaleFactor, ThreadedCompositor::ShouldDoFrameSync::Yes, paintFlags);
++        m_compositor = ThreadedCompositor::create(m_compositorClient, webPage, scaledSize, scaleFactor, ThreadedCompositor::ShouldDoFrameSync::Yes, paintFlags);
+         m_layerTreeContext.contextID = m_surface->surfaceID();
+     } else
+-        m_compositor = ThreadedCompositor::create(m_compositorClient, m_compositorClient, webPage, scaledSize, scaleFactor);
++        m_compositor = ThreadedCompositor::create(m_compositorClient, webPage, scaledSize, scaleFactor);
+ 
+     didChangeViewport();
+ }
+@@ -97,22 +97,6 @@ void ThreadedCoordinatedLayerTreeHost::frameComplete()
+     m_compositor->frameComplete();
+ }
+ 
+-void ThreadedCoordinatedLayerTreeHost::requestDisplayRefreshMonitorUpdate()
+-{
+-    // Flush layers to cause a repaint. If m_isWaitingForRenderer was true at this point, the layer
+-    // flush won't do anything, but that means there's a painting ongoing that will send the
+-    // display refresh notification when it's done.
+-    flushLayersAndForceRepaint();
+-}
+-
+-void ThreadedCoordinatedLayerTreeHost::handleDisplayRefreshMonitorUpdate(bool hasBeenRescheduled)
+-{
+-    // Call renderNextFrame. If hasBeenRescheduled is true, the layer flush will force a repaint
+-    // that will cause the display refresh notification to come.
+-    renderNextFrame(hasBeenRescheduled);
+-    m_compositor->handleDisplayRefreshMonitorUpdate();
+-}
+-
+ uint64_t ThreadedCoordinatedLayerTreeHost::nativeSurfaceHandleForCompositing()
+ {
+     if (!m_surface)
+diff --git a/Source/WebKit/WebProcess/WebPage/CoordinatedGraphics/ThreadedCoordinatedLayerTreeHost.h b/Source/WebKit/WebProcess/WebPage/CoordinatedGraphics/ThreadedCoordinatedLayerTreeHost.h
+index 62c51106116..eb629ae360f 100644
+--- a/Source/WebKit/WebProcess/WebPage/CoordinatedGraphics/ThreadedCoordinatedLayerTreeHost.h
++++ b/Source/WebKit/WebProcess/WebPage/CoordinatedGraphics/ThreadedCoordinatedLayerTreeHost.h
+@@ -33,7 +33,6 @@
+ #include "CoordinatedLayerTreeHost.h"
+ #include "SimpleViewportController.h"
+ #include "ThreadedCompositor.h"
+-#include "ThreadedDisplayRefreshMonitor.h"
+ #include <wtf/OptionSet.h>
+ 
+ namespace WebCore {
+@@ -75,7 +74,7 @@ private:
+     void setNativeSurfaceHandleForCompositing(uint64_t) override;
+ #endif
+ 
+-    class CompositorClient final : public ThreadedCompositor::Client, public ThreadedDisplayRefreshMonitor::Client  {
++    class CompositorClient final : public ThreadedCompositor::Client {
+         WTF_MAKE_NONCOPYABLE(CompositorClient);
+     public:
+         CompositorClient(ThreadedCoordinatedLayerTreeHost& layerTreeHost)
+@@ -86,7 +85,7 @@ private:
+     private:
+         void renderNextFrame() override
+         {
+-            m_layerTreeHost.renderNextFrame(false);
++            m_layerTreeHost.renderNextFrame();
+         }
+ 
+         void commitScrollOffset(uint32_t layerID, const WebCore::IntSize& offset) override
+@@ -114,16 +113,6 @@ private:
+             m_layerTreeHost.didRenderFrame();
+         }
+ 
+-        void requestDisplayRefreshMonitorUpdate() override
+-        {
+-            m_layerTreeHost.requestDisplayRefreshMonitorUpdate();
+-        }
+-
+-        void handleDisplayRefreshMonitorUpdate(bool hasBeenRescheduled)
+-        {
+-            m_layerTreeHost.handleDisplayRefreshMonitorUpdate(hasBeenRescheduled);
+-        }
+-
+         ThreadedCoordinatedLayerTreeHost& m_layerTreeHost;
+     };
+ 
+@@ -144,8 +133,6 @@ private:
+     void didDestroyGLContext();
+     void willRenderFrame();
+     void didRenderFrame();
+-    void requestDisplayRefreshMonitorUpdate();
+-    void handleDisplayRefreshMonitorUpdate(bool);
+ 
+     enum class DiscardableSyncActions {
+         UpdateSize = 1 << 1,
+-- 
+2.16.2
+

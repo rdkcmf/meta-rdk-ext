@@ -1,0 +1,51 @@
+From 16ad846bb216997fa29ad1e9d417aa8051949085 Mon Sep 17 00:00:00 2001
+From: Ievgen Mutavchi <Ievgen_Mutavchi@comcast.com>
+Date: Tue, 2 Jun 2020 18:00:33 -0400
+Subject: [PATCH] Introduce WKNavigationResponseCopyURLResponse
+Source: COMCAST
+License: LGPL-2.1-or-later
+Upstream-Status: None
+Signed-off-by: Eugene Mutavchi <Ievgen_Mutavchi@comcast.com>
+
+And deprecate WKNavigationResponseGetURLResponse that returns pointer
+to a dead object.
+---
+ Source/WebKit/UIProcess/API/C/WKNavigationResponseRef.cpp | 5 +++++
+ Source/WebKit/UIProcess/API/C/WKNavigationResponseRef.h   | 3 +++
+ 2 files changed, 8 insertions(+)
+
+diff --git a/Source/WebKit/UIProcess/API/C/WKNavigationResponseRef.cpp b/Source/WebKit/UIProcess/API/C/WKNavigationResponseRef.cpp
+index 366e32ca3a1..da758a27d73 100644
+--- a/Source/WebKit/UIProcess/API/C/WKNavigationResponseRef.cpp
++++ b/Source/WebKit/UIProcess/API/C/WKNavigationResponseRef.cpp
+@@ -46,6 +46,11 @@ WKURLResponseRef WKNavigationResponseGetURLResponse(WKNavigationResponseRef resp
+     return toAPI(toImpl(response)->response());
+ }
+ 
++WKURLResponseRef WKNavigationResponseCopyURLResponse(WKNavigationResponseRef response)
++{
++    return toAPI(&API::URLResponse::create(toImpl(response)->response()).leakRef());
++}
++
+ bool WKNavigationResponseIsMainFrame(WKNavigationResponseRef response)
+ {
+     return toImpl(response)->frame().isMainFrame();
+diff --git a/Source/WebKit/UIProcess/API/C/WKNavigationResponseRef.h b/Source/WebKit/UIProcess/API/C/WKNavigationResponseRef.h
+index 87d315bdb3b..c03e1bed26c 100644
+--- a/Source/WebKit/UIProcess/API/C/WKNavigationResponseRef.h
++++ b/Source/WebKit/UIProcess/API/C/WKNavigationResponseRef.h
+@@ -36,8 +36,11 @@ WK_EXPORT WKTypeID WKNavigationResponseGetTypeID();
+     
+ WK_EXPORT bool WKNavigationResponseCanShowMIMEType(WKNavigationResponseRef);
+ 
++WK_C_DEPRECATED("use WKNavigationResponseCopyURLResponse")
+ WK_EXPORT WKURLResponseRef WKNavigationResponseGetURLResponse(WKNavigationResponseRef response);
+ 
++WK_EXPORT WKURLResponseRef WKNavigationResponseCopyURLResponse(WKNavigationResponseRef response);
++
+ WK_EXPORT bool WKNavigationResponseIsMainFrame(WKNavigationResponseRef response);
+ 
+ #ifdef __cplusplus
+-- 
+2.20.1
+

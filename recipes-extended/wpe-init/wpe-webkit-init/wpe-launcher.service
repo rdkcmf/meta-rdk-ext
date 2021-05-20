@@ -1,0 +1,12 @@
+[Unit]
+Description=Westersos Compositor startup
+After=network-online.target westeros-startup.service
+Requires=network-online.target westeros-startup.service
+
+[Service]
+ExecStart=/usr/bin/startWPE.sh
+ExecReload=/bin/kill -HUP $MAINPID
+Type=idle
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,24 @@
+From 81c77928af024e0d4912353b602236730d2fe1be Mon Sep 17 00:00:00 2001
+From: Eugene Mutavchi <Ievgen_Mutavchi@comcast.com>
+Date: Thu, 18 Apr 2019 16:50:23 -0400
+Subject: [PATCH 2/2] Reset 'm_isEndReached' on unmarkEndOfStream
+
+---
+ .../platform/graphics/gstreamer/mse/MediaPlayerPrivateGStreamerMSE.cpp   | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/Source/WebCore/platform/graphics/gstreamer/mse/MediaPlayerPrivateGStreamerMSE.cpp b/Source/WebCore/platform/graphics/gstreamer/mse/MediaPlayerPrivateGStreamerMSE.cpp
+index d04007d..62dc63e 100644
+--- a/Source/WebCore/platform/graphics/gstreamer/mse/MediaPlayerPrivateGStreamerMSE.cpp
++++ b/Source/WebCore/platform/graphics/gstreamer/mse/MediaPlayerPrivateGStreamerMSE.cpp
+@@ -1226,6 +1226,7 @@ void MediaPlayerPrivateGStreamerMSE::unmarkEndOfStream()
+     GST_DEBUG("Unmarking end of stream");
+     m_eosPending = false;
+     m_eosMarked = false;
++    m_isEndReached = false;
+ }
+ 
+ MediaTime MediaPlayerPrivateGStreamerMSE::currentMediaTime() const
+-- 
+2.7.4
+

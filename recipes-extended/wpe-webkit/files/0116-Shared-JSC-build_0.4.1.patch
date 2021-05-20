@@ -1,0 +1,197 @@
+From 76eb3dc636d291c581373014a9b5d3e3715c4244 Mon Sep 17 00:00:00 2001
+From: Eugene Mutavchi <Ievgen_Mutavchi@comcast.com>
+Date: Thu, 27 Dec 2018 09:33:59 -0500
+Subject: [PATCH 2/2] Shared JSC build
+
+---
+ Source/JavaScriptCore/PlatformWPE.cmake            | 11 ++++++++
+ Source/JavaScriptCore/wpe-javascriptcore.pc.in     | 11 ++++++++
+ Source/WTF/wtf/RAMSize.cpp                         |  1 +
+ Source/WebCore/PlatformWPE.cmake                   |  3 +--
+ Source/WebKit/CMakeLists.txt                       |  2 ++
+ Source/WebKit/PlatformWPE.cmake                    | 29 ++++++++++++++++++++++
+ Source/WebKit/wpe/wpe-webkit.pc.in                 |  2 +-
+ Source/cmake/OptionsWPE.cmake                      |  8 ++++--
+ 9 files changed, 64 insertions(+), 7 deletions(-)
+ create mode 100644 Source/JavaScriptCore/wpe-javascriptcore.pc.in
+
+Index: git/Source/JavaScriptCore/PlatformWPE.cmake
+===================================================================
+--- git.orig/Source/JavaScriptCore/PlatformWPE.cmake
++++ git/Source/JavaScriptCore/PlatformWPE.cmake
+@@ -1,5 +1,16 @@
++set(JavaScriptCore_OUTPUT_NAME WPEJavaScriptCore)
++
++if ("${JavaScriptCore_LIBRARY_TYPE}" MATCHES "SHARED")
++   add_definitions(-DSTATICALLY_LINKED_WITH_WTF)
++   configure_file(wpe-javascriptcore.pc.in ${CMAKE_BINARY_DIR}/Source/JavaScriptCore/wpe-javascriptcore.pc @ONLY)
++   install(FILES "${CMAKE_BINARY_DIR}/Source/JavaScriptCore/wpe-javascriptcore.pc"
++        DESTINATION "${LIB_INSTALL_DIR}/pkgconfig"
++   )
++endif()
++
+ list(APPEND JavaScriptCore_LIBRARIES
+     ${GLIB_LIBRARIES}
++    ${GLIB_GMODULE_LIBRARIES}
+ )
+ list(APPEND JavaScriptCore_INCLUDE_DIRECTORIES
+     ${GLIB_INCLUDE_DIRS}
+Index: git/Source/JavaScriptCore/wpe-javascriptcore.pc.in
+===================================================================
+--- /dev/null
++++ git/Source/JavaScriptCore/wpe-javascriptcore.pc.in
+@@ -0,0 +1,11 @@
++prefix=@CMAKE_INSTALL_PREFIX@
++exec_prefix=${prefix}
++libdir=@LIB_INSTALL_DIR@
++includedir=${prefix}/include
++
++Name: WPEJavaScriptCore
++Description: WPE version of the JavaScriptCore engine
++Version: @PROJECT_VERSION@
++Requires: glib-2.0 gmodule-2.0
++Libs: -L${libdir} -lWPEJavaScriptCore -ldl
++Cflags: -I${includedir}/wpe-@WPE_API_VERSION@ -I${includedir}/wpe-@WPE_API_VERSION@/WPE
+Index: git/Source/WTF/wtf/RAMSize.cpp
+===================================================================
+--- git.orig/Source/WTF/wtf/RAMSize.cpp
++++ git/Source/WTF/wtf/RAMSize.cpp
+@@ -32,6 +32,7 @@
+ #if OS(WINDOWS)
+ #include <windows.h>
+ #elif defined(USE_SYSTEM_MALLOC) && USE_SYSTEM_MALLOC
++#include <wtf/text/WTFString.h>
+ #if OS(UNIX)
+ #include <sys/sysinfo.h>
+ #endif // OS(UNIX)
+Index: git/Source/WebCore/PlatformWPE.cmake
+===================================================================
+--- git.orig/Source/WebCore/PlatformWPE.cmake
++++ git/Source/WebCore/PlatformWPE.cmake
+@@ -43,6 +43,7 @@ list(APPEND WebCore_INCLUDE_DIRECTORIES
+     "${WEBCORE_DIR}/platform/network/soup"
+     "${WEBCORE_DIR}/platform/text/icu"
+     ${WTF_DIR}
++    "${BMALLOC_DIR}"
+ )
+ 
+ list(APPEND WebCore_SOURCES
+@@ -120,8 +121,6 @@ list(APPEND WebCore_SOURCES
+ 
+     platform/text/Hyphenation.cpp
+     platform/text/LocaleICU.cpp
+-    platform/text/TextCodecICU.cpp
+-    platform/text/TextEncodingDetectorICU.cpp
+ 
+     platform/unix/LoggingUnix.cpp
+ 
+Index: git/Source/WebKit/CMakeLists.txt
+===================================================================
+--- git.orig/Source/WebKit/CMakeLists.txt
++++ git/Source/WebKit/CMakeLists.txt
+@@ -917,6 +917,8 @@ if (WebKit_VERSION_SCRIPT)
+     WEBKIT_ADD_TARGET_PROPERTIES(WebKit LINK_FLAGS "${WebKit_VERSION_SCRIPT}")
+ endif ()
+ 
++set_target_properties(WebKit PROPERTIES INTERFACE_LINK_LIBRARIES "")
++
+ add_executable(WebProcess ${WebProcess_SOURCES})
+ ADD_WEBKIT_PREFIX_HEADER(WebProcess)
+ target_link_libraries(WebProcess ${WebProcess_LIBRARIES})
+Index: git/Source/WebKit/PlatformWPE.cmake
+===================================================================
+--- git.orig/Source/WebKit/PlatformWPE.cmake
++++ git/Source/WebKit/PlatformWPE.cmake
+@@ -7,6 +7,11 @@ file(MAKE_DIRECTORY ${DERIVED_SOURCES_WP
+ file(MAKE_DIRECTORY ${FORWARDING_HEADERS_WPE_DIR})
+ file(MAKE_DIRECTORY ${FORWARDING_HEADERS_WPE_EXTENSION_DIR})
+ 
++if ("${JavaScriptCore_LIBRARY_TYPE}" MATCHES "SHARED")
++    set(WPE_PC_DEPENDENICES "wpe-javascriptcore")
++else()
++    set(WPE_PC_DEPENDENICES "")
++endif()
+ configure_file(wpe/wpe-webkit.pc.in ${CMAKE_BINARY_DIR}/wpe-webkit.pc @ONLY)
+ 
+ add_definitions(-DWEBKIT2_COMPILATION)
+@@ -393,15 +398,30 @@ add_custom_command(
+ )
+ 
+ list(APPEND WebKit_INCLUDE_DIRECTORIES
++    "${CMAKE_SOURCE_DIR}/Source"
++    "${CMAKE_BINARY_DIR}"
++    "${PAL_DIR}"
+     "${FORWARDING_HEADERS_DIR}"
+     "${FORWARDING_HEADERS_WPE_DIR}"
+     "${FORWARDING_HEADERS_WPE_EXTENSION_DIR}"
+     "${DERIVED_SOURCES_DIR}"
+     "${DERIVED_SOURCES_WPE_API_DIR}"
++    "${DERIVED_SOURCES_WEBCORE_DIR}"
++    "${BMALLOC_DIR}"
++    "${JAVASCRIPTCORE_DIR}"
++    "${JAVASCRIPTCORE_DIR}/API"
++    "${JAVASCRIPTCORE_DIR}/ForwardingHeaders"
++    "${JAVASCRIPTCORE_DIR}/heap"
++    "${JAVASCRIPTCORE_DIR}/runtime"
++    "${WEBCORE_DIR}/Modules/fetch"
++    "${WEBCORE_DIR}/dom"
++    "${WEBCORE_DIR}/loader"
++    "${WEBCORE_DIR}/platform"
+     "${WEBCORE_DIR}/platform/graphics/cairo"
+     "${WEBCORE_DIR}/platform/graphics/freetype"
+     "${WEBCORE_DIR}/platform/graphics/opentype"
+     "${WEBCORE_DIR}/platform/graphics/texmap/coordinated"
++    "${WEBCORE_DIR}/platform/network"
+     "${WEBCORE_DIR}/platform/network/soup"
+     "${WEBKIT_DIR}/NetworkProcess/CustomProtocols/soup"
+     "${WEBKIT_DIR}/NetworkProcess/Downloads/soup"
+@@ -448,6 +468,7 @@ list(APPEND WebKit_INCLUDE_DIRECTORIES
+     ${HARFBUZZ_INCLUDE_DIRS}
+     ${LIBSOUP_INCLUDE_DIRS}
+     ${WPE_INCLUDE_DIRS}
++    "${LIBGCRYPT_INCLUDE_DIRS}"
+ )
+ 
+ list(APPEND WebKit_LIBRARIES
+@@ -711,3 +732,11 @@ if (EXPORT_DEPRECATED_WEBKIT2_C_API)
+         COMPONENT "Development"
+     )
+ endif ()
++
++list(APPEND WebProcess_LIBRARIES
++    ${LIBGCRYPT_LIBRARIES}
++)
++
++list(APPEND NetworkProcess_LIBRARIES
++    ${LIBGCRYPT_LIBRARIES}
++)
+Index: git/Source/WebKit/wpe/wpe-webkit.pc.in
+===================================================================
+--- git.orig/Source/WebKit/wpe/wpe-webkit.pc.in
++++ git/Source/WebKit/wpe/wpe-webkit.pc.in
+@@ -6,6 +6,6 @@ includedir=${prefix}/include
+ Name: WebKit2
+ Description: WPE-flavored Web engine
+ Version: @PROJECT_VERSION@
+-Requires.private: glib-2.0 libsoup-2.4
++Requires.private: glib-2.0 libsoup-2.4 @WPE_PC_DEPENDENICES@
+ Libs: -L${libdir} -lWPEWebKit -lwpe-0.2
+ Cflags: -I${includedir}/wpe-@WPE_API_VERSION@ -I${includedir}/wpe-@WPE_API_VERSION@/WPE
+Index: git/Source/cmake/OptionsWPE.cmake
+===================================================================
+--- git.orig/Source/cmake/OptionsWPE.cmake
++++ git/Source/cmake/OptionsWPE.cmake
+@@ -75,7 +75,12 @@ SET_AND_EXPOSE_TO_BUILD(ENABLE_INSPECTOR
+ 
+ set(ENABLE_API_TESTS ${DEVELOPER_MODE})
+ 
+-set(JavaScriptCore_LIBRARY_TYPE STATIC)
++if (DEFINED ENABLE_SHARED_JSC AND ENABLE_SHARED_JSC)
++    set(JavaScriptCore_LIBRARY_TYPE SHARED)
++    add_definitions(-DUSE_EXPORT_MACROS=1)
++else()
++    set(JavaScriptCore_LIBRARY_TYPE STATIC)
++endif()
+ set(WebCore_LIBRARY_TYPE STATIC)
+ 
+ find_package(ICU REQUIRED)

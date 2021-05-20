@@ -1,0 +1,38 @@
+Date: Feb 28 00:31:58 2019
+
+From: aef8e592533d1d806a7b46ce836c6929bd9569d1 Apr 01 18:05:22 2019
+
+Subject: [PATCH] RDK-22987: enforcing TLS 1.2
+
+	TLS 1.2 minimal
+
+Source: COMCAST
+
+License: LGPL-2.1-or-later
+
+Upstream-Status: Pending
+
+Signed-off-by: Igor Borovkov <Igor_Borovkov@cable.comcast.com>	
+---
+
+diff --git a/tls/openssl/gtlsclientconnection-openssl.c b/tls/openssl/gtlsclientconnection-openssl.c
+index 4b49e38..6c148d8 100644
+--- a/tls/openssl/gtlsclientconnection-openssl.c
++++ b/tls/openssl/gtlsclientconnection-openssl.c
+@@ -447,6 +447,16 @@ g_tls_client_connection_openssl_initable_init (GInitable       *initable,
+   hostname = get_server_identity (client);
+ 
+   /* Only TLS 1.2 or higher */
++  if (!g_getenv("NO_FORCE_TLS_1_2"))
++    {
++      options = options |
++                SSL_OP_NO_COMPRESSION |
++                SSL_OP_NO_TLSv1_1 |
++                SSL_OP_NO_SSLv2 |
++                SSL_OP_NO_SSLv3 |
++                SSL_OP_NO_TLSv1;
++    }
++
+   SSL_CTX_set_options (priv->ssl_ctx, options);
+ 
+ #if OPENSSL_VERSION_NUMBER >= 0x10200000L && !defined (LIBRESSL_VERSION_NUMBER)

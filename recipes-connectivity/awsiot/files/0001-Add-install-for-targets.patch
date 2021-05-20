@@ -1,0 +1,141 @@
+Date: Mar 4, 2020 10:29:52 AM
+From: 1ad675b8532f329bebaf40cda54192d0cb4feecb Feb 26, 2020 10:31:59 PM
+Subject: add install targets to cmake
+Source: COMCAST
+License: MIT
+Upstream-Status: Pending
+Signed-off-by: Thomas Lea <Thomas_Lea@comcast.com>
+---
+diff --git a/libraries/aws/common/CMakeLists.txt b/libraries/aws/common/CMakeLists.txt
+index 8645841..4dbf088 100644
+--- a/libraries/aws/common/CMakeLists.txt
++++ b/libraries/aws/common/CMakeLists.txt
+@@ -30,6 +30,9 @@ source_group( "" FILES ${CONFIG_HEADER_PATH}/iot_config.h )
+ source_group( include FILES include/aws_iot.h include/aws_iotdoc_parser.h )
+ source_group( src FILES ${AWS_IOT_COMMON_SOURCES} )
+ 
++install(TARGETS awsiotcommon DESTINATION lib)
++install(DIRECTORY include/ DESTINATION include/awsiot)
++
+ # Build the test executable if needed.
+ if( ${IOT_BUILD_TESTS} )
+     # AWS IoT Common unit test sources.
+@@ -54,4 +57,4 @@ if( ${IOT_BUILD_TESTS} )
+     set_property( TARGET aws_iot_tests_common PROPERTY FOLDER tests )
+     source_group( unit FILES ${AWS_IOT_COMMON_UNIT_TEST_SOURCES} )
+     source_group( "" FILES ${IOT_TEST_APP_SOURCE} test/aws_iot_tests_common.c )
+-endif()
+\ No newline at end of file
++endif()
+diff --git a/libraries/aws/defender/CMakeLists.txt b/libraries/aws/defender/CMakeLists.txt
+index e23f0da..fd6d33f 100644
+--- a/libraries/aws/defender/CMakeLists.txt
++++ b/libraries/aws/defender/CMakeLists.txt
+@@ -32,6 +32,9 @@ source_group( include FILES include/aws_iot_defender.h )
+ source_group( src\\private src/private/aws_iot_defender_internal.h )
+ source_group( src FILES ${DEFENDER_SOURCES} )
+ 
++install(TARGETS awsiotdefender DESTINATION lib)
++install(DIRECTORY include/ DESTINATION include/awsiot)
++
+ # Build the test executable if needed.
+ if( ${IOT_BUILD_TESTS} )
+     # Defender system test sources.
+diff --git a/libraries/aws/jobs/CMakeLists.txt b/libraries/aws/jobs/CMakeLists.txt
+index 0f35e74..05a7836 100644
+--- a/libraries/aws/jobs/CMakeLists.txt
++++ b/libraries/aws/jobs/CMakeLists.txt
+@@ -36,6 +36,9 @@ source_group( include\\types include/types/aws_iot_jobs_types.h )
+ source_group( src\\private src/private/aws_iot_jobs_internal.h )
+ source_group( src FILES ${JOBS_SOURCES} )
+ 
++install(TARGETS awsiotjobs DESTINATION lib)
++install(DIRECTORY include/ DESTINATION include/awsiot)
++
+ # Build the test executable if needed.
+ if( ${IOT_BUILD_TESTS} )
+     # Jobs system test sources.
+diff --git a/libraries/aws/shadow/CMakeLists.txt b/libraries/aws/shadow/CMakeLists.txt
+index d26cd46..a8c5a01 100644
+--- a/libraries/aws/shadow/CMakeLists.txt
++++ b/libraries/aws/shadow/CMakeLists.txt
+@@ -36,6 +36,9 @@ source_group( include\\types include/types/aws_iot_shadow_types.h )
+ source_group( src\\private src/private/aws_iot_shadow_internal.h )
+ source_group( src FILES ${SHADOW_SOURCES} )
+ 
++install(TARGETS awsiotshadow DESTINATION lib)
++install(DIRECTORY include/ DESTINATION include/awsiot)
++
+ # Build the test executable if needed.
+ if( ${IOT_BUILD_TESTS} )
+     # Shadow system test sources.
+diff --git a/libraries/standard/common/CMakeLists.txt b/libraries/standard/common/CMakeLists.txt
+index 8883d60..d94a476 100644
+--- a/libraries/standard/common/CMakeLists.txt
++++ b/libraries/standard/common/CMakeLists.txt
+@@ -96,6 +96,16 @@ source_group( platform\\include FILES ${PLATFORM_INTERFACE_HEADERS} ${PLATFORM_C
+ source_group( platform\\include\\types FILES ${PLATFORM_TYPES_HEADER} ${PORT_TYPES_HEADER} )
+ source_group( platform\\src FILES ${PLATFORM_SOURCES} )
+ 
++install(TARGETS iotbase DESTINATION lib)
++install(FILES ${COMMON_PUBLIC_HEADERS} DESTINATION include/awsiot)
++install(FILES ${COMMON_TYPES_HEADERS} DESTINATION include/awsiot/types)
++install(FILES ${PLATFORM_INTERFACE_HEADERS} DESTINATION include/awsiot/platform)
++install(FILES ${PLATFORM_TYPES_HEADER} DESTINATION include/awsiot/types)
++install(FILES ${PLATFORM_COMMON_HEADERS} DESTINATION include/awsiot)
++# Ports includes
++install(FILES ${PORT_TYPES_HEADER} DESTINATION include/awsiot/types)
++
++
+ # Build the test executable if needed.
+ if( ${IOT_BUILD_TESTS} )
+     # Common unit test sources.
+diff --git a/libraries/standard/mqtt/CMakeLists.txt b/libraries/standard/mqtt/CMakeLists.txt
+index 8ef20a7..9433a06 100644
+--- a/libraries/standard/mqtt/CMakeLists.txt
++++ b/libraries/standard/mqtt/CMakeLists.txt
+@@ -36,6 +36,9 @@ source_group( include\\types FILES include/types/iot_mqtt_types.h )
+ source_group( src FILES ${MQTT_SOURCES} )
+ source_group( src\\private FILES src/private/iot_mqtt_internal.h )
+ 
++install(TARGETS iotmqtt DESTINATION lib)
++install(DIRECTORY include/ DESTINATION include/awsiot)
++
+ # Build the test executable if needed.
+ if( ${IOT_BUILD_TESTS} )
+     # Enable test access in MQTT.
+diff --git a/libraries/standard/serializer/CMakeLists.txt b/libraries/standard/serializer/CMakeLists.txt
+index 15ab4e2..850e88a 100644
+--- a/libraries/standard/serializer/CMakeLists.txt
++++ b/libraries/standard/serializer/CMakeLists.txt
+@@ -28,6 +28,9 @@ source_group( include FILES
+               include/iot_serializer.h )
+ source_group( src FILES ${SERIALIZER_SOURCES} )
+ 
++install(TARGETS iotserializer DESTINATION lib)
++install(DIRECTORY include/ DESTINATION include/awsiot)
++
+ # Build the test executable if needed.
+ if( ${IOT_BUILD_TESTS} )
+     # Serializer unit test sources.
+diff --git a/third_party/mbedtls/CMakeLists.txt b/third_party/mbedtls/CMakeLists.txt
+index 1415845..70225e7 100644
+--- a/third_party/mbedtls/CMakeLists.txt
++++ b/third_party/mbedtls/CMakeLists.txt
+@@ -96,3 +96,5 @@ set_property( TARGET mbedtls PROPERTY FOLDER third_party )
+ source_group( include\\mbedtls FILES ${MBEDTLS_HEADERS} )
+ source_group( source FILES ${MBEDTLS_SOURCES} )
+ source_group( "" FILES iot_config_mbedtls.h threading_alt.h iot_mbedtls_threading.c )
++
++install(TARGETS mbedtls LIBRARY DESTINATION lib PUBLIC_HEADER DESTINATION include)
+diff --git a/third_party/tinycbor/CMakeLists.txt b/third_party/tinycbor/CMakeLists.txt
+index 4eaadb1..a0ad829 100644
+--- a/third_party/tinycbor/CMakeLists.txt
++++ b/third_party/tinycbor/CMakeLists.txt
+@@ -60,3 +60,6 @@ target_compile_options( tinycbor
+ set_property( TARGET tinycbor PROPERTY FOLDER third_party )
+ source_group( include FILES ${TINYCBOR_HEADERS} )
+ source_group( source FILES ${TINYCBOR_SOURCES} )
++
++install(TARGETS tinycbor DESTINATION lib)
++install(FILES ${TINYCBOR_HEADERS} DESTINATION include/tinycbor)

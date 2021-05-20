@@ -1,0 +1,26 @@
+From 876672a5eb0e9a8b0882125983a8c3841328a795 Mon Sep 17 00:00:00 2001
+From: Ievgen Mutavchi <Ievgen_Mutavchi@comcast.com>
+Date: Mon, 21 Oct 2019 10:23:58 -0400
+Subject: [MSE][SourceBuffer] Fix removal of paddings from buffered
+ range
+
+---
+ Source/WebCore/Modules/mediasource/SourceBuffer.cpp | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/Source/WebCore/Modules/mediasource/SourceBuffer.cpp b/Source/WebCore/Modules/mediasource/SourceBuffer.cpp
+index 46112bd..093b4e8 100644
+--- a/Source/WebCore/Modules/mediasource/SourceBuffer.cpp
++++ b/Source/WebCore/Modules/mediasource/SourceBuffer.cpp
+@@ -769,7 +769,7 @@ static PlatformTimeRanges removeSamplesFromTrackBuffer(const DecodeOrderSampleMa
+                 additionalErasedRanges.add(previousSample.presentationTime() + previousSample.duration(), erasedStart);
+         }
+ 
+-        auto endIterator = trackBuffer.samples.presentationOrder().findSampleStartingOnOrAfterPresentationTime(erasedEnd);
++        auto endIterator = trackBuffer.samples.presentationOrder().findSampleContainingOrAfterPresentationTime(erasedEnd);
+         if (endIterator == trackBuffer.samples.presentationOrder().end())
+             additionalErasedRanges.add(erasedEnd, MediaTime::positiveInfiniteTime());
+         else {
+-- 
+2.7.4
+

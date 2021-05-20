@@ -1,0 +1,223 @@
+TCP IPV6 Support : To enable TCP IPV6 support for TDK
+
+RDKTT-1329 : Enable IPv6 support in JSON RPC
+
+Made change in the JSON RPC to enable IPV6 support for TCP
+
+Signed-off-by: sarveswaran <sarveswaran@tataelxsi.co.in>
+
+---
+
+Index: git/src/jsonrpccpp/server/connectors/linuxtcpsocketserver.cpp
+===================================================================
+--- git.orig/src/jsonrpccpp/server/connectors/linuxtcpsocketserver.cpp
++++ git/src/jsonrpccpp/server/connectors/linuxtcpsocketserver.cpp
+@@ -21,7 +21,7 @@
+ #include <string>
+ 
+ #include <jsonrpccpp/common/specificationparser.h>
+-
++#include <arpa/inet.h>
+ #include <errno.h>
+ 
+ using namespace jsonrpc;
+@@ -32,6 +32,15 @@ using namespace std;
+ #define DELIMITER_CHAR char(0x0A)
+ #endif //DELIMITER_CHAR
+ 
++/**************************************************/
++/******************* TDK EDIT *********************/
++/**************************************************/
++/* Variables to hold server ip address */
++
++char ip_str[INET6_ADDRSTRLEN];
++std::string IPaddr="";
++/**************************************************/
++
+ LinuxTcpSocketServer::LinuxTcpSocketServer(const std::string& ipToBind, const unsigned int &port) :
+     AbstractServerConnector(),
+     running(false),
+@@ -46,7 +55,7 @@ bool LinuxTcpSocketServer::StartListenin
+ 	{
+ 		//Create and bind socket here.
+ 		//Then launch the listenning loop.
+-		this->socket_fd = socket(AF_INET, SOCK_STREAM, 0);
++		this->socket_fd = socket(AF_INET6, SOCK_STREAM, 0);
+ 		if(this->socket_fd < 0)
+ 		{
+ 			return false;
+@@ -57,13 +66,14 @@ bool LinuxTcpSocketServer::StartListenin
+ 		setsockopt(this->socket_fd, SOL_SOCKET, SO_REUSEADDR, &reuseaddr, sizeof(reuseaddr));
+ 
+ 		/* start with a clean address structure */
+-		memset(&(this->address), 0, sizeof(struct sockaddr_in));
++		memset(&(this->address), 0, sizeof(struct sockaddr_in6));
++		
++                this->address.sin6_family = AF_INET6;
++                this->address.sin6_addr   = in6addr_any;
++                inet_pton(AF_INET6,this->ipToBind.c_str(), &(this->address.sin6_addr));
++                this->address.sin6_port = htons(this->port);
+ 
+-		this->address.sin_family = AF_INET;
+-		inet_aton(this->ipToBind.c_str(), &(this->address.sin_addr));
+-		this->address.sin_port = htons(this->port);
+-
+-		if(bind(this->socket_fd, reinterpret_cast<struct sockaddr *>(&(this->address)), sizeof(struct sockaddr_in)) != 0)
++		if(bind(this->socket_fd, reinterpret_cast<struct sockaddr *>(&(this->address)), sizeof(struct sockaddr_in6)) != 0)
+ 		{
+ 			return false;
+ 		}
+@@ -142,13 +152,24 @@ void* LinuxTcpSocketServer::LaunchLoop(v
+ void LinuxTcpSocketServer::ListenLoop()
+ {
+ 	int connection_fd = 0;
+-	struct sockaddr_in connection_address;
+-	memset(&connection_address, 0, sizeof(struct sockaddr_in));
++	struct sockaddr_in6 connection_address;
++        int sockname = 0;
++        struct sockaddr_in6 addr;
++	memset(&connection_address, 0, sizeof(struct sockaddr_in6));
+ 	socklen_t address_length = sizeof(connection_address);
+ 	while(this->running)
+ 	{
+ 		if((connection_fd = accept(this->socket_fd, reinterpret_cast<struct sockaddr *>(&(connection_address)),  &address_length)) > 0)
+ 		{
++		  /* CODE BLOCK TO UPDATE CLIENT IP */
++                  sockname = getsockname (connection_fd, (struct sockaddr *)&addr,&address_length);
++                  if (sockname != -1)
++                   {
++                       inet_ntop(AF_INET6, &(addr.sin6_addr.s6_addr), ip_str, INET6_ADDRSTRLEN);
++                       IPaddr = ip_str;
++                       cout<<"Client IP"<<IPaddr <<endl;
++                   }
++
+ 			pthread_t client_thread;
+ 			struct GenerateResponseParameters *params = new struct GenerateResponseParameters();
+ 			params->instance = this;
+@@ -261,3 +282,13 @@ int LinuxTcpSocketServer::CleanClose(con
+ 		return CloseByReset(fd);
+ 	}
+ }
++
++/**************************************************/
++/******************* TDK EDIT *********************/
++/**************************************************/
++/* API to fetch the server ipaddress to which it is connected on an accepted socket */
++std::string LinuxTcpSocketServer::GetIP()
++{
++   return IPaddr;
++}
++
+Index: git/src/jsonrpccpp/server/connectors/linuxtcpsocketserver.h
+===================================================================
+--- git.orig/src/jsonrpccpp/server/connectors/linuxtcpsocketserver.h
++++ git/src/jsonrpccpp/server/connectors/linuxtcpsocketserver.h
+@@ -71,13 +71,19 @@ namespace jsonrpc
+                          * @return A boolean that indicates the success or the failure of the operation.
+                          */
+ 			bool SendResponse(const std::string& response, void* addInfo = NULL);
+-
++                         /**
++                         * @brief The real implementation TcpSocketServer::getIP method.
++                         *
++                         * This method to get the conneected client IP
++                         * @return A String that indicates the ip address of the connected client.
++                         */
++                        std::string GetIP();
+ 		private:
+ 			bool running;                   /*!< A boolean that is used to know the listening state*/
+ 			std::string ipToBind;           /*!< The ipv4 address on which the server should bind and listen*/
+ 			unsigned int port;              /*!< The port on which the server should bind and listen*/
+ 			int socket_fd;                  /*!< The file descriptior of the listening socket*/
+-			struct sockaddr_in address;     /*!< The listening socket*/
++			struct sockaddr_in6 address;     /*!< The listening socket*/
+ 
+ 			pthread_t listenning_thread;    /*!< The identifier of the listen loop thread*/
+ 
+Index: git/src/jsonrpccpp/server/connectors/tcpsocketserver.cpp
+===================================================================
+--- git.orig/src/jsonrpccpp/server/connectors/tcpsocketserver.cpp
++++ git/src/jsonrpccpp/server/connectors/tcpsocketserver.cpp
+@@ -28,6 +28,7 @@ TcpSocketServer::TcpSocketServer(const s
+ #else
+ 	this->realSocket = NULL;
+ #endif
++
+ }
+ 
+ TcpSocketServer::~TcpSocketServer()
+@@ -52,9 +53,9 @@ bool TcpSocketServer::StartListening()
+ 
+ bool TcpSocketServer::StopListening()
+ {
+-	if(this->realSocket != NULL)
++	if(this->realSocket != NULL){
+ 		return this->realSocket->StopListening();
+-	else
++      }else
+ 		return false;
+ }
+ 
+@@ -65,3 +66,12 @@ bool TcpSocketServer::SendResponse(const
+ 	else
+ 		return false;
+ }
++
++/**************************************************/
++/******************* TDK EDIT *********************/
++/**************************************************/
++/* API to fetch the server ipaddress to which it is connected on an accepted socket */
++std::string TcpSocketServer::GetIP()
++{
++   return this->realSocket->GetIP();
++}
+Index: git/src/jsonrpccpp/server/connectors/tcpsocketserver.h
+===================================================================
+--- git.orig/src/jsonrpccpp/server/connectors/tcpsocketserver.h
++++ git/src/jsonrpccpp/server/connectors/tcpsocketserver.h
+@@ -70,6 +70,13 @@ namespace jsonrpc
+                          * @return A boolean that indicates the success or the failure of the operation.
+                          */
+ 			bool SendResponse(const std::string& response, void* addInfo = NULL);
++                         /**
++                         * @brief The AbstractServerConnector::GetIP method overload.
++                         *
++                         * This method will get the connected host IP.
++                         * @return A string that returns the IPaddress of the connected host.
++                         */
++                        std::string GetIP();
+ 
+ 		private:
+             AbstractServerConnector *realSocket; /*!< A pointer to the real implementation of this class depending of running OS*/
+Index: git/src/jsonrpccpp/server/abstractserver.h
+===================================================================
+--- git.orig/src/jsonrpccpp/server/abstractserver.h
++++ git/src/jsonrpccpp/server/abstractserver.h
+@@ -50,6 +50,11 @@ namespace jsonrpc
+             {
+                 return connection.StopListening();
+             }
++            
++            std::string GetIP()
++            {
++                return connection.GetIP();
++            }
+ 
+             virtual void HandleMethodCall(Procedure &proc, const Json::Value& input, Json::Value& output)
+             {
+Index: git/src/jsonrpccpp/server/abstractserverconnector.h
+===================================================================
+--- git.orig/src/jsonrpccpp/server/abstractserverconnector.h
++++ git/src/jsonrpccpp/server/abstractserverconnector.h
+@@ -42,6 +42,11 @@ namespace jsonrpc
+             bool virtual SendResponse(const std::string& response, void* addInfo = NULL) = 0;
+ 
+             /**
++             * This method should return the connected client IP.
++             */
++            virtual std::string GetIP()=0;
++
++            /**
+              * This method must be called, when a request is recognised. It will do everything else for you (including sending the response).
+              * @param request - the request that has been recognised.
+              * @param addInfo - additional Info, that the Connector might need for responding.

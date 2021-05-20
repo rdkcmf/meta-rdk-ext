@@ -1,0 +1,37 @@
+Date: Apr 23 13:29:45 2015
+
+From: b5693abe90e9241907af8bfbd2dfbd0fd932a079 Apr 23 13:29:45 2015
+
+Subject: [PATCH] RDKSYSINTSW-1520: Update the Alljoyn recipe to use the 14.12 release of the package.
+
+	stop automatically reving the version with the open source project to have a more stable environment
+	
+Source: COMCAST 
+
+License: Apache-2.0
+
+Upstream-Status: Pending
+
+Signed-off-by: Garey Hassler <G.Hassler@CablerLabs.com>
+---
+
+Index: source/core/alljoyn/build_core/conf/linux/SConscript
+===================================================================
+--- source.orig/core/alljoyn/build_core/conf/linux/SConscript
++++ source/core/alljoyn/build_core/conf/linux/SConscript
+@@ -36,6 +36,7 @@ env.Append(CFLAGS = ['-Wall',
+                      '-fno-unwind-tables',
+                      '-ffunction-sections',
+                      '-fdata-sections',
++                     '-fPIC',
+                      '-Wno-long-long'])
+ 
+ env.Append(CXXFLAGS = ['-Wall',
+@@ -48,6 +49,7 @@ env.Append(CXXFLAGS = ['-Wall',
+                        '-fno-unwind-tables',
+                        '-ffunction-sections',
+                        '-fdata-sections',
++                       '-fPIC',
+                        '-Wno-long-long',
+                        '-Wno-deprecated',
+                        '-Wno-unknown-pragmas'])

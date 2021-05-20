@@ -1,0 +1,127 @@
+Date: Jul 30 09:49:15 2019
+
+From: 1ce06c3a52aa24af41cd4b251e8f41f022313e14 Aug 05 17:05:32 2019
+
+Subject: [PATCH] RDK-24647: backport happy eyeballs v0
+
+	libsoup's change interleaves IPv4/IPv6 addresses, so we try both
+	family addresses in parallel.
+
+Source: COMCAST
+
+License: LGPL-2.0-or-later
+
+Upstream-Status: Pending
+
+Signed-off-by: Eugene Mutavchi <Ievgen_Mutavchi@comcast.com>
+---
+
+Index: libsoup-2.58.1/libsoup/soup-address.c
+===================================================================
+--- libsoup-2.58.1.orig/libsoup/soup-address.c
++++ libsoup-2.58.1/libsoup/soup-address.c
+@@ -627,6 +627,75 @@ maybe_resolve_ip (SoupAddress *addr)
+ 	g_object_unref (gaddr);
+ }
+ 
++/* Similar to latest GLib's GIO gio/gnetworkaddress.c */
++static GList *
++list_interleave (GList *list1, GList *list2)
++{
++  GList *interleaved = NULL;
++  while (list1 || list2) {
++	  if (list1) {
++		  interleaved = g_list_prepend (interleaved, list1->data);
++		  list1 = g_list_delete_link (list1, list1);
++	  }
++	  if (list2) {
++		  interleaved = g_list_prepend (interleaved, list2->data);
++		  list2 = g_list_delete_link (list2, list2);
++	  }
++  }
++  return g_list_reverse (interleaved);
++}
++
++static GList *
++list_copy_interleaved (GList *list)
++{
++	GList *ipv4 = NULL, *ipv6 = NULL;
++	gboolean ipv4_first;
++
++	g_return_val_if_fail(list != NULL, NULL);
++
++	ipv4_first = (G_SOCKET_FAMILY_IPV4 == g_inet_address_get_family (list->data));
++
++	while (list) {
++		GSocketFamily family = g_inet_address_get_family (list->data);
++		switch (family) {
++			case G_SOCKET_FAMILY_IPV4:
++				ipv4 = g_list_prepend (ipv4, list->data);
++				break;
++			case G_SOCKET_FAMILY_IPV6:
++				ipv6 = g_list_prepend (ipv6, list->data);
++				break;
++			case G_SOCKET_FAMILY_INVALID:
++			case G_SOCKET_FAMILY_UNIX:
++				g_assert_not_reached ();
++		}
++		list = g_list_next (list);
++	}
++
++	ipv4 = g_list_reverse (ipv4);
++	ipv6 = g_list_reverse (ipv6);
++
++	if (ipv4_first)
++		return list_interleave(ipv4, ipv6);
++
++	return list_interleave(ipv6, ipv4);
++}
++
++#if 0
++static void
++dump_addresses (const gchar* prefix, GList *list)
++{
++	int i = 0;
++	g_print("%s\n", prefix);
++	while (list) {
++		if (G_IS_INET_ADDRESS (list->data)) {
++			char *name = g_inet_address_to_string (list->data);
++			g_print("addr[%d]: %s\n", i++, name);
++			g_free(name);
++		}
++		list = g_list_next (list);
++	}
++}
++#endif
+ 
+ static guint
+ update_addrs (SoupAddress *addr, GList *addrs, GError *error)
+@@ -634,6 +703,7 @@ update_addrs (SoupAddress *addr, GList *
+ 	SoupAddressPrivate *priv = soup_address_get_instance_private (addr);
+ 	GInetAddress *gia;
+ 	GSocketAddress *gsa;
++	GList *tmpaddrs = NULL;
+ 	int i;
+ 
+ 	if (error) {
+@@ -647,6 +717,10 @@ update_addrs (SoupAddress *addr, GList *
+ 	else if (priv->sockaddr)
+ 		return SOUP_STATUS_OK;
+ 
++//	dump_addresses("before: ", addrs);
++	addrs = tmpaddrs = list_copy_interleaved(addrs);
++//	dump_addresses("after: ", addrs);
++
+ 	priv->n_addrs = g_list_length (addrs);
+ 	priv->sockaddr = g_new (struct sockaddr_storage, priv->n_addrs);
+ 	for (i = 0; addrs; addrs = addrs->next, i++) {
+@@ -664,6 +738,9 @@ update_addrs (SoupAddress *addr, GList *
+ 		g_object_unref (gsa);
+ 	}
+ 
++	if (tmpaddrs)
++		g_list_free(tmpaddrs);
++
+ 	return SOUP_STATUS_OK;
+ }
+ 

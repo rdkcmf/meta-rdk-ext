@@ -1,0 +1,45 @@
+From 13ec6aec2c7a6da556b97755705eface5c0b2775 Mon Sep 17 00:00:00 2001
+From: Siva Sankar Raja <sivasankar_raja@comcast.com>
+Source: COMCAST
+License: LICENSE-LGPL-2.1
+Upstream-Status: Pending
+Signed-off-by: Siva Sankar Raja <sivasankar_raja@comcast.com>
+Date: Fri, 28 Jun 2019 12:26:34 +0000
+Subject: [PATCH] update localstorage limits
+
+---
+ Source/WebCore/page/Settings.yaml                   | 2 +-
+ Source/WebCore/storage/StorageNamespaceProvider.cpp | 3 ++-
+ 2 files changed, 3 insertions(+), 2 deletions(-)
+
+Index: git/Source/WebCore/page/Settings.yaml
+===================================================================
+--- git.orig/Source/WebCore/page/Settings.yaml
++++ git/Source/WebCore/page/Settings.yaml
+@@ -768,4 +768,4 @@ nonCompositedWebGLEnabled:
+   initial: false
+ localStorageQuota:
+   type: unsigned
+-  initial: 5*1024*1024
++  initial: 100*1024
+Index: git/Source/WebCore/storage/StorageNamespaceProvider.cpp
+===================================================================
+--- git.orig/Source/WebCore/storage/StorageNamespaceProvider.cpp
++++ git/Source/WebCore/storage/StorageNamespaceProvider.cpp
+@@ -36,7 +36,7 @@
+ namespace WebCore {
+ 
+ // Suggested by the HTML5 spec.
+-unsigned localStorageDatabaseQuotaInBytes = 5 * 1024 * 1024;
++unsigned localStorageDatabaseQuotaInBytes = 100 * 1024;
+ 
+ StorageNamespaceProvider::StorageNamespaceProvider()
+ {
+@@ -84,6 +84,7 @@ RefPtr<StorageArea> StorageNamespaceProv
+ 
+ StorageNamespace& StorageNamespaceProvider::localStorageNamespace(unsigned quota)
+ {
++    quota = std::min(localStorageDatabaseQuotaInBytes, quota);
+     if (!m_localStorageNamespace)
+         m_localStorageNamespace = createLocalStorageNamespace(quota);
+ 

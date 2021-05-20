@@ -1,0 +1,663 @@
+Date: Tue, 13 Nov 2012 11:07:04 +0000
+
+From: fc3f312b6be520d9a8afd140adb15c25a6fc0e33 Mon Sep 17 00:00:00 2001
+
+Subject: [PATCH] Allow property indexes to refer to slots inside the object header.
+
+	Review URL: https://chromiumcodereview.appspot.com/11365221
+
+Source: GOOGLE
+
+Upstream-Status: Submitted [ https://v8.googlecode.com/svn/branches/bleeding_edge@12944 ce2b1a6d-e550-0410-aec6-3dcde31c8c00 ] 
+
+Signed-off-by: mmassi@chromium.org
+---
+ src/arm/stub-cache-arm.cc   |   33 +++++++++++++++++--------------
+ src/bootstrapper.cc         |    6 +++---
+ src/ia32/stub-cache-ia32.cc |   33 +++++++++++++++++--------------
+ src/ic.cc                   |   12 +++++-------
+ src/json-stringifier.h      |    3 ++-
+ src/mips/stub-cache-mips.cc |   27 +++++++++++++++-----------
+ src/objects.cc              |   11 +++++++----
+ src/property.cc             |    2 +-
+ src/property.h              |   45 ++++++++++++++++++++++++++++++++++++++++---
+ src/runtime.cc              |   13 +++++++------
+ src/stub-cache.cc           |    6 +++---
+ src/stub-cache.h            |   16 +++++++--------
+ src/x64/stub-cache-x64.cc   |   33 +++++++++++++++++--------------
+ 13 files changed, 151 insertions(+), 89 deletions(-)
+
+Index: qtjsbackend-opensource-src-5.1.1/src/3rdparty/v8/src/arm/stub-cache-arm.cc
+===================================================================
+--- qtjsbackend-opensource-src-5.1.1.orig/src/3rdparty/v8/src/arm/stub-cache-arm.cc	2013-08-25 18:04:17.000000000 +0000
++++ qtjsbackend-opensource-src-5.1.1/src/3rdparty/v8/src/arm/stub-cache-arm.cc	2014-04-18 21:09:17.744748007 +0000
+@@ -327,18 +327,23 @@
+                                             Register dst,
+                                             Register src,
+                                             Handle<JSObject> holder,
+-                                            int index) {
+-  // Adjust for the number of properties stored in the holder.
+-  index -= holder->map()->inobject_properties();
+-  if (index < 0) {
+-    // Get the property straight out of the holder.
+-    int offset = holder->map()->instance_size() + (index * kPointerSize);
++                                            PropertyIndex index) {
++  if (index.is_header_index()) {
++    int offset = index.header_index() * kPointerSize;
+     __ ldr(dst, FieldMemOperand(src, offset));
+   } else {
+-    // Calculate the offset into the properties array.
+-    int offset = index * kPointerSize + FixedArray::kHeaderSize;
+-    __ ldr(dst, FieldMemOperand(src, JSObject::kPropertiesOffset));
+-    __ ldr(dst, FieldMemOperand(dst, offset));
++    // Adjust for the number of properties stored in the holder.
++    int slot = index.field_index() - holder->map()->inobject_properties();
++    if (slot < 0) {
++      // Get the property straight out of the holder.
++      int offset = holder->map()->instance_size() + (slot * kPointerSize);
++      __ ldr(dst, FieldMemOperand(src, offset));
++    } else {
++      // Calculate the offset into the properties array.
++      int offset = slot * kPointerSize + FixedArray::kHeaderSize;
++      __ ldr(dst, FieldMemOperand(src, JSObject::kPropertiesOffset));
++      __ ldr(dst, FieldMemOperand(dst, offset));
++    }
+   }
+ }
+ 
+@@ -1196,7 +1201,7 @@
+                                      Register scratch1,
+                                      Register scratch2,
+                                      Register scratch3,
+-                                     int index,
++                                     PropertyIndex index,
+                                      Handle<String> name,
+                                      Label* miss) {
+   // Check that the receiver isn't a smi.
+@@ -1545,7 +1550,7 @@
+ 
+ Handle<Code> CallStubCompiler::CompileCallField(Handle<JSObject> object,
+                                                 Handle<JSObject> holder,
+-                                                int index,
++                                                PropertyIndex index,
+                                                 Handle<String> name) {
+   // ----------- S t a t e -------------
+   //  -- r2    : name
+@@ -2912,7 +2917,7 @@
+ 
+ Handle<Code> LoadStubCompiler::CompileLoadField(Handle<JSObject> object,
+                                                 Handle<JSObject> holder,
+-                                                int index,
++                                                PropertyIndex index,
+                                                 Handle<String> name) {
+   // ----------- S t a t e -------------
+   //  -- r0    : receiver
+@@ -3101,7 +3106,7 @@
+ Handle<Code> KeyedLoadStubCompiler::CompileLoadField(Handle<String> name,
+                                                      Handle<JSObject> receiver,
+                                                      Handle<JSObject> holder,
+-                                                     int index) {
++                                                     PropertyIndex index) {
+   // ----------- S t a t e -------------
+   //  -- lr    : return address
+   //  -- r0    : key
+Index: qtjsbackend-opensource-src-5.1.1/src/3rdparty/v8/src/bootstrapper.cc
+===================================================================
+--- qtjsbackend-opensource-src-5.1.1.orig/src/3rdparty/v8/src/bootstrapper.cc	2013-08-25 18:04:16.000000000 +0000
++++ qtjsbackend-opensource-src-5.1.1/src/3rdparty/v8/src/bootstrapper.cc	2014-04-18 21:09:17.744748007 +0000
+@@ -1086,11 +1086,11 @@
+     LookupResult lookup(isolate);
+     result->LocalLookup(heap->callee_symbol(), &lookup);
+     ASSERT(lookup.IsField());
+-    ASSERT(lookup.GetFieldIndex() == Heap::kArgumentsCalleeIndex);
++    ASSERT(lookup.GetFieldIndex().field_index() == Heap::kArgumentsCalleeIndex);
+ 
+     result->LocalLookup(heap->length_symbol(), &lookup);
+     ASSERT(lookup.IsField());
+-    ASSERT(lookup.GetFieldIndex() == Heap::kArgumentsLengthIndex);
++    ASSERT(lookup.GetFieldIndex().field_index() == Heap::kArgumentsLengthIndex);
+ 
+     ASSERT(result->map()->inobject_properties() > Heap::kArgumentsCalleeIndex);
+     ASSERT(result->map()->inobject_properties() > Heap::kArgumentsLengthIndex);
+@@ -1188,7 +1188,7 @@
+     LookupResult lookup(isolate);
+     result->LocalLookup(heap->length_symbol(), &lookup);
+     ASSERT(lookup.IsField());
+-    ASSERT(lookup.GetFieldIndex() == Heap::kArgumentsLengthIndex);
++    ASSERT(lookup.GetFieldIndex().field_index() == Heap::kArgumentsLengthIndex);
+ 
+     ASSERT(result->map()->inobject_properties() > Heap::kArgumentsLengthIndex);
+ 
+Index: qtjsbackend-opensource-src-5.1.1/src/3rdparty/v8/src/ia32/stub-cache-ia32.cc
+===================================================================
+--- qtjsbackend-opensource-src-5.1.1.orig/src/3rdparty/v8/src/ia32/stub-cache-ia32.cc	2013-08-25 18:04:18.000000000 +0000
++++ qtjsbackend-opensource-src-5.1.1/src/3rdparty/v8/src/ia32/stub-cache-ia32.cc	2014-04-18 21:09:17.748748007 +0000
+@@ -376,18 +376,23 @@
+                                             Register dst,
+                                             Register src,
+                                             Handle<JSObject> holder,
+-                                            int index) {
+-  // Adjust for the number of properties stored in the holder.
+-  index -= holder->map()->inobject_properties();
+-  if (index < 0) {
+-    // Get the property straight out of the holder.
+-    int offset = holder->map()->instance_size() + (index * kPointerSize);
++                                            PropertyIndex index) {
++  if (index.is_header_index()) {
++    int offset = index.header_index() * kPointerSize;
+     __ mov(dst, FieldOperand(src, offset));
+   } else {
+-    // Calculate the offset into the properties array.
+-    int offset = index * kPointerSize + FixedArray::kHeaderSize;
+-    __ mov(dst, FieldOperand(src, JSObject::kPropertiesOffset));
+-    __ mov(dst, FieldOperand(dst, offset));
++    // Adjust for the number of properties stored in the holder.
++    int slot = index.field_index() - holder->map()->inobject_properties();
++    if (slot < 0) {
++      // Get the property straight out of the holder.
++      int offset = holder->map()->instance_size() + (slot * kPointerSize);
++      __ mov(dst, FieldOperand(src, offset));
++    } else {
++      // Calculate the offset into the properties array.
++      int offset = slot * kPointerSize + FixedArray::kHeaderSize;
++      __ mov(dst, FieldOperand(src, JSObject::kPropertiesOffset));
++      __ mov(dst, FieldOperand(dst, offset));
++    }
+   }
+ }
+ 
+@@ -1036,7 +1041,7 @@
+                                      Register scratch1,
+                                      Register scratch2,
+                                      Register scratch3,
+-                                     int index,
++                                     PropertyIndex index,
+                                      Handle<String> name,
+                                      Label* miss) {
+   // Check that the receiver isn't a smi.
+@@ -1423,7 +1428,7 @@
+ 
+ Handle<Code> CallStubCompiler::CompileCallField(Handle<JSObject> object,
+                                                 Handle<JSObject> holder,
+-                                                int index,
++                                                PropertyIndex index,
+                                                 Handle<String> name) {
+   // ----------- S t a t e -------------
+   //  -- ecx                 : name
+@@ -2956,7 +2961,7 @@
+ 
+ Handle<Code> LoadStubCompiler::CompileLoadField(Handle<JSObject> object,
+                                                 Handle<JSObject> holder,
+-                                                int index,
++                                                PropertyIndex index,
+                                                 Handle<String> name) {
+   // ----------- S t a t e -------------
+   //  -- ecx    : name
+@@ -3156,7 +3161,7 @@
+ Handle<Code> KeyedLoadStubCompiler::CompileLoadField(Handle<String> name,
+                                                      Handle<JSObject> receiver,
+                                                      Handle<JSObject> holder,
+-                                                     int index) {
++                                                     PropertyIndex index) {
+   // ----------- S t a t e -------------
+   //  -- ecx    : key
+   //  -- edx    : receiver
+Index: qtjsbackend-opensource-src-5.1.1/src/3rdparty/v8/src/ic.cc
+===================================================================
+--- qtjsbackend-opensource-src-5.1.1.orig/src/3rdparty/v8/src/ic.cc	2013-08-25 18:04:17.000000000 +0000
++++ qtjsbackend-opensource-src-5.1.1/src/3rdparty/v8/src/ic.cc	2014-04-18 21:09:17.748748007 +0000
+@@ -646,7 +646,7 @@
+   Handle<JSObject> holder(lookup->holder());
+   switch (lookup->type()) {
+     case FIELD: {
+-      int index = lookup->GetFieldIndex();
++      PropertyIndex index = lookup->GetFieldIndex();
+       return isolate()->stub_cache()->ComputeCallField(
+           argc, kind_, extra_state, name, object, holder, index);
+     }
+@@ -1471,11 +1471,9 @@
+   Handle<Code> code;
+   switch (type) {
+     case FIELD:
+-      code = isolate()->stub_cache()->ComputeStoreField(name,
+-                                                        receiver,
+-                                                        lookup->GetFieldIndex(),
+-                                                        Handle<Map>::null(),
+-                                                        strict_mode);
++      code = isolate()->stub_cache()->ComputeStoreField(
++          name, receiver, lookup->GetFieldIndex().field_index(),
++          Handle<Map>::null(), strict_mode);
+       break;
+     case NORMAL:
+       if (receiver->IsGlobalObject()) {
+@@ -1985,7 +1983,7 @@
+   switch (type) {
+     case FIELD:
+       code = isolate()->stub_cache()->ComputeKeyedStoreField(
+-          name, receiver, lookup->GetFieldIndex(),
++          name, receiver, lookup->GetFieldIndex().field_index(),
+           Handle<Map>::null(), strict_mode);
+       break;
+     case TRANSITION: {
+Index: qtjsbackend-opensource-src-5.1.1/src/3rdparty/v8/src/json-stringifier.h
+===================================================================
+--- qtjsbackend-opensource-src-5.1.1.orig/src/3rdparty/v8/src/json-stringifier.h	2013-08-25 18:04:17.000000000 +0000
++++ qtjsbackend-opensource-src-5.1.1/src/3rdparty/v8/src/json-stringifier.h	2014-04-18 21:09:17.748748007 +0000
+@@ -274,7 +274,8 @@
+       return Handle<Object>(value, isolate_);
+     }
+     case FIELD: {
+-      Object* value = lookup.holder()->FastPropertyAt(lookup.GetFieldIndex());
++      Object* value = lookup.holder()->FastPropertyAt(
++          lookup.GetFieldIndex().field_index());
+       ASSERT(!value->IsTheHole());
+       return Handle<Object>(value, isolate_);
+     }
+Index: qtjsbackend-opensource-src-5.1.1/src/3rdparty/v8/src/mips/stub-cache-mips.cc
+===================================================================
+--- qtjsbackend-opensource-src-5.1.1.orig/src/3rdparty/v8/src/mips/stub-cache-mips.cc	2014-04-18 21:06:22.000000000 +0000
++++ qtjsbackend-opensource-src-5.1.1/src/3rdparty/v8/src/mips/stub-cache-mips.cc	2014-04-18 21:09:17.748748007 +0000
+@@ -314,18 +314,23 @@
+                                             Register dst,
+                                             Register src,
+                                             Handle<JSObject> holder,
+-                                            int index) {
+-  // Adjust for the number of properties stored in the holder.
+-  index -= holder->map()->inobject_properties();
+-  if (index < 0) {
+-    // Get the property straight out of the holder.
+-    int offset = holder->map()->instance_size() + (index * kPointerSize);
++                                            PropertyIndex index) {
++  if (index.is_header_index()) {
++    int offset = index.header_index() * kPointerSize;
+     __ lw(dst, FieldMemOperand(src, offset));
+   } else {
+-    // Calculate the offset into the properties array.
+-    int offset = index * kPointerSize + FixedArray::kHeaderSize;
+-    __ lw(dst, FieldMemOperand(src, JSObject::kPropertiesOffset));
+-    __ lw(dst, FieldMemOperand(dst, offset));
++    // Adjust for the number of properties stored in the holder.
++    int slot = index.field_index() - holder->map()->inobject_properties();
++    if (slot < 0) {
++      // Get the property straight out of the holder.
++      int offset = holder->map()->instance_size() + (slot * kPointerSize);
++      __ lw(dst, FieldMemOperand(src, offset));
++    } else {
++      // Calculate the offset into the properties array.
++      int offset = slot * kPointerSize + FixedArray::kHeaderSize;
++      __ lw(dst, FieldMemOperand(src, JSObject::kPropertiesOffset));
++      __ lw(dst, FieldMemOperand(dst, offset));
++    }
+   }
+ }
+ 
+@@ -1200,7 +1205,7 @@
+                                      Register scratch1,
+                                      Register scratch2,
+                                      Register scratch3,
+-                                     int index,
++                                     PropertyIndex index,
+                                      Handle<String> name,
+                                      Label* miss) {
+   // Check that the receiver isn't a smi.
+Index: qtjsbackend-opensource-src-5.1.1/src/3rdparty/v8/src/objects.cc
+===================================================================
+--- qtjsbackend-opensource-src-5.1.1.orig/src/3rdparty/v8/src/objects.cc	2013-08-25 18:04:17.000000000 +0000
++++ qtjsbackend-opensource-src-5.1.1/src/3rdparty/v8/src/objects.cc	2014-04-18 21:09:17.752748005 +0000
+@@ -641,7 +641,8 @@
+       ASSERT(!value->IsTheHole() || result->IsReadOnly());
+       return value->IsTheHole() ? heap->undefined_value() : value;
+     case FIELD:
+-      value = result->holder()->FastPropertyAt(result->GetFieldIndex());
++      value = result->holder()->FastPropertyAt(
++          result->GetFieldIndex().field_index());
+       ASSERT(!value->IsTheHole() || result->IsReadOnly());
+       return value->IsTheHole() ? heap->undefined_value() : value;
+     case CONSTANT_FUNCTION:
+@@ -2439,7 +2440,7 @@
+     // occur as fields.
+     if (result->IsField() &&
+         result->IsReadOnly() &&
+-        FastPropertyAt(result->GetFieldIndex())->IsTheHole()) {
++        FastPropertyAt(result->GetFieldIndex().field_index())->IsTheHole()) {
+       result->DisallowCaching();
+     }
+     return;
+@@ -2932,7 +2933,8 @@
+       result = self->SetNormalizedProperty(lookup, *value);
+       break;
+     case FIELD:
+-      result = self->FastPropertyAtPut(lookup->GetFieldIndex(), *value);
++      result = self->FastPropertyAtPut(
++          lookup->GetFieldIndex().field_index(), *value);
+       break;
+     case CONSTANT_FUNCTION:
+       // Only replace the function if necessary.
+@@ -3098,7 +3100,8 @@
+       break;
+     }
+     case FIELD:
+-      result = self->FastPropertyAtPut(lookup.GetFieldIndex(), *value);
++      result = self->FastPropertyAtPut(
++          lookup.GetFieldIndex().field_index(), *value);
+       break;
+     case CONSTANT_FUNCTION:
+       // Only replace the function if necessary.
+Index: qtjsbackend-opensource-src-5.1.1/src/3rdparty/v8/src/property.cc
+===================================================================
+--- qtjsbackend-opensource-src-5.1.1.orig/src/3rdparty/v8/src/property.cc	2013-08-25 18:04:17.000000000 +0000
++++ qtjsbackend-opensource-src-5.1.1/src/3rdparty/v8/src/property.cc	2014-04-18 21:11:35.924748542 +0000
+@@ -63,7 +63,7 @@
+       break;
+     case FIELD:
+       FPrintF(out, " -type = field\n");
+-      FPrintF(out, " -index = %d", GetFieldIndex());
++      FPrintF(out, " -index = %d", GetFieldIndex().field_index());
+       FPrintF(out, "\n");
+       break;
+     case CALLBACKS:
+Index: qtjsbackend-opensource-src-5.1.1/src/3rdparty/v8/src/property.h
+===================================================================
+--- qtjsbackend-opensource-src-5.1.1.orig/src/3rdparty/v8/src/property.h	2013-08-25 18:04:18.000000000 +0000
++++ qtjsbackend-opensource-src-5.1.1/src/3rdparty/v8/src/property.h	2014-04-18 21:09:17.752748005 +0000
+@@ -132,6 +132,44 @@
+ };
+ 
+ 
++// Holds a property index value distinguishing if it is a field index or an
++// index inside the object header.
++class PropertyIndex {
++ public:
++  static PropertyIndex NewFieldIndex(int index) {
++    return PropertyIndex(index, false);
++  }
++  static PropertyIndex NewHeaderIndex(int index) {
++    return PropertyIndex(index, true);
++  }
++
++  bool is_field_index() { return (index_ & kHeaderIndexBit) == 0; }
++  bool is_header_index() { return (index_ & kHeaderIndexBit) != 0; }
++
++  int field_index() {
++    ASSERT(is_field_index());
++    return value();
++  }
++  int header_index() {
++    ASSERT(is_header_index());
++    return value();
++  }
++
++ private:
++  static const int kHeaderIndexBit = 1 << 31;
++  static const int kIndexMask = ~kHeaderIndexBit;
++
++  int value() { return index_ & kIndexMask; }
++
++  PropertyIndex(int index, bool is_header_based)
++      : index_(index | (is_header_based ? kHeaderIndexBit : 0)) {
++    ASSERT(index <= kIndexMask);
++  }
++
++  int index_;
++};
++
++
+ class LookupResult BASE_EMBEDDED {
+  public:
+   explicit LookupResult(Isolate* isolate)
+@@ -278,7 +316,7 @@
+   Object* GetLazyValue() {
+     switch (type()) {
+       case FIELD:
+-        return holder()->FastPropertyAt(GetFieldIndex());
++        return holder()->FastPropertyAt(GetFieldIndex().field_index());
+       case NORMAL: {
+         Object* value;
+         value = holder()->property_dictionary()->ValueAt(GetDictionaryEntry());
+@@ -334,10 +372,11 @@
+     return number_;
+   }
+ 
+-  int GetFieldIndex() {
++  PropertyIndex GetFieldIndex() {
+     ASSERT(lookup_type_ == DESCRIPTOR_TYPE);
+     ASSERT(IsField());
+-    return Descriptor::IndexFromValue(GetValue());
++    return PropertyIndex::NewFieldIndex(
++        Descriptor::IndexFromValue(GetValue()));
+   }
+ 
+   int GetLocalFieldIndexFromMap(Map* map) {
+Index: qtjsbackend-opensource-src-5.1.1/src/3rdparty/v8/src/runtime.cc
+===================================================================
+--- qtjsbackend-opensource-src-5.1.1.orig/src/3rdparty/v8/src/runtime.cc	2013-08-25 18:04:17.000000000 +0000
++++ qtjsbackend-opensource-src-5.1.1/src/3rdparty/v8/src/runtime.cc	2014-04-18 21:09:17.752748005 +0000
+@@ -1698,7 +1698,7 @@
+   // Strict mode handling not needed (const is disallowed in strict mode).
+   if (lookup.IsField()) {
+     FixedArray* properties = global->properties();
+-    int index = lookup.GetFieldIndex();
++    int index = lookup.GetFieldIndex().field_index();
+     if (properties->get(index)->IsTheHole() || !lookup.IsReadOnly()) {
+       properties->set(index, *value);
+     }
+@@ -1788,7 +1788,7 @@
+ 
+     if (lookup.IsField()) {
+       FixedArray* properties = object->properties();
+-      int index = lookup.GetFieldIndex();
++      int index = lookup.GetFieldIndex().field_index();
+       if (properties->get(index)->IsTheHole()) {
+         properties->set(index, *value);
+       }
+@@ -4095,7 +4095,7 @@
+         LookupResult result(isolate);
+         receiver->LocalLookup(key, &result);
+         if (result.IsField()) {
+-          int offset = result.GetFieldIndex();
++          int offset = result.GetFieldIndex().field_index();
+           keyed_lookup_cache->Update(receiver_map, key, offset);
+           return receiver->FastPropertyAt(offset);
+         }
+@@ -4269,7 +4269,8 @@
+     case NORMAL:
+       return lookup.holder()->GetNormalizedProperty(&lookup);
+     case FIELD:
+-      return lookup.holder()->FastPropertyAt(lookup.GetFieldIndex());
++      return lookup.holder()->FastPropertyAt(
++          lookup.GetFieldIndex().field_index());
+     case CONSTANT_FUNCTION:
+       return lookup.GetConstantFunction();
+     case CALLBACKS:
+@@ -10057,8 +10058,8 @@
+       return value;
+     case FIELD:
+       value =
+-          JSObject::cast(
+-              result->holder())->FastPropertyAt(result->GetFieldIndex());
++          JSObject::cast(result->holder())->FastPropertyAt(
++              result->GetFieldIndex().field_index());
+       if (value->IsTheHole()) {
+         return heap->undefined_value();
+       }
+Index: qtjsbackend-opensource-src-5.1.1/src/3rdparty/v8/src/stub-cache.cc
+===================================================================
+--- qtjsbackend-opensource-src-5.1.1.orig/src/3rdparty/v8/src/stub-cache.cc	2013-08-25 18:04:18.000000000 +0000
++++ qtjsbackend-opensource-src-5.1.1/src/3rdparty/v8/src/stub-cache.cc	2014-04-18 21:09:17.752748005 +0000
+@@ -136,7 +136,7 @@
+ Handle<Code> StubCache::ComputeLoadField(Handle<String> name,
+                                          Handle<JSObject> receiver,
+                                          Handle<JSObject> holder,
+-                                         int field_index) {
++                                         PropertyIndex field_index) {
+   ASSERT(IC::GetCodeCacheForObject(*receiver, *holder) == OWN_MAP);
+   Code::Flags flags = Code::ComputeMonomorphicFlags(Code::LOAD_IC, Code::FIELD);
+   Handle<Object> probe(receiver->map()->FindInCodeCache(*name, flags));
+@@ -261,7 +261,7 @@
+ Handle<Code> StubCache::ComputeKeyedLoadField(Handle<String> name,
+                                               Handle<JSObject> receiver,
+                                               Handle<JSObject> holder,
+-                                              int field_index) {
++                                              PropertyIndex field_index) {
+   ASSERT(IC::GetCodeCacheForObject(*receiver, *holder) == OWN_MAP);
+   Code::Flags flags =
+       Code::ComputeMonomorphicFlags(Code::KEYED_LOAD_IC, Code::FIELD);
+@@ -632,7 +632,7 @@
+                                          Handle<String> name,
+                                          Handle<Object> object,
+                                          Handle<JSObject> holder,
+-                                         int index) {
++                                         PropertyIndex index) {
+   // Compute the check type and the map.
+   InlineCacheHolderFlag cache_holder =
+       IC::GetCodeCacheForObject(*object, *holder);
+Index: qtjsbackend-opensource-src-5.1.1/src/3rdparty/v8/src/stub-cache.h
+===================================================================
+--- qtjsbackend-opensource-src-5.1.1.orig/src/3rdparty/v8/src/stub-cache.h	2013-08-25 18:04:16.000000000 +0000
++++ qtjsbackend-opensource-src-5.1.1/src/3rdparty/v8/src/stub-cache.h	2014-04-18 21:09:17.756748003 +0000
+@@ -83,7 +83,7 @@
+   Handle<Code> ComputeLoadField(Handle<String> name,
+                                 Handle<JSObject> receiver,
+                                 Handle<JSObject> holder,
+-                                int field_index);
++                                PropertyIndex field_index);
+ 
+   Handle<Code> ComputeLoadCallback(Handle<String> name,
+                                    Handle<JSObject> receiver,
+@@ -117,7 +117,7 @@
+   Handle<Code> ComputeKeyedLoadField(Handle<String> name,
+                                      Handle<JSObject> receiver,
+                                      Handle<JSObject> holder,
+-                                     int field_index);
++                                     PropertyIndex field_index);
+ 
+   Handle<Code> ComputeKeyedLoadCallback(Handle<String> name,
+                                         Handle<JSObject> receiver,
+@@ -193,7 +193,7 @@
+                                 Handle<String> name,
+                                 Handle<Object> object,
+                                 Handle<JSObject> holder,
+-                                int index);
++                                PropertyIndex index);
+ 
+   Handle<Code> ComputeCallConstant(int argc,
+                                    Code::Kind,
+@@ -454,7 +454,7 @@
+                                        Register dst,
+                                        Register src,
+                                        Handle<JSObject> holder,
+-                                       int index);
++                                       PropertyIndex index);
+ 
+   static void GenerateLoadArrayLength(MacroAssembler* masm,
+                                       Register receiver,
+@@ -541,7 +541,7 @@
+                          Register scratch1,
+                          Register scratch2,
+                          Register scratch3,
+-                         int index,
++                         PropertyIndex index,
+                          Handle<String> name,
+                          Label* miss);
+ 
+@@ -612,7 +612,7 @@
+ 
+   Handle<Code> CompileLoadField(Handle<JSObject> object,
+                                 Handle<JSObject> holder,
+-                                int index,
++                                PropertyIndex index,
+                                 Handle<String> name);
+ 
+   Handle<Code> CompileLoadCallback(Handle<String> name,
+@@ -655,7 +655,7 @@
+   Handle<Code> CompileLoadField(Handle<String> name,
+                                 Handle<JSObject> object,
+                                 Handle<JSObject> holder,
+-                                int index);
++                                PropertyIndex index);
+ 
+   Handle<Code> CompileLoadCallback(Handle<String> name,
+                                    Handle<JSObject> object,
+@@ -804,7 +804,7 @@
+ 
+   Handle<Code> CompileCallField(Handle<JSObject> object,
+                                 Handle<JSObject> holder,
+-                                int index,
++                                PropertyIndex index,
+                                 Handle<String> name);
+ 
+   Handle<Code> CompileCallConstant(Handle<Object> object,
+Index: qtjsbackend-opensource-src-5.1.1/src/3rdparty/v8/src/x64/stub-cache-x64.cc
+===================================================================
+--- qtjsbackend-opensource-src-5.1.1.orig/src/3rdparty/v8/src/x64/stub-cache-x64.cc	2013-08-25 18:04:17.000000000 +0000
++++ qtjsbackend-opensource-src-5.1.1/src/3rdparty/v8/src/x64/stub-cache-x64.cc	2014-04-18 21:09:17.756748003 +0000
+@@ -350,18 +350,23 @@
+                                             Register dst,
+                                             Register src,
+                                             Handle<JSObject> holder,
+-                                            int index) {
+-  // Adjust for the number of properties stored in the holder.
+-  index -= holder->map()->inobject_properties();
+-  if (index < 0) {
+-    // Get the property straight out of the holder.
+-    int offset = holder->map()->instance_size() + (index * kPointerSize);
++                                            PropertyIndex index) {
++  if (index.is_header_index()) {
++    int offset = index.header_index() * kPointerSize;
+     __ movq(dst, FieldOperand(src, offset));
+   } else {
+-    // Calculate the offset into the properties array.
+-    int offset = index * kPointerSize + FixedArray::kHeaderSize;
+-    __ movq(dst, FieldOperand(src, JSObject::kPropertiesOffset));
+-    __ movq(dst, FieldOperand(dst, offset));
++    // Adjust for the number of properties stored in the holder.
++    int slot = index.field_index() - holder->map()->inobject_properties();
++    if (slot < 0) {
++      // Get the property straight out of the holder.
++      int offset = holder->map()->instance_size() + (slot * kPointerSize);
++      __ movq(dst, FieldOperand(src, offset));
++    } else {
++      // Calculate the offset into the properties array.
++      int offset = slot * kPointerSize + FixedArray::kHeaderSize;
++      __ movq(dst, FieldOperand(src, JSObject::kPropertiesOffset));
++      __ movq(dst, FieldOperand(dst, offset));
++    }
+   }
+ }
+ 
+@@ -1013,7 +1018,7 @@
+                                      Register scratch1,
+                                      Register scratch2,
+                                      Register scratch3,
+-                                     int index,
++                                     PropertyIndex index,
+                                      Handle<String> name,
+                                      Label* miss) {
+   // Check that the receiver isn't a smi.
+@@ -1388,7 +1393,7 @@
+ 
+ Handle<Code> CallStubCompiler::CompileCallField(Handle<JSObject> object,
+                                                 Handle<JSObject> holder,
+-                                                int index,
++                                                PropertyIndex index,
+                                                 Handle<String> name) {
+   // ----------- S t a t e -------------
+   // rcx                 : function name
+@@ -2780,7 +2785,7 @@
+ 
+ Handle<Code> LoadStubCompiler::CompileLoadField(Handle<JSObject> object,
+                                                 Handle<JSObject> holder,
+-                                                int index,
++                                                PropertyIndex index,
+                                                 Handle<String> name) {
+   // ----------- S t a t e -------------
+   //  -- rax    : receiver
+@@ -2973,7 +2978,7 @@
+ Handle<Code> KeyedLoadStubCompiler::CompileLoadField(Handle<String> name,
+                                                      Handle<JSObject> receiver,
+                                                      Handle<JSObject> holder,
+-                                                     int index) {
++                                                     PropertyIndex index) {
+   // ----------- S t a t e -------------
+   //  -- rax     : key
+   //  -- rdx     : receiver

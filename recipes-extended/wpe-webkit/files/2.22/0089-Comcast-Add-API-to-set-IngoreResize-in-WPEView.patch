@@ -1,0 +1,104 @@
+From 21bd72dca6f101e36a58df5135cb3962b6ddb069 Mon Sep 17 00:00:00 2001
+From: Ievgen Mutavchi <Ievgen_Mutavchi@comcast.com>
+Date: Sun, 26 Apr 2020 11:57:10 -0400
+Subject: [PATCH 78/93] [Comcast] Add API to set IngoreResize in WPEView
+Source: COMCAST
+License: GPLV2
+Upstream-Status: None
+Signed-off-by: Eugene Mutavchi <Ievgen_Mutavchi@comcast.com>
+
+---
+ Source/WebKit/UIProcess/API/C/wpe/WKView.cpp | 10 ++++++++++
+ Source/WebKit/UIProcess/API/C/wpe/WKView.h   |  2 ++
+ Source/WebKit/UIProcess/API/wpe/WPEView.cpp  | 14 ++++++++++++--
+ Source/WebKit/UIProcess/API/wpe/WPEView.h    |  3 +++
+ 4 files changed, 27 insertions(+), 2 deletions(-)
+
+Index: git/Source/WebKit/UIProcess/API/C/wpe/WKView.cpp
+===================================================================
+--- git.orig/Source/WebKit/UIProcess/API/C/wpe/WKView.cpp
++++ git/Source/WebKit/UIProcess/API/C/wpe/WKView.cpp
+@@ -60,6 +60,16 @@ void WKViewSetViewState(WKViewRef view,
+     toImpl(view)->setViewState(toViewStateFlags(viewState));
+ }
+ 
++void WKViewSetIgnoreResize(WKViewRef view, bool ignoreResize)
++{
++    toImpl(view)->setIgnoreResize(ignoreResize);
++}
++
++bool WKViewGetIgnoreResize(WKViewRef view)
++{
++    return toImpl(view)->ignoreResize();
++}
++
+ void WKViewSetViewClient(WKViewRef view, const WKViewClientBase* client)
+ {
+     class ViewClient final : public API::Client<WKViewClientBase>, public API::ViewClient {
+Index: git/Source/WebKit/UIProcess/API/C/wpe/WKView.h
+===================================================================
+--- git.orig/Source/WebKit/UIProcess/API/C/wpe/WKView.h
++++ git/Source/WebKit/UIProcess/API/C/wpe/WKView.h
+@@ -48,6 +48,8 @@ enum {
+ typedef uint32_t WKViewState;
+ 
+ WK_EXPORT void WKViewSetViewState(WKViewRef, WKViewState);
++WK_EXPORT void WKViewSetIgnoreResize(WKViewRef, bool);
++WK_EXPORT bool WKViewGetIgnoreResize(WKViewRef);
+ 
+ typedef void (*WKViewFrameDisplayed)(WKViewRef view, const void* clientInfo);
+ 
+Index: git/Source/WebKit/UIProcess/API/wpe/WPEView.cpp
+===================================================================
+--- git.orig/Source/WebKit/UIProcess/API/wpe/WPEView.cpp
++++ git/Source/WebKit/UIProcess/API/wpe/WPEView.cpp
+@@ -174,9 +174,13 @@ void View::handleDownloadRequest(Downloa
+ 
+ void View::setSize(const WebCore::IntSize& size)
+ {
+-    m_size = size;
++    if (m_ignoreResize)
++        m_size = WebCore::IntSize(1280, 720);
++    else
++        m_size = size;
++
+     if (m_pageProxy->drawingArea())
+-        m_pageProxy->drawingArea()->setSize(size);
++        m_pageProxy->drawingArea()->setSize(m_size);
+ }
+ 
+ void View::setViewState(OptionSet<WebCore::ActivityState::Flag> flags)
+@@ -190,6 +194,12 @@ void View::setViewState(OptionSet<WebCor
+         m_pageProxy->activityStateDidChange(changedFlags);
+ }
+ 
++void View::setIgnoreResize(bool ignoreResize)
++{
++    m_ignoreResize = ignoreResize;
++    fprintf(stderr, "WPEView will %s view port resize\n", ignoreResize ? "ignore" : "respect");
++}
++
+ void View::close()
+ {
+     m_pageProxy->close();
+Index: git/Source/WebKit/UIProcess/API/wpe/WPEView.h
+===================================================================
+--- git.orig/Source/WebKit/UIProcess/API/wpe/WPEView.h
++++ git/Source/WebKit/UIProcess/API/wpe/WPEView.h
+@@ -70,6 +70,8 @@ public:
+ 
+     OptionSet<WebCore::ActivityState::Flag> viewState() const { return m_viewStateFlags; }
+     void setViewState(OptionSet<WebCore::ActivityState::Flag>);
++    bool ignoreResize() const { return m_ignoreResize; }
++    void setIgnoreResize(bool);
+ 
+     void close();
+ 
+@@ -88,6 +90,7 @@ private:
+     std::unique_ptr<WebKit::PageClientImpl> m_pageClient;
+     RefPtr<WebKit::WebPageProxy> m_pageProxy;
+     WebCore::IntSize m_size;
++    bool m_ignoreResize { false };
+     OptionSet<WebCore::ActivityState::Flag> m_viewStateFlags;
+ 
+     WebKit::CompositingManagerProxy m_compositingManagerProxy;

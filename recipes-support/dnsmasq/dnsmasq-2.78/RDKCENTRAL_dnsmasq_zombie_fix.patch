@@ -1,0 +1,36 @@
+Date: Jun 19 19:32:24 2019
+
+From: 5ffbed50ca165e1251d1a09e84b6d6843e026296 Jul 09 16:57:55 2019
+
+Subject: [PATCH] RDKB-23039:DNSMASQ Zombie
+
+	In problem case we are seeing PARENT and CHILD processes are getting accessing the common resource.
+	That causing to Child process to die with may be SIGPIPE, which is ignored by parent causing the child proces to get into Zombie.
+	To mitigate this problem we are introducing 100ms delay in parent process.
+	For the actual fix, we are going to introduce proper locking mechanism for common resources.
+
+Source: COMCAST
+
+License: GPL-2.0-or-later
+
+Upstream-Status: Pending
+
+Signed-off-by: Ravi <ravi_veldanda@comcast.com>
+---
+
+
+--- dnsmasq-2.78.orig/src/dnsmasq.c	2019-06-19 18:38:05.099371225 +0000
++++ dnsmasq-2.78/src/dnsmasq.c	2019-06-19 18:40:23.662383632 +0000
+@@ -1664,6 +1664,12 @@
+ 			break;
+ 		      }
+ 		}
++        /* In problem case we are seeing PARENT and CHILD processes are getting accessing the common resource
++        * That causing to Child process to die with may be SIGPIPE, which is ignored by parent causing the child
++        * proces to get into Zombie. To mitigate this problem we are introducing 100ms delay in parent process.
++        * For the actual fix, we are going to introduce proper locking mechanism for common resources. */
++	      my_syslog(LOG_INFO,"%s:%d Sleeping in parent for pid %d",__FUNCTION__,__LINE__,p);
++          usleep(100000);        
+ 	      while (retry_send(close(confd)));
+ 
+ 	      /* The child can use up to TCP_MAX_QUERIES ids, so skip that many. */

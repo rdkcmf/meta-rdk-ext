@@ -1,0 +1,46 @@
+Date: Tue, 22 Mar 2016 12:33:15 +0200
+
+From: 34a0a535595f648599a7c4fb500c898a85f6af93 Mon Sep 17 00:00:00 2001
+
+Subject: [PATCH] WKIT-477: check if 'crypto_info' is available before using it
+
+	Fix crash
+
+Source: COMCAST
+
+License: LGPL-2.1-or-later
+
+Upstream-Status: Pending
+
+Signed-off-by: Eugene Mutavchi <Ievgen_Mutavchi@comcast.com>
+
+---
+
+ gst/isomp4/qtdemux.c | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/gst/isomp4/qtdemux.c b/gst/isomp4/qtdemux.c
+index af13b87..9222e06 100644
+--- a/gst/isomp4/qtdemux.c
++++ b/gst/isomp4/qtdemux.c
+@@ -5121,7 +5121,7 @@ gst_qtdemux_decorate_and_push_buffer (GstQTDemux * qtdemux,
+       gst_pad_push_event (stream->pad, event);
+     }
+ 
+-    index = stream->sample_index - (stream->n_samples - info->crypto_info->len);
++    index = info->crypto_info ? stream->sample_index - (stream->n_samples - info->crypto_info->len) : -1;
+     if (G_LIKELY (index >= 0 && index < info->crypto_info->len)) {
+       /* steal structure from array */
+       crypto_info = g_ptr_array_index (info->crypto_info, index);
+@@ -5129,6 +5129,8 @@ gst_qtdemux_decorate_and_push_buffer (GstQTDemux * qtdemux,
+       GST_LOG_OBJECT (qtdemux, "attaching cenc metadata [%u]", index);
+       if (!crypto_info || !gst_buffer_add_protection_meta (buf, crypto_info))
+         GST_ERROR_OBJECT (qtdemux, "failed to attach cenc metadata to buffer");
++    } else {
++        GST_ERROR_OBJECT (qtdemux, "no cenc metadata to be attached to buffer");
+     }
+   }
+ 
+-- 
+2.1.4
+

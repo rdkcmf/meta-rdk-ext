@@ -1,0 +1,116 @@
+#!/bin/sh
+
+# udhcpc script edited by Tim Riker <Tim@Rikers.org>
+# Further modified by ganesh <Ganesh_Kumar@comcast.com> under DELIA-33637: Using nlmon instead of dhcp hooks
+
+[ -z "$1" ] && echo "Error: should be called from udhcpc" && exit 1
+
+RESOLV_CONF="/etc/resolv.dnsmasq"
+[ -n "$broadcast" ] && BROADCAST="broadcast $broadcast"
+[ -n "$subnet" ] && NETMASK="netmask $subnet"
+
+# return 0 if root is mounted on a network filesystem
+root_is_nfs() {
+	sed -n 's/^[^ ]* \([^ ]*\) \([^ ]*\) .*$/\1 \2/p' /proc/mounts |
+	grep -q "^/ \(nfs\|smbfs\|ncp\|coda\)$"
+}
+
+have_bin_ip=0
+if [ -x /sbin/ip ]; then
+  have_bin_ip=1
+fi
+
+if [ -f /etc/device.properties ];then
+     . /etc/device.properties
+fi
+
+case "$1" in
+	deconfig)
+		if [ -x /sbin/resolvconf ]; then
+			/sbin/resolvconf -d "${interface}.udhcpc"
+		fi
+		if ! root_is_nfs ; then
+                        if [ $have_bin_ip -eq 1 ]; then
+                                if [[ "$interface" = *:* ]]; then
+                                	# aliases (e.g. pci0:0) don't like to be called 0.0.0.0
+                                        /sbin/ifconfig $interface 127.0.0.2
+                                else
+                                	#ip addr flush dev $interface
+                                	#ip link set dev $interface up
+					/sbin/ifconfig $interface 0.0.0.0
+					if [ "$interface" = "pci0" ]; then
+						/sbin/ifconfig pci0:0 192.168.17.10 netmask 255.255.255.0 up
+					fi
+				fi
+                        fi
+		fi
+		;;
+
+	renew|bound)
+                if [ $have_bin_ip -eq 1 ]; then
+                        ip addr add dev $interface local $ip/$mask $BROADCAST
+                else
+                        /sbin/ifconfig $interface $ip $BROADCAST $NETMASK
+                fi
+
+		if [ -n "$router" ] ; then
+			if ! root_is_nfs ; then
+                                if [ $have_bin_ip -eq 1 ]; then
+                                        while ip route del default 2>/dev/null ; do
+                                                :
+                                        done
+                                else
+                                        while route del default gw 0.0.0.0 dev $interface 2>/dev/null ; do
+                                                :
+                                        done
+                                fi
+			fi
+
+			metric=0
+			for i in $router ; do
+                                if [ $have_bin_ip -eq 1 ]; then
+                                        ip route add default via $i metric $metric
+                                else
+                                        route add default gw $i dev $interface metric $metric 2>/dev/null
+                                fi
+                                metric=$(($metric + 1))
+			done
+		fi
+
+		# Update resolver configuration file
+		R=""
+		[ -n "$domain" ] && R="search $domain
+"
+		for i in $dns; do
+			echo "$0: Adding DNS $i"
+			R="${R}nameserver $i
+"
+		done
+
+		HOSTNAME=`hostname`
+		if [ -x /sbin/resolvconf ]; then
+			echo -n "$R" | /sbin/resolvconf -a "${interface}.udhcpc"
+		else
+			echo -n "$R" > "$RESOLV_CONF"
+                        echo "$ip $HOSTNAME" >> /etc/hosts
+		fi
+                echo "DNS Entries..."
+                cat $RESOLV_CONF
+                echo "Route Entries..."
+                route -n
+
+		CURRENT_IP=`/sbin/ifconfig $ESTB_INTERFACE | grep 'inet addr:'| grep -v '127.0.0.1' | cut -d: -f2 | cut -d' ' -f1`
+                if [ -f /tmp/ipv4_address.txt ]; then
+                        PREVIOUS_IP=$(cat /tmp/ipv4_address.txt)
+
+                        if [ "$CURRENT_IP" != "$PREVIOUS_IP" ]; then
+                                touch /tmp/ip_address_changed
+                        	echo "$CURRENT_IP" > /tmp/ipv4_address.txt
+                        fi
+                else
+                        echo "$CURRENT_IP" > /tmp/ipv4_address.txt
+                fi
+		;;
+esac
+
+exit 0

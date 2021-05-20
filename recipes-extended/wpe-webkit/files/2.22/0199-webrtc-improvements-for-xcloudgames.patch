@@ -1,0 +1,302 @@
+From 79f7e61e7ab5ff24dd6d0fbf4d6efe3ad61f55c2 Mon Sep 17 00:00:00 2001
+From: Ievgen Mutavchi <Ievgen_Mutavchi@comcast.com>
+Date: Tue, 30 Jun 2020 12:24:05 -0400
+Subject: [PATCH] [webrtc] improvements for xcloudgames
+ - [WebRTC] Add option to configure more detailed logging
+ - [WebRTC] default to WebCore provider
+ - [WebRTC] introduce no-op encoder, needed just to signal device caps
+ - [WebRTC] don't prefer late decoding
+ - [WebRTC] don't push samples through main thread
+ - [WebRTC] configure immediate-output for mediastream
+Source: COMCAST
+License: LGPL-2.1-or-later
+Upstream-Status: None
+Signed-off-by: Ievgen Mutavchi <Ievgen_Mutavchi@comcast.com>
+---
+ .../gstreamer/MediaPlayerPrivateGStreamer.cpp      | 50 ++++++++++++++++++----
+ .../gstreamer/MediaPlayerPrivateGStreamer.h        |  1 +
+ .../RealtimeIncomingVideoSourceLibWebRTC.cpp       |  4 ++
+ .../libwebrtc/GStreamerVideoDecoderFactory.cpp     |  5 +++
+ .../libwebrtc/GStreamerVideoEncoderFactory.cpp     | 42 ++++++++++++++++++
+ .../mediastream/libwebrtc/LibWebRTCProvider.cpp    |  7 ++-
+ Source/WebKit/WebProcess/WebPage/WebPage.cpp       | 10 ++++-
+ 7 files changed, 109 insertions(+), 10 deletions(-)
+
+Index: git/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp
+===================================================================
+--- git.orig/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp
++++ git/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp
+@@ -1989,15 +1989,17 @@ void MediaPlayerPrivateGStreamer::source
+     if (WEBKIT_IS_WEB_SRC(m_source.get())) {
+         webKitWebSrcSetMediaPlayer(WEBKIT_WEB_SRC(m_source.get()), m_player);
+         g_signal_connect(GST_ELEMENT_PARENT(m_source.get()), "element-added", G_CALLBACK(uriDecodeBinElementAddedCallback), this);
++    }
++#else
++    // TODO: set HTTP headers on source element here.
++#endif
++
+ #if ENABLE(MEDIA_STREAM) && GST_CHECK_VERSION(1, 10, 0)
+-    } else if (WEBKIT_IS_MEDIA_STREAM_SRC(sourceElement)) {
++    if (WEBKIT_IS_MEDIA_STREAM_SRC(sourceElement)) {
+         auto stream = m_streamPrivate.get();
+         ASSERT(stream);
+         webkitMediaStreamSrcSetStream(WEBKIT_MEDIA_STREAM_SRC(sourceElement), stream);
+-#endif
+     }
+-#else
+-    // TODO: set HTTP headers on source element here.
+ #endif
+ }
+ 
+@@ -2851,6 +2853,7 @@ void MediaPlayerPrivateGStreamer::create
+ 
+     g_object_set(m_pipeline.get(), "mute", m_player->muted(), nullptr);
+ 
++    g_signal_connect_swapped(m_pipeline.get(), "element-setup", G_CALLBACK(elementSetupCallback), this);
+     g_signal_connect_swapped(m_pipeline.get(), "source-setup", G_CALLBACK(sourceSetupCallback), this);
+     if (m_isLegacyPlaybin) {
+         g_signal_connect_swapped(m_pipeline.get(), "video-changed", G_CALLBACK(videoChangedCallback), this);
+@@ -2897,6 +2900,10 @@ void MediaPlayerPrivateGStreamer::create
+ 
+     if (m_videoSink)
+         g_signal_connect_swapped(m_videoSink.get(), "first-video-frame-callback", G_CALLBACK(onFirstVideoFrameCallback), this);
++
++    // configure westeros sink before it allocates resources
++    if (m_videoSink)
++        elementSetupCallback(this, m_videoSink.get(), m_pipeline.get());
+ #endif
+ 
+ #if !USE(WESTEROS_SINK) && !USE(FUSION_SINK)
+@@ -2960,6 +2967,55 @@ bool MediaPlayerPrivateGStreamer::canSav
+     return false;
+ }
+ 
++void MediaPlayerPrivateGStreamer::elementSetupCallback(MediaPlayerPrivateGStreamer* player, GstElement* element, GstElement* /*pipeline*/)
++{
++    GST_DEBUG("Element set-up for %s", GST_ELEMENT_NAME(element));
++#if PLATFORM(BROADCOM)
++    if (g_str_has_prefix(GST_ELEMENT_NAME(element), "brcmaudiosink")) {
++        g_object_set(G_OBJECT(element), "async", TRUE, nullptr);
++    }
++#endif
++
++#if USE(WESTEROS_SINK)
++    static GstCaps *westerosSinkCaps = nullptr;
++    static GType westerosSinkType = G_TYPE_INVALID;
++    static std::once_flag onceFlag;
++    std::call_once(onceFlag, [] {
++        GRefPtr<GstElementFactory> westerosfactory = adoptGRef(gst_element_factory_find("westerossink"));
++        if (westerosfactory) {
++            westerosSinkType = gst_element_factory_get_element_type(westerosfactory.get());
++            for (auto *t = gst_element_factory_get_static_pad_templates(westerosfactory.get()); t != nullptr; t = g_list_next(t)) {
++               GstStaticPadTemplate *padtemplate = (GstStaticPadTemplate*)t->data;
++               if (padtemplate->direction != GST_PAD_SINK)
++                 continue;
++               if (westerosSinkCaps)
++                 westerosSinkCaps = gst_caps_merge(westerosSinkCaps, gst_static_caps_get (&padtemplate->static_caps));
++               else
++                 westerosSinkCaps = gst_static_caps_get (&padtemplate->static_caps);
++           }
++        }
++    });
++    if (G_TYPE_CHECK_INSTANCE_TYPE(G_OBJECT(element), westerosSinkType)) {
++#if ENABLE(MEDIA_STREAM)
++        if (player->m_streamPrivate != nullptr && g_object_class_find_property(G_OBJECT_GET_CLASS(element), "immediate-output")) {
++            GST_DEBUG("Enable 'immediate-output' in WesterosSink");
++            g_object_set (G_OBJECT(element), "immediate-output", TRUE, nullptr);
++        }
++#endif
++    }
++    // FIXME: Following is a hack needed to get westeros-sink working with playbin3.
++    //        Remove once XRE-15474 is fixed.
++    if (!player->m_isLegacyPlaybin && westerosSinkCaps && g_str_has_prefix(GST_ELEMENT_NAME(element), "decodebin3")) {
++        GstCaps* defaultCaps = nullptr;
++        g_object_get (element, "caps", &defaultCaps, NULL);
++        defaultCaps = gst_caps_merge(defaultCaps, gst_caps_ref(westerosSinkCaps));
++        g_object_set (element, "caps", defaultCaps, NULL);
++        GST_ERROR ("setting stop caps tp %" GST_PTR_FORMAT, defaultCaps);
++        gst_caps_unref(defaultCaps);
++    }
++#endif
++}
++
+ }
+ 
+ #endif // USE(GSTREAMER)
+Index: git/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.h
+===================================================================
+--- git.orig/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.h
++++ git/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.h
+@@ -248,6 +248,7 @@ protected:
+     static GstFlowReturn newTextSampleCallback(MediaPlayerPrivateGStreamer*);
+ #endif
+     static gboolean durationChangedCallback(MediaPlayerPrivateGStreamer*);
++    static void elementSetupCallback(MediaPlayerPrivateGStreamer*, GstElement*, GstElement*);
+ 
+ private:
+ 
+Index: git/Source/WebCore/platform/mediastream/gstreamer/RealtimeIncomingVideoSourceLibWebRTC.cpp
+===================================================================
+--- git.orig/Source/WebCore/platform/mediastream/gstreamer/RealtimeIncomingVideoSourceLibWebRTC.cpp
++++ git/Source/WebCore/platform/mediastream/gstreamer/RealtimeIncomingVideoSourceLibWebRTC.cpp
+@@ -60,10 +60,14 @@ void RealtimeIncomingVideoSourceLibWebRT
+         return;
+ 
+     auto sample = GStreamerSampleFromLibWebRTCVideoFrame(frame);
++    #if 1
++    videoSampleAvailable(MediaSampleGStreamer::create(sample.get(), WebCore::FloatSize(), String()));
++    #else
+     callOnMainThread([protectedThis = makeRef(*this), sample] {
+         protectedThis->videoSampleAvailable(MediaSampleGStreamer::create(sample.get(),
+             WebCore::FloatSize(), String()));
+     });
++    #endif
+ }
+ 
+ } // namespace WebCore
+Index: git/Source/WebCore/platform/mediastream/libwebrtc/GStreamerVideoDecoderFactory.cpp
+===================================================================
+--- git.orig/Source/WebCore/platform/mediastream/libwebrtc/GStreamerVideoDecoderFactory.cpp
++++ git/Source/WebCore/platform/mediastream/libwebrtc/GStreamerVideoDecoderFactory.cpp
+@@ -79,6 +79,11 @@ public:
+         return gst_element_factory_make(factoryName, name.get());
+     }
+ 
++    bool PrefersLateDecoding() const override
++    {
++        return false;
++    }
++
+     int32_t InitDecode(const webrtc::VideoCodec*, int32_t) override
+     {
+         m_src = makeElement("appsrc");
+@@ -176,7 +181,7 @@ public:
+             m_dtsPtsMap[GST_BUFFER_PTS(buffer.get())] = timestamps;
+         }
+ 
+-        GST_LOG_OBJECT(pipeline(), "%ld Decoding: %" GST_PTR_FORMAT, renderTimeMs, buffer.get());
++        GST_LOG_OBJECT(pipeline(), "%" G_GINT64_FORMAT " Decoding: %" GST_PTR_FORMAT, renderTimeMs, buffer.get());
+         auto sample = adoptGRef(gst_sample_new(buffer.get(), GetCapsForFrame(inputImage), nullptr, nullptr));
+         switch (gst_app_src_push_sample(GST_APP_SRC(m_src), sample.get())) {
+         case GST_FLOW_OK:
+Index: git/Source/WebCore/platform/mediastream/libwebrtc/GStreamerVideoEncoderFactory.cpp
+===================================================================
+--- git.orig/Source/WebCore/platform/mediastream/libwebrtc/GStreamerVideoEncoderFactory.cpp
++++ git/Source/WebCore/platform/mediastream/libwebrtc/GStreamerVideoEncoderFactory.cpp
+@@ -533,8 +533,45 @@ public:
+     }
+ };
+ 
++struct NoopEncoder : public webrtc::VideoEncoder
++{
++    int32_t InitEncode(const webrtc::VideoCodec*, int32_t, size_t) final
++    {
++        return WEBRTC_VIDEO_CODEC_ERROR;
++    }
++    int32_t RegisterEncodeCompleteCallback(webrtc::EncodedImageCallback*) final
++    {
++        return WEBRTC_VIDEO_CODEC_ERROR;
++    }
++    int32_t Release() final
++    {
++        return WEBRTC_VIDEO_CODEC_OK;
++    }
++    int32_t Encode(const webrtc::VideoFrame&, const webrtc::CodecSpecificInfo*, const std::vector<webrtc::FrameType>*) final
++    {
++        return WEBRTC_VIDEO_CODEC_ERROR;
++    }
++    int32_t SetChannelParameters(uint32_t, int64_t) final
++    {
++        return WEBRTC_VIDEO_CODEC_ERROR;
++    }
++    void AddCodecIfSupported(std::vector<webrtc::SdpVideoFormat>* supportedFormats)
++    {
++        auto h264Format = webrtc::SdpVideoFormat(cricket::kH264CodecName,
++            { { cricket::kH264FmtpProfileLevelId, cricket::kH264ProfileLevelConstrainedBaseline },
++                { cricket::kH264FmtpLevelAsymmetryAllowed, "1" },
++                { cricket::kH264FmtpPacketizationMode, "1" } });
++        supportedFormats->push_back(h264Format);
++    }
++};
++
++static bool useNoopEncoder() {  return true; }
++
+ std::unique_ptr<webrtc::VideoEncoder> GStreamerVideoEncoderFactory::CreateVideoEncoder(const webrtc::SdpVideoFormat& format)
+ {
++    if (useNoopEncoder())
++        return std::make_unique<NoopEncoder>();
++
+     if (format.name == cricket::kVp8CodecName)
+         return std::make_unique<VP8Encoder>(format);
+ 
+@@ -558,6 +595,11 @@ std::vector<webrtc::SdpVideoFormat> GStr
+ {
+     std::vector<webrtc::SdpVideoFormat> supportedCodecs;
+ 
++    if (useNoopEncoder()) {
++        NoopEncoder().AddCodecIfSupported(&supportedCodecs);
++        return supportedCodecs;
++    }
++
+     VP8Encoder().AddCodecIfSupported(&supportedCodecs);
+     H264Encoder().AddCodecIfSupported(&supportedCodecs);
+ 
+Index: git/Source/WebCore/platform/mediastream/libwebrtc/LibWebRTCProvider.cpp
+===================================================================
+--- git.orig/Source/WebCore/platform/mediastream/libwebrtc/LibWebRTCProvider.cpp
++++ git/Source/WebCore/platform/mediastream/libwebrtc/LibWebRTCProvider.cpp
+@@ -120,7 +120,12 @@ static void initializePeerConnectionFact
+ 
+ #if defined(NDEBUG)
+ #if !LOG_DISABLED || !RELEASE_LOG_DISABLED
+-    rtc::LogMessage::LogToDebug(LogWebRTC.state != WTFLogChannelOn ? rtc::LS_NONE : rtc::LS_INFO);
++    const char* logConfig = getenv("WRTC_LOG");  // ex.: WRTC_LOG="tstamp verbose debug"
++    if (logConfig) {
++        rtc::LogMessage::ConfigureLogging(logConfig);
++    } else {
++        rtc::LogMessage::LogToDebug(LogWebRTC.state != WTFLogChannelOn ? rtc::LS_NONE : rtc::LS_INFO);
++    }
+ #else
+     rtc::LogMessage::LogToDebug(rtc::LS_NONE);
+ #endif
+Index: git/Source/WebKit/WebProcess/WebPage/WebPage.cpp
+===================================================================
+--- git.orig/Source/WebKit/WebProcess/WebPage/WebPage.cpp
++++ git/Source/WebKit/WebProcess/WebPage/WebPage.cpp
+@@ -343,6 +343,14 @@ Ref<WebPage> WebPage::create(uint64_t pa
+     return page;
+ }
+ 
++static UniqueRef<WebCore::LibWebRTCProvider> makeWebRTCProvider()
++{
++    static bool useWebKitProvider = !!getenv("WPE_USE_WEBKIT_WEBRTC_PROVIDER");
++    if (useWebKitProvider)
++        return makeUniqueRef<WebKit::LibWebRTCProvider>();
++    return WebCore::LibWebRTCProvider::create();
++}
++
+ WebPage::WebPage(uint64_t pageID, WebPageCreationParameters&& parameters)
+     : m_pageID(pageID)
+     , m_viewSize(parameters.viewSize)
+@@ -406,7 +414,7 @@ WebPage::WebPage(uint64_t pageID, WebPag
+     PageConfiguration pageConfiguration(
+         makeUniqueRef<WebEditorClient>(this),
+         WebSocketProvider::create(),
+-        makeUniqueRef<WebKit::LibWebRTCProvider>(),
++        makeWebRTCProvider(),
+         WebProcess::singleton().cacheStorageProvider()
+     );
+     pageConfiguration.chromeClient = new WebChromeClient(*this);
+Index: git/Source/WebKit/Shared/WebPreferences.yaml
+===================================================================
+--- git.orig/Source/WebKit/Shared/WebPreferences.yaml
++++ git/Source/WebKit/Shared/WebPreferences.yaml
+@@ -630,7 +630,7 @@ EnumeratingAllNetworkInterfacesEnabled:
+ # FIXME: What is this for?
+ ICECandidateFilteringEnabled:
+   type: bool
+-  defaultValue: true
++  defaultValue: false
+   webcoreBinding: none
+ 
+ ShadowDOMEnabled:

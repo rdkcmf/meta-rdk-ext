@@ -1,0 +1,29 @@
+Date: Apr 7, 2016 10:19 PM
+
+From: c439390387aa75560eb4e8abb6a0ff9f024cff61 Apr 12, 2016 11:58 PM
+
+Subject: [PATCH] XF3-552: Modified to install utils in image.
+
+	Added a new patch to install utils to rootfs.
+	
+Source: COMCAST 
+
+License: LGPL-2.0-or-later
+
+Upstream-Status: Pending
+
+Signed-off-by: Balaji Punnuru <balaji_punnuru@cable.comcast.com>
+---
+
+Index: libnetfilter_conntrack-1.0.2/utils/Makefile.am
+===================================================================
+--- libnetfilter_conntrack-1.0.2.orig/utils/Makefile.am
++++ libnetfilter_conntrack-1.0.2/utils/Makefile.am
+@@ -1,6 +1,6 @@
+ include $(top_srcdir)/Make_global.am
+ 
+-check_PROGRAMS = expect_dump expect_create expect_get expect_delete \
++bin_PROGRAMS = expect_dump expect_create expect_get expect_delete \
+ 	       expect_flush expect_events expect_create_userspace \
+ 	       expect_create_nat \
+ 	       conntrack_create conntrack_dump conntrack_update \

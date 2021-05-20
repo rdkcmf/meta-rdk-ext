@@ -1,0 +1,32 @@
+  Date: Feb 25, 2021 5:04 PM
+From: 683a0789d615413a1c2754321fef35690a39566b Mar 12, 2019 5:53 AM
+Subject: [PATCH] RDKB-34125: CSRF changes for session cookie
+     Apply CSRF changes over the files pulled from OSS repo.
+Source: COMCAST
+License: RDK Management
+Upstream-Status: Pending
+Signed-off-by: <ashaann_mathew@comcast.com>
+---
+
+diff --git a/js/csrfprotector.js b/js/csrfprotector.js
+index 01ad9ed..0c08952 100644
+--- a/js/csrfprotector.js
++++ b/js/csrfprotector.js
+@@ -50,12 +50,17 @@ var CSRFP = {
+ 	 */
+ 	_getAuthKey: function() {
+ 		var re = new RegExp(CSRFP.CSRFP_TOKEN +"=([^;]+)(;|$)");
++		if(document.cookie !=""){
+ 		var RegExpArray = re.exec(document.cookie);
+ 		
+ 		if (RegExpArray === null) {
+ 			return false;
+ 		}
+ 		return RegExpArray[1];
++		}else{
++			var sessionCsrf= sessionStorage.getItem("Csrfp_token");
++			return sessionCsrf;
++		}
+ 	},
+ 	/** 
+ 	 * Function to get domain of any url

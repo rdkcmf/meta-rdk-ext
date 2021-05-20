@@ -1,0 +1,50 @@
+From d34a7123c56a745a8058fb4d35a1a3015003d660 Mon Sep 17 00:00:00 2001
+From: Ievgen Mutavchi <Ievgen_Mutavchi@comcast.com>
+Date: Sun, 26 Apr 2020 13:03:16 -0400
+Subject: [PATCH 88/93] Backport fix for crash in
+ Inspector::AsyncStackTrace::truncate
+Source: COMCAST
+License: GPLV2
+Upstream-Status: None
+Signed-off-by: Eugene Mutavchi <Ievgen_Mutavchi@comcast.com>
+
+Web Inspector: Crashes seen under
+Inspector::ScriptCallFrame::~ScriptCallFrame
+ https://bugs.webkit.org/show_bug.cgi?id=180373
+ <rdar://problem/33894170>
+
+* inspector/AsyncStackTrace.cpp:
+(Inspector::AsyncStackTrace::truncate):
+The `lastUnlockedAncestor->remove()` may release the only reference to it's
+parent which we intend to use later but don't hold a RefPtr to. Keep the
+parent alive explicitly by protecting it.
+---
+ Source/JavaScriptCore/inspector/AsyncStackTrace.cpp | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+Index: git/Source/JavaScriptCore/inspector/AsyncStackTrace.cpp
+===================================================================
+--- git.orig/Source/JavaScriptCore/inspector/AsyncStackTrace.cpp
++++ git/Source/JavaScriptCore/inspector/AsyncStackTrace.cpp
+@@ -167,7 +167,7 @@ void AsyncStackTrace::truncate(size_t ma
+ 
+     // The subtree being truncated must be removed from it's parent before
+     // updating its parent pointer chain.
+-    auto* sourceNode = lastUnlockedAncestor->m_parent.get();
++    RefPtr<AsyncStackTrace> sourceNode = lastUnlockedAncestor->m_parent;
+     lastUnlockedAncestor->remove();
+ 
+     while (sourceNode) {
+@@ -175,10 +175,10 @@ void AsyncStackTrace::truncate(size_t ma
+         previousNode->m_parent->m_childCount = 1;
+         previousNode = previousNode->m_parent.get();
+ 
+-        if (sourceNode == newStackTraceRoot)
++        if (sourceNode.get() == newStackTraceRoot)
+             break;
+ 
+-        sourceNode = sourceNode->m_parent.get();
++        sourceNode = sourceNode->m_parent;
+     }
+ 
+     previousNode->m_truncated = true;

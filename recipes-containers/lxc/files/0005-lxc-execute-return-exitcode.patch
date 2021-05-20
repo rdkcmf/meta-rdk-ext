@@ -1,0 +1,27 @@
+(2017.11.09) Stefan Verkoyen (stefan.verkoyen@androme.be)
+ONEM-5278 lxc-execute always returns 0
+
+diff --git a/lxc/src/lxc/tools/lxc_execute.c b/lxc_patched/src/lxc/tools/lxc_execute.c
+index fae2dca..f26105a 100644
+--- lxc/src/lxc/tools/lxc_execute.c
++++ lxc_patched/src/lxc/tools/lxc_execute.c
+@@ -166,5 +166,5 @@ int main(int argc, char *argv[])
+ 
+ 	if (ret < 0)
+ 		exit(EXIT_FAILURE);
+-	exit(EXIT_SUCCESS);
++	exit(ret);
+ }
+diff --git a/lxc/src/lxc/tools/lxc_init.c b/lxc_patched/src/lxc/tools/lxc_init.c
+index 948f135..aec126d 100644
+--- lxc/src/lxc/tools/lxc_init.c
++++ lxc_patched/src/lxc/tools/lxc_init.c
+@@ -321,7 +321,7 @@ int main(int argc, char *argv[])
+ 
+ 		execvp(aargv[0], aargv);
+ 		ERROR("failed to exec: '%s' : %m", aargv[0]);
+-		exit(err);
++		exit(EXIT_FAILURE);
+ 	}
+ 
+ 	/* let's process the signals now */

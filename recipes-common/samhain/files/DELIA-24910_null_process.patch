@@ -1,0 +1,53 @@
+Copyright (C) 1989, 1991 Free Software Foundation, Inc.
+
+This program is free software; you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation; either version 2 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program; if not, write to the Free Software
+Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+
+Date: Jun 21 18:18:42 2018 
+
+From: b46adcba9868eeceba424163c8c2b4c0528c82dc Jan 30 06:17:51 2019
+
+Subject: [PATCH] DELIA-24910: [PXG1V3]Observed "null" process prints in samhain.log
+
+        Samhain printing some processname as null
+
+Source: COMCAST
+
+Upstream-Status: Pending
+
+Signed-off-by: prakash <Prakash_KAPPESANNANAGAPPA@comcast.com>
+---
+
+diff --git a/src/sh_processcheck.c b/src/sh_processcheck.c
+index 55fe7ae..cbad37f 100644
+--- a/src/sh_processcheck.c
++++ b/src/sh_processcheck.c
+@@ -483,12 +483,13 @@ static int is_in_whitelist (const char *str, unsigned long num)
+               }
+               list1 = list1->next;
+           }
+-          SH_MUTEX_LOCK(mutex_thread_nolog);
+-          sh_error_handle(sh_prochk_severity, FIL__, __LINE__, 0,
++	  if(safe != NULL) {
++          	SH_MUTEX_LOCK(mutex_thread_nolog);
++          	sh_error_handle(sh_prochk_severity, FIL__, __LINE__, 0,
+                               MSG_PCK_NEW,
+                               i, safe, user);
+-          SH_MUTEX_UNLOCK(mutex_thread_nolog);
+-
++          	SH_MUTEX_UNLOCK(mutex_thread_nolog);
++	 }
+ 	 SH_FREE(safe);
+ 	 SH_FREE(aout);
+       }

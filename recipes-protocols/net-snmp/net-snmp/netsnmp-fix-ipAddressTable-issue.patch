@@ -1,0 +1,44 @@
+Fixed the below issue
+Some physical interface data were missing in ipAddressTable MIB
+
+Reason : Broadcast address of the virtual interfaces was fetched wrongly. Instead of 
+getting the broadcast address of the virtual interface, the broadcast address of its 
+respective physical interface was taken. Due to this, both physical and virtual interfaces
+have the same broadcast address. Hence, only the entries corresponding to the virtual interface 
+was considered in ipAddressTable MIB. The entries of the physical interface were considered as 
+duplicates and were neglected. Hence, physical address entries wont be listed in the ipAddressTable MIB 
+
+Signed-off-by: Geethu Theres K <Geethu_TheresK@comcast.com>
+
+
+diff --git a/agent/mibgroup/ip-mib/data_access/ipaddress_ioctl.c b/agent/mibgroup/ip-mib/data_access/ipaddress_ioctl.c
+--- a/agent/mibgroup/ip-mib/data_access/ipaddress_ioctl.c
++++ b/agent/mibgroup/ip-mib/data_access/ipaddress_ioctl.c
+@@ -241,15 +241,26 @@ _netsnmp_ioctl_ipaddress_container_load_v4(netsnmp_container *container,
+ #if defined (NETSNMP_ENABLE_IPV6)
+         addr_info = netsnmp_access_other_info_get(entry->if_index, AF_INET);
+         if(addr_info.bcastflg) {
++           ifrp->ifr_addr = save_addr;
+            bcastentry = netsnmp_access_ipaddress_entry_create();
+            if(NULL == bcastentry) {
+               rc = -3;
+               break;
+            }
++           if (ioctl(sd, SIOCGIFBRDADDR, ifrp) < 0) {
++              snmp_log(LOG_ERR,
++                     "error getting broadcast for interface %d\n", i);
++              netsnmp_access_ipaddress_entry_free(bcastentry);
++              netsnmp_access_ipaddress_entry_free(entry);
++              continue;
++           }
++           netsnmp_assert(AF_INET == ifrp->ifr_addr.sa_family);
++           si = (struct sockaddr_in *) &ifrp->ifr_addr;
++           
+            bcastentry->if_index = entry->if_index;
+            bcastentry->ns_ia_index = ++idx_offset;
+            bcastentry->ia_address_len = sizeof(addr_info.addr);
+-           memcpy(bcastentry->ia_address, &addr_info.addr,
++           memcpy(bcastentry->ia_address, &si->sin_addr.s_addr,
+                   bcastentry->ia_address_len);
+         }
+ #endif

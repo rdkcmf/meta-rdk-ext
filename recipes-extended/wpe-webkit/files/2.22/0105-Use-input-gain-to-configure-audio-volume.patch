@@ -1,0 +1,26 @@
+From bfd245aa2b94871176c7cf0c4e07ba37b454cbbc Mon Sep 17 00:00:00 2001
+From: Ievgen Mutavchi <Ievgen_Mutavchi@comcast.com>
+Date: Sun, 26 Apr 2020 16:17:48 -0400
+Subject: [PATCH] Fix volume setup
+Source: COMCAST
+License: GPLV2
+Upstream-Status: None
+Signed-off-by: Eugene Mutavchi <Ievgen_Mutavchi@comcast.com>
+
+---
+ .../platform/graphics/gstreamer/MediaPlayerPrivateGStreamerBase.cpp     | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+Index: git/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamerBase.cpp
+===================================================================
+--- git.orig/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamerBase.cpp
++++ git/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamerBase.cpp
+@@ -664,7 +664,7 @@ void MediaPlayerPrivateGStreamerBase::se
+         return;
+ 
+     GST_DEBUG_OBJECT(pipeline(), "Setting volume: %f", volume);
+-    gst_stream_volume_set_volume(m_volumeElement.get(), GST_STREAM_VOLUME_FORMAT_CUBIC, static_cast<double>(volume));
++    gst_stream_volume_set_volume(m_volumeElement.get(), volumeFormat, static_cast<double>(volume));
+ }
+ 
+ float MediaPlayerPrivateGStreamerBase::volume() const

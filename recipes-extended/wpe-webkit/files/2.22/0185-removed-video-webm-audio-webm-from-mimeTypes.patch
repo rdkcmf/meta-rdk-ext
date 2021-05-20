@@ -1,0 +1,32 @@
+Date: Feb 21, 2020 11:10 AM
+From 88ef0d7a4e2a650ba868220a800466a1a321afbf Mon Sep 17 00:00:00 2001
+Subject: [PATCH] removed video/webm & audio/webm from mimeTypes
+Source: COMCAST
+License: GPLV2
+Upstream-Status: Pending
+Signed-off-by: Balaji Selvam <Balaji_Selvam@Comcast.Com>
+From: Balaji Selvam <balaji_selvam@comcast.com>
+Date: Tue, 19 May 2020 11:53:51 +0000
+
+---
+ .../graphics/gstreamer/mse/MediaPlayerPrivateGStreamerMSE.cpp         | 4 +---
+ 1 file changed, 1 insertion(+), 3 deletions(-)
+
+diff --git a/Source/WebCore/platform/graphics/gstreamer/mse/MediaPlayerPrivateGStreamerMSE.cpp b/Source/WebCore/platform/graphics/gstreamer/mse/MediaPlayerPrivateGStreamerMSE.cpp
+index 4f0c9f14da97..d6f45ca86910 100644
+--- a/Source/WebCore/platform/graphics/gstreamer/mse/MediaPlayerPrivateGStreamerMSE.cpp
++++ b/Source/WebCore/platform/graphics/gstreamer/mse/MediaPlayerPrivateGStreamerMSE.cpp
+@@ -951,9 +951,7 @@ HashSet<String, ASCIICaseInsensitiveHash>& MediaPlayerPrivateGStreamerMSE::mimeT
+         HashSet<String, ASCIICaseInsensitiveHash> set;
+         const char* mimeTypes[] = {
+             "video/mp4",
+-            "audio/mp4",
+-            "video/webm",
+-            "audio/webm"
++            "audio/mp4"
+         };
+         for (auto& type : mimeTypes)
+             set.add(type);
+-- 
+2.14.2
+

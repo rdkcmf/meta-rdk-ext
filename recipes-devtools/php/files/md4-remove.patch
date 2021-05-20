@@ -1,0 +1,113 @@
+Redistribution and use in source and binary forms, with or without
+modification, is permitted provided that the following conditions
+are met:
+
+  1. Redistributions of source code must retain the above copyright
+     notice, this list of conditions and the following disclaimer.
+ 
+  2. Redistributions in binary form must reproduce the above copyright
+     notice, this list of conditions and the following disclaimer in
+     the documentation and/or other materials provided with the
+     distribution.
+ 
+  3. The name "PHP" must not be used to endorse or promote products
+     derived from this software without prior written permission. For
+     written permission, please contact group@php.net.
+  
+  4. Products derived from this software may not be called "PHP", nor
+     may "PHP" appear in their name, without prior written permission
+     from group@php.net.  You may indicate that your software works in
+     conjunction with PHP by saying "Foo for PHP" instead of calling
+     it "PHP Foo" or "phpfoo"
+ 
+  5. The PHP Group may publish revised and/or new versions of the
+     license from time to time. Each version will be given a
+     distinguishing version number.
+     Once covered code has been published under a particular version
+     of the license, you may always continue to use it under the terms
+     of that version. You may also choose to use such covered code
+     under the terms of any subsequent version of the license
+     published by the PHP Group. No one other than the PHP Group has
+     the right to modify the terms applicable to covered code created
+     under this License.
+
+  6. Redistributions of any form whatsoever must retain the following
+     acknowledgment:
+     "This product includes PHP, freely available from
+     <http://www.php.net/>".
+
+
+THIS SOFTWARE IS PROVIDED BY THE PHP DEVELOPMENT TEAM ``AS IS'' AND 
+ANY EXPRESSED OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO,
+THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A 
+PARTICULAR PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE PHP
+DEVELOPMENT TEAM OR ITS CONTRIBUTORS BE LIABLE FOR ANY DIRECT, 
+INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES 
+(INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR 
+SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT,
+STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED
+OF THE POSSIBILITY OF SUCH DAMAGE.
+
+Date: Sep 10, 2018 10:20 PM
+
+From: d82599ca4b4764af42189b5a0d482d376215aacc 	Sep 26, 2018 8:45 PM
+
+Subject: [PATCH] RDKB-18052: Use OAUTH to replace POTD
+
+	Turn on curl and openssl in php and add patch file to remove md4 from openssl.
+	
+Source: COMCAST
+
+Upstream-Status: Pending 
+
+Signed-off-by: Kirk Davis <kirk_davis@cable.comcast.com>
+---
+
+Index: php-7.2.8/ext/openssl/openssl.c
+===================================================================
+--- php-7.2.8.orig/ext/openssl/openssl.c
++++ php-7.2.8/ext/openssl/openssl.c
+@@ -1322,9 +1322,11 @@ static EVP_MD * php_openssl_get_evp_md_f
+ 		case OPENSSL_ALGO_MD5:
+ 			mdtype = (EVP_MD *) EVP_md5();
+ 			break;
++#ifdef HAVE_OPENSSL_MD4_H
+ 		case OPENSSL_ALGO_MD4:
+ 			mdtype = (EVP_MD *) EVP_md4();
+ 			break;
++#endif
+ #ifdef HAVE_OPENSSL_MD2_H
+ 		case OPENSSL_ALGO_MD2:
+ 			mdtype = (EVP_MD *) EVP_md2();
+@@ -1347,9 +1349,11 @@ static EVP_MD * php_openssl_get_evp_md_f
+ 		case OPENSSL_ALGO_SHA512:
+ 			mdtype = (EVP_MD *) EVP_sha512();
+ 			break;
++#ifdef HAVE_OPENSSL_RMD160_H
+ 		case OPENSSL_ALGO_RMD160:
+ 			mdtype = (EVP_MD *) EVP_ripemd160();
+ 			break;
++#endif
+ 		default:
+ 			return NULL;
+ 			break;
+@@ -6031,7 +6035,7 @@ PHP_FUNCTION(openssl_seal)
+ 			RETURN_FALSE;
+ 		}
+ 	} else {
+-		cipher = EVP_rc4();
++		cipher = EVP_enc_null();
+ 	}
+ 
+ 	iv_len = EVP_CIPHER_iv_length(cipher);
+@@ -6164,7 +6168,7 @@ PHP_FUNCTION(openssl_open)
+ 			RETURN_FALSE;
+ 		}
+ 	} else {
+-		cipher = EVP_rc4();
++		cipher = EVP_enc_null();
+ 	}
+ 
+ 	cipher_iv_len = EVP_CIPHER_iv_length(cipher);

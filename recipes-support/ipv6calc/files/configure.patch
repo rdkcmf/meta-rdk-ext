@@ -1,0 +1,30 @@
+Date: Jun 16 19:51:34 2015
+
+From: 836562acea9aa46f9407b4d058dd22d3b1c4a2c8 Jun 16 19:52:32 2015
+
+Subject: [PATCH] RDKSYSINTSW-2346 : Iintegrate ipv6calc in pace xi3 yocto builds
+
+	Add recipe for ipv6calc
+
+Source: COMCAST
+
+License: LGPL-2.0-or-later
+
+Upstream-Status: Pending
+
+Signed-off-by: Vargheese Baby <vargheesebaby@tataelxsi.com>
+---
+
+Index: ipv6calc-0.99.0/configure.in
+===================================================================
+--- ipv6calc-0.99.0.orig/configure.in	2015-04-16 06:23:20.000000000 +0000
++++ ipv6calc-0.99.0/configure.in	2015-06-16 17:29:49.000000000 +0000
+@@ -129,7 +129,7 @@
+ 		fi
+ 	],
+ 	[
+-		AC_CHECK_HEADER(openssl/md5.h, [
++		AC_CHECK_HEADER(md5/md5.h, [
+ 			AC_MSG_RESULT([*** openssl/md5.h header file found])
+ 			AC_CHECK_LIB(crypto, MD5_Init,
+ 			[

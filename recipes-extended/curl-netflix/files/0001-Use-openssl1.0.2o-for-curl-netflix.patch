@@ -1,0 +1,65 @@
+From 7329fc947c4356c33f02d0c7a9c36696e0f37f88 Mon Sep 17 00:00:00 2001
+From: mselva006c <mani_selvaraj@comcast.com>
+Date: Fri, 10 Jul 2020 02:54:37 +0000
+Subject: [PATCH] Use openssl1.0.2o for curl-netflix
+Source: COMCAST
+License: MIT
+Upstream-Status: Pending
+Signed-off-by: mselva006c <mani_selvaraj@comcast.com>
+---
+ configure.ac | 18 +++++++++---------
+ 1 file changed, 9 insertions(+), 9 deletions(-)
+
+diff --git a/configure.ac b/configure.ac
+index 9d0a14a..addd6ef 100755
+--- a/configure.ac
++++ b/configure.ac
+@@ -1644,15 +1644,15 @@ if test -z "$ssl_backends" -o "x$OPT_SSL" != xno &&
+   CPPFLAGS="$CPPFLAGS $SSL_CPPFLAGS"
+   LDFLAGS="$LDFLAGS $SSL_LDFLAGS"
+ 
+-  AC_CHECK_LIB(crypto, HMAC_Update,[
++  AC_CHECK_LIB(crypto-1.0.2o, HMAC_Update,[
+      HAVECRYPTO="yes"
+-     LIBS="-lcrypto $LIBS"
++     LIBS="-lcrypto-1.0.2o $LIBS"
+      ],[
+      LDFLAGS="$CLEANLDFLAGS -L$LIB_OPENSSL"
+      CPPFLAGS="$CLEANCPPFLAGS -I$PREFIX_OPENSSL/include/openssl -I$PREFIX_OPENSSL/include"
+-     AC_CHECK_LIB(crypto, HMAC_Init_ex,[
++     AC_CHECK_LIB(crypto-1.0.2o, HMAC_Init_ex,[
+        HAVECRYPTO="yes"
+-       LIBS="-lcrypto $LIBS"], [
++       LIBS="-lcrypto-1.0.2o $LIBS"], [
+ 
+        dnl still no, but what about with -ldl?
+        AC_MSG_CHECKING([OpenSSL linking with -ldl])
+@@ -1702,15 +1702,15 @@ if test -z "$ssl_backends" -o "x$OPT_SSL" != xno &&
+     dnl This is only reasonable to do if crypto actually is there: check for
+     dnl SSL libs NOTE: it is important to do this AFTER the crypto lib
+ 
+-    AC_CHECK_LIB(ssl, SSL_connect)
++    AC_CHECK_LIB(ssl-1.0.2o, SSL_connect)
+ 
+-    if test "$ac_cv_lib_ssl_SSL_connect" != yes; then
++    if test "$ac_cv_lib_ssl_1_0_2o_SSL_connect" != yes; then
+         dnl we didn't find the SSL lib, try the RSAglue/rsaref stuff
+         AC_MSG_CHECKING(for ssl with RSAglue/rsaref libs in use);
+         OLIBS=$LIBS
+         LIBS="-lRSAglue -lrsaref $LIBS"
+-        AC_CHECK_LIB(ssl, SSL_connect)
+-        if test "$ac_cv_lib_ssl_SSL_connect" != yes; then
++        AC_CHECK_LIB(ssl-1.0.2o, SSL_connect)
++        if test "$ac_cv_lib_ssl_1_0_2o_SSL_connect" != yes; then
+             dnl still no SSL_connect
+             AC_MSG_RESULT(no)
+             LIBS=$OLIBS
+@@ -1865,7 +1865,7 @@ dnl ---
+ dnl We require OpenSSL with SRP support.
+ dnl ---
+ if test "$OPENSSL_ENABLED" = "1"; then
+-  AC_CHECK_LIB(crypto, SRP_Calc_client_key,
++  AC_CHECK_LIB(crypto-1.0.2o, SRP_Calc_client_key,
+    [
+      AC_DEFINE(HAVE_OPENSSL_SRP, 1, [if you have the function SRP_Calc_client_key])
+      AC_SUBST(HAVE_OPENSSL_SRP, [1])

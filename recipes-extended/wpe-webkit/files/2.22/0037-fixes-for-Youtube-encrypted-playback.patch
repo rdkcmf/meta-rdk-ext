@@ -1,0 +1,191 @@
+From 9de7624269d5d351db7fcb5cf4afc544d5b35381 Mon Sep 17 00:00:00 2001
+From: Gurdal Oruklu <gurdal_oruklu@comcast.com>
+Source: COMCAST
+License: LICENSE-LGPL-2.1
+Upstream-Status: Pending
+Signed-off-by: Gurdal Oruklu <gurdal_oruklu@comcast.com>
+Date: Fri, 5 Jul 2019 12:38:05 +0000
+Subject: [PATCH] Avoid sending 'encrypted' event with same init data.
+
+---
+ .../MediaPlayerPrivateGStreamerBase.cpp       |  4 +-
+ .../MediaPlayerPrivateGStreamerBase.h         |  1 +
+ .../gstreamer/eme/GStreamerEMEUtilities.h     |  2 +-
+ ...bKitCommonEncryptionDecryptorGStreamer.cpp | 55 +++++++++++++------
+ 4 files changed, 44 insertions(+), 18 deletions(-)
+
+diff --git a/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamerBase.cpp b/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamerBase.cpp
+index 029304fdbd15..52e808a85b4b 100644
+--- a/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamerBase.cpp
++++ b/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamerBase.cpp
+@@ -1477,7 +1477,9 @@ void MediaPlayerPrivateGStreamerBase::initializationDataEncountered(const String
+ 
+     GST_TRACE("init data encountered of size %" G_GSIZE_FORMAT " with MD5 %s", initData.sizeInBytes(), GStreamerEMEUtilities::initDataMD5(initData).utf8().data());
+     GST_MEMDUMP("init data", initData.characters8(), initData.sizeInBytes());
+-
++    if (m_lastInitData.sizeInBytes() >= initData.sizeInBytes() && memmem(m_lastInitData.characters8(), m_lastInitData.sizeInBytes(), initData.characters8(), initData.sizeInBytes()))
++        return;
++    m_lastInitData = initData;
+     m_player->initializationDataEncountered(initDataType, ArrayBuffer::create(reinterpret_cast<const uint8_t*>(initData.characters8()), initData.sizeInBytes()));
+ }
+ 
+diff --git a/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamerBase.h b/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamerBase.h
+index 81c7a7479662..f675a9a2280f 100644
+--- a/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamerBase.h
++++ b/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamerBase.h
+@@ -292,6 +292,7 @@ protected:
+ 
+ #if ENABLE(ENCRYPTED_MEDIA)
+     RefPtr<const CDMInstance> m_cdmInstance;
++    String m_lastInitData;
+ #endif
+ };
+ 
+diff --git a/Source/WebCore/platform/graphics/gstreamer/eme/GStreamerEMEUtilities.h b/Source/WebCore/platform/graphics/gstreamer/eme/GStreamerEMEUtilities.h
+index 56e3f1a7f617..2070bd70804f 100644
+--- a/Source/WebCore/platform/graphics/gstreamer/eme/GStreamerEMEUtilities.h
++++ b/Source/WebCore/platform/graphics/gstreamer/eme/GStreamerEMEUtilities.h
+@@ -37,7 +37,7 @@
+ #endif
+ 
+ // NOTE: YouTube 2018 EME conformance tests expect this to be >=5s.
+-const WTF::Seconds WEBCORE_GSTREAMER_EME_LICENSE_KEY_RESPONSE_TIMEOUT = WTF::Seconds(6);
++const WTF::Seconds WEBCORE_GSTREAMER_EME_LICENSE_KEY_RESPONSE_TIMEOUT = WTF::Seconds(60);
+ 
+ namespace WebCore {
+ 
+diff --git a/Source/WebCore/platform/graphics/gstreamer/eme/WebKitCommonEncryptionDecryptorGStreamer.cpp b/Source/WebCore/platform/graphics/gstreamer/eme/WebKitCommonEncryptionDecryptorGStreamer.cpp
+index 0391afaab59a..381d51ce41c3 100644
+--- a/Source/WebCore/platform/graphics/gstreamer/eme/WebKitCommonEncryptionDecryptorGStreamer.cpp
++++ b/Source/WebCore/platform/graphics/gstreamer/eme/WebKitCommonEncryptionDecryptorGStreamer.cpp
+@@ -40,6 +40,7 @@ using WebCore::GstMappedBuffer;
+ #define WEBKIT_MEDIA_CENC_DECRYPT_GET_PRIVATE(obj) (G_TYPE_INSTANCE_GET_PRIVATE((obj), WEBKIT_TYPE_MEDIA_CENC_DECRYPT, WebKitMediaCommonEncryptionDecryptPrivate))
+ struct _WebKitMediaCommonEncryptionDecryptPrivate {
+     bool m_keyReceived { false };
++    bool m_shouldStop { false };
+     Lock m_mutex;
+     Condition m_condition;
+     RefPtr<CDMInstance> m_cdmInstance;
+@@ -171,16 +172,15 @@ static GstCaps* webkitMediaCommonEncryptionDecryptTransformCaps(GstBaseTransform
+ 
+             gst_structure_set(outgoingStructure.get(), "original-media-type", G_TYPE_STRING, gst_structure_get_name(incomingStructure), nullptr);
+ 
+-            WebKitMediaCommonEncryptionDecryptPrivate* priv = self->priv;
+-            LockHolder locker(priv->m_mutex);
+-
+-            if (webkitMediaCommonEncryptionDecryptIsCDMInstanceAvailable(self)) {
+-                gst_structure_set_name(outgoingStructure.get(),
+-                    WebCore::GStreamerEMEUtilities::isUnspecifiedKeySystem(priv->m_cdmInstance->keySystem()) ? "application/x-webm-enc" : "application/x-cenc");
+-                gst_structure_set(outgoingStructure.get(),
+-                    "protection-system", G_TYPE_STRING, WebCore::GStreamerEMEUtilities::keySystemToUuid(priv->m_cdmInstance->keySystem()), nullptr);
+-
+-            }
++            g_print("WEBM::Incoming original media type is %s\n", gst_structure_get_name(incomingStructure));
++            if (!g_strcmp0(gst_structure_get_name(incomingStructure), "video/x-vp9")
++                || !g_strcmp0(gst_structure_get_name(incomingStructure), "video/webm")
++                || !g_strcmp0(gst_structure_get_name(incomingStructure), "audio/webm")
++                || !g_strcmp0(gst_structure_get_name(incomingStructure), "audio/x-vorbis")
++                || !g_strcmp0(gst_structure_get_name(incomingStructure), "audio/x-opus"))
++                gst_structure_set_name(outgoingStructure.get(), "application/x-webm-enc");
++            else
++                gst_structure_set_name(outgoingStructure.get(), "application/x-cenc");
+         }
+ 
+         bool duplicate = false;
+@@ -214,13 +214,19 @@ static GstFlowReturn webkitMediaCommonEncryptionDecryptTransformInPlace(GstBaseT
+     WebKitMediaCommonEncryptionDecrypt* self = WEBKIT_MEDIA_CENC_DECRYPT(base);
+     WebKitMediaCommonEncryptionDecryptPrivate* priv = WEBKIT_MEDIA_CENC_DECRYPT_GET_PRIVATE(self);
+ 
++    LockHolder locker(priv->m_mutex);
++
++    if (priv->m_isFlushing) {
++        GST_DEBUG_OBJECT(self, "flushing");
++        return GST_FLOW_FLUSHING;
++    }
++
+     GstProtectionMeta* protectionMeta = reinterpret_cast<GstProtectionMeta*>(gst_buffer_get_protection_meta(buffer));
+     if (!protectionMeta) {
+         GST_TRACE_OBJECT(self, "buffer %p has no protection meta, assuming it's not encrypted", buffer);
+         return GST_FLOW_OK;
+     }
+ 
+-    LockHolder locker(priv->m_mutex);
+     const GValue* streamEncryptionEventsList = gst_structure_get_value(protectionMeta->info, "stream-encryption-events");
+     if (streamEncryptionEventsList && GST_VALUE_HOLDS_LIST(streamEncryptionEventsList)) {
+         unsigned streamEncryptionEventsListSize = gst_value_list_get_size(streamEncryptionEventsList);
+@@ -260,8 +266,11 @@ static GstFlowReturn webkitMediaCommonEncryptionDecryptTransformInPlace(GstBaseT
+             GST_ERROR_OBJECT(self, "can't process key requests in less than PAUSED state");
+             return GST_FLOW_NOT_SUPPORTED;
+         }
+-        if (!priv->m_condition.waitFor(priv->m_mutex, WEBCORE_GSTREAMER_EME_LICENSE_KEY_RESPONSE_TIMEOUT, [priv] { return priv->m_isFlushing || priv->m_keyReceived; })) {
+-            if (!priv->m_keyReceived) {
++        if (!priv->m_condition.waitFor(priv->m_mutex, WEBCORE_GSTREAMER_EME_LICENSE_KEY_RESPONSE_TIMEOUT, [priv] { return priv->m_isFlushing || priv->m_keyReceived || priv->m_shouldStop; })) {
++            if (priv->m_isFlushing) {
++                GST_DEBUG_OBJECT(self, "flushing");
++                return GST_FLOW_FLUSHING;
++            } else {
+                 GST_ERROR_OBJECT(self, "key not available");
+                 return GST_FLOW_NOT_SUPPORTED;
+             }
+@@ -274,6 +283,16 @@ static GstFlowReturn webkitMediaCommonEncryptionDecryptTransformInPlace(GstBaseT
+             return GST_FLOW_FLUSHING;
+         }
+ 
++        if (priv->m_shouldStop) {
++            GST_DEBUG_OBJECT(self, "stopping");
++            return GST_FLOW_OK;
++        }
++
++        if (!priv->m_keyReceived) {
++            GST_ERROR_OBJECT(self, "key not available");
++            return GST_FLOW_NOT_SUPPORTED;
++        }
++
+         GST_DEBUG_OBJECT(self, "key received, continuing");
+     }
+ 
+@@ -391,11 +410,11 @@ static void webkitMediaCommonEncryptionDecryptProcessProtectionEvents(WebKitMedi
+     ASSERT(priv->m_mutex.isLocked());
+ 
+     bool isCDMInstanceAvailable = webkitMediaCommonEncryptionDecryptIsCDMInstanceAvailable(self);
++    const char* eventKeySystemUUID = nullptr;
+ 
+     WebCore::InitData concatenatedInitDatas;
+     for (auto& event : priv->m_protectionEvents) {
+         GstBuffer* buffer = nullptr;
+-        const char* eventKeySystemUUID = nullptr;
+         const char* origin = nullptr;
+         gst_event_parse_protection(event.get(), &eventKeySystemUUID, &buffer, &origin);
+         const char* eventKeySystem = WebCore::GStreamerEMEUtilities::uuidToKeySystem(eventKeySystemUUID);
+@@ -442,7 +461,10 @@ static void webkitMediaCommonEncryptionDecryptProcessProtectionEvents(WebKitMedi
+             GST_DEBUG_OBJECT(self, "init data of size %u", dataSize);
+             GST_TRACE_OBJECT(self, "init data MD5 %s", WebCore::GStreamerEMEUtilities::initDataMD5(initData).utf8().data());
+             GST_MEMDUMP_OBJECT(self, "init data", mappedBuffer.data(), mappedBuffer.size());
+-            priv->m_initDatas.set(eventKeySystem, initData);
++            if (isCDMInstanceAvailable)
++                priv->m_initDatas.set(priv->m_cdmInstance->keySystem(), initData);
++            else
++                priv->m_initDatas.set(eventKeySystem, initData);
+             GST_MEMDUMP_OBJECT(self, "key ID", reinterpret_cast<const uint8_t*>(kid->data()), kid->size());
+             priv->m_keyIds.set(initData, kid.copyRef());
+ 
+@@ -482,7 +504,7 @@ static void webkitMediaCommonEncryptionDecryptProcessProtectionEvents(WebKitMedi
+         GST_DEBUG_OBJECT(self, "reporting concatenated init datas of size %u", concatenatedInitDatas.sizeInBytes());
+         GST_TRACE_OBJECT(self, "init data MD5 %s", WebCore::GStreamerEMEUtilities::initDataMD5(concatenatedInitDatas).utf8().data());
+         GST_MEMDUMP_OBJECT(self, "init data", reinterpret_cast<const uint8_t*>(concatenatedInitDatas.characters8()), concatenatedInitDatas.sizeInBytes());
+-        gst_element_post_message(GST_ELEMENT(self), gst_message_new_element(GST_OBJECT(self), gst_structure_new("drm-initialization-data-encountered", "init-data", GST_TYPE_BUFFER, buffer.get(), nullptr)));
++gst_element_post_message(GST_ELEMENT(self), gst_message_new_element(GST_OBJECT(self), gst_structure_new("drm-initialization-data-encountered", "init-data", GST_TYPE_BUFFER, buffer.get(), "key-system-uuid", G_TYPE_STRING, eventKeySystemUUID, nullptr)));
+     }
+ }
+ 
+@@ -564,6 +586,7 @@ static GstStateChangeReturn webKitMediaCommonEncryptionDecryptorChangeState(GstE
+     case GST_STATE_CHANGE_PAUSED_TO_READY:
+         GST_DEBUG_OBJECT(self, "PAUSED->READY");
+         priv->m_isFlushing = false;
++        priv->m_shouldStop = true;
+         priv->m_condition.notifyOne();
+         break;
+     default:
+-- 
+2.24.0
+

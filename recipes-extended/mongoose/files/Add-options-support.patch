@@ -1,0 +1,20 @@
+Adds support for OPTIONS HTTP preflight request.
+
+It enables Lightning based application to access
+SessionMgr API from WEB Browsers.
+
+Signed-off-by: Damian Wrobel <dwrobel@ertelnet.rybnik.pl>
+---
+
+Index: mongoose/mongoose.c
+===================================================================
+--- mongoose.orig/mongoose.c
++++ mongoose/mongoose.c
+@@ -2375,6 +2375,7 @@ is_known_http_method(const char *method)
+ 	return (!strcmp(method, "GET") ||
+ 	    !strcmp(method, "POST") ||
+ 	    !strcmp(method, "HEAD") ||
++	    !strcmp(method, "OPTIONS") ||
+ 	    !strcmp(method, "PUT") ||
+ 	    !strcmp(method, "DELETE"));
+ }

@@ -1,0 +1,147 @@
+From e70857a0176a09a94fab71930ecb44a7805f37e6 Mon Sep 17 00:00:00 2001
+From: Siva Sankar Raja <sivasankar_raja@comcast.com>
+Source: COMCAST
+License: LICENSE-LGPL-2.1
+Upstream-Status: Pending
+Signed-off-by: Siva Sankar Raja <sivasankar_raja@comcast.com>
+Date: Mon, 8 Jul 2019 14:31:50 +0000
+Subject: [PATCH] Fix-holepunching-after-re-parenting-video-layer
+
+---
+ .../CoordinatedGraphicsScene.cpp                   | 23 +++++++++++++++-------
+ .../CoordinatedGraphics/CoordinatedGraphicsScene.h |  9 ++++++---
+ 2 files changed, 22 insertions(+), 10 deletions(-)
+
+Index: git/Source/WebKit/Shared/CoordinatedGraphics/CoordinatedGraphicsScene.cpp
+===================================================================
+--- git.orig/Source/WebKit/Shared/CoordinatedGraphics/CoordinatedGraphicsScene.cpp
++++ git/Source/WebKit/Shared/CoordinatedGraphics/CoordinatedGraphicsScene.cpp
+@@ -110,13 +110,14 @@ void CoordinatedGraphicsScene::updateVie
+         m_client->updateViewport();
+ }
+ 
+-void CoordinatedGraphicsScene::syncPlatformLayerIfNeeded(TextureMapperLayer* layer, const CoordinatedGraphicsLayerState& state)
++void CoordinatedGraphicsScene::syncPlatformLayerIfNeeded(TextureMapperLayer* layer, const CoordinatedGraphicsLayerState& state, CommitScope& commitScope)
+ {
+ #if USE(COORDINATED_GRAPHICS_THREADED)
+     if (!state.platformLayerChanged)
+         return;
+ 
+     if (state.platformLayerProxy) {
++        commitScope.releasedPlatformLayerProxies.remove(state.platformLayerProxy);
+         m_platformLayerProxies.set(layer, state.platformLayerProxy);
+         state.platformLayerProxy->activateOnCompositingThread(this, layer);
+     } else
+@@ -124,6 +125,7 @@ void CoordinatedGraphicsScene::syncPlatf
+ #else
+     UNUSED_PARAM(layer);
+     UNUSED_PARAM(state);
++    UNUSED_PARAM(commitScope);
+ #endif
+ }
+ 
+@@ -222,7 +224,7 @@ void CoordinatedGraphicsScene::setLayerS
+     createTilesIfNeeded(layer, layerState);
+     removeTilesIfNeeded(layer, layerState, commitScope);
+     updateTilesIfNeeded(layer, layerState, commitScope);
+-    syncPlatformLayerIfNeeded(layer, layerState);
++    syncPlatformLayerIfNeeded(layer, layerState, commitScope);
+ }
+ 
+ TextureMapperLayer* CoordinatedGraphicsScene::getLayerByIDIfExists(CoordinatedLayerID id)
+@@ -243,13 +245,13 @@ void CoordinatedGraphicsScene::createLay
+     m_layers.add(id, WTFMove(newLayer));
+ }
+ 
+-void CoordinatedGraphicsScene::deleteLayers(const Vector<CoordinatedLayerID>& layerIDs)
++void CoordinatedGraphicsScene::deleteLayers(const Vector<CoordinatedLayerID>& layerIDs, CommitScope& commitScope)
+ {
+     for (auto& layerID : layerIDs)
+-        deleteLayer(layerID);
++        deleteLayer(layerID, commitScope);
+ }
+ 
+-void CoordinatedGraphicsScene::deleteLayer(CoordinatedLayerID layerID)
++void CoordinatedGraphicsScene::deleteLayer(CoordinatedLayerID layerID, CommitScope& commitScope)
+ {
+     std::unique_ptr<TextureMapperLayer> layer = m_layers.take(layerID);
+     ASSERT(layer);
+@@ -257,7 +259,9 @@ void CoordinatedGraphicsScene::deleteLay
+     m_backingStores.remove(layer.get());
+ #if USE(COORDINATED_GRAPHICS_THREADED)
+     if (auto platformLayerProxy = m_platformLayerProxies.take(layer.get()))
+-        platformLayerProxy->invalidate();
++        commitScope.releasedPlatformLayerProxies.add(platformLayerProxy);
++#else
++    UNUSED_PARAM(commitScope);
+ #endif
+ }
+ 
+@@ -436,7 +440,7 @@ void CoordinatedGraphicsScene::commitSce
+     CommitScope commitScope;
+ 
+     createLayers(state.layersToCreate);
+-    deleteLayers(state.layersToRemove);
++    deleteLayers(state.layersToRemove, commitScope);
+ 
+     if (state.rootCompositingLayer != m_rootLayerID)
+         setRootLayerID(state.rootCompositingLayer);
+@@ -448,6 +452,11 @@ void CoordinatedGraphicsScene::commitSce
+ 
+     for (auto& backingStore : commitScope.backingStoresWithPendingBuffers)
+         backingStore->commitTileOperations(*m_textureMapper);
++
++#if USE(COORDINATED_GRAPHICS_THREADED)
++    for (auto& proxy : commitScope.releasedPlatformLayerProxies)
++        proxy->invalidate();
++#endif
+ }
+ 
+ void CoordinatedGraphicsScene::ensureRootLayer()
+@@ -510,7 +519,7 @@ void CoordinatedGraphicsScene::applyStat
+         CommitScope commitScope;
+ 
+         createLayers(state.layersToCreate);
+-        deleteLayers(state.layersToRemove);
++        deleteLayers(state.layersToRemove, commitScope);
+ 
+         if (state.rootCompositingLayer != m_rootLayerID)
+             setRootLayerID(state.rootCompositingLayer);
+Index: git/Source/WebKit/Shared/CoordinatedGraphics/CoordinatedGraphicsScene.h
+===================================================================
+--- git.orig/Source/WebKit/Shared/CoordinatedGraphics/CoordinatedGraphicsScene.h
++++ git/Source/WebKit/Shared/CoordinatedGraphics/CoordinatedGraphicsScene.h
+@@ -96,11 +96,14 @@ private:
+ 
+         Vector<RefPtr<WebCore::CoordinatedBackingStore>> releasedImageBackings;
+         HashSet<RefPtr<WebCore::CoordinatedBackingStore>> backingStoresWithPendingBuffers;
++#if USE(COORDINATED_GRAPHICS_THREADED)
++        HashSet<RefPtr<WebCore::TextureMapperPlatformLayerProxy>> releasedPlatformLayerProxies;
++#endif
+     };
+ 
+     void setRootLayerID(WebCore::CoordinatedLayerID);
+     void createLayers(const Vector<WebCore::CoordinatedLayerID>&);
+-    void deleteLayers(const Vector<WebCore::CoordinatedLayerID>&);
++    void deleteLayers(const Vector<WebCore::CoordinatedLayerID>&, CommitScope&);
+     void setLayerState(WebCore::CoordinatedLayerID, const WebCore::CoordinatedGraphicsLayerState&, CommitScope&);
+     void setLayerChildrenIfNeeded(WebCore::TextureMapperLayer*, const WebCore::CoordinatedGraphicsLayerState&);
+     void updateTilesIfNeeded(WebCore::TextureMapperLayer*, const WebCore::CoordinatedGraphicsLayerState&, CommitScope&);
+@@ -108,7 +111,7 @@ private:
+     void removeTilesIfNeeded(WebCore::TextureMapperLayer*, const WebCore::CoordinatedGraphicsLayerState&, CommitScope&);
+     void setLayerFiltersIfNeeded(WebCore::TextureMapperLayer*, const WebCore::CoordinatedGraphicsLayerState&);
+     void setLayerAnimationsIfNeeded(WebCore::TextureMapperLayer*, const WebCore::CoordinatedGraphicsLayerState&);
+-    void syncPlatformLayerIfNeeded(WebCore::TextureMapperLayer*, const WebCore::CoordinatedGraphicsLayerState&);
++    void syncPlatformLayerIfNeeded(WebCore::TextureMapperLayer*, const WebCore::CoordinatedGraphicsLayerState&, CommitScope&);
+ 
+     void syncImageBackings(const WebCore::CoordinatedGraphicsState&, CommitScope&);
+     void createImageBacking(WebCore::CoordinatedImageBackingID);
+@@ -128,7 +131,7 @@ private:
+     void updateViewport();
+ 
+     void createLayer(WebCore::CoordinatedLayerID);
+-    void deleteLayer(WebCore::CoordinatedLayerID);
++    void deleteLayer(WebCore::CoordinatedLayerID, CommitScope&);
+ 
+     void assignImageBackingToLayer(WebCore::TextureMapperLayer*, WebCore::CoordinatedImageBackingID);
+     void ensureRootLayer();

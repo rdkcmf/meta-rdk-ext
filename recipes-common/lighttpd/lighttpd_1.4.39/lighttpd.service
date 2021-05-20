@@ -1,0 +1,15 @@
+[Unit]
+Description=Lightning Fast Webserver With Light System Requirements
+After=network.target local-fs.target previous-log-backup.service
+
+[Service]
+ExecStartPre=/usr/sbin/lighttpd -t -f /etc/lighttpd.conf
+ExecStartPre=-/bin/sh -c '/lib/rdk/lighttpd-setup.sh'
+ExecStart=/usr/sbin/lighttpd -D -f /etc/lighttpd.conf
+ExecReload=/bin/kill -HUP $MAINPID
+TimeoutStopSec=3
+RestartSec=3
+Restart=always
+
+[Install]
+WantedBy=multi-user.target

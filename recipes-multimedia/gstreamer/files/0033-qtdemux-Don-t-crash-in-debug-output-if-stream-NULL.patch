@@ -1,0 +1,29 @@
+From 875fc630d567a17f6b0fc0b6bf6a1bd90464e589 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Sebastian=20Dr=C3=B6ge?= <sebastian@centricular.com>
+Date: Thu, 27 Apr 2017 12:56:27 +0300
+Subject: [PATCH] qtdemux: Don't crash in debug output if stream==NULL
+
+That case is correctly handled below but not in the debug output.
+
+https://bugzilla.gnome.org/show_bug.cgi?id=781270
+---
+ gst/isomp4/qtdemux.c | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/gst/isomp4/qtdemux.c b/gst/isomp4/qtdemux.c
+index b321b97..6c95575 100644
+--- a/gst/isomp4/qtdemux.c
++++ b/gst/isomp4/qtdemux.c
+@@ -3933,7 +3933,8 @@ qtdemux_parse_moof (GstQTDemux * qtdemux, const guint8 * buffer, guint length,
+ 
+       GST_DEBUG_OBJECT (qtdemux, "decode time %" G_GINT64_FORMAT
+           " (%" GST_TIME_FORMAT ")", decode_time,
+-          GST_TIME_ARGS (QTSTREAMTIME_TO_GSTTIME (stream, decode_time)));
++          GST_TIME_ARGS (stream ? QTSTREAMTIME_TO_GSTTIME (stream,
++                  decode_time) : GST_CLOCK_TIME_NONE));
+ 
+       /* Discard the fragment buffer timestamp info to avoid using it.
+        * Rely on tfdt instead as it is more accurate than the timestamp
+-- 
+2.7.4
+

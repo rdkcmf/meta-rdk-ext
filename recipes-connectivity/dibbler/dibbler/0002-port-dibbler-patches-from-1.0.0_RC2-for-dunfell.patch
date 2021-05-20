@@ -1,0 +1,184 @@
+Date: Sep 28, 2017 7:13 AM
+From: 697b42237ce8bd8f09b9e4cb000bac3194f2fe5d Sep 3, 2018 12:23 PM
+Subject: [PATCH] RDKALL-973: Update dibbler to 1.0.1
+	Address dibbler security vulnerability
+	This patch contains following fixes that were added in version 1.0.0RC2
+		1] RDKSYSINTSW-1471/XONE-16135  - Fixes for using the interface specified in conf file
+		   Without this change, dibbler uses the first available interface for assigning IP
+		2] BPV-8919/DELIA-9823 - Changing the default work and database dir from read-only location to /tmp 
+Source: LGI
+License: GPL-2.0-or-later
+Upstream-Status: Pending
+Signed-off-by: Andre McCurdy <armccurdy@gmail.com>
+
+---
+ CfgMgr/CfgMgr.cpp                   | 35 +++++++++++++++++++++++++----
+ Misc/Portable.h                     | 14 ++++++------
+ Misc/Portable.h.in                  | 12 +++++-----
+ Port-linux/lowlevel-options-linux.c | 15 +++++++------
+ 4 files changed, 52 insertions(+), 24 deletions(-)
+
+Index: git/CfgMgr/CfgMgr.cpp
+===================================================================
+--- git.orig/CfgMgr/CfgMgr.cpp
++++ git/CfgMgr/CfgMgr.cpp
+@@ -182,18 +182,45 @@ bool TCfgMgr::setDUID(const std::string&
+     SPtr<TIfaceIface> realIface;
+ 
+     bool found=false;
++    const char *INTRFACE_SEARCH_STRING="iface";
++    FILE *dibblerClientConfPtr = NULL ;
++    char *line = NULL;
++    size_t len = 0;
++    char *interfaceName = NULL;
++    dibblerClientConfPtr = fopen( DEFAULT_CLNTCONF_FILE , "r");
++    if ( NULL == dibblerClientConfPtr ) {
++        Log(Info) << "Unable to open client config file  " << DEFAULT_CLNTCONF_FILE  << LogEnd;
++    } else {
++       while (getline(&line, &len, dibblerClientConfPtr) != -1) {
++           char *lineWithInterface = NULL ;
++           if ((lineWithInterface = strstr(line,INTRFACE_SEARCH_STRING))) {
++               char *tempConfigValue;
++               strtok_r(lineWithInterface, " ", &tempConfigValue);
++               interfaceName = strtok_r(NULL, " ", &tempConfigValue);
++               break ;
++           }
++       }
++       fclose(dibblerClientConfPtr);
++    }
+ 
++    if ( NULL != interfaceName ) {
++        ifaceMgr.getIfaceByName(interfaceName);
++    } else {
+         ifaceMgr.firstIface();
++    }
+     if (this->DUIDType == DUID_TYPE_EN) {
+-        realIface = ifaceMgr.getIface(); // use the first interface. It will be ignored anyway
+-        found = true;
+-
++        if ( NULL != interfaceName ) {
++            realIface = ifaceMgr.getIfaceByName(interfaceName);
++        } else {
++            realIface = ifaceMgr.getIface(); // use the first interface. It will be ignored anyway
++        }
++       found = true;
+         if (!realIface) {
+             Log(Error) << "Unable to find any interfaces. Can't generate DUID" << LogEnd;
+             return false;
+         }
+     }
+-    while( (!found) && (realIface=ifaceMgr.getIface()) )
++    while( (!found) && (realIface = ifaceMgr.getIfaceByName(interfaceName)) )
+     {
+         realIface->firstLLAddress();
+         char buf[64];
+Index: git/Misc/Portable.h
+===================================================================
+--- git.orig/Misc/Portable.h
++++ git/Misc/Portable.h
+@@ -164,18 +164,18 @@ struct link_state_notify_t
+ #if defined(BSD)
+ #define DEFAULT_WORKDIR       "/var/db/dibbler"
+ #else
+-#define DEFAULT_WORKDIR       "/var/lib/dibbler"
++#define DEFAULT_WORKDIR       "/tmp/dibbler"
+ #endif
+ 
+ #if defined(LINUX) || defined(BSD) || defined(SUNOS)
+ #define DEFAULT_CLNTCONF_FILE "/etc/dibbler/client.conf"
+-#define DEFAULT_CLNTPID_FILE  "/var/lib/dibbler/client.pid"
++#define DEFAULT_CLNTPID_FILE  "/tmp/dibbler/client.pid"
+ #define DEFAULT_CLNTLOG_FILE  "/var/log/dibbler/dibbler-client.log"
+ 
+ #define DEFAULT_SCRIPT     ""
+ #define SRVCONF_FILE       "/etc/dibbler/server.conf"
+ #define RELCONF_FILE       "/etc/dibbler/relay.conf"
+-#define RESOLVCONF_FILE    "/etc/resolv.conf"
++#define RESOLVCONF_FILE    "/etc/resolv.dnsmasq"
+ #define NTPCONF_FILE       "/etc/ntp.conf"
+ #define RADVD_FILE         "/etc/dibbler/radvd.conf"
+ 
+@@ -185,10 +185,10 @@ struct link_state_notify_t
+ #define CLNT_AAASPI_FILE   "/var/db/dibbler/AAA/AAA-SPI"
+ #define SRV_KEYMAP_FILE    "/var/db/dibbler/AAA/keys-mapping"
+ #else
+-#define SRVPID_FILE        "/var/lib/dibbler/server.pid"
+-#define RELPID_FILE        "/var/lib/dibbler/relay.pid"
+-#define CLNT_AAASPI_FILE   "/var/lib/dibbler/AAA/AAA-SPI"
+-#define SRV_KEYMAP_FILE    "/var/lib/dibbler/AAA/keys-mapping"
++#define SRVPID_FILE        "/tmp/dibbler/server.pid"
++#define RELPID_FILE        "/tmp/dibbler/relay.pid"
++#define CLNT_AAASPI_FILE   "/tmp/dibbler/AAA/AAA-SPI"
++#define SRV_KEYMAP_FILE    "/tmp/dibbler/AAA/keys-mapping"
+ #endif
+ 
+ #define SRVLOG_FILE        "/var/log/dibbler/dibbler-server.log"
+Index: git/Misc/Portable.h.in
+===================================================================
+--- git.orig/Misc/Portable.h.in
++++ git/Misc/Portable.h.in
+@@ -164,18 +164,18 @@ struct link_state_notify_t
+ #if defined(BSD)
+ #define DEFAULT_WORKDIR       "/var/db/dibbler"
+ #else
+-#define DEFAULT_WORKDIR       "/var/lib/dibbler"
++#define DEFAULT_WORKDIR       "/tmp/dibbler"
+ #endif
+ 
+ #if defined(LINUX) || defined(BSD) || defined(SUNOS)
+ #define DEFAULT_CLNTCONF_FILE "/etc/dibbler/client.conf"
+-#define DEFAULT_CLNTPID_FILE  "/var/lib/dibbler/client.pid"
++#define DEFAULT_CLNTPID_FILE  "/tmp/dibbler/client.pid"
+ #define DEFAULT_CLNTLOG_FILE  "/var/log/dibbler/dibbler-client.log"
+ 
+ #define DEFAULT_SCRIPT     ""
+ #define SRVCONF_FILE       "/etc/dibbler/server.conf"
+ #define RELCONF_FILE       "/etc/dibbler/relay.conf"
+-#define RESOLVCONF_FILE    "/etc/resolv.conf"
++#define RESOLVCONF_FILE    "/etc/resolv.dnsmasq"
+ #define NTPCONF_FILE       "/etc/ntp.conf"
+ #define RADVD_FILE         "/etc/dibbler/radvd.conf"
+ 
+@@ -185,10 +185,10 @@ struct link_state_notify_t
+ #define CLNT_AAASPI_FILE   "/var/db/dibbler/AAA/AAA-SPI"
+ #define SRV_KEYMAP_FILE    "/var/db/dibbler/AAA/keys-mapping"
+ #else
+-#define SRVPID_FILE        "/var/lib/dibbler/server.pid"
+-#define RELPID_FILE        "/var/lib/dibbler/relay.pid"
+-#define CLNT_AAASPI_FILE   "/var/lib/dibbler/AAA/AAA-SPI"
+-#define SRV_KEYMAP_FILE    "/var/lib/dibbler/AAA/keys-mapping"
++#define SRVPID_FILE        "/tmp/dibbler/server.pid"
++#define RELPID_FILE        "/tmp/dibbler/relay.pid"
++#define CLNT_AAASPI_FILE   "/tmp/dibbler/AAA/AAA-SPI"
++#define SRV_KEYMAP_FILE    "/tmp/dibbler/AAA/keys-mapping"
+ #endif
+ 
+ #define SRVLOG_FILE        "/var/log/dibbler/dibbler-server.log"
+Index: git/Port-linux/lowlevel-options-linux.c
+===================================================================
+--- git.orig/Port-linux/lowlevel-options-linux.c
++++ git/Port-linux/lowlevel-options-linux.c
+@@ -459,15 +459,16 @@ void add_radvd_conf(const char* ifname,
+     FILE * f;
+     f = fopen(RADVD_FILE, "r+");
+     if (!f) {
+-	/* unable to open, so this file is missing, let's create it */
+-	f = fopen(RADVD_FILE, "w");
+-	fprintf(f, "#\n");
+-	fprintf(f, "# Router Advertisement config file generated by Dibbler %s\n", DIBBLER_VERSION);
+-	fprintf(f, "#\n");
+-	fprintf(f, "\n");
++           sprintf(errorMsg, "Unable to create %s file. \n", RADVD_FILE);
+     }
++    else {
++                fprintf(f, "#\n");
++                fprintf(f, "# Router Advertisement config file generated by Dibbler %s\n", DIBBLER_VERSION);
++                fprintf(f, "#\n");
++                fprintf(f, "\n");
++    }    
+     if (!f) {
+-	sprintf(errorMsg, "Unable to open %s file.", RADVD_FILE);
++	sprintf(errorMsg, "Unable to open %s file. \n", RADVD_FILE);
+     }
+     fseek(f, 0, SEEK_END);
+     

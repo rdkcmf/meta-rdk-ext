@@ -1,0 +1,65 @@
+Date: Apr 20 17:50:42 2018
+
+From: e9fdf438d143f0840a24ded0972f21863dfb3fdd Apr 24 05:16:20 2018
+
+Subject: [PATCH] DELIA-26739 : xcal-device high memory usage
+
+	Patch for gupnp-service.c to remove the hash entries of older proxies.
+	
+Source: COMCAST
+
+License: LGPL-2.0-or-later
+
+Upstream-Status: Pending
+
+Signed-off-by: Kailash Baskar <kailash_baskar@comcast.com>
+---
+
+--- gupnp-0.20.10.org/libgupnp/gupnp-service.c  2018-04-20 07:33:23.532225184 +0000
++++ gupnp-0.20.10/libgupnp/gupnp-service.c      2018-04-20 07:45:56.290077551 +0000
+@@ -1170,6 +1170,16 @@ send_initial_state (SubscriptionData *da
+         g_free (mem);
+ }
+
++gboolean compare (gpointer key, gpointer value, gpointer user_data)
++{
++        SubscriptionData *nvalue;
++        nvalue = (SubscriptionData *) value;
++        if(g_strrstr(g_strstrip((char *)nvalue->callbacks->data), g_strstrip((char *)user_data)) == NULL)
++        {
++                return FALSE;
++        }
++        return TRUE;
++}
+
+ /* Subscription request */
+ static void
+@@ -1179,7 +1189,8 @@ subscribe (GUPnPService *service,
+ {
+         SubscriptionData *data;
+         char *start, *end, *uri;
+-
++       char ipAddr[24];
++       int res = 0;
+         data = g_slice_new0 (SubscriptionData);
+
+         /* Parse callback list */
+@@ -1208,7 +1219,7 @@ subscribe (GUPnPService *service,
+
+                 return;
+         }
+-
++       sscanf((char *)data->callbacks->data, "http://%99[^:]", ipAddr);
+         /* Add service and SID */
+         data->service = service;
+         data->sid     = generate_sid ();
+@@ -1224,7 +1235,7 @@ subscribe (GUPnPService *service,
+                          g_main_context_get_thread_default ());
+
+         g_source_unref (data->timeout_src);
+-
++       res = g_hash_table_foreach_remove (service->priv->subscriptions, compare, ipAddr);
+         /* Add to hash */
+         g_hash_table_insert (service->priv->subscriptions,
+                              data->sid,
+

@@ -1,0 +1,35 @@
+From 4fd15a2dfdcc639e21fdc4be1d62a6f7a7952758 Mon Sep 17 00:00:00 2001
+From: Ievgen Mutavchi <Ievgen_Mutavchi@comcast.com>
+Date: Thu, 12 Sep 2019 12:40:16 -0400
+Subject: [PATCH] Fast exit for WebKit processes
+
+---
+ Source/WebKit/Shared/unix/ChildProcessMain.h | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+diff --git a/Source/WebKit/Shared/unix/ChildProcessMain.h b/Source/WebKit/Shared/unix/ChildProcessMain.h
+index 7b90294..ede4c7f 100644
+--- a/Source/WebKit/Shared/unix/ChildProcessMain.h
++++ b/Source/WebKit/Shared/unix/ChildProcessMain.h
+@@ -30,6 +30,8 @@
+ #include "WebKit2Initialize.h"
+ #include <wtf/RunLoop.h>
+ 
++#include <unistd.h>
++
+ namespace WebKit {
+ 
+ class ChildProcessMainBase {
+@@ -61,6 +63,9 @@ int ChildProcessMain(int argc, char** argv)
+     RunLoop::run();
+     childMain.platformFinalize();
+ 
++    if (!getenv("RDKBROWSER2_CLEAN_EXIT_WEBPROCESS"))
++        _exit(EXIT_SUCCESS);
++
+     return EXIT_SUCCESS;
+ }
+ 
+-- 
+2.7.4
+

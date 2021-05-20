@@ -1,0 +1,29 @@
+From b27a4c03da4aadef60b0b5dce88ad85adc7cea4e Mon Sep 17 00:00:00 2001
+From: adam-bienkunski-red <adam.bienkunski@redembedded.com>
+Date: Wed, 11 Apr 2018 10:55:20 +0200
+Subject: [PATCH] Create internal dev directory with "x" permission
+
+To support intel subdirectories in /dev. The execute (x) premission was added
+in LXC mechanism. This allow to mount bind single device in container instead of
+whole directory.
+
+diff --git a/src/lxc/conf.c b/src/lxc/conf.c
+index c54ee41..6e00bea 100644
+--- a/src/lxc/conf.c
++++ b/src/lxc/conf.c
+@@ -1763,6 +1763,12 @@ static int mount_entry_create_dir_file(const struct mntent *mntent,
+ 		if (mkdir_p(pathdirname, 0755) < 0) {
+ 			WARN("Failed to create target directory");
+ 		}
++
++		ret = chmod(pathdirname, S_IRWXU|S_IRGRP|S_IXGRP|S_IROTH|S_IXOTH);
++		if (ret != 0) {
++			ERROR("chmod() failed with error %d", ret);
++			ret = -1;
++		}
+ 		pathfile = fopen(path, "wb");
+ 		if (!pathfile) {
+ 			WARN("Failed to create mount target '%s'", path);
+-- 
+2.7.4
+

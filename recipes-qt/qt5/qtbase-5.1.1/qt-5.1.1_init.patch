@@ -1,0 +1,897 @@
+Date: Nov 15 01:07:18 2013
+
+From: ecf7073215f1c8c856031894fb7ee09a6698abf6 Dec 12 15:26:52 2013
+
+Subject: [PATCH] qtbase 5.1.1: add RDK patches
+
+	This patch adds the Qt qtbase 5.1.1 patches from RDK to OE's qtbase.
+
+Source: COMCAST
+
+Upstream-Status: Pending
+
+Signed-off-by: Trevor Woerner <trevor.woerner@linaro.org>
+---
+
+Index: qtbase/src/gui/kernel/qopenglcontext.cpp
+===================================================================
+--- qtbase/src/gui/kernel/qopenglcontext.cpp
++++ qtbase/src/gui/kernel/qopenglcontext.cpp
+@@ -671,6 +671,22 @@
+     return funcs;
+ }
+ 
++void QOpenGLContext::updateContext( QRect &rect )
++{
++    Q_D(const QOpenGLContext);
++
++    if (!d->platformGLContext || !d->platformGLContext->isValid()) {
++        qWarning("platformGLContext is not valid");
++        return;
++    }
++
++    if (!d->surface || !d->surface->surfaceHandle()) {
++        return;
++    }
++
++    d->platformGLContext->updateContext(d->surface->surfaceHandle(), rect);
++}
++
+ /*!
+     Returns the set of OpenGL extensions supported by this context.
+ 
+Index: qtbase/src/gui/kernel/qopenglcontext.h
+===================================================================
+--- qtbase/src/gui/kernel/qopenglcontext.h
++++ qtbase/src/gui/kernel/qopenglcontext.h
+@@ -189,6 +189,8 @@
+     QSet<QByteArray> extensions() const;
+     bool hasExtension(const QByteArray &extension) const;
+ 
++    void updateContext( QRect &rect );
++
+ Q_SIGNALS:
+     void aboutToBeDestroyed();
+ 
+Index: qtbase/src/gui/kernel/qplatformopenglcontext.cpp
+===================================================================
+--- qtbase/src/gui/kernel/qplatformopenglcontext.cpp
++++ qtbase/src/gui/kernel/qplatformopenglcontext.cpp
+@@ -152,4 +152,8 @@
+     return (majorOk && minorOk);
+ }
+ 
++void QPlatformOpenGLContext::updateContext(QPlatformSurface *, QRect &)
++{
++}
++
+ QT_END_NAMESPACE
+Index: qtbase/src/gui/kernel/qplatformopenglcontext.h
+===================================================================
+--- qtbase/src/gui/kernel/qplatformopenglcontext.h
++++ qtbase/src/gui/kernel/qplatformopenglcontext.h
+@@ -85,6 +85,8 @@
+ 
+     virtual QFunctionPointer getProcAddress(const QByteArray &procName) = 0;
+ 
++    virtual void updateContext(QPlatformSurface *, QRect &rect);
++
+     QOpenGLContext *context() const;
+ 
+     static bool parseOpenGLVersion(const QByteArray &versionString, int &major, int &minor);
+Index: qtbase/src/opengl/gl2paintengineex/qpaintengineex_opengl2.cpp
+===================================================================
+--- qtbase/src/opengl/gl2paintengineex/qpaintengineex_opengl2.cpp
++++ qtbase/src/opengl/gl2paintengineex/qpaintengineex_opengl2.cpp
+@@ -132,8 +132,16 @@
+         glTexParameteri(target, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+         glTexParameteri(target, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+     }
+-    glTexParameteri(target, GL_TEXTURE_WRAP_S, wrapMode);
+-    glTexParameteri(target, GL_TEXTURE_WRAP_T, wrapMode);
++
++    // Ensure GL_CLAMP_TO_EDGE is used as OpenGL ES 2.0 requires this wrap mode
++    // for textures that are non-power-of-two dimensions. When a invalid wrap mode
++    // is used the texture unit will return all opaque black samples (0,0,0,1),
++    // and this is what we observer without this change.  It would be better ensure
++    // the correct mode is used at a higher level where the dimensions of the texture
++    // is known, but we see errors without this change and with the change we see
++    // no errors, so we're going with this for the moment.
++    glTexParameterf(target, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE );
++    glTexParameterf(target, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE );
+ }
+ 
+ 
+@@ -1817,7 +1825,8 @@
+ 
+             funcs.glActiveTexture(GL_TEXTURE0 + QT_MASK_TEXTURE_UNIT);
+             glBindTexture(GL_TEXTURE_2D, cache->texture());
+-            updateTextureFilter(GL_TEXTURE_2D, GL_REPEAT, false);
++            // Must use GL_CLAMP_TO_EDGE for non-power-of-two textures
++            updateTextureFilter(GL_TEXTURE_2D, GL_CLAMP_TO_EDGE, false);
+ 
+ #if defined(QT_OPENGL_DRAWCACHEDGLYPHS_INDEX_ARRAY_VBO)
+             glDrawElements(GL_TRIANGLE_STRIP, 6 * numGlyphs, GL_UNSIGNED_SHORT, 0);
+Index: qtbase/src/opengl/gl2paintengineex/qtextureglyphcache_gl.cpp
+===================================================================
+--- qtbase/src/opengl/gl2paintengineex/qtextureglyphcache_gl.cpp
++++ qtbase/src/opengl/gl2paintengineex/qtextureglyphcache_gl.cpp
+@@ -192,6 +192,12 @@
+     funcs->glActiveTexture(GL_TEXTURE0 + QT_IMAGE_TEXTURE_UNIT);
+     glBindTexture(GL_TEXTURE_2D, oldTexture);
+ 
++    // Ensure GL_CLAMP_TO_EDGE is used for the render of the old texture
++    // into the temp texture as the cache textures are may be non-pot and
++    // OpenGL ES 2.0 requires GL_CLAMP_TO_EDGE for non-pot textures.
++    glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
++    glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
++
+     if (pex != 0)
+         pex->transferMode(BrushDrawingMode);
+ 
+Index: qtbase/src/opengl/qgl.cpp
+===================================================================
+--- qtbase/src/opengl/qgl.cpp
++++ qtbase/src/opengl/qgl.cpp
+@@ -4679,6 +4679,15 @@
+     d->glcx->drawTexture(point, textureId, textureTarget);
+ }
+ 
++void QGLWidget::updateSize()
++{
++    Q_D(QGLWidget);
++    if ( d->glcx )
++    {
++        d->glcx->updateContext( data->crect );
++    }
++}
++
+ Q_GLOBAL_STATIC(QGLEngineThreadStorage<QGL2PaintEngineEx>, qt_gl_2_engine)
+ 
+ Q_OPENGL_EXPORT QPaintEngine* qt_qgl_paint_engine()
+Index: qtbase/src/opengl/qgl.h
+===================================================================
+--- qtbase/src/opengl/qgl.h
++++ qtbase/src/opengl/qgl.h
+@@ -307,6 +307,8 @@
+ 
+     static const QGLContext* currentContext();
+ 
++    void updateContext( QRect &rect );
++
+     static QGLContext *fromOpenGLContext(QOpenGLContext *platformContext);
+     QOpenGLContext *contextHandle() const;
+ 
+@@ -425,6 +427,8 @@
+     void drawTexture(const QRectF &target, GLuint textureId, GLenum textureTarget = GL_TEXTURE_2D);
+     void drawTexture(const QPointF &point, GLuint textureId, GLenum textureTarget = GL_TEXTURE_2D);
+ 
++    void updateSize();
++
+ public Q_SLOTS:
+     virtual void updateGL();
+     virtual void updateOverlayGL();
+Index: qtbase/src/opengl/qgl_qpa.cpp
+===================================================================
+--- qtbase/src/opengl/qgl_qpa.cpp
++++ qtbase/src/opengl/qgl_qpa.cpp
+@@ -177,6 +177,13 @@
+     return d->valid;
+ }
+ 
++void QGLContext::updateContext( QRect &rect )
++{
++    Q_D(QGLContext);
++    if (d->guiGlContext)
++        d->guiGlContext->updateContext(rect);
++}
++
+ void QGLContext::reset()
+ {
+     Q_D(QGLContext);
+Index: qtbase/src/platformsupport/input/evdevkeyboard/qevdevkeyboardhandler.cpp
+===================================================================
+--- qtbase/src/platformsupport/input/evdevkeyboard/qevdevkeyboardhandler.cpp
++++ qtbase/src/platformsupport/input/evdevkeyboard/qevdevkeyboardhandler.cpp
+@@ -80,9 +80,8 @@
+         unloadKeymap();
+ 
+     // socket notifier for events on the keyboard device
+-    QSocketNotifier *notifier;
+-    notifier = new QSocketNotifier(m_fd, QSocketNotifier::Read, this);
+-    connect(notifier, SIGNAL(activated(int)), this, SLOT(readKeycode()));
++    m_notifier = new QSocketNotifier(m_fd, QSocketNotifier::Read, this);
++    connect(m_notifier, SIGNAL(activated(int)), this, SLOT(readKeycode()));
+ }
+ 
+ QEvdevKeyboardHandler::~QEvdevKeyboardHandler()
+@@ -173,6 +172,11 @@
+             qWarning("Got EOF from the input device.");
+             return;
+         } else if (result < 0) {
++            if (errno == ENODEV) {
++                m_notifier->setEnabled(false);
++                qWarning("Got ENODEV, disable poll of the input device.");
++                return;
++            }
+             if (errno != EINTR && errno != EAGAIN) {
+                 qWarning("Could not read from input device: %s", strerror(errno));
+                 return;
+Index: qtbase/src/platformsupport/input/evdevkeyboard/qevdevkeyboardhandler_p.h
+===================================================================
+--- qtbase/src/platformsupport/input/evdevkeyboard/qevdevkeyboardhandler_p.h
++++ qtbase/src/platformsupport/input/evdevkeyboard/qevdevkeyboardhandler_p.h
+@@ -48,6 +48,8 @@
+ 
+ QT_BEGIN_NAMESPACE
+ 
++class QSocketNotifier;
++
+ namespace QEvdevKeyboardMap {
+     const quint32 FileMagic = 0x514d4150; // 'QMAP'
+ 
+@@ -189,6 +191,8 @@
+     const QEvdevKeyboardMap::Composing *m_keycompose;
+     int m_keycompose_size;
+ 
++    QSocketNotifier *m_notifier;
++
+     static const QEvdevKeyboardMap::Mapping s_keymap_default[];
+     static const QEvdevKeyboardMap::Composing s_keycompose_default[];
+ };
+Index: qtbase/src/platformsupport/input/evdevmouse/qevdevmousehandler.cpp
+===================================================================
+--- qtbase/src/platformsupport/input/evdevmouse/qevdevmousehandler.cpp
++++ qtbase/src/platformsupport/input/evdevmouse/qevdevmousehandler.cpp
+@@ -94,7 +94,7 @@
+ }
+ 
+ QEvdevMouseHandler::QEvdevMouseHandler(const QString &device, int fd, bool compression, int jitterLimit)
+-    : m_device(device), m_fd(fd), m_notify(0), m_x(0), m_y(0), m_prevx(0), m_prevy(0),
++    : m_device(device), m_fd(fd), m_notifier(0), m_x(0), m_y(0), m_prevx(0), m_prevy(0),
+       m_compression(compression), m_buttons(0), m_prevInvalid(true)
+ {
+     setObjectName(QLatin1String("Evdev Mouse Handler"));
+@@ -102,9 +102,8 @@
+     m_jitterLimitSquared = jitterLimit * jitterLimit;
+ 
+     // socket notifier for events on the mouse device
+-    QSocketNotifier *notifier;
+-    notifier = new QSocketNotifier(m_fd, QSocketNotifier::Read, this);
+-    connect(notifier, SIGNAL(activated(int)), this, SLOT(readMouseData()));
++    m_notifier = new QSocketNotifier(m_fd, QSocketNotifier::Read, this);
++    connect(m_notifier, SIGNAL(activated(int)), this, SLOT(readMouseData()));
+ }
+ 
+ QEvdevMouseHandler::~QEvdevMouseHandler()
+@@ -142,6 +141,11 @@
+             qWarning("Got EOF from the input device.");
+             return;
+         } else if (result < 0) {
++            if (errno == ENODEV) {
++                m_notifier->setEnabled(false);
++                qWarning("Got ENODEV, disable poll of the input device.");
++                return;
++            }
+             if (errno != EINTR && errno != EAGAIN) {
+                 qWarning("Could not read from input device: %s", strerror(errno));
+                 return;
+Index: qtbase/src/platformsupport/input/evdevmouse/qevdevmousehandler_p.h
+===================================================================
+--- qtbase/src/platformsupport/input/evdevmouse/qevdevmousehandler_p.h
++++ qtbase/src/platformsupport/input/evdevmouse/qevdevmousehandler_p.h
+@@ -70,7 +70,7 @@
+ 
+     QString m_device;
+     int m_fd;
+-    QSocketNotifier *m_notify;
++    QSocketNotifier *m_notifier;
+     int m_x, m_y;
+     int m_prevx, m_prevy;
+     bool m_compression;
+Index: qtbase/src/network/access/qhttpnetworkconnectionchannel.cpp
+===================================================================
+--- qtbase/src/network/access/qhttpnetworkconnectionchannel.cpp
++++ qtbase/src/network/access/qhttpnetworkconnectionchannel.cpp
+@@ -559,10 +559,10 @@
+     }
+ 
+     // already trying to connect?
+-    if (socketState == QAbstractSocket::HostLookupState ||
+-        socketState == QAbstractSocket::ConnectingState) {
+-        return false;
+-    }
++    //if (socketState == QAbstractSocket::HostLookupState ||
++    //    socketState == QAbstractSocket::ConnectingState) {
++    //    return false;
++    //}
+ 
+     // make sure that this socket is in a connected state, if not initiate
+     // connection to the host.
+Index: qtbase/src/network/access/qhttpnetworkconnection.cpp
+===================================================================
+--- qtbase/src/network/access/qhttpnetworkconnection.cpp
++++ qtbase/src/network/access/qhttpnetworkconnection.cpp
+@@ -68,7 +68,12 @@
+ 
+ QT_BEGIN_NAMESPACE
+ 
++#ifdef CONFIGURE_HTTP_CHANNELS
++int QHttpNetworkConnectionPrivate::defaultChannelCount = 6;
++bool QHttpNetworkConnectionPrivate::bQHttpChannelsCreated = false;
++#else
+ const int QHttpNetworkConnectionPrivate::defaultChannelCount = 6;
++#endif
+ 
+ // The pipeline length. So there will be 4 requests in flight.
+ const int QHttpNetworkConnectionPrivate::defaultPipelineLength = 3;
+@@ -87,6 +92,9 @@
+ #endif
+ {
+     channels = new QHttpNetworkConnectionChannel[channelCount];
++#ifdef CONFIGURE_HTTP_CHANNELS
++    bQHttpChannelsCreated = true; // http channels are created so changing channelCount doesn't have any effect hereafter
++#endif
+ }
+ 
+ QHttpNetworkConnectionPrivate::QHttpNetworkConnectionPrivate(quint16 channelCount, const QString &hostName, quint16 port, bool encrypt)
+@@ -98,6 +106,9 @@
+ #endif
+ {
+     channels = new QHttpNetworkConnectionChannel[channelCount];
++#ifdef CONFIGURE_HTTP_CHANNELS
++    bQHttpChannelsCreated = true; // http channels are created so changing channelCount doesn't have any effect hereafter
++#endif
+ }
+ 
+ 
+@@ -566,7 +577,8 @@
+         // emissions that can come out from this code path need to
+         // be QueuedConnection.
+         // We are currently trying to fine-tune this.
+-        _q_startNextRequest();
++        // _q_startNextRequest();
++        QMetaObject::invokeMethod(q, "_q_startNextRequest", Qt::QueuedConnection);
+     }
+     return reply;
+ }
+@@ -602,6 +614,12 @@
+             prepareRequest(messagePair);
+         channels[i].request = messagePair.first;
+         channels[i].reply = messagePair.second;
++
++        if (channels[i].reply != 0 && socket && socket->isValid())
++        {
++            emit channels[i].reply->started();
++        }
++
+         return true;
+     }
+ 
+@@ -612,6 +630,12 @@
+             prepareRequest(messagePair);
+         channels[i].request = messagePair.first;
+         channels[i].reply = messagePair.second;
++
++        if (channels[i].reply != 0 && socket && socket->isValid())
++        {
++            emit channels[i].reply->started();
++        }
++
+         return true;
+     }
+     return false;
+@@ -1270,6 +1294,27 @@
+ 
+ #endif //QT_NO_SSL
+ 
++// Set the http default channel count
++#ifdef CONFIGURE_HTTP_CHANNELS
++int QHttpNetworkConnectionPrivate::setHttpDefaultChannelCount(uint numChannels)
++{
++    int nRet = -1;
++    if(!bQHttpChannelsCreated) // before QHttpNetworkConnectionChannel is created
++    {
++        nRet = defaultChannelCount = (numChannels < CHANNEL_COUNT_MIN) ? CHANNEL_COUNT_MIN : // channel cnt should not be less than 6
++                                         (numChannels > CHANNEL_COUNT_MAX) ? CHANNEL_COUNT_MAX :  // channel cnt should not be more than 100
++                                             numChannels;
++
++        qDebug() << "QHttpNetworkConnectionPrivate::setHttpDefaultChannelCount success";
++    }
++    else
++    {
++        qDebug() << "QHttpNetworkConnectionPrivate::setHttpDefaultChannelCount failure";
++    }
++    return nRet;
++}
++#endif
++
+ #ifndef QT_NO_NETWORKPROXY
+ // only called from QHttpNetworkConnectionChannel::_q_proxyAuthenticationRequired, not
+ // from QHttpNetworkConnectionChannel::handleAuthenticationChallenge
+Index: qtbase/src/network/access/qhttpnetworkconnection_p.h
+===================================================================
+--- qtbase/src/network/access/qhttpnetworkconnection_p.h
++++ qtbase/src/network/access/qhttpnetworkconnection_p.h
+@@ -143,6 +143,10 @@
+     Q_PRIVATE_SLOT(d_func(), void _q_connectDelayedChannel())
+ };
+ 
++#ifdef CONFIGURE_HTTP_CHANNELS
++#define CHANNEL_COUNT_MIN 6
++#define CHANNEL_COUNT_MAX 100
++#endif
+ 
+ // private classes
+ typedef QPair<QHttpNetworkRequest, QHttpNetworkReply*> HttpMessagePair;
+@@ -152,7 +156,12 @@
+ {
+     Q_DECLARE_PUBLIC(QHttpNetworkConnection)
+ public:
++#ifdef CONFIGURE_HTTP_CHANNELS
++    static int defaultChannelCount;     // not a const var so that it can be set later
++    static bool bQHttpChannelsCreated;  // to indicate if QHttpNetworkChannels are created
++#else
+     static const int defaultChannelCount;
++#endif
+     static const int defaultPipelineLength;
+     static const int defaultRePipelineLength;
+ 
+@@ -247,6 +256,10 @@
+     QSharedPointer<QNetworkSession> networkSession;
+ #endif
+ 
++#ifdef CONFIGURE_HTTP_CHANNELS
++    static int setHttpDefaultChannelCount(uint numChannels); // API to set the default channel count but this would be successful before QHttpNetworkConnectionChannel creation
++#endif
++
+     friend class QHttpNetworkConnectionChannel;
+ };
+ 
+Index: qtbase/src/network/access/qhttpnetworkreply_p.h
+===================================================================
+--- qtbase/src/network/access/qhttpnetworkreply_p.h
++++ qtbase/src/network/access/qhttpnetworkreply_p.h
+@@ -147,6 +147,7 @@
+ #endif
+ 
+ Q_SIGNALS:
++    void started();
+     void readyRead();
+     void finished();
+     void finishedWithError(QNetworkReply::NetworkError errorCode, const QString &detail = QString());
+Index: qtbase/src/network/access/qhttpthreaddelegate.cpp
+===================================================================
+--- qtbase/src/network/access/qhttpthreaddelegate.cpp
++++ qtbase/src/network/access/qhttpthreaddelegate.cpp
+@@ -329,6 +329,8 @@
+ 
+     connect(httpReply, SIGNAL(cacheCredentials(QHttpNetworkRequest,QAuthenticator*)),
+             this, SLOT(cacheCredentialsSlot(QHttpNetworkRequest,QAuthenticator*)));
++
++    connect(httpReply, SIGNAL(started()), this, SIGNAL(started()));
+ }
+ 
+ // This gets called from the user thread or by the synchronous HTTP timeout timer
+Index: qtbase/src/network/access/qhttpthreaddelegate_p.h
+===================================================================
+--- qtbase/src/network/access/qhttpthreaddelegate_p.h
++++ qtbase/src/network/access/qhttpthreaddelegate_p.h
+@@ -144,6 +144,7 @@
+     void downloadData(QByteArray);
+     void error(QNetworkReply::NetworkError, const QString);
+     void downloadFinished();
++    void started();
+ public slots:
+     // This are called via QueuedConnection from user thread
+     void startRequest();
+Index: qtbase/src/network/access/qnetworkaccessmanager.cpp
+===================================================================
+--- qtbase/src/network/access/qnetworkaccessmanager.cpp
++++ qtbase/src/network/access/qnetworkaccessmanager.cpp
+@@ -71,6 +71,10 @@
+ 
+ #include "qthread.h"
+ 
++#ifdef CONFIGURE_HTTP_CHANNELS
++#include "qhttpnetworkconnection_p.h"
++#endif
++
+ QT_BEGIN_NAMESPACE
+ 
+ Q_GLOBAL_STATIC(QNetworkAccessFileBackendFactory, fileBackend)
+@@ -1089,6 +1093,10 @@
+ #endif
+         ) {
+         QNetworkReplyHttpImpl *reply = new QNetworkReplyHttpImpl(this, request, op, outgoingData);
++
++        // connect to 'started' signal before sending request
++        connect(reply, SIGNAL(started()), this, SLOT(_q_replyStarted()));
++
+ #ifndef QT_NO_BEARERMANAGEMENT
+         connect(this, SIGNAL(networkSessionConnected()),
+                 reply, SLOT(_q_networkSessionConnected()));
+@@ -1144,6 +1152,17 @@
+     QNetworkAccessManagerPrivate::clearCache(this);
+ }
+ 
++// API exposed to set HTTP Channel Count maintained in QHttpChannelConnectionPrivate
++int QNetworkAccessManager::setHttpChannelCount(uint numChannels)
++{
++#ifdef CONFIGURE_HTTP_CHANNELS
++    return QHttpNetworkConnectionPrivate::setHttpDefaultChannelCount(numChannels);
++#else // Not supported if the flag is turned off
++    qDebug() << "QNetworkAccessManager::setHttpChannelCount not supported";
++#endif
++    return -1;
++}
++
+ void QNetworkAccessManagerPrivate::_q_replyFinished()
+ {
+     Q_Q(QNetworkAccessManager);
+@@ -1172,6 +1191,15 @@
+ #endif
+ }
+ 
++void QNetworkAccessManagerPrivate::_q_replyStarted()
++{
++    Q_Q(QNetworkAccessManager);
++
++    QNetworkReply *reply = qobject_cast<QNetworkReply *>(q->sender());
++    if (reply)
++        emit q->started(reply);
++}
++
+ void QNetworkAccessManagerPrivate::_q_replySslErrors(const QList<QSslError> &errors)
+ {
+ #ifndef QT_NO_SSL
+Index: qtbase/src/network/access/qnetworkaccessmanager.h
+===================================================================
+--- qtbase/src/network/access/qnetworkaccessmanager.h
++++ qtbase/src/network/access/qnetworkaccessmanager.h
+@@ -131,6 +131,7 @@
+     void setNetworkAccessible(NetworkAccessibility accessible);
+     NetworkAccessibility networkAccessible() const;
+ #endif
++    static int setHttpChannelCount(uint numChannels); // API exposed to set HTTP channel count maintained in QHttpNetworkConnectionPrivate
+ 
+ Q_SIGNALS:
+ #ifndef QT_NO_NETWORKPROXY
+@@ -138,6 +139,7 @@
+ #endif
+     void authenticationRequired(QNetworkReply *reply, QAuthenticator *authenticator);
+     void finished(QNetworkReply *reply);
++    void started(QNetworkReply *reply);
+ #ifndef QT_NO_SSL
+     void encrypted(QNetworkReply *reply);
+     void sslErrors(QNetworkReply *reply, const QList<QSslError> &errors);
+@@ -160,6 +162,7 @@
+ 
+     Q_DECLARE_PRIVATE(QNetworkAccessManager)
+     Q_PRIVATE_SLOT(d_func(), void _q_replyFinished())
++    Q_PRIVATE_SLOT(d_func(), void _q_replyStarted())
+     Q_PRIVATE_SLOT(d_func(), void _q_replyEncrypted())
+     Q_PRIVATE_SLOT(d_func(), void _q_replySslErrors(QList<QSslError>))
+ #ifndef QT_NO_BEARERMANAGEMENT
+Index: qtbase/src/network/access/qnetworkaccessmanager_p.h
+===================================================================
+--- qtbase/src/network/access/qnetworkaccessmanager_p.h
++++ qtbase/src/network/access/qnetworkaccessmanager_p.h
+@@ -90,6 +90,7 @@
+     ~QNetworkAccessManagerPrivate();
+ 
+     void _q_replyFinished();
++    void _q_replyStarted();
+     void _q_replyEncrypted();
+     void _q_replySslErrors(const QList<QSslError> &errors);
+     QNetworkReply *postProcess(QNetworkReply *reply);
+Index: qtbase/src/network/access/qnetworkreply.h
+===================================================================
+--- qtbase/src/network/access/qnetworkreply.h
++++ qtbase/src/network/access/qnetworkreply.h
+@@ -145,6 +145,7 @@
+ 
+ Q_SIGNALS:
+     void metaDataChanged();
++    void started();
+     void finished();
+     void error(QNetworkReply::NetworkError);
+ #ifndef QT_NO_SSL
+Index: qtbase/src/network/access/qnetworkreplyhttpimpl.cpp
+===================================================================
+--- qtbase/src/network/access/qnetworkreplyhttpimpl.cpp
++++ qtbase/src/network/access/qnetworkreplyhttpimpl.cpp
+@@ -607,19 +607,22 @@
+     Q_Q(QNetworkReplyHttpImpl);
+ 
+     QThread *thread = 0;
++    //Patch for XRE-2372 And XRE-2114
++    bool startHttpThread = 0;
++    //Patch End for XRE-2372 And XRE-2114
+     if (synchronous) {
+         // A synchronous HTTP request uses its own thread
+         thread = new QThread();
+         thread->setObjectName(QStringLiteral("Qt HTTP synchronous thread"));
+         QObject::connect(thread, SIGNAL(finished()), thread, SLOT(deleteLater()));
+-        thread->start();
+     } else if (!managerPrivate->httpThread) {
+         // We use the manager-global thread.
+         // At some point we could switch to having multiple threads if it makes sense.
+         managerPrivate->httpThread = new QThread();
+         managerPrivate->httpThread->setObjectName(QStringLiteral("Qt HTTP thread"));
+-        managerPrivate->httpThread->start();
+-
++        //Patch for XRE-2372 And XRE-2114
++        startHttpThread = 1;
++        //Patch End for XRE-2372 And XRE-2114
+         thread = managerPrivate->httpThread;
+     } else {
+         // Asynchronous request, thread already exists
+@@ -755,6 +758,27 @@
+ 
+     // Create the HTTP thread delegate
+     QHttpThreadDelegate *delegate = new QHttpThreadDelegate;
++    //Patch for XRE-2372 And XRE-2114
++    QNonContiguousByteDeviceThreadForwardImpl *forwardUploadDevice = NULL;
++    if(!synchronous)
++    {
++        if (uploadByteDevice)
++        {
++	    forwardUploadDevice = new QNonContiguousByteDeviceThreadForwardImpl(uploadByteDevice->atEnd(), uploadByteDevice->size());
++	    forwardUploadDevice->setParent(delegate); // needed to make sure it is moved on moveToThread()
++        }
++    }
++    // Move the delegate to the http thread
++    delegate->moveToThread(thread);
++    // This call automatically moves the uploadDevice too for the asynchronous case.
++    if(startHttpThread || synchronous || (!thread->isRunning()))
++    {
++        if (!synchronous) QObject::connect(thread, SIGNAL(started()),q,SLOT(startNetworkRequest()),Qt::QueuedConnection);
++        startHttpThread = 1;
++        thread->start();
++    }
++    //Patch End for XRE-2372  And XRE-2114
++
+ #ifndef QT_NO_BEARERMANAGEMENT
+     delegate->networkSession = managerPrivate->getNetworkSession();
+ #endif
+@@ -800,6 +824,9 @@
+         delegate->pendingDownloadProgress = pendingDownloadProgressEmissions;
+ 
+         // Connect the signals of the delegate to us
++        QObject::connect(delegate, SIGNAL(started()),
++                q, SLOT(replyStarted()),
++                Qt::QueuedConnection);
+         QObject::connect(delegate, SIGNAL(downloadData(QByteArray)),
+                 q, SLOT(replyDownloadData(QByteArray)),
+                 Qt::QueuedConnection);
+@@ -845,28 +872,34 @@
+         QObject::connect(q, SIGNAL(readBufferFreed(qint64)), delegate, SLOT(readBufferFreed(qint64)));
+ 
+         if (uploadByteDevice) {
+-            QNonContiguousByteDeviceThreadForwardImpl *forwardUploadDevice =
+-                    new QNonContiguousByteDeviceThreadForwardImpl(uploadByteDevice->atEnd(), uploadByteDevice->size());
+-            if (uploadByteDevice->isResetDisabled())
+-                forwardUploadDevice->disableReset();
+-            forwardUploadDevice->setParent(delegate); // needed to make sure it is moved on moveToThread()
+-            delegate->httpRequest.setUploadByteDevice(forwardUploadDevice);
+-
+-            // From main thread to user thread:
+-            QObject::connect(q, SIGNAL(haveUploadData(QByteArray,bool,qint64)),
+-                             forwardUploadDevice, SLOT(haveDataSlot(QByteArray,bool,qint64)), Qt::QueuedConnection);
+-            QObject::connect(uploadByteDevice.data(), SIGNAL(readyRead()),
+-                             forwardUploadDevice, SIGNAL(readyRead()),
+-                             Qt::QueuedConnection);
++            //Patch for XRE-2372 And XRE-2114
++            if(forwardUploadDevice)
++            {
++                //Patch End for XRE-2372 And XRE-2114
++                if (uploadByteDevice->isResetDisabled())
++                    forwardUploadDevice->disableReset();
++                delegate->httpRequest.setUploadByteDevice(forwardUploadDevice);
++
++
++                // From main thread to user thread:
++                QObject::connect(q, SIGNAL(haveUploadData(QByteArray,bool,qint64)),
++                                 forwardUploadDevice, SLOT(haveDataSlot(QByteArray,bool,qint64)), Qt::QueuedConnection);
++                QObject::connect(uploadByteDevice.data(), SIGNAL(readyRead()),
++                                 forwardUploadDevice, SIGNAL(readyRead()),
++                                 Qt::QueuedConnection);
+ 
+             // From http thread to user thread:
+-            QObject::connect(forwardUploadDevice, SIGNAL(wantData(qint64)),
+-                             q, SLOT(wantUploadDataSlot(qint64)));
+-            QObject::connect(forwardUploadDevice, SIGNAL(processedData(qint64)),
+-                             q, SLOT(sentUploadDataSlot(qint64)));
+-            QObject::connect(forwardUploadDevice, SIGNAL(resetData(bool*)),
+-                    q, SLOT(resetUploadDataSlot(bool*)),
+-                    Qt::BlockingQueuedConnection); // this is the only one with BlockingQueued!
++                QObject::connect(forwardUploadDevice, SIGNAL(wantData(qint64)),
++                                 q, SLOT(wantUploadDataSlot(qint64)));
++                QObject::connect(forwardUploadDevice, SIGNAL(processedData(qint64)),
++                                 q, SLOT(sentUploadDataSlot(qint64)));
++                QObject::connect(forwardUploadDevice, SIGNAL(resetData(bool*)),
++                                 q, SLOT(resetUploadDataSlot(bool*)),
++                                 Qt::BlockingQueuedConnection); // this is the only one with BlockingQueued!
++            //Patch for XRE-2372 And XRE-2114
++            }
++            //Patch End for XRE-2372 And XRE-2114
++
+         }
+     } else if (synchronous) {
+         QObject::connect(q, SIGNAL(startHttpRequestSynchronously()), delegate, SLOT(startRequestSynchronously()), Qt::BlockingQueuedConnection);
+@@ -882,11 +915,6 @@
+         }
+     }
+ 
+-
+-    // Move the delegate to the http thread
+-    delegate->moveToThread(thread);
+-    // This call automatically moves the uploadDevice too for the asynchronous case.
+-
+     // Prepare timers for progress notifications
+     downloadProgressSignalChoke.start();
+     uploadProgressSignalChoke.invalidate();
+@@ -925,10 +953,21 @@
+ 
+         finished();
+     } else {
+-        emit q->startHttpRequest(); // Signal to the HTTP thread and go back to user.
++        //Patch for XRE-2372 And XRE-2114
++        if(!startHttpThread)
++           emit q->startHttpRequest(); // Signal to the HTTP thread and go back to user.
++        //Patch End for XRE-2372 And XRE-2114
+     }
+ }
+ 
++//Patch for XRE-2372 And XRE-2114
++void QNetworkReplyHttpImplPrivate::startNetworkRequest()
++{
++   Q_Q(QNetworkReplyHttpImpl);
++   emit q->startHttpRequest(); // Signal to the HTTP thread and go back to user.
++}
++//Patch End for XRE-2372 And XRE-2114
++
+ void QNetworkReplyHttpImplPrivate::invalidateCache()
+ {
+     QAbstractNetworkCache *nc = managerPrivate->networkCache;
+@@ -1046,6 +1085,11 @@
+     finished();
+ }
+ 
++void QNetworkReplyHttpImplPrivate::replyStarted()
++{
++    started();
++}
++
+ void QNetworkReplyHttpImplPrivate::checkForRedirect(const int statusCode)
+ {
+     Q_Q(QNetworkReplyHttpImpl);
+@@ -1061,6 +1105,8 @@
+         QUrl url = QUrl(QString::fromUtf8(header));
+         if (!url.isValid())
+             url = QUrl(QLatin1String(header));
++        if (getenv("DEBUG_QT_REDIRECTS"))
++            printf("Got redirect to %s\n", url.toEncoded().data());
+         q->setAttribute(QNetworkRequest::RedirectionTargetAttribute, url);
+     }
+ }
+@@ -1562,6 +1608,14 @@
+         qDebug("QNetworkReplyImpl::_q_startOperation was called more than once");
+         return;
+     }
++    //COMCAST MODIFICATION BEGIN [NETWORK]
++    if (state == Aborted) {
++        // there is a use case when reply gets aborted before
++        // start, see XRE-3566 for details.
++        return;
++    }
++    //COMCAST MODIFICATION END [NETWORK]
++
+     state = Working;
+ 
+ #ifndef QT_NO_BEARERMANAGEMENT
+@@ -1856,6 +1910,13 @@
+     finished();
+ }
+ 
++void QNetworkReplyHttpImplPrivate::started()
++{
++    Q_Q(QNetworkReplyHttpImpl);
++    if (state != Aborted)
++        emit q->started();
++}
++
+ void QNetworkReplyHttpImplPrivate::finished()
+ {
+     Q_Q(QNetworkReplyHttpImpl);
+@@ -1936,6 +1997,16 @@
+ 
+ void QNetworkReplyHttpImplPrivate::metaDataChanged()
+ {
++    //COMCAST MODIFICATION BEGIN [NETWORK]
++    if (state == Aborted)
++    {
++        // At this point this->manager (QNetworkAccessManager) may have been destroyed,
++        // so bail out to prevent a crash (see XRE-3469).
++        // We're not interested in incoming data after abort() anyway.
++        return;
++    }
++    //COMCAST MODIFICATION END [NETWORK]
++
+     // FIXME merge this with replyDownloadMetaData(); ?
+ 
+     Q_Q(QNetworkReplyHttpImpl);
+Index: qtbase/src/network/access/qnetworkreplyhttpimpl_p.h
+===================================================================
+--- qtbase/src/network/access/qnetworkreplyhttpimpl_p.h
++++ qtbase/src/network/access/qnetworkreplyhttpimpl_p.h
+@@ -111,6 +111,7 @@
+     // From reply
+     Q_PRIVATE_SLOT(d_func(), void replyDownloadData(QByteArray))
+     Q_PRIVATE_SLOT(d_func(), void replyFinished())
++    Q_PRIVATE_SLOT(d_func(), void replyStarted())
+     Q_PRIVATE_SLOT(d_func(), void replyDownloadMetaData(QList<QPair<QByteArray,QByteArray> >,int,QString,bool,QSharedPointer<char>,qint64))
+     Q_PRIVATE_SLOT(d_func(), void replyDownloadProgressSlot(qint64,qint64))
+     Q_PRIVATE_SLOT(d_func(), void httpAuthenticationRequired(const QHttpNetworkRequest &, QAuthenticator *))
+@@ -129,6 +130,9 @@
+     Q_PRIVATE_SLOT(d_func(), void sentUploadDataSlot(qint64))
+     Q_PRIVATE_SLOT(d_func(), void emitReplyUploadProgress(qint64, qint64))
+ 
++    //Patch fix for XRE-2372
++    Q_PRIVATE_SLOT(d_func(), void startNetworkRequest())
++    //Patch End for XRE-2372
+ 
+ #ifndef QT_NO_SSL
+ protected:
+@@ -184,6 +188,7 @@
+ #endif
+     void _q_finished();
+ 
++    void started();
+     void finished();
+     void error(QNetworkReply::NetworkError code, const QString &errorString);
+     void _q_error(QNetworkReply::NetworkError code, const QString &errorString);
+@@ -274,6 +279,7 @@
+ 
+ public:
+     // From HTTP thread:
++    void replyStarted();
+     void replyDownloadData(QByteArray);
+     void replyFinished();
+     void replyDownloadMetaData(QList<QPair<QByteArray,QByteArray> >,int,QString,bool,QSharedPointer<char>,qint64);
+@@ -294,6 +300,8 @@
+     void wantUploadDataSlot(qint64);
+     void sentUploadDataSlot(qint64);
+ 
++    void startNetworkRequest();
++
+     Q_DECLARE_PUBLIC(QNetworkReplyHttpImpl)
+ };
+ 
+Index: qtbase/src/network/ssl/qsslsocket_openssl.cpp
+===================================================================
+--- qtbase/src/network/ssl/qsslsocket_openssl.cpp
++++ qtbase/src/network/ssl/qsslsocket_openssl.cpp
+@@ -530,15 +530,19 @@
+     for (int a = 0; a < dirs.count(); ++a) {
+         QDirIterator iterator(QLatin1String(dirs.at(a)), symLinkFilter, QDir::Files);
+         if (iterator.hasNext()) {
+-            s_loadRootCertsOnDemand = true;
++            // If we set s_loadRootCertsOnDemand to true here, the certs never actually get loaded due to the
++            // check below.
++            // s_loadRootCertsOnDemand = true;
+             break;
+         }
+     }
+ #endif
+ #endif //QT_NO_LIBRARY
+     // if on-demand loading was not enabled, load the certs now
+-    if (!s_loadRootCertsOnDemand)
++    if (!s_loadRootCertsOnDemand) {
++        s_loadRootCertsOnDemand = true;
+         setDefaultCaCertificates(systemCaCertificates());
++    }
+ #ifdef Q_OS_WIN
+     //Enabled for fetching additional root certs from windows update on windows 6+
+     //This flag is set false by setDefaultCaCertificates() indicating the app uses

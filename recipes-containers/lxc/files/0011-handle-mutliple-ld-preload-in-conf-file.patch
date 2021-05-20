@@ -1,0 +1,73 @@
+(2019.08.19) Mariusz Kozłowski <mkozlowski.contractor@libertyglobal.com>
+[ONEM-12897] Contcatenate multiple LD_PRELOAD in lxc.conf
+
+Due to the nature of container conf genrator it can generate two
+sections for given container - main and append. Both can contain
+lxc.environment = LD_RELOAD=... and the latter would overwrite the
+former one when read by lxc. This patch changes this lxc behaviour
+(for LD_PRELOAD only) and appends the values.
+
+Index: b/src/lxc/confile.c
+===================================================================
+--- a/src/lxc/confile.c
++++ b/src/lxc/confile.c
+@@ -1225,14 +1225,59 @@ static int config_group(const char *key,
+ 	return ret;
+ }
+ 
++static struct lxc_list *list_get_matching(const struct lxc_list *list, const char *match)
++{
++	struct lxc_list *iterator;
++	size_t len = strlen(match);
++
++	lxc_list_for_each(iterator, list) {
++		if (!strncmp(match, (char *)iterator->elem, len))
++			return iterator;
++	}
++
++	return NULL;
++}
++
++static int extend_env_if_exists(const char *match, const char *item, struct lxc_list *list)
++{
++	struct lxc_list *env;
++	size_t m_len;
++	size_t len;
++	char *buf;
++
++	m_len = strlen(match);
++
++	if (strncmp(match, item, m_len))
++		return 1;
++
++	env = list_get_matching(list, match);
++	if (!env)
++		return 2;
++
++	len = strlen((char *)env->elem) + 1 + strlen(item) - m_len + 1;
++	buf = malloc(len);
++	if (!buf)
++		return -ENOMEM;
++
++	snprintf(buf, len, "%s:%s", (char *)env->elem, item + m_len);
++	free(env->elem);
++	env->elem = buf;
++	return 0;
++}
++
+ static int config_environment(const char *key, const char *value,
+                               struct lxc_conf *lxc_conf)
+ {
+ 	struct lxc_list *list_item = NULL;
++	int ret;
+ 
+ 	if (!strlen(value))
+ 		return lxc_clear_environment(lxc_conf);
+ 
++	ret = extend_env_if_exists("LD_PRELOAD=", value, &lxc_conf->environment);
++	if (ret <= 0)
++		return ret;
++
+ 	list_item = malloc(sizeof(*list_item));
+ 	if (!list_item)
+ 		goto freak_out;

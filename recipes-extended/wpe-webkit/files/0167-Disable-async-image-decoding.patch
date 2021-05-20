@@ -1,0 +1,31 @@
+From 8f99f60422fbb42be3fdaedccfc9c92884ea324a Mon Sep 17 00:00:00 2001
+From: Ievgen Mutavchi <Ievgen_Mutavchi@comcast.com>
+License: GPLV2
+Date: Fri, 1 Nov 2019 09:59:24 -0400
+From: ebecd56aaa2727b6305d39c69951fbdc8740f800 Oct 31, 2018 11:56 PM
+Source: COMCAST
+Upstream-Status: None
+Signed-off-by: Eugene Mutavchi <Ievgen_Mutavchi@comcast.com>
+Subject: [PATCH] Disable async image decoding
+
+The CachedResource::tryReplaceEncodedData() causes a crash if executed
+during image async decoding.
+---
+ Source/WebCore/platform/graphics/ImageSource.cpp | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/Source/WebCore/platform/graphics/ImageSource.cpp b/Source/WebCore/platform/graphics/ImageSource.cpp
+index dbcdb3f..0198bda 100644
+--- a/Source/WebCore/platform/graphics/ImageSource.cpp
++++ b/Source/WebCore/platform/graphics/ImageSource.cpp
+@@ -320,6 +320,7 @@ ImageSource::FrameRequestQueue& ImageSource::frameRequestQueue()
+ 
+ bool ImageSource::canUseAsyncDecoding()
+ {
++    return false;
+     if (!isDecoderAvailable())
+         return false;
+     // FIXME: figure out the best heuristic for enabling async image decoding.
+-- 
+2.7.4
+

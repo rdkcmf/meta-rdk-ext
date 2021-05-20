@@ -1,0 +1,256 @@
+From cf0b541b519fde784beff4506179acfe676c3c7c Mon Sep 17 00:00:00 2001
+From: Ievgen Mutavchi <Ievgen_Mutavchi@comcast.com>
+Date: Tue, 10 Sep 2019 11:17:05 -0400
+Subject: [PATCH] Pause media and skip compositor scene rendering hide when web
+ page is hidden
+
+---
+ Source/WebCore/html/HTMLMediaElement.cpp                  |  2 +-
+ .../gstreamer/MediaPlayerPrivateGStreamerBase.cpp         | 11 +++++++++++
+ .../graphics/gstreamer/MediaPlayerPrivateGStreamerBase.h  |  4 +++-
+ .../threadedcompositor/ThreadedCompositor.cpp             | 15 +++++++++++++--
+ .../threadedcompositor/ThreadedCompositor.h               |  3 +++
+ .../WebKit/WebProcess/WebPage/AcceleratedDrawingArea.cpp  |  4 ++++
+ .../ThreadedCoordinatedLayerTreeHost.cpp                  |  7 +++++++
+ .../ThreadedCoordinatedLayerTreeHost.h                    |  2 ++
+ Source/WebKit/WebProcess/WebPage/LayerTreeHost.cpp        |  6 ++++++
+ Source/WebKit/WebProcess/WebPage/LayerTreeHost.h          |  1 +
+ Source/WebKit/WebProcess/WebPage/WebPage.cpp              | 10 +++++++++-
+ 11 files changed, 60 insertions(+), 5 deletions(-)
+
+diff --git a/Source/WebCore/html/HTMLMediaElement.cpp b/Source/WebCore/html/HTMLMediaElement.cpp
+index bb568e1..0a483b0 100644
+--- a/Source/WebCore/html/HTMLMediaElement.cpp
++++ b/Source/WebCore/html/HTMLMediaElement.cpp
+@@ -5580,7 +5580,7 @@ void HTMLMediaElement::visibilityStateChanged()
+         m_player->setVisible(!m_elementIsHidden);
+ 
+     bool isPlayingAudio = isPlaying() && hasAudio() && !muted() && volume();
+-    if (!isPlayingAudio) {
++    if (true || !isPlayingAudio) {
+         if (m_elementIsHidden) {
+             ALWAYS_LOG(LOGIDENTIFIER, "visibilityStateChanged() Suspending playback after going to the background");
+             m_mediaSession->beginInterruption(PlatformMediaSession::EnteringBackground);
+diff --git a/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamerBase.cpp b/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamerBase.cpp
+index ea95157..ff2a6c3 100644
+--- a/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamerBase.cpp
++++ b/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamerBase.cpp
+@@ -1542,6 +1542,17 @@ void MediaPlayerPrivateGStreamerBase::platformResume()
+ #endif
+ }
+ 
++void MediaPlayerPrivateGStreamerBase::setVisible(bool visible)
++{
++    if (m_visible == visible)
++        return;
++    m_visible = visible;
++
++#if USE(HOLE_PUNCH_GSTREAMER)
++    updateVideoRectangle(!m_visible);
++#endif
++}
++
+ }
+ 
+ #endif // USE(GSTREAMER)
+diff --git a/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamerBase.h b/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamerBase.h
+index 01bd9a7..929f7ad 100644
+--- a/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamerBase.h
++++ b/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamerBase.h
+@@ -92,7 +92,7 @@ public:
+ 
+     bool ended() const override { return m_isEndReached; }
+ 
+-    void setVisible(bool) override { }
++    void setVisible(bool) override;
+     void setSize(const IntSize&) override;
+     void setPosition(const IntPoint&) override;
+     void sizeChanged();
+@@ -282,6 +282,8 @@ protected:
+     RefPtr<const CDMInstance> m_cdmInstance;
+     Vector<String> m_reportedInitData;
+ #endif
++
++    bool m_visible { true };
+ };
+ 
+ }
+diff --git a/Source/WebKit/Shared/CoordinatedGraphics/threadedcompositor/ThreadedCompositor.cpp b/Source/WebKit/Shared/CoordinatedGraphics/threadedcompositor/ThreadedCompositor.cpp
+index 4d2823e..58ef172 100644
+--- a/Source/WebKit/Shared/CoordinatedGraphics/threadedcompositor/ThreadedCompositor.cpp
++++ b/Source/WebKit/Shared/CoordinatedGraphics/threadedcompositor/ThreadedCompositor.cpp
+@@ -172,6 +172,13 @@ void ThreadedCompositor::setDrawsBackground(bool drawsBackground)
+     m_compositingRunLoop->scheduleUpdate();
+ }
+ 
++void ThreadedCompositor::setIsVisible(bool v)
++{
++    LockHolder locker(m_attributes.lock);
++    m_attributes.isVisbile = v;
++    m_compositingRunLoop->scheduleUpdate();
++}
++
+ void ThreadedCompositor::renderNextFrame()
+ {
+     ASSERT(RunLoop::isMain());
+@@ -254,6 +261,7 @@ void ThreadedCompositor::renderLayerTree()
+     float scaleFactor;
+     bool drawsBackground;
+     bool needsResize;
++    bool isVisbile;
+     Vector<WebCore::CoordinatedGraphicsState> states;
+ 
+     {
+@@ -263,6 +271,7 @@ void ThreadedCompositor::renderLayerTree()
+         scaleFactor = m_attributes.scaleFactor;
+         drawsBackground = m_attributes.drawsBackground;
+         needsResize = m_attributes.needsResize;
++        isVisbile = m_attributes.isVisbile;
+ 
+         states = WTFMove(m_attributes.states);
+ 
+@@ -294,13 +303,15 @@ void ThreadedCompositor::renderLayerTree()
+     viewportTransform.scale(scaleFactor);
+     viewportTransform.translate(-scrollPosition.x(), -scrollPosition.y());
+ 
+-    if (!drawsBackground) {
++    if (!drawsBackground || !isVisbile) {
+         glClearColor(0, 0, 0, 0);
+         glClear(GL_COLOR_BUFFER_BIT);
+     }
+ 
+     m_scene->applyStateChanges(states);
+-    m_scene->paintToCurrentGLContext(viewportTransform, 1, FloatRect { FloatPoint { }, viewportSize },
++
++    if (isVisbile)
++      m_scene->paintToCurrentGLContext(viewportTransform, 1, FloatRect { FloatPoint { }, viewportSize },
+         Color::transparent, !drawsBackground, scrollPosition, m_paintFlags);
+ 
+     m_context->swapBuffers();
+diff --git a/Source/WebKit/Shared/CoordinatedGraphics/threadedcompositor/ThreadedCompositor.h b/Source/WebKit/Shared/CoordinatedGraphics/threadedcompositor/ThreadedCompositor.h
+index 9586316..fa1e0ac 100644
+--- a/Source/WebKit/Shared/CoordinatedGraphics/threadedcompositor/ThreadedCompositor.h
++++ b/Source/WebKit/Shared/CoordinatedGraphics/threadedcompositor/ThreadedCompositor.h
+@@ -90,6 +90,8 @@ public:
+ 
+     void frameComplete();
+ 
++    void setIsVisible(bool v);
++
+ private:
+     ThreadedCompositor(Client&, WebPage&, const WebCore::IntSize&, float scaleFactor, ShouldDoFrameSync, WebCore::TextureMapper::PaintFlags);
+ 
+@@ -130,6 +132,7 @@ private:
+ 
+         bool clientRendersNextFrame { false };
+         bool coordinateUpdateCompletionWithClient { false };
++        bool isVisbile { true };
+     } m_attributes;
+ 
+ #if USE(REQUEST_ANIMATION_FRAME_DISPLAY_MONITOR)
+diff --git a/Source/WebKit/WebProcess/WebPage/AcceleratedDrawingArea.cpp b/Source/WebKit/WebProcess/WebPage/AcceleratedDrawingArea.cpp
+index e9af8cf..eb3e91c 100644
+--- a/Source/WebKit/WebProcess/WebPage/AcceleratedDrawingArea.cpp
++++ b/Source/WebKit/WebProcess/WebPage/AcceleratedDrawingArea.cpp
+@@ -497,6 +497,10 @@ void AcceleratedDrawingArea::activityStateDidChange(ActivityState::Flags changed
+ {
+     if (changed & ActivityState::IsInWindow)
+         handleIsInWindowChanged();
++
++    if (changed & ActivityState::IsVisible && m_layerTreeHost) {
++        m_layerTreeHost->pageVisibilityChanged(m_webPage.isVisible());
++    }
+ }
+ 
+ void AcceleratedDrawingArea::attachViewOverlayGraphicsLayer(Frame* frame, GraphicsLayer* viewOverlayRootLayer)
+diff --git a/Source/WebKit/WebProcess/WebPage/CoordinatedGraphics/ThreadedCoordinatedLayerTreeHost.cpp b/Source/WebKit/WebProcess/WebPage/CoordinatedGraphics/ThreadedCoordinatedLayerTreeHost.cpp
+index d75e939..4bc3eae 100644
+--- a/Source/WebKit/WebProcess/WebPage/CoordinatedGraphics/ThreadedCoordinatedLayerTreeHost.cpp
++++ b/Source/WebKit/WebProcess/WebPage/CoordinatedGraphics/ThreadedCoordinatedLayerTreeHost.cpp
+@@ -295,6 +295,13 @@ RefPtr<WebCore::DisplayRefreshMonitor> ThreadedCoordinatedLayerTreeHost::createD
+ }
+ #endif
+ 
++void ThreadedCoordinatedLayerTreeHost::pageVisibilityChanged(bool v)
++{
++    CoordinatedLayerTreeHost::pageVisibilityChanged(v);
++    if (m_compositor)
++        m_compositor->setIsVisible(v);
++}
++
+ } // namespace WebKit
+ 
+ #endif // USE(COORDINATED_GRAPHICS)
+diff --git a/Source/WebKit/WebProcess/WebPage/CoordinatedGraphics/ThreadedCoordinatedLayerTreeHost.h b/Source/WebKit/WebProcess/WebPage/CoordinatedGraphics/ThreadedCoordinatedLayerTreeHost.h
+index eb629ae..2eb0e25 100644
+--- a/Source/WebKit/WebProcess/WebPage/CoordinatedGraphics/ThreadedCoordinatedLayerTreeHost.h
++++ b/Source/WebKit/WebProcess/WebPage/CoordinatedGraphics/ThreadedCoordinatedLayerTreeHost.h
+@@ -70,6 +70,8 @@ private:
+ 
+     void setIsDiscardable(bool) override;
+ 
++    void pageVisibilityChanged(bool) override;
++
+ #if PLATFORM(GTK) && PLATFORM(X11) &&  !USE(REDIRECTED_XCOMPOSITE_WINDOW)
+     void setNativeSurfaceHandleForCompositing(uint64_t) override;
+ #endif
+diff --git a/Source/WebKit/WebProcess/WebPage/LayerTreeHost.cpp b/Source/WebKit/WebProcess/WebPage/LayerTreeHost.cpp
+index 013b721..33a4f83 100644
+--- a/Source/WebKit/WebProcess/WebPage/LayerTreeHost.cpp
++++ b/Source/WebKit/WebProcess/WebPage/LayerTreeHost.cpp
+@@ -84,6 +84,12 @@ void LayerTreeHost::resumeRendering()
+     scheduleLayerFlush();
+ }
+ 
++void LayerTreeHost::pageVisibilityChanged(bool isVisible)
++{
++    if (isVisible)
++        scheduleLayerFlush();
++}
++
+ void LayerTreeHost::invalidate()
+ {
+     ASSERT(m_isValid);
+diff --git a/Source/WebKit/WebProcess/WebPage/LayerTreeHost.h b/Source/WebKit/WebProcess/WebPage/LayerTreeHost.h
+index e75fbf3..e19f509 100644
+--- a/Source/WebKit/WebProcess/WebPage/LayerTreeHost.h
++++ b/Source/WebKit/WebProcess/WebPage/LayerTreeHost.h
+@@ -80,6 +80,7 @@ public:
+ 
+     virtual void pauseRendering();
+     virtual void resumeRendering();
++    virtual void pageVisibilityChanged(bool);
+ 
+     virtual WebCore::GraphicsLayerFactory* graphicsLayerFactory() { return nullptr; }
+ 
+diff --git a/Source/WebKit/WebProcess/WebPage/WebPage.cpp b/Source/WebKit/WebProcess/WebPage/WebPage.cpp
+index 209e58e..c39ba8a 100644
+--- a/Source/WebKit/WebProcess/WebPage/WebPage.cpp
++++ b/Source/WebKit/WebProcess/WebPage/WebPage.cpp
+@@ -2685,7 +2685,7 @@ void WebPage::updateIsInWindow(bool isInitialState)
+         // Defer the call to Page::setCanStartMedia() since it ends up sending a synchronous message to the UI process
+         // in order to get plug-in connections, and the UI process will be waiting for the Web process to update the backing
+         // store after moving the view into a window, until it times out and paints white. See <rdar://problem/9242771>.
+-        if (m_mayStartMediaWhenInWindow)
++        if (m_mayStartMediaWhenInWindow && !m_setCanStartMediaTimer.isActive())
+             m_setCanStartMediaTimer.startOneShot(0_s);
+ 
+         WebProcess::singleton().pageDidEnterWindow(m_pageID);
+@@ -2704,6 +2704,14 @@ void WebPage::visibilityDidChange()
+         if (auto* frame = m_mainFrame->coreFrame())
+             frame->loader().history().saveDocumentAndScrollState();
+     }
++
++    if (!isVisible) {
++        m_setCanStartMediaTimer.stop();
++        m_page->setCanStartMedia(false);
++    } else if (m_activityState & WebCore::ActivityState::IsInWindow) {
++        if (m_mayStartMediaWhenInWindow && !m_setCanStartMediaTimer.isActive())
++            m_setCanStartMediaTimer.startOneShot(0_s);
++    }
+ }
+ 
+ void WebPage::setActivityState(ActivityState::Flags activityState, bool wantsDidUpdateActivityState, const Vector<CallbackID>& callbackIDs)
+-- 
+2.7.4
+

@@ -1,0 +1,164 @@
+Copyright (C) 1989, 1991 Free Software Foundation, Inc.
+
+This program is free software; you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation; either version 2 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program; if not, write to the Free Software
+Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+
+Date: Jan 17 07:33:56 2018
+
+From: 974918a8c2d2deb6308a03fb8b6f4e9ff6632b3f Jan 18 16:31:07 2018
+
+Subject: [PATCH] CISCOXB3-3654, DELIA-24989  : Observed high memory usage on IDS enabled boxes.
+
+	Fixed possible memory leaks in samhain code.
+	Adding FREE function call to allocated memory for avoding memory leak.
+
+Source: COMCAST
+
+Upstream-Status: Pending
+
+Signed-off-by: prakash k Sanna nagappa <Prakash_KAPPESANNANAGAPPA@comcast.com>	
+---
+
+diff --git a/src/sh_inotify.c b/src/sh_inotify.c
+index 7c683a8..ddaf565 100644
+--- a/src/sh_inotify.c
++++ b/src/sh_inotify.c
+@@ -230,7 +230,7 @@ ssize_t sh_inotify_read_timeout(char * buffer, size_t count, int timeout)
+ }
+ 
+ 
+-static void sh_inotify_free_watch(void * item)
++void sh_inotify_free_watch(void * item)
+ {
+   sh_watch * this = (sh_watch *) item;
+ 
+@@ -345,6 +345,7 @@ int sh_inotify_add_dormant(sh_watches * watches, sh_watch * item)
+   this->next  = (struct sh_inotify_litem *) watches->dormant_watches;
+   
+   watches->dormant_watches = this;
++  SH_FREE(this);
+   SH_MUTEX_UNLOCK(mutex_list_dormant);
+   return 0;
+ }
+@@ -494,8 +495,10 @@ int sh_inotify_add_watch_later(const char * filename, sh_watches * watches,
+   item->check_mask = check_mask;
+ 
+   sh_inotify_add_dormant(watches, item);
+-  if (errnum)
+-    *errnum = 0;
++  if (errnum) {
++	sh_inotify_free_watch(item);
++    	*errnum = 0;
++	}	
+ 
+   return 0;
+ }
+diff --git a/src/sh_mounts.c b/src/sh_mounts.c
+index e73605d..7c2a767 100644
+--- a/src/sh_mounts.c
++++ b/src/sh_mounts.c
+@@ -265,6 +265,8 @@ if(NULL!=mountlist)
+ 
+             sh_error_handle(ShMountsSevOpt, FIL__, __LINE__, 0, MSG_MNT_NEWMOUNT,
+                                       cfgmnt1->path);
++	    //SH_FREE(item);
++	    sh_inotify_free_watch(item);
+         }
+     }
+ }	
+diff --git a/src/sh_processcheck.c b/src/sh_processcheck.c
+index b53f2e0..53461d2 100644
+--- a/src/sh_processcheck.c
++++ b/src/sh_processcheck.c
+@@ -244,6 +244,7 @@ static char * get_user_and_path (pid_t pid, char * user, size_t usrlen)
+   len = readlink(path, buf, PATH_MAX);   /* flawfinder: ignore */
+   /* Ignore process name checks for kernel threads */
+   if ( (-1 == len) && (ENOENT == errno) ) {
++	SH_FREE(buf);
+       return KERNEL_THREAD_MESSAGE ;
+   }
+   len = (len >= PATH_MAX) ? (PATH_MAX-1) : len;
+@@ -426,7 +427,6 @@ static int is_in_whitelist (const char *str, unsigned long num)
+ {
+   struct watchlist * list = process_whitelist;
+   struct watchlist * list1 = process_whitelist;
+-  char *tmp;
+     
+   volatile size_t i = num;
+   char   user[16];
+@@ -469,8 +469,6 @@ static int is_in_whitelist (const char *str, unsigned long num)
+               }
+           }
+ 
+-          tmp = sh_util_safe_name (str);
+-         
+           SH_MUTEX_LOCK(mutex_thread_nolog);
+           safe = sh_util_safe_name (aout);
+           SH_MUTEX_UNLOCK(mutex_thread_nolog);
+@@ -479,7 +477,8 @@ static int is_in_whitelist (const char *str, unsigned long num)
+           {
+               if (strstr(safe, list1->str))
+               {
+-                  SH_FREE(tmp);
++		   SH_FREE(safe);
++		   SH_FREE(aout);
+                   return S_TRUE;
+               }
+               list1 = list1->next;
+@@ -490,7 +489,8 @@ static int is_in_whitelist (const char *str, unsigned long num)
+                               i, safe, user);
+           SH_MUTEX_UNLOCK(mutex_thread_nolog);
+ 
+-          SH_FREE(tmp);
++	 SH_FREE(safe);
++	 SH_FREE(aout);
+       }
+ #endif
+   return S_FALSE;
+@@ -569,7 +569,6 @@ static void check_whitelist ()
+   //printf("check_whitelist === \n");
+   struct watchlist * list = process_whitelist;
+   char * tmp;
+-  size_t indx;
+ 
+   /* Take the address to keep gcc from putting them into registers. 
+    * Avoids the 'clobbered by longjmp' warning. 
+@@ -1079,7 +1078,7 @@ static int sh_processes_readps (FILE * in, short * res,
+ 		sl_strlcpy(str, tstr, len);
+ 	      if (lnum != 0)
+               {
+-		is_in_watchlist (tstr, num);
++		is_in_watchlist (tstr, num);
+                 if(SH_PR_PS == flag)
+                 {
+ 		   is_in_whitelist (tstr, num);
+@@ -1543,6 +1542,7 @@ int sh_prochk_check(void)
+       clean_list (&list_missing);
+       clean_list (&list_hidden);
+       clean_list (&list_fake);
++      clean_list (&whitelist_missing);
+     }
+ 
+   SH_MUTEX_UNLOCK(mutex_proc_check);
+@@ -1615,6 +1615,10 @@ int sh_prochk_cleanup(void)
+     kill_list(list_fake);
+     list_fake    = NULL;
+   }
++  if (whitelist_missing) {
++    kill_list(whitelist_missing);
++    whitelist_missing    = NULL;
++  }
+   
+   SL_RETURN(0, _("sh_prochk_cleanup"));
+ }

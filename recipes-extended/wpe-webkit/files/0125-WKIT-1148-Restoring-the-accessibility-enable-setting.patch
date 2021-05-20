@@ -1,0 +1,164 @@
+From 0459d44408baa5774234f69d045a68b16db235b1 Mon Sep 17 00:00:00 2001
+From: Balaji Selvam <balaji_selvam@comcast.com>
+Date: Tue, 19 Feb 2019 14:28:28 +0000
+Subject: [PATCH] WKIT-1148 : Restoring the accessibility enable settings when
+ closing RWI
+
+Reason for change: When accessibility is disabled, WPE is expected to
+not to send any accessibility events to rdkat.
+But when Remote Web Inspector is used, it unconditionally enables WebKit
+accessibility which leads to event sent to rdkat.
+Test Procedure: ensure the event won't sent to rdkat.
+Risks: Low
+
+Signed-off-by: Balaji Selvam <Balaji_Selvam@Comcast.Com>
+---
+ Source/WebCore/accessibility/AXObjectCache.cpp   | 17 ++++++++++++++---
+ Source/WebCore/accessibility/AXObjectCache.h     |  5 ++++-
+ Source/WebCore/inspector/InspectorController.cpp |  4 ++++
+ Source/WebCore/inspector/InspectorDOMAgent.cpp   |  4 ++--
+ Source/WebCore/inspector/InspectorOverlay.cpp    |  2 +-
+ 5 files changed, 25 insertions(+), 7 deletions(-)
+
+diff --git a/Source/WebCore/accessibility/AXObjectCache.cpp b/Source/WebCore/accessibility/AXObjectCache.cpp
+index c2171adf122..d201b013c2d 100644
+--- a/Source/WebCore/accessibility/AXObjectCache.cpp
++++ b/Source/WebCore/accessibility/AXObjectCache.cpp
+@@ -164,6 +164,7 @@ void AccessibilityReplacedText::postTextStateChangeNotification(AXObjectCache* c
+ 
+ bool AXObjectCache::gAccessibilityEnabled = false;
+ bool AXObjectCache::gAccessibilityEnhancedUserInterfaceEnabled = false;
++bool AXObjectCache::gAccessibilityEnabledByInspector = false;
+ 
+ void AXObjectCache::enableAccessibility()
+ {
+@@ -175,6 +176,16 @@ void AXObjectCache::disableAccessibility()
+     gAccessibilityEnabled = false;
+ }
+ 
++void AXObjectCache::enableAccessibilityFromInspector()
++{
++    gAccessibilityEnabledByInspector = true;
++}
++
++void AXObjectCache::restoreAccessibilityFromInspector()
++{
++    gAccessibilityEnabledByInspector = false;
++}
++
+ void AXObjectCache::setEnhancedUserInterfaceAccessibility(bool flag)
+ {
+     gAccessibilityEnhancedUserInterfaceEnabled = flag;
+@@ -321,7 +332,7 @@ AccessibilityObject* AXObjectCache::focusedImageMapUIElement(HTMLAreaElement* ar
+     
+ AccessibilityObject* AXObjectCache::focusedUIElementForPage(const Page* page)
+ {
+-    if (!gAccessibilityEnabled)
++    if (!accessibilityEnabled())
+         return nullptr;
+ 
+     // get the focused node in the page
+@@ -619,7 +630,7 @@ AccessibilityObject* AXObjectCache::getOrCreate(RenderObject* renderer)
+     
+ AccessibilityObject* AXObjectCache::rootObject()
+ {
+-    if (!gAccessibilityEnabled)
++    if (!accessibilityEnabled())
+         return nullptr;
+ 
+     return getOrCreate(m_document.view());
+@@ -627,7 +638,7 @@ AccessibilityObject* AXObjectCache::rootObject()
+ 
+ AccessibilityObject* AXObjectCache::rootObjectForFrame(Frame* frame)
+ {
+-    if (!gAccessibilityEnabled)
++    if (!accessibilityEnabled())
+         return nullptr;
+ 
+     if (!frame)
+diff --git a/Source/WebCore/accessibility/AXObjectCache.h b/Source/WebCore/accessibility/AXObjectCache.h
+index 7edf649e47d..f606d51af5b 100644
+--- a/Source/WebCore/accessibility/AXObjectCache.h
++++ b/Source/WebCore/accessibility/AXObjectCache.h
+@@ -190,10 +190,12 @@ public:
+     WEBCORE_EXPORT static void enableAccessibility();
+     WEBCORE_EXPORT static void disableAccessibility();
+ 
++    WEBCORE_EXPORT static void enableAccessibilityFromInspector();
++    WEBCORE_EXPORT static void restoreAccessibilityFromInspector();
+     // Enhanced user interface accessibility can be toggled by the assistive technology.
+     WEBCORE_EXPORT static void setEnhancedUserInterfaceAccessibility(bool flag);
+     
+-    static bool accessibilityEnabled() { return gAccessibilityEnabled; }
++    static bool accessibilityEnabled() { return gAccessibilityEnabled || gAccessibilityEnabledByInspector; }
+     static bool accessibilityEnhancedUserInterfaceEnabled() { return gAccessibilityEnhancedUserInterfaceEnabled; }
+ #else
+     static void enableAccessibility() { }
+@@ -418,6 +420,7 @@ private:
+     std::unique_ptr<AXComputedObjectAttributeCache> m_computedObjectAttributeCache;
+     WEBCORE_EXPORT static bool gAccessibilityEnabled;
+     WEBCORE_EXPORT static bool gAccessibilityEnhancedUserInterfaceEnabled;
++    WEBCORE_EXPORT static bool gAccessibilityEnabledByInspector;
+ 
+     HashSet<AXID> m_idsInUse;
+ 
+diff --git a/Source/WebCore/inspector/InspectorController.cpp b/Source/WebCore/inspector/InspectorController.cpp
+index 459702fd673..2332daf21dc 100644
+--- a/Source/WebCore/inspector/InspectorController.cpp
++++ b/Source/WebCore/inspector/InspectorController.cpp
+@@ -78,6 +78,7 @@
+ #include <inspector/agents/InspectorScriptProfilerAgent.h>
+ #include <runtime/JSLock.h>
+ #include <wtf/Stopwatch.h>
++#include <WebCore/accessibility/AXObjectCache.h>
+ 
+ #if ENABLE(REMOTE_INSPECTOR)
+ #include "PageDebuggable.h"
+@@ -278,6 +279,9 @@ void InspectorController::disconnectFrontend(FrontendChannel* frontendChannel)
+     m_isAutomaticInspection = false;
+     m_pauseAfterInitialization = false;
+ 
++    //restoring Accessibility enable flag
++    WebCore::AXObjectCache::restoreAccessibilityFromInspector();
++
+     InspectorInstrumentation::frontendDeleted();
+ 
+     bool disconnectedLastFrontend = !m_frontendRouter->hasFrontends();
+diff --git a/Source/WebCore/inspector/InspectorDOMAgent.cpp b/Source/WebCore/inspector/InspectorDOMAgent.cpp
+index 1e5291a9612..8a781f10185 100644
+--- a/Source/WebCore/inspector/InspectorDOMAgent.cpp
++++ b/Source/WebCore/inspector/InspectorDOMAgent.cpp
+@@ -1491,7 +1491,7 @@ Ref<Inspector::Protocol::DOM::Node> InspectorDOMAgent::buildObjectForNode(Node*
+ 
+     // Need to enable AX to get the computed role.
+     if (!WebCore::AXObjectCache::accessibilityEnabled())
+-        WebCore::AXObjectCache::enableAccessibility();
++        WebCore::AXObjectCache::enableAccessibilityFromInspector();
+ 
+     if (AXObjectCache* axObjectCache = node->document().axObjectCache()) {
+         if (AccessibilityObject* axObject = axObjectCache->getOrCreate(node))
+@@ -1637,7 +1637,7 @@ RefPtr<Inspector::Protocol::DOM::AccessibilityProperties> InspectorDOMAgent::bui
+         return nullptr;
+ 
+     if (!WebCore::AXObjectCache::accessibilityEnabled())
+-        WebCore::AXObjectCache::enableAccessibility();
++        WebCore::AXObjectCache::enableAccessibilityFromInspector();
+ 
+     Node* activeDescendantNode = nullptr;
+     bool busy = false;
+diff --git a/Source/WebCore/inspector/InspectorOverlay.cpp b/Source/WebCore/inspector/InspectorOverlay.cpp
+index abf478e4926..6bb982aea74 100644
+--- a/Source/WebCore/inspector/InspectorOverlay.cpp
++++ b/Source/WebCore/inspector/InspectorOverlay.cpp
+@@ -604,7 +604,7 @@ static RefPtr<Inspector::Protocol::OverlayTypes::ElementData> buildObjectForElem
+ 
+     // Need to enable AX to get the computed role.
+     if (!WebCore::AXObjectCache::accessibilityEnabled())
+-        WebCore::AXObjectCache::enableAccessibility();
++        WebCore::AXObjectCache::enableAccessibilityFromInspector();
+ 
+     if (AXObjectCache* axObjectCache = node->document().axObjectCache()) {
+         if (AccessibilityObject* axObject = axObjectCache->getOrCreate(node))
+-- 
+2.16.2
+

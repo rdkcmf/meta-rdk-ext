@@ -1,0 +1,107 @@
+From e718c2c156e90390a45d7527419a4f1ea992b07b Mon Sep 17 00:00:00 2001
+From: amoham071 <ameerkhan_mohamedrafiq@comcast.com>
+Source: original
+License: LICENSE-LGPL-2.1
+Upstream-Status: Pending
+Date: Fri, 14 Feb 2020 07:11:13 +0000
+Subject: [PATCH] XRE-14630: App not throwing Error when an error occurs
+Signed-off-by: Ameerkhan <ameerkhan_mohamedrafiq@comcast.com>
+---
+ .../graphics/holepunch/MediaPlayerPrivateHolePunchBase.cpp     |  9 ++++++++-
+ .../graphics/holepunch/MediaPlayerPrivateHolePunchBase.h       |  6 +++++-
+ .../graphics/holepunch/MediaPlayerPrivateHolePunchDummy.cpp    | 10 ++++++++++
+ .../graphics/holepunch/MediaPlayerPrivateHolePunchDummy.h      |  2 +-
+ 4 files changed, 24 insertions(+), 3 deletions(-)
+
+diff --git a/Source/WebCore/platform/graphics/holepunch/MediaPlayerPrivateHolePunchBase.cpp b/Source/WebCore/platform/graphics/holepunch/MediaPlayerPrivateHolePunchBase.cpp
+index c6e7f5264b0..b327aa4799a 100644
+--- a/Source/WebCore/platform/graphics/holepunch/MediaPlayerPrivateHolePunchBase.cpp
++++ b/Source/WebCore/platform/graphics/holepunch/MediaPlayerPrivateHolePunchBase.cpp
+@@ -42,6 +42,7 @@ namespace WebCore {
+ 
+ MediaPlayerPrivateHolePunchBase::MediaPlayerPrivateHolePunchBase(MediaPlayer* player)
+     :m_player(player)
++    , m_networkState(MediaPlayer::Empty)
+ {
+ #if USE(COORDINATED_GRAPHICS_THREADED)
+     m_platformLayerProxy = adoptRef(new TextureMapperPlatformLayerProxy());
+@@ -66,7 +67,7 @@ FloatSize MediaPlayerPrivateHolePunchBase::naturalSize() const
+ 
+ MediaPlayer::NetworkState MediaPlayerPrivateHolePunchBase::networkState() const
+ {
+-    return MediaPlayer::Empty;
++    return m_networkState;
+ }
+ 
+ MediaPlayer::ReadyState MediaPlayerPrivateHolePunchBase::readyState() const
+@@ -85,6 +86,12 @@ void MediaPlayerPrivateHolePunchBase::swapBuffersIfNeeded()
+     m_platformLayerProxy->pushNextBuffer(std::make_unique<TextureMapperPlatformLayerBuffer>(0, m_size, TextureMapperGL::ShouldOverwriteRect, GL_DONT_CARE));
+ }
+ 
++void MediaPlayerPrivateHolePunchBase::setNetworkState(MediaPlayer::NetworkState networkState)
++{
++    m_networkState = networkState;
++    m_player->networkStateChanged();
++}
++
+ }
+ 
+ #endif // USE(COORDINATED_GRAPHICS_THREADED)
+diff --git a/Source/WebCore/platform/graphics/holepunch/MediaPlayerPrivateHolePunchBase.h b/Source/WebCore/platform/graphics/holepunch/MediaPlayerPrivateHolePunchBase.h
+index d618bfbfc18..956f7d013ab 100644
+--- a/Source/WebCore/platform/graphics/holepunch/MediaPlayerPrivateHolePunchBase.h
++++ b/Source/WebCore/platform/graphics/holepunch/MediaPlayerPrivateHolePunchBase.h
+@@ -64,11 +64,15 @@ public:
+     virtual bool supportsAcceleratedRendering() const override { return true; }
+     virtual RefPtr<TextureMapperPlatformLayerProxy> proxy() const override { return m_platformLayerProxy.copyRef(); }
+     virtual void swapBuffersIfNeeded() override;
++    void setNetworkState(MediaPlayer::NetworkState);
+ 
+-private:
++protected:
+     MediaPlayer* m_player;
++
++private:
+     IntSize m_size;
+     RefPtr<TextureMapperPlatformLayerProxy> m_platformLayerProxy;
++    MediaPlayer::NetworkState m_networkState;
+ 
+ };
+ }
+diff --git a/Source/WebCore/platform/graphics/holepunch/MediaPlayerPrivateHolePunchDummy.cpp b/Source/WebCore/platform/graphics/holepunch/MediaPlayerPrivateHolePunchDummy.cpp
+index 4b167ae9e33..d10eb594690 100644
+--- a/Source/WebCore/platform/graphics/holepunch/MediaPlayerPrivateHolePunchDummy.cpp
++++ b/Source/WebCore/platform/graphics/holepunch/MediaPlayerPrivateHolePunchDummy.cpp
+@@ -88,6 +88,16 @@ MediaPlayerPrivateHolePunchDummy::MediaPlayerPrivateHolePunchDummy(MediaPlayer*
+ {
+ }
+ 
++void MediaPlayerPrivateHolePunchDummy::load(const String& loadUrl)
++{
++    if (m_player) {
++        auto mimeType = m_player->contentMIMEType();
++        if (mimeType.isEmpty() || !(mimeTypeCache().contains(mimeType))) {
++            MediaPlayerPrivateHolePunchBase::setNetworkState(MediaPlayer::FormatError);
++        }
++    }
++}
++
+ MediaPlayerPrivateHolePunchDummy::~MediaPlayerPrivateHolePunchDummy()
+ {
+ }
+diff --git a/Source/WebCore/platform/graphics/holepunch/MediaPlayerPrivateHolePunchDummy.h b/Source/WebCore/platform/graphics/holepunch/MediaPlayerPrivateHolePunchDummy.h
+index e1c108acf0d..85e1f21fb11 100644
+--- a/Source/WebCore/platform/graphics/holepunch/MediaPlayerPrivateHolePunchDummy.h
++++ b/Source/WebCore/platform/graphics/holepunch/MediaPlayerPrivateHolePunchDummy.h
+@@ -42,7 +42,7 @@ public:
+     bool hasVideo() const override { return false; };
+     bool hasAudio() const override { return false; };
+ 
+-    void load(const String&) override { };
++    void load(const String&) override;
+ #if ENABLE(MEDIA_SOURCE)
+     void load(const String&, MediaSourcePrivateClient*) override { };
+ #endif
+-- 
+2.14.2
+

@@ -1,0 +1,91 @@
+#!/bin/sh
+
+. /etc/device.properties
+. /lib/rdk/utils.sh
+# udhcpc script edited by Tim Riker <Tim@Rikers.org>
+# Further modified by ganesh <Ganesh_Kumar@comcast.com> DELIA-33637: Using nlmon instead of dhcp hooks
+
+[ -z "$1" ] && echo "Error: should be called from udhcpc" && exit 1
+
+[ -x /etc/udhcpc.script.user ] && /etc/udhcpc.script.user "$@"
+
+TMP_RESOLV_CONF="/tmp/resolv.bak"
+UDHCPC_RESOLV_CONF="/tmp/resolv.dnsmasq.udhcpc"
+
+[ -n "$broadcast" ] && BROADCAST="broadcast $broadcast"
+[ -n "$subnet" ] && NETMASK="netmask $subnet"
+
+WIFI_INTERFACE=${WIFI_INTERFACE:=wlan0}
+MOCA_INTERFACE=${MOCA_INTERFACE:=eth1}
+LAN_INTERFACE=${LAN_INTERFACE:=eth2}
+
+if [ "$interface" = ${MOCA_INTERFACE} ] || [ "$interface" = ${MOCA_INTERFACE}:0 ]; then
+   [ -f /tmp/ani_wifi ] && METRIC_STRING="metric 2000"
+fi
+
+if [ "$interface" = ${WIFI_INTERFACE} ] || [ "$interface" = ${WIFI_INTERFACE}:0 ]; then
+   [ ! -f /tmp/ani_wifi ] && METRIC_STRING="metric 2000"
+fi
+
+echo "`date +"%b %d %T.%6N"` : udhcpc : $1,$interface,$ip,$subnet,$broadcast,$message" >> /opt/logs/netsrvmgr.log
+
+case "$1" in
+        deconfig)
+                if [[ "$interface" = *:* ]]; then
+                        # aliases (e.g. eth0:0) don't like to be called 0.0.0.0
+#                       /sbin/ifconfig $interface 127.0.0.2
+                        echo "in defconfig"
+                else
+#                       /sbin/ifconfig $interface 0.0.0.0
+                        echo "in defconfig"
+                fi
+                ;;
+
+        renew|bound)
+                /sbin/ifconfig $interface $ip $BROADCAST $NETMASK
+
+                if [ -n "$router" ] ; then
+                        echo "deleting routers"
+                        while route del default gw 0.0.0.0 dev $interface 2> /dev/null; do
+                                :
+                        done
+
+                        metric=0
+                        for i in $router ; do
+                                echo "route add default gw $i dev $interface $METRIC_STRING"
+                                route add default gw $i dev $interface $METRIC_STRING
+                        done
+                fi
+                echo -n > $TMP_RESOLV_CONF
+	        [ -n "$domain" ] && echo search $domain >> $TMP_RESOLV_CONF
+        	for i in $dns ; do
+	           echo adding dns $i
+	           echo nameserver $i >> $TMP_RESOLV_CONF
+	        done
+
+                cp $TMP_RESOLV_CONF $UDHCPC_RESOLV_CONF
+
+        	HOSTNAME=`hostname`
+	        echo "127.0.0.1 $HOSTNAME" >> /etc/hosts
+	        echo "::1 $HOSTNAME" >> /etc/hosts
+                ;;
+        request)
+		if [ -f /lib/rdk/logMilestone.sh ]; then
+		   sh /lib/rdk/logMilestone.sh "SEND_DHCP_REQUEST"
+ 		fi
+                ;;
+
+        reply)
+		if [ -f /lib/rdk/logMilestone.sh ]; then
+		   sh /lib/rdk/logMilestone.sh "RECV_DHCP_RESPONSE"
+ 		fi
+                ;;
+
+        nak)
+		if [ -f /lib/rdk/logMilestone.sh ]; then
+		   sh /lib/rdk/logMilestone.sh "RECV_DHCP_RESPONSE_NAK"
+ 		fi
+                ;;
+esac
+
+exit 0

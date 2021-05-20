@@ -1,0 +1,116 @@
+From 7141e57901da4ed031c06a498d78c5fae92ed790 Mon Sep 17 00:00:00 2001
+From: Eugene Mutavchi <Ievgen_Mutavchi@comcast.com>
+Date: Thu, 27 Dec 2018 10:16:16 -0500
+Subject: [PATCH 1/2] Move breakpad to webkit
+
+---
+ .../EntryPoint/unix/NetworkProcessMain.cpp         |  8 -------
+ Source/WebKit/PlatformWPE.cmake                    | 13 ++--------
+ .../WebKit/Shared/unix/BreakpadExceptionHandler.h  | 28 ----------------------
+ Source/WebKit/Shared/unix/ChildProcessMain.cpp     | 22 +++++++++++++++++
+ Source/WebKit/Shared/unix/ChildProcessMain.h       |  8 +++++++
+ .../WebProcess/EntryPoint/unix/WebProcessMain.cpp  |  8 -------
+ 6 files changed, 32 insertions(+), 55 deletions(-)
+ delete mode 100644 Source/WebKit/Shared/unix/BreakpadExceptionHandler.h
+
+Index: git/Source/WebKit/PlatformWPE.cmake
+===================================================================
+--- git.orig/Source/WebKit/PlatformWPE.cmake
++++ git/Source/WebKit/PlatformWPE.cmake
+@@ -463,20 +463,14 @@ list(APPEND WebKit_LIBRARIES
+ )
+ 
+ if (ENABLE_BREAKPAD)
+-    list(APPEND WebProcess_INCLUDE_DIRECTORIES
++    list(APPEND WebKit_INCLUDE_DIRECTORIES
+         ${BREAKPAD_INCLUDE_DIRS}
+     )
+-
+-    list(APPEND WebProcess_LIBRARIES
++    list(APPEND WebKit_LIBRARIES
+         ${BREAKPAD_LIBRARIES}
+     )
+-
+-    list(APPEND NetworkProcess_INCLUDE_DIRECTORIES
+-        ${BREAKPAD_INCLUDE_DIRS}
+-    )
+-
+-    list(APPEND NetworkProcess_LIBRARIES
+-        ${BREAKPAD_LIBRARIES}
++    list(APPEND WebKit_SOURCES
++        Shared/unix/BreakpadExceptionHandler.cpp
+     )
+ endif ()
+ 
+Index: git/Source/WebKit/Shared/unix/BreakpadExceptionHandler.h
+===================================================================
+--- git.orig/Source/WebKit/Shared/unix/BreakpadExceptionHandler.h
++++ git/Source/WebKit/Shared/unix/BreakpadExceptionHandler.h
+@@ -3,25 +3,18 @@
+ 
+ #if defined (USE_BREAKPAD)
+ #include "config.h"
+-#include <client/linux/handler/exception_handler.h>
+ 
+-namespace
+-{
+-// called by 'google_breakpad::ExceptionHandler' on every crash
+-bool breakpadCallback(const google_breakpad::MinidumpDescriptor& descriptor, void* context, bool succeeded)
+-{
+-  (void) descriptor;
+-  (void) context;
+-  return succeeded;
+-}
++#include <WebKit/WKBase.h>
+ 
+-void installExceptionHandler()
++namespace WebKit
+ {
+-  static google_breakpad::ExceptionHandler* excHandler = NULL;
+-  delete excHandler;
+-  const char* BREAKPAD_MINIDUMP_DIR = "/opt/minidumps";
+-  excHandler = new google_breakpad::ExceptionHandler(google_breakpad::MinidumpDescriptor(BREAKPAD_MINIDUMP_DIR), NULL, breakpadCallback, NULL, true, -1);
++
++extern "C" {
++
++WK_EXPORT void installExceptionHandler();
++
+ }
++
+ }
+ #endif
+ 
+Index: git/Source/WebKit/Shared/unix/BreakpadExceptionHandler.cpp
+===================================================================
+--- /dev/null
++++ git/Source/WebKit/Shared/unix/BreakpadExceptionHandler.cpp
+@@ -0,0 +1,29 @@
++#if defined (USE_BREAKPAD)
++#include "config.h"
++#include "BreakpadExceptionHandler.h"
++#include <client/linux/handler/exception_handler.h>
++#include <signal.h>
++
++namespace WebKit
++{
++// called by 'google_breakpad::ExceptionHandler' on every crash
++static bool breakpadCallback(const google_breakpad::MinidumpDescriptor& descriptor, void* context, bool succeeded)
++{
++  (void) descriptor;
++  (void) context;
++  return succeeded;
++}
++
++void installExceptionHandler()
++{
++#ifdef SIGPIPE
++  signal (SIGPIPE, SIG_IGN);
++#endif
++  static google_breakpad::ExceptionHandler* excHandler = NULL;
++  delete excHandler;
++  const char* BREAKPAD_MINIDUMP_DIR = "/opt/minidumps";
++  excHandler = new google_breakpad::ExceptionHandler(google_breakpad::MinidumpDescriptor(BREAKPAD_MINIDUMP_DIR), NULL, breakpadCallback, NULL, true, -1);
++}
++}
++#endif
++

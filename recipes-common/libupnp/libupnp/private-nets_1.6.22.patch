@@ -1,0 +1,78 @@
+Date: Mon May 11 06:06:59 2020 +0000
+From: Ie54e9e25014bd1640f66162a9f8ef2e16075aee3
+Subject: RDKB-28788: UPnP - Vulnerable to UPnP CallStranger (CVSS 7.3)
+Source: COMCAST
+License: BSD 2-Clause
+Upstream-Status: N/A
+
+Signed-off-by: Boris Itkis <boris_itkis@comcast.com>
+
+---
+diff --git a/upnp/src/gena/gena_device.c b/upnp/src/gena/gena_device.c
+index c54f884..0e15d60 100644
+--- a/upnp/src/gena/gena_device.c
++++ b/upnp/src/gena/gena_device.c
+@@ -54,6 +54,36 @@
+ 	#define snprintf _snprintf
+ #endif
+ 
++static int addr_private(const struct sockaddr_storage *addr)
++{
++#define IN_SUBNET(m, a) \
++    { htonl(m), htonl(a) }
++
++    const struct {
++        unsigned long mask;
++        unsigned long subnet;
++    } private_net_in[] = {
++        IN_SUBNET(0xff000000, 0x0A000000), /* 10.0.0.0    - 10.255.255.255  */
++        IN_SUBNET(0xfff00000, 0xAC100000), /* 172.16.0.0  - 172.31.255.255  */
++        IN_SUBNET(0xffff0000, 0xC0A80000), /* 192.168.0.0 - 192.168.255.255 */
++        IN_SUBNET(0xffff0000, 0xA9FE0000), /* 169.254.0.0 - 169.254.255.255 */
++        IN_SUBNET(0xffff0000, 0x7F000000), /* 127.0.0.0   - 127.255.255.255 */
++    };
++    int i, in_n = sizeof(private_net_in)/sizeof(*private_net_in);
++
++    if (addr->ss_family == AF_INET) /* IPv4 */
++    {
++        unsigned int sin = ((struct sockaddr_in *) addr)->sin_addr.s_addr;
++
++        for (i = 0; i < in_n; ++i)
++        {
++            if ((sin & private_net_in[i].mask) == private_net_in[i].subnet)
++                return 1;
++        }
++    }
++    return 0;
++}
++
+ /*!
+  * \brief Unregisters a device.
+  *
+@@ -1134,7 +1164,15 @@ static int create_url_list(
+                                              URLS->size - i + 1,
+                                              &temp ) ) == HTTP_SUCCESS )
+                 && ( temp.hostport.text.size != 0 ) ) {
+-                URLcount++;
++                if (addr_private(&temp.hostport.IPaddress))
++                    URLcount++;
++                else
++                    UpnpPrintf(
++                        UPNP_ALL, GENA, __FILE__, __LINE__,
++                        "Reject subscription request for %.*s: not a private IP\n",
++                        (int)temp.hostport.text.size,
++                        temp.hostport.text.buff
++                    );
+             } else {
+                 if( return_code == UPNP_E_OUTOF_MEMORY ) {
+                     return return_code;
+@@ -1163,7 +1201,8 @@ static int create_url_list(
+                       HTTP_SUCCESS )
+                     && ( out->parsedURLs[URLcount2].hostport.text.size !=
+                          0 ) ) {
+-                    URLcount2++;
++                    if (addr_private(&out->parsedURLs[URLcount2].hostport.IPaddress))
++                        URLcount2++;
+                     if (URLcount2 >= URLcount)
+                         /*
+                          * break early here in case there is a bogus URL that

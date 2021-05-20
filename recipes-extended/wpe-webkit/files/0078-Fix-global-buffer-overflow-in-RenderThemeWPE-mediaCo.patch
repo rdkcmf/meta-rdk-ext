@@ -1,0 +1,27 @@
+From 66d3573e9e56feaa4a653e32eb84b8974990b6d8 Mon Sep 17 00:00:00 2001
+From: Eugene Mutavchi <Ievgen_Mutavchi@comcast.com>
+Date: Thu, 9 Aug 2018 12:25:32 -0400
+Subject: [PATCH] Fix global-buffer-overflow in
+ RenderThemeWPE::mediaControlsStyleSheet
+
+Similar to https://bugs.webkit.org/show_bug.cgi?id=166622
+---
+ Source/WebCore/platform/wpe/RenderThemeWPE.cpp | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/Source/WebCore/platform/wpe/RenderThemeWPE.cpp b/Source/WebCore/platform/wpe/RenderThemeWPE.cpp
+index e5d8027..5613a4f 100644
+--- a/Source/WebCore/platform/wpe/RenderThemeWPE.cpp
++++ b/Source/WebCore/platform/wpe/RenderThemeWPE.cpp
+@@ -52,7 +52,7 @@ String RenderThemeWPE::extraDefaultStyleSheet()
+ #if ENABLE(VIDEO)
+ String RenderThemeWPE::mediaControlsStyleSheet()
+ {
+-    return ASCIILiteral(mediaControlsBaseUserAgentStyleSheet);
++    return String(mediaControlsBaseUserAgentStyleSheet, sizeof(mediaControlsBaseUserAgentStyleSheet));
+ }
+ 
+ String RenderThemeWPE::mediaControlsScript()
+-- 
+2.7.4
+

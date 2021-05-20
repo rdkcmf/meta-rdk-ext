@@ -1,0 +1,50 @@
+Date: Jan 27, 2015 3:44 AM
+
+From: d0ff8b276aeece996601036d969212d88dce9760 Jan 27, 2015 3:44 AM
+
+Subject: [PATCH] BPV-8919 : Update Dibbler Master branch source code Misc/Portable.h.in
+
+	To change the configuration paths from /var/lib/dibbler to /tmp/dibbler to fit the default STB read-write paths.
+	
+Source: COMCAST
+
+License: GPL-2.0-or-later
+
+Upstream-Status: Pendin
+
+Signed-off-by: plakshmin <prajwal.lakshmin@wipro.com>
+---
+
+diff --git a/Misc/Portable.h.in b/Misc/Portable.h.in
+index 65b1a4d..99ab291 100644
+--- a/Misc/Portable.h.in
++++ b/Misc/Portable.h.in
+@@ -145,7 +145,7 @@ struct link_state_notify_t
+ #endif
+ 
+ #if defined(LINUX) || defined(BSD) || defined(SUNOS)
+-#define WORKDIR            "/var/lib/dibbler"
++#define WORKDIR            "/tmp/dibbler"
+ #define DEFAULT_SCRIPT     ""
+ #define CLNTCONF_FILE      "/etc/dibbler/client.conf"
+ #define SRVCONF_FILE       "/etc/dibbler/server.conf"
+@@ -153,14 +153,14 @@ struct link_state_notify_t
+ #define RESOLVCONF_FILE    "/etc/resolv.dnsmasq"
+ #define NTPCONF_FILE       "/etc/ntp.conf"
+ #define RADVD_FILE         "/etc/dibbler/radvd.conf"
+-#define CLNTPID_FILE       "/var/lib/dibbler/client.pid"
+-#define SRVPID_FILE        "/var/lib/dibbler/server.pid"
+-#define RELPID_FILE        "/var/lib/dibbler/relay.pid"
++#define CLNTPID_FILE       "/tmp/dibbler/client.pid"
++#define SRVPID_FILE        "/tmp/dibbler/server.pid"
++#define RELPID_FILE        "/tmp/dibbler/relay.pid"
+ #define CLNTLOG_FILE       "/var/log/dibbler/dibbler-client.log"
+ #define SRVLOG_FILE        "/var/log/dibbler/dibbler-server.log"
+ #define RELLOG_FILE        "/var/log/dibbler/dibbler-relay.log"
+-#define CLNT_AAASPI_FILE   "/var/lib/dibbler/AAA/AAA-SPI"
+-#define SRV_KEYMAP_FILE    "/var/lib/dibbler/AAA/keys-mapping"
++#define CLNT_AAASPI_FILE   "/tmp/dibbler/AAA/AAA-SPI"
++#define SRV_KEYMAP_FILE    "/tmp/dibbler/AAA/keys-mapping"
+ #define NULLFILE           "/dev/null"
+ 
+ /* those defines were initially used on Linux only, but hopefully 

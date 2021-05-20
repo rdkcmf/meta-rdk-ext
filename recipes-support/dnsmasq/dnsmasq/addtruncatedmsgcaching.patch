@@ -1,0 +1,32 @@
+Date: Feb 23 05:58:43 2016
+
+From: 94ec1c09a55c0128d37cd55372b161ad512cb7d3 Jul 26 18:09:59 2016
+
+Subject: [PATCH] DELIA-12929: Added caching support for truncated response.
+
+	Adding the caching support for truncated dns reponses,
+        so we dont flood the network with same dns queries.
+
+Source: COMCAST
+
+License: GPL-2.0-or-later
+
+Upstream-Status: Pending
+
+Signed-off-by: Balaji Punnuru <balaji_punnuru@cable.comcast.com>
+---
+
+Index: dnsmasq-2.68/src/rfc1035.c
+===================================================================
+--- dnsmasq-2.68.orig/src/rfc1035.c
++++ dnsmasq-2.68/src/rfc1035.c
+@@ -1123,8 +1123,7 @@ int extract_addresses(struct dns_header
+      Don't cache replies from non-recursive nameservers, since we may get a 
+      reply containing a CNAME but not its target, even though the target 
+      does exist. */
+-  if (!(header->hb3 & HB3_TC) && 
+-      !(header->hb4 & HB4_CD) &&
++  if (!(header->hb4 & HB4_CD) &&
+       (header->hb4 & HB4_RA) &&
+       !checking_disabled)
+     cache_end_insert();

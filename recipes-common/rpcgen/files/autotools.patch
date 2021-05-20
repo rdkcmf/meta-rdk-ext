@@ -1,0 +1,375 @@
+Sun RPC is a product of Sun Microsystems, Inc. and is provided for
+unrestricted use provided that this legend is included on all tape
+media and as a part of the software program in whole or part.  Users
+may copy or modify Sun RPC without charge, but are not authorized
+to license or distribute it to anyone else except as part of a product or
+program developed by the user.
+
+SUN RPC IS PROVIDED AS IS WITH NO WARRANTIES OF ANY KIND INCLUDING THE
+WARRANTIES OF DESIGN, MERCHANTIBILITY AND FITNESS FOR A PARTICULAR
+PURPOSE, OR ARISING FROM A COURSE OF DEALING, USAGE OR TRADE PRACTICE.
+
+Sun RPC is provided with no support and without any obligation on the
+part of Sun Microsystems, Inc. to assist in its use, correction,
+modification or enhancement.
+
+SUN MICROSYSTEMS, INC. SHALL HAVE NO LIABILITY WITH RESPECT TO THE
+INFRINGEMENT OF COPYRIGHTS, TRADE SECRETS OR ANY PATENTS BY SUN RPC
+OR ANY PART THEREOF.
+
+In no event will Sun Microsystems, Inc. be liable for any lost revenue
+or profits or other special, indirect and consequential damages, even if
+Sun has been advised of the possibility of such damages.
+
+Sun Microsystems, Inc.
+2550 Garcia Avenue
+Mountain View, California  94043
+
+Date: Jan 25, 2016 9:22 PM
+
+From: 0f89515a4237b1af669027d92685be0a682c3edc Jan 25, 2016 10:02 PM
+
+Subject: [PATCH] ARRISXB3-4090: Added new recipe for rpcgen
+
+	rpcgen is needed for iot and webpa building.
+        Added rpcgen-native support so it could be useful for all.
+	
+Source: COMCAST 
+
+Upstream-Status: Pending
+
+Signed-off-by: Balaji Punnuru <balaji_punnuru@cable.comcast.com>
+---
+
+Index: sunrpc/Makefile.am
+===================================================================
+--- /dev/null
++++ sunrpc/Makefile.am
+@@ -0,0 +1,35 @@
++# Sun RPC is a product of Sun Microsystems, Inc. and is provided for
++# unrestricted use provided that this legend is included on all tape
++# media and as a part of the software program in whole or part.  Users
++# may copy or modify Sun RPC without charge, but are not authorized
++# to license or distribute it to anyone else except as part of a product or
++# program developed by the user.
++#
++# SUN RPC IS PROVIDED AS IS WITH NO WARRANTIES OF ANY KIND INCLUDING THE
++# WARRANTIES OF DESIGN, MERCHANTIBILITY AND FITNESS FOR A PARTICULAR
++# PURPOSE, OR ARISING FROM A COURSE OF DEALING, USAGE OR TRADE PRACTICE.
++#
++# Sun RPC is provided with no support and without any obligation on the
++# part of Sun Microsystems, Inc. to assist in its use, correction,
++# modification or enhancement.
++#
++# SUN MICROSYSTEMS, INC. SHALL HAVE NO LIABILITY WITH RESPECT TO THE
++# INFRINGEMENT OF COPYRIGHTS, TRADE SECRETS OR ANY PATENTS BY SUN RPC
++# OR ANY PART THEREOF.
++#
++# In no event will Sun Microsystems, Inc. be liable for any lost revenue
++# or profits or other special, indirect and consequential damages, even if
++# Sun has been advised of the possibility of such damages.
++#
++# Sun Microsystems, Inc.
++# 2550 Garcia Avenue
++# Mountain View, California  94043
++
++SUBDIRS =
++
++bin_PROGRAMS = rpcgen
++
++rpcgen_SOURCES = rpc_main.c rpc_hout.c rpc_cout.c rpc_parse.c rpc_scan.c rpc_util.c rpc_svcout.c rpc_clntout.c \
++                 rpc_tblout.c rpc_sample.c
++
++rpcgen_CFLAGS = -D__USE_LARGEFILE65 -D_LARGEFILE_SOURCE -D_LARGEFILE64_SOURCE -std=gnu90 -D_RPC_THREAD_SAFE_
+Index: sunrpc/configure.ac
+===================================================================
+--- /dev/null
++++ sunrpc/configure.ac
+@@ -0,0 +1,45 @@
++dnl                                               -*- Autoconf -*-
++dnl Process this file with autoconf to produce a configure script.
++
++dnl AC_PREREQ([2.69])
++AC_INIT(rpcgen, 1.0, balaji_punnuru@cable.comcast.com,rmfwebkitifc)
++AM_INIT_AUTOMAKE([foreign no-dist-gzip dist-bzip2 1.9])
++LT_INIT
++
++dnl subdirectories.
++
++dnl Checks for programs.
++AC_PROG_CXX
++AC_PROG_CC
++AC_PROG_INSTALL
++AC_PROG_LN_S
++AC_PROG_CPP
++AC_PROG_CXXCPP
++
++dnl use pretty build output with automake >= 1.11
++m4_ifdef([AM_SILENT_RULES],[AM_SILENT_RULES([yes])],
++  [AM_DEFAULT_VERBOSITY=1
++   AC_SUBST(AM_DEFAULT_VERBOSITY)])
++
++
++
++
++dnl **********************************
++dnl checks for dependencies
++dnl **********************************
++AC_HEADER_STDC
++
++dnl Checks for header files.
++AC_CHECK_HEADERS([limits.h memory.h stdlib.h string.h sys/socket.h unistd.h])
++
++dnl Checks for typedefs, structures, and compiler characteristics.
++dnl AC_CHECK_HEADER_STDBOOL
++AC_TYPE_UINT8_T
++
++dnl Checks for library functions.
++AC_FUNC_MALLOC
++AC_CHECK_FUNCS([memset strdup strerror])
++
++
++AC_CONFIG_FILES([Makefile])
++AC_OUTPUT
+Index: sunrpc/rpc_main.c
+===================================================================
+--- sunrpc.orig/rpc_main.c
++++ sunrpc/rpc_main.c
+@@ -283,14 +283,14 @@ open_output (const char *infile, const c
+ 
+   if (infile != NULL && streq (outfile, infile))
+     {
+-      fprintf (stderr, _ ("%s: output would overwrite %s\n"), cmdname,
++      fprintf (stderr, "%s: output would overwrite %s\n", cmdname,
+ 	       infile);
+       crash ();
+     }
+   fout = fopen (outfile, "w");
+   if (fout == NULL)
+     {
+-      fprintf (stderr, _ ("%s: unable to open %s: %m\n"), cmdname, outfile);
++      fprintf (stderr, "%s: unable to open %s: %m\n", cmdname, outfile);
+       crash ();
+     }
+   record_open (outfile);
+@@ -302,7 +302,7 @@ close_output (const char *outfile)
+ {
+   if (fclose (fout) == EOF)
+     {
+-      fprintf (stderr, _("%s: while writing output %s: %m"), cmdname,
++      fprintf (stderr, "%s: while writing output %s: %m", cmdname,
+ 	       outfile ?: "<stdout>");
+       crash ();
+     }
+@@ -337,7 +337,7 @@ find_cpp (void)
+     {				/* /lib/cpp or explicit cpp does not exist */
+       if (cppDefined)
+ 	{
+-	  fprintf (stderr, _ ("cannot find C preprocessor: %s \n"), CPP);
++	  fprintf (stderr, "cannot find C preprocessor: %s \n", CPP);
+ 	  crash ();
+ 	}
+       else
+@@ -345,7 +345,7 @@ find_cpp (void)
+ 	  CPP = SVR4_CPP;
+ 	  if (stat (CPP, &buf) < 0)
+ 	    {			/* can't find any cpp */
+-	      fputs (_ ("cannot find any C preprocessor (cpp)\n"), stdout);
++	      fputs ("cannot find any C preprocessor (cpp)\n", stdout);
+ 	      crash ();
+ 	    }
+ 	}
+@@ -414,10 +414,10 @@ close_input (void)
+   if (WIFSIGNALED (status) || WEXITSTATUS (status) != 0)
+     {
+       if (WIFSIGNALED (status))
+-	fprintf (stderr, _("%s: C preprocessor failed with signal %d\n"),
++	fprintf (stderr, "%s: C preprocessor failed with signal %d\n",
+ 		 cmdname, WTERMSIG (status));
+       else
+-	fprintf (stderr, _("%s: C preprocessor failed with exit code %d\n"),
++	fprintf (stderr, "%s: C preprocessor failed with exit code %d\n",
+ 		 cmdname, WEXITSTATUS (status));
+       crash ();
+     }
+@@ -457,7 +457,7 @@ check_nettype (const char *name, const c
+ 	  return 1;
+ 	}
+     }
+-  fprintf (stderr, _ ("illegal nettype: `%s'\n"), name);
++  fprintf (stderr, "illegal nettype: `%s'\n", name);
+   return 0;
+ }
+ 
+@@ -1119,7 +1119,7 @@ addarg (const char *cp)
+ {
+   if (argcount >= ARGLISTLEN)
+     {
+-      fprintf (stderr, _("rpcgen: too many defines\n"));
++      fprintf (stderr, "rpcgen: too many defines\n");
+       crash ();
+       /*NOTREACHED */
+     }
+@@ -1131,7 +1131,7 @@ putarg (int whereto, const char *cp)
+ {
+   if (whereto >= ARGLISTLEN)
+     {
+-      fprintf (stderr, _("rpcgen: arglist coding error\n"));
++      fprintf (stderr, "rpcgen: arglist coding error\n");
+       crash ();
+       /*NOTREACHED */
+     }
+@@ -1164,7 +1164,7 @@ checkfiles (const char *infile, const ch
+ 	  fprintf (stderr,
+ 		   /* TRANS: the file will not be removed; this is an
+ 		      TRANS: informative message.  */
+-		   _("file `%s' already exists and may be overwritten\n"),
++		   "file `%s' already exists and may be overwritten\n",
+ 		   outfile);
+ 	  crash ();
+ 	}
+@@ -1209,7 +1209,7 @@ parseargs (int argc, const char *argv[],
+ 	  if (cmd->infile)
+ 	    {
+ 	      fprintf (stderr,
+-		       _("Cannot specify more than one input file!\n"));
++		       "Cannot specify more than one input file!\n");
+ 	      return 0;
+ 	    }
+ 	  cmd->infile = argv[i];
+@@ -1379,7 +1379,7 @@ parseargs (int argc, const char *argv[],
+     {
+       /* glibc doesn't support these flags.  */
+       f_print (stderr,
+-	       _("This implementation doesn't support newstyle or MT-safe code!\n"));
++	       "This implementation doesn't support newstyle or MT-safe code!\n");
+       return (0);
+     }
+ #endif
+@@ -1388,7 +1388,7 @@ parseargs (int argc, const char *argv[],
+       pmflag = inetdflag ? 0 : 1;    /* pmflag or inetdflag is always TRUE */
+       if ((inetdflag && cmd->nflag))
+ 	{			/* netid not allowed with inetdflag */
+-	  fprintf (stderr, _("Cannot use netid flag with inetd flag!\n"));
++	  fprintf (stderr, "Cannot use netid flag with inetd flag!\n");
+ 	  return 0;
+ 	}
+     }
+@@ -1400,14 +1400,14 @@ parseargs (int argc, const char *argv[],
+ #endif
+       if (cmd->nflag)
+ 	{			/* netid needs TIRPC */
+-	  f_print (stderr, _("Cannot use netid flag without TIRPC!\n"));
++	  f_print (stderr, "Cannot use netid flag without TIRPC!\n");
+ 	  return (0);
+ 	}
+     }
+ 
+   if (newstyle && (tblflag || cmd->tflag))
+     {
+-      f_print (stderr, _("Cannot use table flags with newstyle!\n"));
++      f_print (stderr, "Cannot use table flags with newstyle!\n");
+       return (0);
+     }
+ 
+@@ -1426,12 +1426,12 @@ parseargs (int argc, const char *argv[],
+ 	   (cmd->Ssflag || cmd->Scflag || cmd->makefileflag))
+     {
+       fprintf (stderr,
+-	       _("\"infile\" is required for template generation flags.\n"));
++	       "\"infile\" is required for template generation flags.\n");
+       return 0;
+     }
+   if (nflags > 1)
+     {
+-      fprintf (stderr, _("Cannot have more than one file generation flag!\n"));
++      fprintf (stderr, "Cannot have more than one file generation flag!\n");
+       return 0;
+     }
+   return 1;
+@@ -1440,13 +1440,13 @@ parseargs (int argc, const char *argv[],
+ static void
+ usage (void)
+ {
+-  fprintf (stderr, _("usage: %s infile\n"), cmdname);
+-  fprintf (stderr, _("\t%s [-abkCLNTM][-Dname[=value]] [-i size] \
+-[-I [-K seconds]] [-Y path] infile\n"), cmdname);
+-  fprintf (stderr, _("\t%s [-c | -h | -l | -m | -t | -Sc | -Ss | -Sm] \
+-[-o outfile] [infile]\n"), cmdname);
+-  fprintf (stderr, _("\t%s [-s nettype]* [-o outfile] [infile]\n"), cmdname);
+-  fprintf (stderr, _("\t%s [-n netid]* [-o outfile] [infile]\n"), cmdname);
++  fprintf (stderr, "usage: %s infile\n", cmdname);
++  fprintf (stderr, "\t%s [-abkCLNTM][-Dname[=value]] [-i size] \
++[-I [-K seconds]] [-Y path] infile\n", cmdname);
++  fprintf (stderr, "\t%s [-c | -h | -l | -m | -t | -Sc | -Ss | -Sm] \
++[-o outfile] [infile]\n", cmdname);
++  fprintf (stderr, "\t%s [-s nettype]* [-o outfile] [infile]\n", cmdname);
++  fprintf (stderr, "\t%s [-n netid]* [-o outfile] [infile]\n", cmdname);
+   options_usage ();
+   exit (1);
+ }
+Index: sunrpc/rpc_scan.c
+===================================================================
+--- sunrpc.orig/rpc_scan.c
++++ sunrpc/rpc_scan.c
+@@ -111,7 +111,7 @@ scan_num (token *tokp)
+     case TOK_IDENT:
+       break;
+     default:
+-      error (_("constant or identifier expected"));
++      error ("constant or identifier expected");
+     }
+ }
+ 
+@@ -307,7 +307,7 @@ get_token (token *tokp)
+ 	  char buf[100];
+ 	  char *p;
+ 
+-	  s_print (buf, _("illegal character in file: "));
++	  s_print (buf, "illegal character in file: ");
+ 	  p = buf + strlen (buf);
+ 	  if (isprint (*where))
+ 	    {
+@@ -346,7 +346,7 @@ findstrconst (const char **str, const ch
+   while (*p && *p != '"');
+   if (*p == 0)
+     {
+-      error (_("unterminated string constant"));
++      error ("unterminated string constant");
+     }
+   p++;
+   size = p - *str;
+@@ -372,13 +372,13 @@ findchrconst (const char **str, const ch
+   while (*p && *p != '\'');
+   if (*p == 0)
+     {
+-      error (_("unterminated string constant"));
++      error ("unterminated string constant");
+     }
+   p++;
+   size = p - *str;
+   if (size != 3)
+     {
+-      error (_("empty char string"));
++      error ("empty char string");
+     }
+   tmp = alloc (size + 1);
+   strncpy (tmp, *str, size);
+@@ -520,7 +520,7 @@ docppline (const char *line, int *lineno
+     }
+   if (*line != '"')
+     {
+-      error (_("preprocessor error"));
++      error ("preprocessor error");
+     }
+   line++;
+   p = file = alloc (strlen (line) + 1);
+@@ -530,7 +530,7 @@ docppline (const char *line, int *lineno
+     }
+   if (*line == 0)
+     {
+-      error (_("preprocessor error"));
++      error ("preprocessor error");
+     }
+   *p = 0;
+   if (*file == 0)

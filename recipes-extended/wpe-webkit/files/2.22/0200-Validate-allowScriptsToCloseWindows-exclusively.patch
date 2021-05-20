@@ -1,0 +1,33 @@
+From e3e28908ef2796fb315e328b47282d31b2370385 Mon Sep 17 00:00:00 2001
+From: "Vivek.A" <Vivek_Arumugam@comcast.com>
+Date: Mon, 6 Jul 2020 09:49:39 +0000
+Subject: [PATCH] DELIA-44222: Peacock/Prime/Youtube launch failed
+Source: COMCAST
+License: LGPL-2.1-or-later
+Upstream-Status: Pending
+Signed-off-by: Vivek.A <Vivek_Arumugam@Comcast.Com>
+
+Check allowScriptsToCloseWindows exclusively
+---
+ Source/WebCore/page/DOMWindow.cpp | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/Source/WebCore/page/DOMWindow.cpp b/Source/WebCore/page/DOMWindow.cpp
+index 61d373918fca..297b2453d2fc 100644
+--- a/Source/WebCore/page/DOMWindow.cpp
++++ b/Source/WebCore/page/DOMWindow.cpp
+@@ -1096,6 +1096,11 @@ void DOMWindow::close()
+         return;
+     }
+
++    if (!allowScriptsToCloseWindows) {
++        console()->addMessage(MessageSource::JS, MessageLevel::Warning, "Not allowed to close windows"_s);
++        return;
++    }
++
+     if (!m_frame->loader().shouldClose())
+         return;
+
+-- 
+2.24.0
+

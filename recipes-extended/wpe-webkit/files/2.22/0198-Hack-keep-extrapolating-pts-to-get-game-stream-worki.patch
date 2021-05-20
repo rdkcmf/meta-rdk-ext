@@ -1,0 +1,28 @@
+From e1bd3a845baf3e66499178df7f5e46708d052392 Mon Sep 17 00:00:00 2001
+From: Ievgen Mutavchi <Ievgen_Mutavchi@comcast.com>
+Date: Wed, 29 Apr 2020 21:18:08 -0400
+Subject: [PATCH] Hack - keep extrapolating pts to get game stream working
+Source: COMCAST
+License: LGPL-2.1-or-later
+Upstream-Status: None
+Signed-off-by: Ievgen Mutavchi <Ievgen_Mutavchi@comcast.com>
+
+---
+ .../ThirdParty/libwebrtc/Source/webrtc/modules/video_coding/timing.cc | 2 +-
+ 1 files changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/Source/ThirdParty/libwebrtc/Source/webrtc/modules/video_coding/timing.cc b/Source/ThirdParty/libwebrtc/Source/webrtc/modules/video_coding/timing.cc
+index 310467b..68835ba 100644
+--- a/Source/ThirdParty/libwebrtc/Source/webrtc/modules/video_coding/timing.cc
++++ b/Source/ThirdParty/libwebrtc/Source/webrtc/modules/video_coding/timing.cc
+@@ -175,7 +175,7 @@ int64_t VCMTiming::RenderTimeMsInternal(uint32_t frame_timestamp,
+                                         int64_t now_ms) const {
+   if (min_playout_delay_ms_ == 0 && max_playout_delay_ms_ == 0) {
+     // Render as soon as possible.
+-    return 0;
++//    return 0;
+   }
+   int64_t estimated_complete_time_ms =
+       ts_extrapolator_->ExtrapolateLocalTime(frame_timestamp);
+-- 
+2.7.4

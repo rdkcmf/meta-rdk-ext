@@ -1,0 +1,10 @@
+[Unit]
+Description=The RPC portmapper
+After=network.target
+
+[Service]
+Type=forking
+ExecStart=/sbin/portmap
+
+[Install]
+WantedBy=multi-user.target

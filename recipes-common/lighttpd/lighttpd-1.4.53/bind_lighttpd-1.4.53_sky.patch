@@ -1,0 +1,75 @@
+
+Date: Dec 13, 2019 4:05 PM
+From: Change-Id: I56605d17f33c04ea06658184e0d5cf1f00280188
+Subject: RDKB-22373: Upgrade lighttpd to 1.4.53
+Porting the patches added to lighttpd-1.4.45 version to latest 1.4.53 version as well.
+Older patches are slightly modified to make it compatible with latest version.
+Source: COMCAST
+License: BSD-3-Clause
+Upstream-Status: None
+Signed-off-by: Rakhil P E <Rakhil_PuthiyaveettilEdachena@comcast.com>
+
+Index: lighttpd-1.4.53/src/sock_addr.c
+===================================================================
+--- lighttpd-1.4.53.orig/src/sock_addr.c
++++ lighttpd-1.4.53/src/sock_addr.c
+@@ -446,6 +446,9 @@ int sock_addr_from_str_hints(server *srv
+             hints.ai_protocol = IPPROTO_TCP;
+ 
+             if (0 != (r = getaddrinfo(str, NULL, &hints, &res))) {
++            #ifdef SO_BINDTODEVICE
++                saddr->ipv6.sin6_addr = in6addr_any;
++            #else
+                 hints.ai_family = AF_INET;
+                 if (
+                   #ifdef EAI_ADDRFAMILY
+@@ -466,10 +469,12 @@ int sock_addr_from_str_hints(server *srv
+                                 gai_strerror(r), "'", str, "'");
+ 
+                 return 0;
++            #endif
+             }
+-
++            #ifndef SO_BINDTODEVICE
+             memcpy(saddr, res->ai_addr, res->ai_addrlen);
+             freeaddrinfo(res);
++            #endif
+         }
+         saddr->ipv6.sin6_port = htons(port);
+         *len = sizeof(struct sockaddr_in6);
+@@ -485,6 +490,9 @@ int sock_addr_from_str_hints(server *srv
+             saddr->ipv4.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+         }
+         else {
++#ifdef SO_BINDTODEVICE
++          saddr->ipv4.sin_addr.s_addr = htonl(INADDR_ANY);
++#else
+           #ifdef HAVE_INET_PTON
+             /*(reuse HAVE_INET_PTON for presence of getaddrinfo())*/
+             struct addrinfo hints, *res;
+@@ -526,6 +534,7 @@ int sock_addr_from_str_hints(server *srv
+             memcpy(&saddr->ipv4.sin_addr.s_addr,
+                    he->h_addr_list[0], he->h_length);
+           #endif
++#endif
+         }
+         saddr->ipv4.sin_port = htons(port);
+         *len = sizeof(struct sockaddr_in);
+Index: lighttpd-1.4.53/src/network.c
+===================================================================
+--- lighttpd-1.4.53.orig/src/network.c
++++ lighttpd-1.4.53/src/network.c
+@@ -281,11 +281,13 @@ static int network_server_init(server *s
+ 
+ #ifdef HAVE_IPV6
+ 		if (set_v6only && -1 == stdin_fd) {
++#ifndef SO_BINDTODEVICE
+ 				int val = 1;
+ 				if (-1 == setsockopt(srv_socket->fd, IPPROTO_IPV6, IPV6_V6ONLY, &val, sizeof(val))) {
+ 					log_error_write(srv, __FILE__, __LINE__, "ss", "setsockopt(IPV6_V6ONLY) failed:", strerror(errno));
+ 					return -1;
+ 				}
++#endif
+ 		}
+ #endif
+ 

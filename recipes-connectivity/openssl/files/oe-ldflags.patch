@@ -1,0 +1,39 @@
+Date: May 28 19:38:09 2014
+
+From: 105907cb3aeadba214530a500e427532544bb681 May 28 19:38:09 2014
+
+Subject: [PATCH] Added new recipes for net-snmp, openssl-0.9, rmfgeneric, trm, rmfhalheaders, rmfpodmgrheaders, rmfpodmgr recipes
+
+
+        Added patches for new recipes for net-snmp, openssl-0.9, rmfgeneric, trm, rmfhalheaders, rmfpodmgrheaders, rmfpodmgr recipes.
+
+Source: OPENSOURCE
+
+License: Apache-2.0
+
+Upstream-Status: [ http://git.yoctoproject.org/cgit/cgit.cgi/meta-freescale/commit/recipes-connectivity/openssl/openssl-qoriq/debian/no-symbolic.patch?h=pyro&id=67df1cdca7fe5be0513d67e6abd45b973189ecfe ]
+
+Signed-off-by:  Zhenhua Luo <zhenhua.luo@freescale.com>
+---
+
+diff -urN openssl-0.9.8j.orig/Makefile.shared openssl-0.9.8j/Makefile.shared
+--- openssl-0.9.8j.orig/Makefile.shared	2008-09-17 15:56:40.000000000 +0000
++++ openssl-0.9.8j/Makefile.shared	2009-04-02 13:44:48.000000000 +0000
+@@ -90,7 +90,7 @@
+ LINK_APP=	\
+   ( $(SET_X);   \
+     LIBDEPS="$${LIBDEPS:-$(LIBDEPS)}"; \
+-    LDCMD="$${LDCMD:-$(CC)}"; LDFLAGS="$${LDFLAGS:-$(CFLAGS)}"; \
++    LDCMD="$${LDCMD:-$(CC)}"; LDFLAGS="$(OE_LDFLAGS) $${LDFLAGS:-$(CFLAGS)}"; \
+     LIBPATH=`for x in $$LIBDEPS; do if echo $$x | grep '^ *-L' > /dev/null 2>&1; then echo $$x | sed -e 's/^ *-L//'; fi; done | uniq`; \
+     LIBPATH=`echo $$LIBPATH | sed -e 's/ /:/g'`; \
+     LD_LIBRARY_PATH=$$LIBPATH:$$LD_LIBRARY_PATH \
+@@ -100,7 +100,7 @@
+   ( $(SET_X);   \
+     LIBDEPS="$${LIBDEPS:-$(LIBDEPS)}"; \
+     SHAREDCMD="$${SHAREDCMD:-$(CC)}"; \
+-    SHAREDFLAGS="$${SHAREDFLAGS:-$(CFLAGS) $(SHARED_LDFLAGS)}"; \
++    SHAREDFLAGS="$(OE_LDFLAGS) $${SHAREDFLAGS:-$(CFLAGS) $(SHARED_LDFLAGS)}"; \
+     LIBPATH=`for x in $$LIBDEPS; do if echo $$x | grep '^ *-L' > /dev/null 2>&1; then echo $$x | sed -e 's/^ *-L//'; fi; done | uniq`; \
+     LIBPATH=`echo $$LIBPATH | sed -e 's/ /:/g'`; \
+     LD_LIBRARY_PATH=$$LIBPATH:$$LD_LIBRARY_PATH \

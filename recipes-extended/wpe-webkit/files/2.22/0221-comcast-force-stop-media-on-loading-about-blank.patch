@@ -1,0 +1,59 @@
+From b6eb2cb2a40fbcdfd690c9f0ce8f9be94a76423b Mon Sep 17 00:00:00 2001
+From: Eugene Mutavchi <Ievgen_Mutavchi@comcast.com>
+Date: Tue, 26 Jan 2021 16:13:21 +0000
+Subject: [PATCH] comcast force stop media on loading about:blank
+
+---
+ Source/WebCore/html/HTMLMediaElement.cpp  | 9 +++++++++
+ Source/WebCore/replay/UserInputBridge.cpp | 6 ++++++
+ 2 files changed, 15 insertions(+)
+
+diff --git a/Source/WebCore/html/HTMLMediaElement.cpp b/Source/WebCore/html/HTMLMediaElement.cpp
+index 7af27841a820..dd6acf059f04 100644
+--- a/Source/WebCore/html/HTMLMediaElement.cpp
++++ b/Source/WebCore/html/HTMLMediaElement.cpp
+@@ -371,6 +371,15 @@ HashSet<HTMLMediaElement*>& HTMLMediaElement::allMediaElements()
+     return elements;
+ }
+ 
++void ForceStopMediaElements()
++{
++    for (auto* mediaElement : HTMLMediaElement::allMediaElements()) {
++        WTFLogAlways("Force stop '%s'", mediaElement->currentSrc().string().utf8().data());
++        ActiveDOMObject* obj = mediaElement;
++        obj->stop();
++    }
++}
++
+ #if ENABLE(MEDIA_SESSION)
+ typedef HashMap<uint64_t, HTMLMediaElement*> IDToElementMap;
+ 
+diff --git a/Source/WebCore/replay/UserInputBridge.cpp b/Source/WebCore/replay/UserInputBridge.cpp
+index 2cedd8fc9aa6..b2588c84b4af 100644
+--- a/Source/WebCore/replay/UserInputBridge.cpp
++++ b/Source/WebCore/replay/UserInputBridge.cpp
+@@ -37,6 +37,7 @@
+ #include "PlatformKeyboardEvent.h"
+ #include "PlatformMouseEvent.h"
+ #include "PlatformWheelEvent.h"
++#include "SchemeRegistry.h"
+ 
+ namespace WebCore {
+ 
+@@ -116,8 +117,13 @@ bool UserInputBridge::logicalScrollRecursively(ScrollLogicalDirection direction,
+     return m_page.focusController().focusedOrMainFrame().eventHandler().logicalScrollRecursively(direction, granularity, nullptr);
+ }
+ 
++void ForceStopMediaElements();  // defined in HTMLMediaElement
+ void UserInputBridge::loadRequest(FrameLoadRequest&& request, InputSource)
+ {
++    if (request.resourceRequest().url().isEmpty() ||
++        SchemeRegistry::shouldLoadURLSchemeAsEmptyDocument(request.resourceRequest().url().protocol().toStringWithoutCopying())) {
++        ForceStopMediaElements();
++    }
+     m_page.mainFrame().loader().load(WTFMove(request));
+ }
+ 
+-- 
+2.24.0
+

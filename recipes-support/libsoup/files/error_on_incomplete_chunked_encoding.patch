@@ -1,0 +1,61 @@
+From 51d147998e5767fff06bb6b231fa3ac20ee51687 Mon Sep 17 00:00:00 2001
+From: cmurug728 <Chockalingam_Murugan@comcast.com>
+Date: Thu, 4 Mar 2021 11:40:24 +0000
+Subject: [PATCH] libsoup: signal error on incomplete chunked encoding
+
+---
+
+diff --git a/libsoup/soup-body-input-stream.c b/libsoup/soup-body-input-stream.c
+index 32ad074..a49b00d 100644
+--- a/libsoup/soup-body-input-stream.c
++++ b/libsoup/soup-body-input-stream.c
+@@ -162,6 +162,14 @@ again:
+ 		nread = soup_filter_input_stream_read_line (
+ 			fstream, metabuf, sizeof (metabuf), blocking,
+ 			&got_line, cancellable, error);
++                if (nread == 0) {
++                        if (error && *error == NULL) {
++                            g_set_error_literal (error, G_IO_ERROR,
++                                             G_IO_ERROR_PARTIAL_INPUT,
++                                             _("Connection terminated unexpectedly"));
++                         }
++                        return -1;
++                }
+ 		if (nread <= 0)
+ 			return nread;
+ 		if (!got_line) {
+@@ -194,7 +202,15 @@ again:
+ 		nread = soup_filter_input_stream_read_line (
+ 			SOUP_FILTER_INPUT_STREAM (bistream->priv->base_stream),
+ 			metabuf, sizeof (metabuf), blocking,
+-			&got_line, cancellable, error);
++			&got_line, cancellable, error);	
++                if (nread == 0) {
++                        if (error && *error == NULL) {
++                            g_set_error_literal (error, G_IO_ERROR,
++                                             G_IO_ERROR_PARTIAL_INPUT,
++                                             _("Connection terminated unexpectedly"));
++                         }
++                        return -1;
++                }
+ 		if (nread <= 0)
+ 			return nread;
+ 		if (!got_line) {
+@@ -211,6 +227,14 @@ again:
+ 		nread = soup_filter_input_stream_read_line (
+ 			fstream, buffer, count, blocking,
+ 			&got_line, cancellable, error);
++                if (nread == 0) {
++                        if (error && *error == NULL) {
++                            g_set_error_literal (error, G_IO_ERROR,
++                                             G_IO_ERROR_PARTIAL_INPUT,
++                                             _("Connection terminated unexpectedly"));
++                         }
++                        return -1;
++                }
+ 		if (nread <= 0)
+ 			return nread;
+ 
+-- 
+2.14.2
+

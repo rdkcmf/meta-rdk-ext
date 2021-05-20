@@ -1,0 +1,24 @@
+From ab89fbd787d133caca126df44949cf58e198c0a4 Mon Sep 17 00:00:00 2001
+From: Ievgen Mutavchi <emutavchi@gmail.com>
+Date: Tue, 13 Aug 2019 10:32:14 -0400
+Subject: [PATCH] Handle gst pad error as format error
+
+---
+ .../WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp  | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp b/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp
+index 0e6ea2f..5ddd2ab 100644
+--- a/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp
++++ b/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp
+@@ -1155,6 +1155,7 @@ void MediaPlayerPrivateGStreamer::handleMessage(GstMessage* message)
+             || g_error_matches(err.get(), GST_STREAM_ERROR, GST_STREAM_ERROR_WRONG_TYPE)
+             || g_error_matches(err.get(), GST_STREAM_ERROR, GST_STREAM_ERROR_FAILED)
+             || g_error_matches(err.get(), GST_CORE_ERROR, GST_CORE_ERROR_MISSING_PLUGIN)
++            || g_error_matches(err.get(), GST_CORE_ERROR, GST_CORE_ERROR_PAD)
+             || g_error_matches(err.get(), GST_RESOURCE_ERROR, GST_RESOURCE_ERROR_NOT_FOUND)) {
+ 
+             fprintf(stderr, "HTML5 video: Playback failed: Format error [%s]\n",m_url.string().utf8().data());
+-- 
+2.7.4
+

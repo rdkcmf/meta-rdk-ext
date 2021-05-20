@@ -1,0 +1,84 @@
+lxc: linux Container library
+
+Authors:
+Daniel Lezcano <daniel.lezcano@free.fr>
+
+This library is free software; you can redistribute it and/or
+modify it under the terms of the GNU Lesser General Public
+License as published by the Free Software Foundation; either
+version 2.1 of the License, or (at your option) any later version.
+
+This library is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+Lesser General Public License for more details.
+
+ou should have received a copy of the GNU Lesser General Public
+License along with this library; if not, write to the Free Software
+Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
+
+Date: Oct 31 05:16:21 2016
+
+From: f25c23dc0257487d12d27541dbdcdf13bca1c7d6 Feb 14 15:09:26 2017
+
+Subject: [PATCH] RDKSVREQ-10055 : Yocto Rootfs Packaging Fails on Multiuser Systems
+
+	The geteuid() api returns always zero as a user id irrespective of privillaged/non-privillaged user.
+	So replaced user id in lxc path variable to user's home directory.
+
+Source: COMCAST
+
+Upstream-Status: Pending
+
+Signed-off-by: mselvaraj <Mani_selvaraj@comcast.com>
+---
+
+Index: lxc-1.1.2/src/lxc/lxclock.c
+===================================================================
+--- lxc-1.1.2.orig/src/lxc/lxclock.c
++++ lxc-1.1.2/src/lxc/lxclock.c
+@@ -101,6 +101,7 @@ static char *lxclock_name(const char *p,
+ 	int len;
+ 	char *dest;
+ 	char *rundir;
++        char *homedir;
+ 
+ 	/* lockfile will be:
+ 	 * "/run" + "/lock/lxc/$lxcpath/$lxcname + '\0' if root
+@@ -120,7 +121,7 @@ static char *lxclock_name(const char *p,
+ 		return NULL;
+ 	}
+ 
+-	ret = snprintf(dest, len, "%s/lock/lxc/%s", rundir, p);
++       ret = snprintf(dest, len, "%s/lock/lxc/%s", rundir, p);
+ 	if (ret < 0 || ret >= len) {
+ 		free(dest);
+ 		free(rundir);
+@@ -132,7 +133,8 @@ static char *lxclock_name(const char *p,
+ 		 * * maximum length of $(id -u) is 10 calculated by (log (2 ** (sizeof(uid_t) * 8) - 1) / log 10 + 1)
+ 		 * * lxcpath always starts with '/'
+ 		 */
+-		int l2 = 22 + strlen(n) + strlen(p);
++                homedir = getenv("HOME");
++		int l2 = 22 + strlen(n) + strlen(p) + strlen(homedir);
+ 		if (l2 > len) {
+ 			char *d;
+ 			d = realloc(dest, l2);
+@@ -144,7 +146,7 @@ static char *lxclock_name(const char *p,
+ 			len = l2;
+ 			dest = d;
+ 		}
+-		ret = snprintf(dest, len, "/tmp/%d/lxc%s", geteuid(), p);
++		ret = snprintf(dest, len, "/tmp/%s/lxc%s", homedir, p);
+ 		if (ret < 0 || ret >= len) {
+ 			free(dest);
+ 			free(rundir);
+@@ -156,7 +158,7 @@ static char *lxclock_name(const char *p,
+ 			free(rundir);
+ 			return NULL;
+ 		}
+-		ret = snprintf(dest, len, "/tmp/%d/lxc%s/.%s", geteuid(), p, n);
++		ret = snprintf(dest, len, "/tmp/%s/lxc%s/.%s", homedir, p, n);
+ 	} else
+ 		ret = snprintf(dest, len, "%s/lock/lxc/%s/.%s", rundir, p, n);
+ 

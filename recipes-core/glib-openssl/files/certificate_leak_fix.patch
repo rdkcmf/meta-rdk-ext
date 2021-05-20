@@ -1,0 +1,37 @@
+Date: Oct 10 10:09:44 2017
+
+From: bef956303aed1dc154cf2f11953637acd8457ed6 Oct 16 14:04:14 2017
+
+Subject: [PATCH] XRE-12149: upgrade glib-openssl and fix certificate leak
+
+	Fix memory leak in WPE network process
+
+Source: COMCAST
+
+License: LGPL-2.1-or-later
+
+Upstream-Status: Pending
+
+Signed-off-by: Eugene Mutavchi <Ievgen_Mutavchi@comcast.com>
+---
+
+
+Index: glib-openssl-2.50.3/tls/openssl/gtlsconnection-openssl.c
+===================================================================
+--- glib-openssl-2.50.3.orig/tls/openssl/gtlsconnection-openssl.c
++++ glib-openssl-2.50.3/tls/openssl/gtlsconnection-openssl.c
+@@ -238,9 +238,13 @@ get_peer_certificate (GTlsConnectionOpen
+ 
+   certs = SSL_get_peer_cert_chain (ssl);
+   if (certs == NULL)
+-    return NULL;
++    {
++      X509_free(peer);
++      return NULL;
++    }
+ 
+   chain = g_tls_certificate_openssl_build_chain (peer, certs);
++  X509_free(peer);
+   if (!chain)
+     return NULL;
+ 

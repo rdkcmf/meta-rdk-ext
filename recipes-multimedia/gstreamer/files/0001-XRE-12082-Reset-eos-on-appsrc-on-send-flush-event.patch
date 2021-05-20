@@ -1,0 +1,32 @@
+From 0ff5bd3cd8604e3bc228c79c1a287e8bbd27170b Mon Sep 17 00:00:00 2001
+From: mzuber <Mark_Zuber@cable.comcast.com>
+Date: Wed, 27 Sep 2017 08:15:51 -0400
+Subject: [PATCH] XRE-12082: Reset eos on appsrc on send flush event
+
+Bringing needed part of patch from gst 1.4 to 1.10
+Netflix use case.
+
+Reason for change: appsrc needs to reset eos on send flush event
+Test Procedure: Seek to end of video in Netflix.
+When a few seconds from end seek back and make sure seeking doesn't get stuck
+Risks: Low
+Signed-off-by: mzuber <Mark_Zuber@cable.comcast.com>
+---
+ gst-libs/gst/app/gstappsrc.c | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/gst-libs/gst/app/gstappsrc.c b/gst-libs/gst/app/gstappsrc.c
+index 5a44a45..c85e738 100644
+--- a/gst-libs/gst/app/gstappsrc.c
++++ b/gst-libs/gst/app/gstappsrc.c
+@@ -800,6 +800,7 @@ gst_app_src_send_event (GstElement * element, GstEvent * event)
+     case GST_EVENT_FLUSH_STOP:
+       g_mutex_lock (&priv->mutex);
+       gst_app_src_flush_queued (appsrc, TRUE);
++      priv->is_eos = FALSE;
+       g_mutex_unlock (&priv->mutex);
+       break;
+     default:
+-- 
+1.9.1
+

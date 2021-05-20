@@ -1,0 +1,37 @@
+[PATCH] gstreamer-plugins-good audioparser: support eac3 and ec-3
+
+Disable gstreamer provided eac3 and ec-3 parser.
+Plugins which look into audio/video data need to be removed since
+SOC plugins already cover the audio parser functionality.
+
+Signed-off-by: Azam Ansari <AzamAyub_Ansari@cable.comcast.com>
+
+diff --git a/gst/audioparsers/plugin.c b/gst/audioparsers/plugin.c
+index 6524016..600200a 100644
+--- a/gst/audioparsers/plugin.c
++++ b/gst/audioparsers/plugin.c
+@@ -40,8 +40,8 @@ plugin_init (GstPlugin * plugin)
+   //ret &= gst_element_register (plugin, "amrparse",
+   ret = gst_element_register (plugin, "amrparse",
+       GST_RANK_PRIMARY + 1, GST_TYPE_AMR_PARSE);
+-  ret &= gst_element_register (plugin, "ac3parse",
+-      GST_RANK_PRIMARY + 1, GST_TYPE_AC3_PARSE);
++//  ret &= gst_element_register (plugin, "ac3parse",
++//      GST_RANK_PRIMARY + 1, GST_TYPE_AC3_PARSE);
+   ret &= gst_element_register (plugin, "dcaparse",
+       GST_RANK_PRIMARY + 1, GST_TYPE_DCA_PARSE);
+   ret &= gst_element_register (plugin, "flacparse",
+
+diff --git a/gst/audioparsers/Makefile.am b/home/aansari001c/gst-plugins-good-1.10.4/gst/audioparsers/Makefile.am
+index 46921d4..85f5a82 100644
+--- a/gst/audioparsers/Makefile.am
++++ b/home/aansari001c/gst-plugins-good-1.10.4/gst/audioparsers/Makefile.am
+@@ -1,7 +1,7 @@
+ plugin_LTLIBRARIES = libgstaudioparsers.la
+ 
+ libgstaudioparsers_la_SOURCES = \
+-	gstamrparse.c gstac3parse.c \
++	gstamrparse.c \
+ 	gstdcaparse.c gstflacparse.c gstmpegaudioparse.c \
+ 	gstsbcparse.c gstwavpackparse.c plugin.c
+ 

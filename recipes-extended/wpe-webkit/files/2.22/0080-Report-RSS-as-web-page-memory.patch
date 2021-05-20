@@ -1,0 +1,107 @@
+From 6002fd1f7254f5ebad03c0bd6b3b61b26ef57c26 Mon Sep 17 00:00:00 2001
+From: Balaji Selvam <balaji_selvam@comcast.com>
+Source: COMCAST
+License: LICENSE-LGPL-2.1
+Upstream-Status: Pending
+Signed-off-by: Balaji Selvam <balaji_selvam@comcast.com>
+Date: Tue, 8 Oct 2019 19:09:45 +0000
+Subject: [PATCH] Report RSS as web page memory
+
+---
+ .../JavaScriptCore/heap/GCIncomingRefCountedSetInlines.h  |  7 +++++--
+ Source/WebCore/page/ResourceUsageThread.cpp               | 12 ++++++------
+ Source/WebCore/page/linux/ResourceUsageThreadLinux.cpp    | 15 +++++++++++----
+ 3 files changed, 22 insertions(+), 12 deletions(-)
+
+Index: git/Source/JavaScriptCore/heap/GCIncomingRefCountedSetInlines.h
+===================================================================
+--- git.orig/Source/JavaScriptCore/heap/GCIncomingRefCountedSetInlines.h
++++ git/Source/JavaScriptCore/heap/GCIncomingRefCountedSetInlines.h
+@@ -61,17 +61,20 @@ bool GCIncomingRefCountedSet<T>::addRefe
+ template<typename T>
+ void GCIncomingRefCountedSet<T>::sweep()
+ {
++    size_t bytes = 0;
+     for (size_t i = 0; i < m_vector.size(); ++i) {
+         T* object = m_vector[i];
+         size_t size = object->gcSizeEstimateInBytes();
+         ASSERT(object->isDeferred());
+         ASSERT(object->numberOfIncomingReferences());
+-        if (!object->filterIncomingReferences(removeDead))
++        if (!object->filterIncomingReferences(removeDead)) {
++            bytes += size;
+             continue;
+-        m_bytes -= size;
++        }
+         m_vector[i--] = m_vector.last();
+         m_vector.removeLast();
+     }
++    m_bytes = bytes;
+ }
+ 
+ template<typename T>
+Index: git/Source/WebCore/page/ResourceUsageThread.cpp
+===================================================================
+--- git.orig/Source/WebCore/page/ResourceUsageThread.cpp
++++ git/Source/WebCore/page/ResourceUsageThread.cpp
+@@ -50,9 +50,9 @@ void ResourceUsageThread::addObserver(vo
+ {
+     auto& resourceUsageThread = ResourceUsageThread::singleton();
+     resourceUsageThread.createThreadIfNeeded();
+-#if PLATFORM(LINUX)
+-    MemoryCache::singleton().setDisabled(false);
+-#endif
++//#if PLATFORM(LINUX)
++//    MemoryCache::singleton().setDisabled(false);
++//#endif
+ 
+     {
+         LockHolder locker(resourceUsageThread.m_lock);
+@@ -67,9 +67,9 @@ void ResourceUsageThread::addObserver(vo
+ void ResourceUsageThread::removeObserver(void* key)
+ {
+     auto& resourceUsageThread = ResourceUsageThread::singleton();
+-#if PLATFORM(LINUX)
+-    MemoryCache::singleton().setDisabled(true);
+-#endif
++//#if PLATFORM(LINUX)
++//    MemoryCache::singleton().setDisabled(true);
++//#endif
+ 
+     {
+         LockHolder locker(resourceUsageThread.m_lock);
+Index: git/Source/WebCore/page/linux/ResourceUsageThreadLinux.cpp
+===================================================================
+--- git.orig/Source/WebCore/page/linux/ResourceUsageThreadLinux.cpp
++++ git/Source/WebCore/page/linux/ResourceUsageThreadLinux.cpp
+@@ -210,7 +210,7 @@ void ResourceUsageThread::platformThread
+ 
+     ProcessMemoryStatus memoryStatus;
+     currentProcessMemoryStatus(memoryStatus);
+-    data.totalDirtySize = memoryStatus.resident - memoryStatus.shared;
++    data.totalDirtySize = memoryStatus.resident; // - memoryStatus.shared;
+ 
+     size_t currentGCHeapCapacity = vm->heap.blockBytesAllocated();
+     size_t currentGCOwnedExtra = vm->heap.extraMemorySize();
+@@ -221,11 +221,18 @@ void ResourceUsageThread::platformThread
+     data.categories[MemoryCategory::GCOwned].dirtySize = currentGCOwnedExtra - currentGCOwnedExternal;
+     data.categories[MemoryCategory::GCOwned].externalSize = currentGCOwnedExternal;
+ 
+-    data.categories[MemoryCategory::Images].dirtySize = MemoryCache::singleton().getStatistics().images.decodedSize;
+-
+-    data.categories[MemoryCategory::LibcMalloc].dirtySize = WTF::fastMallocStatistics().committedVMBytes;
++    data.categories[MemoryCategory::Images].dirtySize = MemoryCache::singleton().getStatistics().images.size;
+     data.categories[MemoryCategory::Layers].dirtySize = totalLayerBackingStoreBytes;
+ 
++    auto& mallocBucket = isFastMallocEnabled() ? data.categories[MemoryCategory::bmalloc] : data.categories[MemoryCategory::LibcMalloc];
++    mallocBucket.dirtySize = data.totalDirtySize;
++
++    // Account for GC owned Same as in ResourceUsageThreadCocoa.mm
++    mallocBucket.dirtySize -= currentGCHeapCapacity;
++    size_t currentGCOwnedGenerallyInMalloc = currentGCOwnedExtra - currentGCOwnedExternal;
++    if (currentGCOwnedGenerallyInMalloc < mallocBucket.dirtySize)
++        mallocBucket.dirtySize -= currentGCOwnedGenerallyInMalloc;
++
+     data.totalExternalSize = currentGCOwnedExternal;
+ 
+     auto now = MonotonicTime::now();

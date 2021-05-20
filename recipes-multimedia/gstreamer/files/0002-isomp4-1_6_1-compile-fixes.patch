@@ -1,0 +1,330 @@
+Date: Nov 19 08:40:26 2015
+
+From: 9267950d03026cf174010f115c5a9722124c82cb Nov 20 19:34:58 2015
+
+Subject: [PATCH] WKIT-388 : Upgrade gstreamer isomp4 plugin to version 1.6.1
+
+	Update just the isomp4 plugin (used mainly for mse demuxing)
+	This brings in bug fixes and better seeking support and also
+	lines us up with the current webkit-wayland master.
+
+	Metro's patches can also be applied cleanly now and are added
+	in this commit.
+
+	Biggest risk is the removal/changes to the isomp4 plugin so it
+	works in a 1.4.4 install.  Applied with the
+	0002-isomp4-1_6_1-compile-fixes.patch.
+
+	This gets seeking working really well on the ubuntu desktop.
+	Seeking both in and out of the currently buffered data seems
+	to work	well, with some rare stuck in spinner cases.
+	Xi3 still has issues most likely related to soc plugins
+	that still need to be investigated.
+
+        And make sure h264parse always sends codec-data change
+
+Source: COMCAST
+
+License: LGPL-2.1-or-later
+
+Upstream-Status: Pending
+
+Signed-off-by: mzuber <Mark_Zuber@cable.comcast.com>
+
+---
+
+diff --git a/gst/isomp4/gstqtmux.c b/gst/isomp4/gstqtmux.c
+index 7f72443..29a40cc 100644
+--- a/gst/isomp4/gstqtmux.c
++++ b/gst/isomp4/gstqtmux.c
+@@ -1671,8 +1671,6 @@ gst_qt_mux_send_mdat_header (GstQTMux * qtmux, guint64 * off, guint64 size,
+   }
+ 
+   GST_LOG_OBJECT (qtmux, "Pushing mdat header");
+-  if (fsync_after)
+-    GST_BUFFER_FLAG_SET (buf, GST_BUFFER_FLAG_SYNC_AFTER);
+ 
+   return gst_qt_mux_send_buffer (qtmux, buf, off, FALSE);
+ 
+@@ -1835,8 +1833,6 @@ gst_qt_mux_send_free_atom (GstQTMux * qtmux, guint64 * off, guint32 size,
+   buf = _gst_buffer_new_take_data (data, offset);
+   g_free (node_header);
+ 
+-  if (fsync_after)
+-    GST_BUFFER_FLAG_SET (buf, GST_BUFFER_FLAG_SYNC_AFTER);
+ 
+   GST_LOG_OBJECT (qtmux, "Pushing free atom");
+   ret = gst_qt_mux_send_buffer (qtmux, buf, off, FALSE);
+@@ -1922,8 +1918,6 @@ gst_qt_mux_send_moov (GstQTMux * qtmux, guint64 * _offset,
+   if (qtmux->state == GST_QT_MUX_STATE_EOS)
+     gst_qt_mux_set_header_on_caps (qtmux, buf);
+ 
+-  if (fsync_after)
+-    GST_BUFFER_FLAG_SET (buf, GST_BUFFER_FLAG_SYNC_AFTER);
+   ret = gst_qt_mux_send_buffer (qtmux, buf, _offset, mind_fast);
+ 
+   /* Write out a free atom if needed */
+@@ -3276,56 +3270,6 @@ not_negotiated:
+   }
+ }
+ 
+-/*
+- * DTS running time can be negative. There is no way to represent that in
+- * MP4 however, thus we need to offset DTS so that it starts from 0.
+- */
+-static void
+-gst_qt_pad_adjust_buffer_dts (GstQTMux * qtmux, GstQTPad * pad,
+-    GstCollectData * cdata, GstBuffer ** buf)
+-{
+-  GstClockTime pts;
+-  gint64 dts;
+-
+-  pts = GST_BUFFER_PTS (*buf);
+-  dts = GST_COLLECT_PADS_DTS (cdata);
+-
+-  GST_LOG_OBJECT (qtmux, "selected pad %s with PTS %" GST_TIME_FORMAT
+-      " and DTS %" GST_STIME_FORMAT, GST_PAD_NAME (cdata->pad),
+-      GST_TIME_ARGS (pts), GST_STIME_ARGS (dts));
+-
+-  if (!GST_CLOCK_TIME_IS_VALID (pad->dts_adjustment)) {
+-    if (GST_CLOCK_STIME_IS_VALID (dts) && dts < 0)
+-      pad->dts_adjustment = -dts;
+-    else
+-      pad->dts_adjustment = 0;
+-  }
+-
+-  if (pad->dts_adjustment > 0) {
+-    *buf = gst_buffer_make_writable (*buf);
+-
+-    dts += pad->dts_adjustment;
+-
+-    if (GST_CLOCK_TIME_IS_VALID (pts))
+-      pts += pad->dts_adjustment;
+-
+-    if (GST_CLOCK_STIME_IS_VALID (dts) && dts < 0) {
+-      GST_WARNING_OBJECT (pad, "Decreasing DTS.");
+-      dts = 0;
+-    }
+-
+-    if (pts < dts) {
+-      GST_WARNING_OBJECT (pad, "DTS is bigger then PTS");
+-      pts = dts;
+-    }
+-
+-    GST_BUFFER_PTS (*buf) = pts;
+-    GST_BUFFER_DTS (*buf) = dts;
+-
+-    GST_LOG_OBJECT (qtmux, "time adjusted to PTS %" GST_TIME_FORMAT
+-        " and DTS %" GST_TIME_FORMAT, GST_TIME_ARGS (pts), GST_TIME_ARGS (dts));
+-  }
+-}
+ 
+ static GstFlowReturn
+ gst_qt_mux_handle_buffer (GstCollectPads * pads, GstCollectData * cdata,
+@@ -3350,7 +3294,6 @@ gst_qt_mux_handle_buffer (GstCollectPads * pads, GstCollectData * cdata,
+   /* clipping already converted to running time */
+   if (best_pad != NULL) {
+     g_assert (buf);
+-    gst_qt_pad_adjust_buffer_dts (qtmux, best_pad, cdata, &buf);
+     ret = gst_qt_mux_add_buffer (qtmux, best_pad, buf);
+   } else {
+     qtmux->state = GST_QT_MUX_STATE_EOS;
+diff --git a/gst/isomp4/qtdemux.c b/gst/isomp4/qtdemux.c
+index d727a54..d64b1c1 100644
+--- a/gst/isomp4/qtdemux.c
++++ b/gst/isomp4/qtdemux.c
+@@ -391,10 +391,6 @@ struct _QtDemuxStream
+ 
+   gboolean disabled;
+ 
+-  /* stereoscopic video streams */
+-  GstVideoMultiviewMode multiview_mode;
+-  GstVideoMultiviewFlags multiview_flags;
+-
+   /* protected streams */
+   gboolean protected;
+   guint32 protection_scheme_type;
+@@ -1452,7 +1448,6 @@ gst_qtdemux_perform_seek (GstQTDemux * qtdemux, GstSegment * segment,
+   }
+ 
+   /* and set all streams to the final position */
+-  gst_flow_combiner_reset (qtdemux->flowcombiner);
+   for (n = 0; n < qtdemux->n_streams; n++) {
+     QtDemuxStream *stream = qtdemux->streams[n];
+ 
+@@ -1781,8 +1776,6 @@ _create_stream (void)
+   stream->sample_index = -1;
+   stream->offset_in_sample = 0;
+   stream->new_stream = TRUE;
+-  stream->multiview_mode = GST_VIDEO_MULTIVIEW_MODE_NONE;
+-  stream->multiview_flags = GST_VIDEO_MULTIVIEW_FLAGS_NONE;
+   stream->protected = FALSE;
+   stream->protection_scheme_type = 0;
+   stream->protection_scheme_version = 0;
+@@ -1955,11 +1948,9 @@ gst_qtdemux_reset (GstQTDemux * qtdemux, gboolean hard)
+     qtdemux->timescale = 0;
+     qtdemux->got_moov = FALSE;
+   } else if (qtdemux->mss_mode) {
+-    gst_flow_combiner_reset (qtdemux->flowcombiner);
+     for (n = 0; n < qtdemux->n_streams; n++)
+       gst_qtdemux_stream_clear (qtdemux, qtdemux->streams[n]);
+   } else {
+-    gst_flow_combiner_reset (qtdemux->flowcombiner);
+     for (n = 0; n < qtdemux->n_streams; n++) {
+       qtdemux->streams[n]->sent_eos = FALSE;
+       qtdemux->streams[n]->segment_seqnum = 0;
+@@ -4552,11 +4543,7 @@ gst_qtdemux_combine_flows (GstQTDemux * demux, QtDemuxStream * stream,
+ {
+   GST_LOG_OBJECT (demux, "flow return: %s", gst_flow_get_name (ret));
+ 
+-  if (stream->pad)
+-    ret = gst_flow_combiner_update_pad_flow (demux->flowcombiner, stream->pad,
+-        ret);
+-  else
+-    ret = gst_flow_combiner_update_flow (demux->flowcombiner, ret);
++  ret = gst_flow_combiner_update_flow (demux->flowcombiner, ret);
+ 
+   GST_LOG_OBJECT (demux, "combined flow return: %s", gst_flow_get_name (ret));
+   return ret;
+@@ -5094,14 +5081,6 @@ gst_qtdemux_loop_state_movie (GstQTDemux * qtdemux)
+               &offset, &sample_size, &dts, &pts, &duration, &keyframe)))
+     goto eos_stream;
+ 
+-  /* If we're doing a keyframe-only trickmode, only push keyframes on video streams */
+-  if (G_UNLIKELY (qtdemux->
+-          segment.flags & GST_SEGMENT_FLAG_TRICKMODE_KEY_UNITS)) {
+-    if (stream->subtype == FOURCC_vide && !keyframe) {
+-      GST_LOG_OBJECT (qtdemux, "Skipping non-keyframe on stream %d", index);
+-      goto next;
+-    }
+-  }
+ 
+   GST_DEBUG_OBJECT (qtdemux,
+       "pushing from stream %d, empty %d offset %" G_GUINT64_FORMAT
+@@ -6775,30 +6754,19 @@ gst_qtdemux_configure_stream (GstQTDemux * qtdemux, QtDemuxStream * stream)
+       stream->fps_n = 0;
+       stream->fps_d = 1;
+     } else {
+-      if (stream->duration == 0 || stream->n_samples < 2) {
+-        stream->fps_n = stream->timescale;
+-        stream->fps_d = 1;
+-      } else {
+-        /* Calculate a framerate, ignoring the first sample which is sometimes truncated */
+-        /* stream->duration is guint64, timescale, n_samples are guint32 */
+-        GstClockTime avg_duration =
+-            gst_util_uint64_scale_round (stream->duration -
+-            stream->first_duration, GST_SECOND,
+-            (guint64) (stream->timescale) * (stream->n_samples - 1));
++      /* we might need to scale the timescale to get precise framerate */
++      const int required_scale = rint (log (10000) / 2.303);    /* divide to get log10 */
++      int current_scale = rint (log (stream->timescale) / 2.303);
++      int factor = pow (10.0, MAX (0, required_scale - current_scale));
+ 
+-        GST_LOG_OBJECT (qtdemux,
+-            "Calculating avg sample duration based on stream duration %"
+-            G_GUINT64_FORMAT
+-            " minus first sample %u, leaving %d samples gives %"
+-            GST_TIME_FORMAT, stream->duration, stream->first_duration,
+-            stream->n_samples - 1, GST_TIME_ARGS (avg_duration));
++      stream->fps_n = stream->timescale * factor;
+ 
+-        gst_video_guess_framerate (avg_duration, &stream->fps_n,
+-            &stream->fps_d);
+-      }
+-      GST_DEBUG_OBJECT (qtdemux,
+-          "Calculating framerate, timescale %u gave fps_n %d fps_d %d",
+-          stream->timescale, stream->fps_n, stream->fps_d);
++      if (stream->duration == 0 || stream->n_samples == 0)
++        stream->fps_d = factor;
++      else
++        stream->fps_d =
++            gst_util_uint64_scale_int_round (stream->duration, factor,
++            stream->n_samples);
+     }
+ 
+     if (stream->caps) {
+@@ -6834,25 +6802,6 @@ gst_qtdemux_configure_stream (GstQTDemux * qtdemux, QtDemuxStream * stream)
+             GST_TYPE_FRACTION, stream->par_w, stream->par_h, NULL);
+       }
+ 
+-      if (stream->multiview_mode != GST_VIDEO_MULTIVIEW_MODE_NONE) {
+-        guint par_w = 1, par_h = 1;
+-
+-        if (stream->par_w > 0 && stream->par_h > 0) {
+-          par_w = stream->par_w;
+-          par_h = stream->par_h;
+-        }
+-
+-        if (gst_video_multiview_guess_half_aspect (stream->multiview_mode,
+-                stream->width, stream->height, par_w, par_h)) {
+-          stream->multiview_flags |= GST_VIDEO_MULTIVIEW_FLAGS_HALF_ASPECT;
+-        }
+-
+-        gst_caps_set_simple (stream->caps,
+-            "multiview-mode", G_TYPE_STRING,
+-            gst_video_multiview_mode_to_caps_string (stream->multiview_mode),
+-            "multiview-flags", GST_TYPE_VIDEO_MULTIVIEW_FLAGSET,
+-            stream->multiview_flags, GST_FLAG_SET_MASK_EXACT, NULL);
+-      }
+     }
+   }
+ 
+@@ -8410,7 +8359,6 @@ qtdemux_parse_trak (GstQTDemux * qtdemux, GNode * trak)
+   GNode *pasp;
+   GNode *tref;
+   GNode *udta;
+-  GNode *svmi;
+ 
+   QtDemuxStream *stream = NULL;
+   gboolean new_stream = FALSE;
+@@ -8571,50 +8519,6 @@ qtdemux_parse_trak (GstQTDemux * qtdemux, GNode * trak)
+   if (!(stbl = qtdemux_tree_get_child_by_type (minf, FOURCC_stbl)))
+     goto corrupt_file;
+ 
+-  /*parse svmi header if existing */
+-  svmi = qtdemux_tree_get_child_by_type (stbl, FOURCC_svmi);
+-  if (svmi) {
+-    len = QT_UINT32 ((guint8 *) svmi->data);
+-    version = QT_UINT32 ((guint8 *) svmi->data + 8);
+-    if (!version) {
+-      GstVideoMultiviewMode mode = GST_VIDEO_MULTIVIEW_MODE_NONE;
+-      GstVideoMultiviewFlags flags = GST_VIDEO_MULTIVIEW_FLAGS_NONE;
+-      guint8 frame_type, frame_layout;
+-
+-      /* MPEG-A stereo video */
+-      if (qtdemux->major_brand == FOURCC_ss02)
+-        flags |= GST_VIDEO_MULTIVIEW_FLAGS_MIXED_MONO;
+-
+-      frame_type = QT_UINT8 ((guint8 *) svmi->data + 12);
+-      frame_layout = QT_UINT8 ((guint8 *) svmi->data + 13) & 0x01;
+-      switch (frame_type) {
+-        case 0:
+-          mode = GST_VIDEO_MULTIVIEW_MODE_SIDE_BY_SIDE;
+-          break;
+-        case 1:
+-          mode = GST_VIDEO_MULTIVIEW_MODE_ROW_INTERLEAVED;
+-          break;
+-        case 2:
+-          mode = GST_VIDEO_MULTIVIEW_MODE_FRAME_BY_FRAME;
+-          break;
+-        case 3:
+-          /* mode 3 is primary/secondary view sequence, ie
+-           * left/right views in separate tracks. See section 7.2
+-           * of ISO/IEC 23000-11:2009 */
+-          GST_FIXME_OBJECT (qtdemux,
+-              "Implement stereo video in separate streams");
+-      }
+-
+-      if ((frame_layout & 0x1) == 0)
+-        flags |= GST_VIDEO_MULTIVIEW_FLAGS_RIGHT_VIEW_FIRST;
+-
+-      GST_LOG_OBJECT (qtdemux,
+-          "StereoVideo: composition type: %u, is_left_first: %u",
+-          frame_type, frame_layout);
+-      stream->multiview_mode = mode;
+-      stream->multiview_flags = flags;
+-    }
+-  }
+ 
+   /* parse stsd */
+   if (!(stsd = qtdemux_tree_get_child_by_type (stbl, FOURCC_stsd)))

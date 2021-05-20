@@ -1,0 +1,60 @@
+From c7fce1a131870d17242f8a6dab0e7e5353ff6906 Mon Sep 17 00:00:00 2001
+From: Gurdal Oruklu <gurdal_oruklu@comcast.com>
+Date: Wed, 3 Oct 2018 01:55:41 +0000
+Subject: [PATCH] comcast broadcom audio eos workaround
+
+---
+ .../graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp      | 13 +++++++++++++
+ .../graphics/gstreamer/MediaPlayerPrivateGStreamer.h        |  5 ++++-
+ 2 files changed, 17 insertions(+), 1 deletion(-)
+
+diff --git a/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp b/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp
+index 55b45827f56..5bb0a482c13 100644
+--- a/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp
++++ b/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp
+@@ -159,6 +159,9 @@ MediaPlayerPrivateGStreamer::MediaPlayerPrivateGStreamer(MediaPlayer* player)
+     , m_totalBytes(0)
+     , m_preservesPitch(false)
+     , m_lastQuery(-1)
++#if PLATFORM(BROADCOM)
++    , m_webkitAudioSink(0)
++#endif
+ {
+ #if USE(GLIB)
+     m_readyTimerHandler.setPriority(G_PRIORITY_DEFAULT_IDLE);
+@@ -1732,6 +1735,16 @@ void MediaPlayerPrivateGStreamer::updateStates()
+                 if (!m_fillTimer.isActive() && (state == GST_STATE_PAUSED))
+                     m_networkState = MediaPlayer::Idle;
+             }
++            // TODO:This is a temporary workaround for EOS event not being received by audio-sink
++            // This is a broadcom plugin issue and is expected to be fixed as part of BCOM-1927.
++            // Get rid of this, once the fix for BCOM-1927 is available.
++#if PLATFORM(BROADCOM)
++            if (!m_webkitAudioSink) {
++                g_object_get(m_pipeline.get(), "audio-sink", &m_webkitAudioSink, NULL);
++                if (m_webkitAudioSink && g_strrstr (GST_ELEMENT_NAME(m_webkitAudioSink.get()), "brcmaudiosink"))
++                    g_object_set(G_OBJECT(m_webkitAudioSink.get()), "async", TRUE, NULL);
++            }
++#endif
+ 
+             break;
+         default:
+diff --git a/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.h b/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.h
+index 5490a2d4e83..2f67733c906 100644
+--- a/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.h
++++ b/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.h
+@@ -196,7 +196,10 @@ protected:
+     GRefPtr<GstElement> m_source;
+     bool m_volumeAndMuteInitialized;
+     MediaTime m_previousDuration;
+-
++    // TODO: EOS temporary fix. To be removed once BCOM-1927 is fixed.
++#if PLATFORM(BROADCOM)
++    GRefPtr<GstElement> m_webkitAudioSink;
++#endif
+     static GstSeekFlags hardwareDependantSeekFlags();
+     void readyTimerFired();
+ 
+-- 
+2.16.2
+

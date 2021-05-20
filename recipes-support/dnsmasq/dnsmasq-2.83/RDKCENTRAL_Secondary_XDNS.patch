@@ -1,0 +1,361 @@
+Index: dnsmasq-2.83/src/arp.c
+===================================================================
+--- dnsmasq-2.83.orig/src/arp.c
++++ dnsmasq-2.83/src/arp.c
+@@ -283,7 +283,7 @@ struct dnsoverride_record* get_dnsoverri
+ 
+ 
+ /* find dns server address for given mac in dnsrecs */
+-int find_dnsoverride_server(char* macaddr, union all_addr* serv, int iptype)
++int find_dnsoverride_server(char* macaddr, union all_addr* serv, int iptype,int count)
+ {
+        if(!macaddr || !serv)
+        {
+@@ -297,7 +297,7 @@ int find_dnsoverride_server(char* macadd
+        struct dnsoverride_record *p = dnsrecs;
+        while(p)
+        {
+-               if(strcmp(p->macaddr, macaddr) == 0)
++               if(strcmp(p->macaddr, macaddr) == 0 && count==0)
+                {
+                        //found
+                        if(iptype == 4)
+@@ -321,6 +321,10 @@ int find_dnsoverride_server(char* macadd
+                        return 1; //success
+ 
+                }
++
++	       if(strcmp(p->macaddr, macaddr) == 0 && count==1){      //for secondary XDNS
++			count--;
++		}
+                p = p->next;
+        }
+        //unlock
+@@ -330,16 +334,31 @@ int find_dnsoverride_server(char* macadd
+        return 0; // not found
+ }
+ 
+-/* find default server address. Default is indicated by mac addr "00:00:00:00:00:00" TODO: Needs protection */
+-int find_dnsoverride_defaultserver(union all_addr* serv, int iptype)
++/* find default(primary and secondary) server address. Default is indicated by mac addr "00:00:00:00:00:00" TODO: Needs protection */
++int find_dnsoverride_defaultserver(union all_addr* serv1,union all_addr* serv2, int iptype,int* primary)
+ {
+-       if(!serv)
++       int retval;
++       if(!serv1)
+        {
+-               my_syslog(LOG_WARNING, _("#### XDNS : find_dnsoverride_defaultserver(%x) Error Param!!"), serv);
++               my_syslog(LOG_WARNING, _("#### XDNS : find_dnsoverride_defaultserver(%x) Error Param!!"), serv1);
+                return 0;
+        }
+ 
+-       return find_dnsoverride_server(XDNS_NULL_MAC, serv, iptype);
++       if(retval=find_dnsoverride_server(XDNS_NULL_MAC, serv1, iptype,0))                // For Primary Default server
++	{
++			*primary=1;
++		if(serv2)
++		{
++       			if(find_dnsoverride_server(XDNS_NULL_MAC, serv2, iptype,1))              // For secondary Default server
++				*primary=2;
++		}
++		else
++		{
++			my_syslog(LOG_WARNING, _("#### XDNS : find_dnsoverride_defaultserver(%x)secondary XDNS Error Param!!"), serv2);
++		}
++	}
++
++	return retval;
+ }
+ 
+ /* </XDNS> */
+Index: dnsmasq-2.83/src/dnsmasq.h
+===================================================================
+--- dnsmasq-2.83.orig/src/dnsmasq.h
++++ dnsmasq-2.83/src/dnsmasq.h
+@@ -1058,6 +1058,7 @@ extern struct daemon {
+   struct bogus_addr *bogus_addr, *ignore_addr;
+   struct server *servers;
+   struct server *dns_override_server; /* for XDNS */
++  struct server *dns_override_server2; /* for Secondary XDNS */
+   struct ipsets *ipsets;
+   int log_fac; /* log facility */
+   char *log_file; /* optional log file */
+@@ -1732,8 +1733,8 @@ int find_mac(union mysockaddr *addr, uns
+ int update_dnsoverride_records(struct dnsoverride_record *precord);
+ struct dnsoverride_record* get_dnsoverride_record(char* macaddr);
+ struct dnsoverride_record* get_dnsoverride_defaultrecord();
+-int find_dnsoverride_server(char* macaddr, union all_addr* serv, int iptype);
+-int find_dnsoverride_defaultserver(union all_addr* serv, int iptype);
++int find_dnsoverride_server(char* macaddr, union all_addr* serv, int iptype,int count);
++int find_dnsoverride_defaultserver(union all_addr* serv1,union all_addr* serv2, int iptype,int* primary);
+ int do_arp_script_run(void);
+ 
+ /* dump.c */
+Index: dnsmasq-2.83/src/edns0.c
+===================================================================
+--- dnsmasq-2.83.orig/src/edns0.c
++++ dnsmasq-2.83/src/edns0.c
+@@ -15,6 +15,7 @@
+ */
+ 
+ #include "dnsmasq.h"
++#define XDNS_NULL_MAC "00:00:00:00:00:00"
+ 
+ unsigned char *find_pseudoheader(struct dns_header *header, size_t plen, size_t  *len, unsigned char **p, int *is_sign, int *is_last)
+ {
+@@ -386,21 +387,22 @@ static size_t add_xdns_server(struct dns
+ 
+                // get appropriate ipv4 or ipv6 dnsoverride address using mac addr
+                union all_addr dnsaddr;
++	       union all_addr secondarydnsaddr;
++               int primary=0;
+                memset(&dnsaddr, 0, sizeof(union all_addr));
+-
+-               struct server *serv = NULL;
++               memset(&secondarydnsaddr, 0, sizeof(union all_addr));
+ 
+                // if xdns addr for same iptype, if not found try for other iptype
+                // then try the default.
+-               if(!find_dnsoverride_server(strmac, &dnsaddr, iptype))
++               if(!find_dnsoverride_server(strmac, &dnsaddr, iptype,0))
+                {
+-                      if(find_dnsoverride_server(strmac, &dnsaddr, (iptype==4)?6:4))//try other type
++                      if(find_dnsoverride_server(strmac, &dnsaddr, (iptype==4)?6:4,0))//try other type
+                       {
+                              iptype = (iptype==4)?6:4;
+                       }
+-                      else if(!find_dnsoverride_defaultserver(&dnsaddr, iptype))
++                      else if(!find_dnsoverride_defaultserver(&dnsaddr,&secondarydnsaddr,iptype,&primary))
+                       {
+-                            if(find_dnsoverride_defaultserver(&dnsaddr, (iptype==4)?6:4))//try other type
++                            if(find_dnsoverride_defaultserver(&dnsaddr,&secondarydnsaddr, (iptype==4)?6:4,&primary))//try other type
+                             {
+                                    iptype = (iptype==4)?6:4;
+                             }
+@@ -413,7 +415,53 @@ static size_t add_xdns_server(struct dns
+                       }
+                }
+                //else found xdns server to use.
++		if(primary==2)      // For secondary XDNS server
++		{
++
++			struct server *secondserv = NULL;
++			char string[64]={0};
++               		secondserv = daemon->dns_override_server2;
++               		if(!secondserv) // if first time, daemon->dns_override_server2 is NULL. Allocate
++               		{
++                      		secondserv = whine_malloc(sizeof (struct server)); //allocated once & reused. Not freed.
++                      		if(secondserv)
++                      		{
++                            		memset(secondserv, 0, sizeof(struct server));
++                     		}
++                      		daemon->dns_override_server2 = secondserv;
++              		}
++
++               		if(secondserv)
++               		{
++                       		if(iptype == 4)
++                       		{
++                               		my_syslog(LOG_WARNING, _("### XDNS - set secondary ipv4 dns_override_server entry in daemon"));
++                              		//serv->addr.in.sin_addr = secondarydnsaddr.addr4;
++                               		memcpy(&secondserv->addr.in.sin_addr, &secondarydnsaddr.addr4, sizeof(struct in_addr));
++                               		secondserv->addr.sa.sa_family = AF_INET;
++					inet_ntop(AF_INET, &(secondarydnsaddr.addr4), string, 64);
++					my_syslog(LOG_WARNING, _("### XDNS - set secondary ipv4 dns_override_server string:%s!"),string);
++                     		}
++#ifdef HAVE_IPV6
++                       		else if(iptype == 6)
++                       		{
++                               		my_syslog(LOG_WARNING, _("### XDNS - set secondary ipv6 dns_override_server entry in daemon"));
++                               		//serv->addr.in6.sin6_addr = secondarydnsaddr.addr6;
++                               		memcpy(&secondserv->addr.in6.sin6_addr, &secondarydnsaddr.addr6, sizeof(struct in6_addr));
++                               		secondserv->addr.sa.sa_family = AF_INET6;
++                                        inet_ntop(AF_INET6, &(secondarydnsaddr.addr6), string, 64);
++                                        my_syslog(LOG_WARNING, _("### XDNS - set secondary ipv6 dns_override_server string:%s!"),string);
++                       		}
++#endif
++               	 		}
++   		 	}
++			else
++			{
++				daemon->dns_override_server2=NULL;
++				my_syslog(LOG_WARNING, _("### XDNS - secondary XDNS server does not exist!"));
++			}
+ 
++	       struct server *serv = NULL;
+                serv = daemon->dns_override_server;
+                if(!serv) // if first time, daemon->dns_override_server is NULL. Allocate
+                {
+Index: dnsmasq-2.83/src/forward.c
+===================================================================
+--- dnsmasq-2.83.orig/src/forward.c
++++ dnsmasq-2.83/src/forward.c
+@@ -259,6 +259,7 @@ static int forward_query(int udpfd, unio
+   unsigned int flags = 0;
+   unsigned int fwd_flags = 0;
+   struct server *start = NULL;
++  struct server *secondstart = NULL;
+   void *hash = hash_questions(header, plen, daemon->namebuff);
+ #ifdef HAVE_DNSSEC
+   int do_dnssec = 0;
+@@ -498,7 +499,8 @@ static int forward_query(int udpfd, unio
+ 	  if (forward->flags & FREC_TEST_PKTSZ)
+ 	    PUTSHORT(SAFE_PKTSZ, pheader);
+ 	}
+-      
++
++      int primaryxdns=0;
+       while (1)
+ 	{ 
+ 	  /* only send to servers dealing with our domain.
+@@ -626,31 +628,40 @@ static int forward_query(int udpfd, unio
+                          }
+                  }
+ 
++                 struct server *xdnsserver;
++                 if(!primaryxdns)
++                 {
++                         xdnsserver=daemon->dns_override_server;
++                 }
++                 else
++                 {
++                         xdnsserver=daemon->dns_override_server2;
++                 }
+ 
+-			if(option_bool(OPT_DNS_OVERRIDE) && daemon->dns_override_server)
++			if(option_bool(OPT_DNS_OVERRIDE) && xdnsserver)
+ 			{
+ 			  char strprn[64] = {0};
+-			  if(daemon->dns_override_server->addr.sa.sa_family == AF_INET)
++			  if(xdnsserver->addr.sa.sa_family == AF_INET)
+ 			  {
+ 				  memset(strprn, 0, 64);
+-				  if(inet_ntop(AF_INET, &(daemon->dns_override_server->addr.in.sin_addr), strprn, 64))
++				  if(inet_ntop(AF_INET, &(xdnsserver->addr.in.sin_addr), strprn, 64))
+ 				  {
+ 					  if(strprn[0] != 0 && strcmp(strprn, "0.0.0.0") != 0)
+ 					  {
+-						  memcpy(&start->addr.in.sin_addr, &daemon->dns_override_server->addr.in.sin_addr, sizeof(struct in_addr));
++						  memcpy(&start->addr.in.sin_addr, &xdnsserver->addr.in.sin_addr, sizeof(struct in_addr));
+ 						  start->addr.in.sin_family = AF_INET;
+ 			   			  //my_syslog(LOG_WARNING, _("#### XDNS - Overriding upstream address with IPv4 xDNS addr"));
+ 					  }
+ 				  }
+ 			  }
+-			  else if(daemon->dns_override_server->addr.sa.sa_family == AF_INET6)
++			  else if(xdnsserver->addr.sa.sa_family == AF_INET6)
+ 			  {
+ 				  memset(strprn, 0, 64);
+-				  if(inet_ntop(AF_INET6, &(daemon->dns_override_server->addr.in6.sin6_addr), strprn, 64))
++				  if(inet_ntop(AF_INET6, &(xdnsserver->addr.in6.sin6_addr), strprn, 64))
+ 				  {
+ 					  if(strprn[0] != 0 && strcmp(strprn, "::") != 0)
+ 					  {
+-				  		  memcpy(&start->addr.in6.sin6_addr, &daemon->dns_override_server->addr.in6.sin6_addr, sizeof(struct in6_addr));
++				  		  memcpy(&start->addr.in6.sin6_addr, &xdnsserver->addr.in6.sin6_addr, sizeof(struct in6_addr));
+ 				  		  start->addr.in6.sin6_family = AF_INET6;
+ 			   			  //my_syslog(LOG_WARNING, _("#### XDNS - Overriding upstream address with IPv6 xDNS addr"));
+ 					  }
+@@ -668,9 +679,13 @@ static int forward_query(int udpfd, unio
+                  // Print where udp send is sending to:
+                  char strprn[64] = {0}; memset(strprn, 0, 64);
+                  if(start->addr.sa.sa_family == AF_INET)
++                 {
+                          inet_ntop(AF_INET, &(start->addr.in.sin_addr), strprn, 64);
++                 }
+                  else if(start->addr.sa.sa_family == AF_INET6)
++                 {
+                          inet_ntop(AF_INET6, &(start->addr.in6.sin6_addr), strprn, 64);
++                 }
+ 
+ 			  my_syslog(LOG_INFO, _("#### XDNS - sendto (%u, 0x%x, len = %d) to %s : %s)"),
+ 				  fd,
+@@ -710,6 +725,14 @@ static int forward_query(int udpfd, unio
+ 		  start->queries++;
+ 		  forwarded = 1;
+ 		  forward->sentto = start;
++                  if(!primaryxdns)
++                  {
++                        primaryxdns= 1;
++                  }
++                  else
++                  {
++                        primaryxdns=0;
++                  }
+ 		  if (!forward->forwardall) 
+ 		    break;
+ 		  forward->forwardall++;
+Index: dnsmasq-2.83/src/network.c
+===================================================================
+--- dnsmasq-2.83.orig/src/network.c
++++ dnsmasq-2.83/src/network.c
+@@ -1716,6 +1716,34 @@ void check_servers(void)
+   cleanup_servers();
+ }
+ 
++/*XDNS- prints the linked list containg Primary and secondary DNS servers*/
++void print_dnsoverride_servers(struct dnsoverride_record *pprec)
++{
++
++        struct dnsoverride_record* p= pprec;
++	int i=0;
++        while(p != NULL)
++        {
++		char ipv4add[64] = {0};
++		char ipv6add[64] = {0};
++		inet_ntop(AF_INET, &(p->dnsaddr4.addr4), ipv4add, 64);
++#ifdef HAVE_IPV6
++		inet_ntop(AF_INET6, &(p->dnsaddr6.addr6), ipv6add, 64);
++#endif
++       		my_syslog(LOG_ERR, _("### XDNS # macaddr[%d] : \"%s\""), i, p->macaddr);
++       		my_syslog(LOG_ERR, _("### XDNS # srvaddr4[%d] : \"%s\""), i, ipv4add);
++#ifdef HAVE_IPV6
++       		my_syslog(LOG_ERR, _("### XDNS # srvaddr6[%d] : \"%s\""), i, ipv6add);
++#endif
++
++     		my_syslog(LOG_ERR, _("### XDNS # cpetag[%d] : \"%s\""), i, p->cpetag);
++                p=p->next;
++		i++;
++
++        }
++
++}
++
+ /* XDNS - Helper to create override server entries in record. Builds pprec list and returns the head. */
+ static int create_dnsoverride_servers(struct dnsoverride_record **pprec, char* macaddr, char *srvaddr4, char *srvaddr6, char *cpetag)
+ {
+@@ -1744,6 +1772,7 @@ static int create_dnsoverride_servers(st
+ 
+        //create entry and attach to record. This entries are maintained in arp.c. Cleanup is done there.
+        struct dnsoverride_record* entry = NULL;
++       struct dnsoverride_record* temp = NULL;
+        if ((entry = whine_malloc(sizeof(struct dnsoverride_record))))
+        {
+                memset(entry, 0, sizeof(struct dnsoverride_record));
+@@ -1774,9 +1803,15 @@ static int create_dnsoverride_servers(st
+                        strcpy(entry->cpetag, cpetag);
+                }
+ 
+-
+-               entry->next = *pprec;
+-               *pprec = entry;
++               entry->next = NULL;
++               if(*pprec == NULL)
++               {
++			*pprec = entry;
++	       }
++	       else
++	       {
++		       (*pprec)->next = (struct dnsoverride_record*)entry;
++	       }
+        }
+        return 1; //success
+ }
+@@ -1902,6 +1937,7 @@ int reload_servers(char *fname)
+       gotone = 1;
+     }
+   /* XDNS - Call to update the records in arp dnsoverride records*/
++  print_dnsoverride_servers(prec);
+   update_dnsoverride_records(prec);
+ 
+   fclose(f);

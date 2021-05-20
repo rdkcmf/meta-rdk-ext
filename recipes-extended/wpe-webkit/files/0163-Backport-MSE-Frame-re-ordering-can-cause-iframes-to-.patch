@@ -1,0 +1,227 @@
+From 2f9d328e39584267df2d6f2e6dae3726ddcc4c66 Mon Sep 17 00:00:00 2001
+From: Ievgen Mutavchi <Ievgen_Mutavchi@comcast.com>
+Date: Fri, 25 Oct 2019 10:59:03 -0400
+Subject: [PATCH] Backport [MSE] Frame re-ordering can cause iframes to never
+ be enqueued https://bugs.webkit.org/show_bug.cgi?id=191485
+
+Test: media/media-source/media-source-dropped-iframe.html
+
+Some frame re-ordering techniques result in files where the first frame has a
+decode timestamp < 0, but a presentation timestamp >= 0. When appending these
+samples to existing content, we can fail to enqueue the first frame because its
+DTS overlaps an existing sample, but the presentation timestamp does not.
+Rather than try to only enqueue samples whose decode timestamps are > than the
+greatest decode end timestamp (minus some fudge factor), allow all frames to be
+added to the decode queue if they are strictly ordered greater than the last
+enqueued frame.
+
+* Modules/mediasource/SourceBuffer.cpp:
+(WebCore::SourceBuffer::TrackBuffer::TrackBuffer):
+(WebCore::SourceBuffer::sourceBufferPrivateDidReceiveSample):
+(WebCore::SourceBuffer::provideMediaData):
+(WebCore::SourceBuffer::reenqueueMediaForTime):
+
+LayoutTests:
+
+* media/media-source/media-source-dropped-iframe-expected.txt: Added.
+* media/media-source/media-source-dropped-iframe.html: Added.
+---
+ .../media-source-dropped-iframe-expected.txt       | 27 +++++++++
+ .../media-source/media-source-dropped-iframe.html  | 64 ++++++++++++++++++++++
+ .../WebCore/Modules/mediasource/SourceBuffer.cpp   | 33 +++++++----
+ 3 files changed, 112 insertions(+), 12 deletions(-)
+ create mode 100644 LayoutTests/media/media-source/media-source-dropped-iframe-expected.txt
+ create mode 100644 LayoutTests/media/media-source/media-source-dropped-iframe.html
+
+diff --git a/LayoutTests/media/media-source/media-source-dropped-iframe-expected.txt b/LayoutTests/media/media-source/media-source-dropped-iframe-expected.txt
+new file mode 100644
+index 0000000..f31c4fb
+--- /dev/null
++++ b/LayoutTests/media/media-source/media-source-dropped-iframe-expected.txt
+@@ -0,0 +1,27 @@
++
++EXPECTED (source.readyState == 'closed') OK
++EVENT(sourceopen)
++RUN(sourceBuffer = source.addSourceBuffer("video/mock; codecs=mock"))
++RUN(sourceBuffer.appendBuffer(initSegment))
++EVENT(updateend)
++RUN(sourceBuffer.appendBuffer(samples))
++EVENT(updateend)
++RUN(sourceBuffer.timestampOffset = 3)
++RUN(sourceBuffer.appendBuffer(samples))
++EVENT(updateend)
++Buffered:
++{PTS({0/1 = 0.000000}), DTS({0/1 = 0.000000}), duration({1/1 = 1.000000}), flags(1), generation(1)}
++{PTS({1/1 = 1.000000}), DTS({1/1 = 1.000000}), duration({1/1 = 1.000000}), flags(0), generation(1)}
++{PTS({2/1 = 2.000000}), DTS({2/1 = 2.000000}), duration({1/1 = 1.000000}), flags(0), generation(1)}
++{PTS({3/1 = 3.000000}), DTS({2/1 = 2.000000}), duration({1/1 = 1.000000}), flags(1), generation(2)}
++{PTS({5/1 = 5.000000}), DTS({3/1 = 3.000000}), duration({1/1 = 1.000000}), flags(0), generation(2)}
++{PTS({4/1 = 4.000000}), DTS({4/1 = 4.000000}), duration({1/1 = 1.000000}), flags(0), generation(2)}
++Enqueued:
++{PTS({0/1 = 0.000000}), DTS({0/1 = 0.000000}), duration({1/1 = 1.000000}), flags(1), generation(1)}
++{PTS({1/1 = 1.000000}), DTS({1/1 = 1.000000}), duration({1/1 = 1.000000}), flags(0), generation(1)}
++{PTS({2/1 = 2.000000}), DTS({2/1 = 2.000000}), duration({1/1 = 1.000000}), flags(0), generation(1)}
++{PTS({3/1 = 3.000000}), DTS({2/1 = 2.000000}), duration({1/1 = 1.000000}), flags(1), generation(2)}
++{PTS({5/1 = 5.000000}), DTS({3/1 = 3.000000}), duration({1/1 = 1.000000}), flags(0), generation(2)}
++{PTS({4/1 = 4.000000}), DTS({4/1 = 4.000000}), duration({1/1 = 1.000000}), flags(0), generation(2)}
++END OF TEST
++
+diff --git a/LayoutTests/media/media-source/media-source-dropped-iframe.html b/LayoutTests/media/media-source/media-source-dropped-iframe.html
+new file mode 100644
+index 0000000..65822f8
+--- /dev/null
++++ b/LayoutTests/media/media-source/media-source-dropped-iframe.html
+@@ -0,0 +1,64 @@
++<!DOCTYPE html>
++<html>
++<head>
++    <title>media-source-dropped-iframe</title>
++    <script src="mock-media-source.js"></script>
++    <script src="../video-test.js"></script>
++    <script>
++    var source;
++    var sourceBuffer;
++    var initSegment;
++    var samples;
++
++    if (window.internals)
++        internals.initializeMockMediaSource();
++
++    async function runTest() {
++        findMediaElement();
++
++        source = new MediaSource();
++        testExpected('source.readyState', 'closed');
++
++        video.srcObject = source;
++        await waitFor(source, 'sourceopen');
++
++        run('sourceBuffer = source.addSourceBuffer("video/mock; codecs=mock")');
++        initSegment = makeAInit(8, [makeATrack(1, 'mock', TRACK_KIND.VIDEO)]);
++        run('sourceBuffer.appendBuffer(initSegment)');
++        await waitFor(sourceBuffer, 'updateend');
++
++        samples = concatenateSamples([
++            makeASample(0, 0, 1, 1, 1, SAMPLE_FLAG.SYNC, 1),
++            makeASample(1, 1, 1, 1, 1, SAMPLE_FLAG.NONE, 1),
++            makeASample(2, 2, 1, 1, 1, SAMPLE_FLAG.NONE, 1),
++        ]);
++        run('sourceBuffer.appendBuffer(samples)');
++        await waitFor(sourceBuffer, 'updateend');
++
++        run('sourceBuffer.timestampOffset = 3');
++        samples = concatenateSamples([
++            makeASample(0, -1, 1, 1, 1, SAMPLE_FLAG.SYNC, 2),
++            makeASample(2,  0, 1, 1, 1, SAMPLE_FLAG.NONE, 2),
++            makeASample(1,  1, 1, 1, 1, SAMPLE_FLAG.NONE, 2),
++        ]);
++        run('sourceBuffer.appendBuffer(samples)');
++        await waitFor(sourceBuffer, 'updateend');
++
++        bufferedSamples = internals.bufferedSamplesForTrackID(sourceBuffer, 1);
++        enqueuedSamples = internals.enqueuedSamplesForTrackID(sourceBuffer, 1);
++
++        consoleWrite("Buffered:");
++        bufferedSamples.forEach(consoleWrite);
++
++        consoleWrite("Enqueued:");
++        enqueuedSamples.forEach(consoleWrite);
++
++        endTest();
++    }
++    
++    </script>
++</head>
++<body onload="runTest().catch(failTest)">
++    <video></video>
++</body>
++</html>
+diff --git a/Source/WebCore/Modules/mediasource/SourceBuffer.cpp b/Source/WebCore/Modules/mediasource/SourceBuffer.cpp
+index dd6aa59..f1fb596 100644
+--- a/Source/WebCore/Modules/mediasource/SourceBuffer.cpp
++++ b/Source/WebCore/Modules/mediasource/SourceBuffer.cpp
+@@ -78,7 +78,8 @@ struct SourceBuffer::TrackBuffer {
+     MediaTime lastFrameDuration;
+     MediaTime highestPresentationTimestamp;
+     MediaTime lastEnqueuedPresentationTime;
+-    MediaTime lastEnqueuedDecodeEndTime;
++    DecodeOrderSampleMap::KeyType lastEnqueuedDecodeKey;
++    MediaTime lastEnqueuedDecodeDuration;
+     MediaTime roundedTimestampOffset;
+     uint32_t lastFrameTimescale { 0 };
+     bool needRandomAccessFlag { true };
+@@ -94,7 +95,8 @@ struct SourceBuffer::TrackBuffer {
+         , lastFrameDuration(MediaTime::invalidTime())
+         , highestPresentationTimestamp(MediaTime::invalidTime())
+         , lastEnqueuedPresentationTime(MediaTime::invalidTime())
+-        , lastEnqueuedDecodeEndTime(MediaTime::invalidTime())
++        , lastEnqueuedDecodeKey({MediaTime::invalidTime(), MediaTime::invalidTime()})
++        , lastEnqueuedDecodeDuration(MediaTime::invalidTime())
+     {
+     }
+ };
+@@ -1861,8 +1863,8 @@ void SourceBuffer::sourceBufferPrivateDidReceiveSample(MediaSample& sample)
+         trackBuffer.samples.addSample(sample);
+ 
+         // Add a microsecond to decodetimestamp in order to prevent some sample drops due to a rounding issue.
+-        // TO-DO: fix the rounding issue and remove the microsecond from the comparison
+-        if (trackBuffer.lastEnqueuedDecodeEndTime.isInvalid() || (decodeTimestamp + microsecond) > trackBuffer.lastEnqueuedDecodeEndTime) {
++        DecodeOrderSampleMap::KeyType decodeKey(sample.decodeTime(), sample.presentationTime());
++        if (trackBuffer.lastEnqueuedDecodeKey.first.isInvalid() || decodeKey > trackBuffer.lastEnqueuedDecodeKey) {
+             DecodeOrderSampleMap::KeyType decodeKey(sample.decodeTime(), sample.presentationTime());
+             trackBuffer.decodeQueue.insert(DecodeOrderSampleMap::MapType::value_type(decodeKey, &sample));
+         }
+@@ -1924,9 +1926,9 @@ void SourceBuffer::sourceBufferPrivateDidReceiveSample(MediaSample& sample)
+     if (it != m_trackBufferMap.end() && m_private->isReadyForMoreSamples(trackID)) {
+         TrackBuffer& trackBuffer = it->value;
+         if (!trackBuffer.needsReenqueueing
+-            && trackBuffer.lastEnqueuedDecodeEndTime.isValid()
++            && trackBuffer.lastEnqueuedDecodeKey.first.isValid()
+             && trackBuffer.lastDecodeTimestamp.isValid()
+-            && abs(trackBuffer.lastEnqueuedDecodeEndTime - trackBuffer.lastDecodeTimestamp) > MediaTime::createWithDouble(0.350)) {
++            && abs(trackBuffer.lastEnqueuedDecodeKey.first - trackBuffer.lastDecodeTimestamp) > MediaTime::createWithDouble(0.350)) {
+             provideMediaData(trackBuffer, trackID);
+         }
+     }
+@@ -2122,12 +2124,15 @@ void SourceBuffer::provideMediaData(TrackBuffer& trackBuffer, const AtomicString
+         // new current time without triggering this early return.
+         // FIXME(135867): Make this gap detection logic less arbitrary.
+         MediaTime oneSecond(1, 1);
+-        if (trackBuffer.lastEnqueuedDecodeEndTime.isValid() && sample->decodeTime() - trackBuffer.lastEnqueuedDecodeEndTime > oneSecond)
++        if (trackBuffer.lastEnqueuedDecodeKey.first.isValid()
++            && trackBuffer.lastEnqueuedDecodeDuration.isValid()
++            && sample->decodeTime() - trackBuffer.lastEnqueuedDecodeKey.first > oneSecond + trackBuffer.lastEnqueuedDecodeDuration)
+             break;
+ 
+         trackBuffer.decodeQueue.erase(trackBuffer.decodeQueue.begin());
+         trackBuffer.lastEnqueuedPresentationTime = sample->presentationTime();
+-        trackBuffer.lastEnqueuedDecodeEndTime = sample->decodeTime() + sample->duration();
++        trackBuffer.lastEnqueuedDecodeKey = {sample->decodeTime(), sample->presentationTime()};
++        trackBuffer.lastEnqueuedDecodeDuration = sample->duration();
+         m_private->enqueueSample(sample.releaseNonNull(), trackID);
+ #if !LOG_DISABLED
+         ++enqueuedSamples;
+@@ -2170,12 +2175,16 @@ void SourceBuffer::reenqueueMediaForTime(TrackBuffer& trackBuffer, const AtomicS
+     }
+ 
+     if (!trackBuffer.decodeQueue.empty()) {
+-        auto& lastSample = trackBuffer.decodeQueue.rbegin()->second;
+-        trackBuffer.lastEnqueuedPresentationTime = lastSample->presentationTime();
+-        trackBuffer.lastEnqueuedDecodeEndTime = lastSample->decodeTime();
++        auto lastSampleIter = trackBuffer.decodeQueue.rbegin();
++        auto lastSampleDecodeKey = lastSampleIter->first;
++        auto lastSampleDuration = lastSampleIter->second->duration();
++        trackBuffer.lastEnqueuedPresentationTime = lastSampleDecodeKey.second;
++        trackBuffer.lastEnqueuedDecodeKey = lastSampleDecodeKey;
++        trackBuffer.lastEnqueuedDecodeDuration = lastSampleDuration;
+     } else {
+         trackBuffer.lastEnqueuedPresentationTime = MediaTime::invalidTime();
+-        trackBuffer.lastEnqueuedDecodeEndTime = MediaTime::invalidTime();
++        trackBuffer.lastEnqueuedDecodeKey = {MediaTime::invalidTime(), MediaTime::invalidTime()};
++        trackBuffer.lastEnqueuedDecodeDuration = MediaTime::invalidTime();
+     }
+ 
+     // Fill the decode queue with the remaining samples.
+-- 
+2.7.4
+

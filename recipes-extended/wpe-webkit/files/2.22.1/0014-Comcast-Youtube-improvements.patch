@@ -1,0 +1,512 @@
+From bb8404a0b7bf76371813f2e648feb9c6e165bf2c Mon Sep 17 00:00:00 2001
+From: Gurdal Oruklu <gurdal_oruklu@comcast.com>
+Subject: [PATCH] Comcast YouTube improvements
+Source: COMCAST
+License: GPLV2
+Upstream-Status: None
+Date: Thu, 14 Jan 2021 19:08:58 +0000
+Subject: [PATCH] youtube patch
+
+---
+ Source/JavaScriptCore/interpreter/Interpreter.cpp  |  3 +++
+ Source/JavaScriptCore/runtime/Options.cpp          |  3 +++
+ Source/JavaScriptCore/runtime/Options.h            |  2 ++
+ Source/WTF/wtf/MediaTime.h                         |  8 ++++++
+ Source/WebCore/Modules/mediasource/SampleMap.cpp   |  4 +--
+ .../WebCore/Modules/mediasource/SourceBuffer.cpp   | 14 ++++++-----
+ Source/WebCore/loader/FrameLoader.cpp              |  4 ++-
+ Source/WebCore/loader/MixedContentChecker.cpp      |  6 +++--
+ .../WebCore/loader/cache/CachedResourceLoader.cpp  |  4 +++
+ Source/WebCore/page/MemoryRelease.cpp              | 25 +++++++++++++++++--
+ .../graphics/gstreamer/mse/AppendPipeline.cpp      |  5 ++++
+ .../texmap/coordinated/TiledBackingStore.cpp       |  4 +++
+ Source/WebCore/rendering/RenderLayerCompositor.cpp |  5 ++++
+ Source/WebCore/rendering/RenderLayerCompositor.h   |  1 +
+ .../NetworkProcess/soup/NetworkDataTaskSoup.cpp    |  4 ++-
+ .../NetworkProcess/soup/NetworkDataTaskSoup.h      |  1 +
+ .../threadedcompositor/CompositingRunLoop.cpp      | 29 ++++++++++++++++++++--
+ .../threadedcompositor/CompositingRunLoop.h        |  2 ++
+ .../WebProcess/Network/WebLoaderStrategy.cpp       | 12 +++++++++
+ .../WebProcess/WebCoreSupport/WebChromeClient.cpp  |  8 ++++++
+ .../CoordinatedGraphics/CompositingCoordinator.cpp |  2 +-
+ Source/cmake/OptionsWPE.cmake                      |  4 ++-
+ 22 files changed, 132 insertions(+), 18 deletions(-)
+
+diff --git a/Source/JavaScriptCore/interpreter/Interpreter.cpp b/Source/JavaScriptCore/interpreter/Interpreter.cpp
+index aac401ef421b..8ffb2c551d7b 100644
+--- a/Source/JavaScriptCore/interpreter/Interpreter.cpp
++++ b/Source/JavaScriptCore/interpreter/Interpreter.cpp
+@@ -551,6 +551,9 @@ private:
+ 
+ void Interpreter::getStackTrace(JSCell* owner, Vector<StackFrame>& results, size_t framesToSkip, size_t maxStackSize)
+ {
++    if (Options::disableStackTrace())
++       return;
++
+     DisallowGC disallowGC;
+     VM& vm = m_vm;
+     CallFrame* callFrame = vm.topCallFrame;
+diff --git a/Source/JavaScriptCore/runtime/Options.h b/Source/JavaScriptCore/runtime/Options.h
+index 27396d20c04d..403f5ff539c4 100644
+--- a/Source/JavaScriptCore/runtime/Options.h
++++ b/Source/JavaScriptCore/runtime/Options.h
+@@ -478,6 +478,8 @@ constexpr bool enableWebAssemblyStreamingApi = false;
+     \
+     v(bool, useWebAssembly, true, Normal, "Expose the WebAssembly global object.") \
+     \
++    v(bool, disableStackTrace, false, Normal, "Disable stack trace generatoin for errors/exceptions.") \
++    \
+     v(bool, enableSpectreMitigations, true, Restricted, "Enable Spectre mitigations.") \
+     v(bool, enableSpectreGadgets, false, Restricted, "enable gadgets to test Spectre mitigations.") \
+     v(bool, usePoisoning, true, Normal, "Poison is randomized at load time when true, and initialized to 0 if false which defeats some Spectre and type confusion mitigations, but allows tools such as leak detectors to function better.") \
+diff --git a/Source/WTF/wtf/MediaTime.h b/Source/WTF/wtf/MediaTime.h
+index 4aded379bea3..06a459b4ccc3 100644
+--- a/Source/WTF/wtf/MediaTime.h
++++ b/Source/WTF/wtf/MediaTime.h
+@@ -73,7 +73,15 @@ public:
+     MediaTime operator-(const MediaTime& rhs) const;
+     MediaTime operator-() const;
+     MediaTime operator*(int32_t) const;
++#if 0
+     bool operator<(const MediaTime& rhs) const { return compare(rhs) == LessThan; }
++#else
++    bool operator<(const MediaTime& rhs) const {
++         if (m_timeFlags == Valid && m_timeFlags == rhs.m_timeFlags && m_timeScale == rhs.m_timeScale)
++             return m_timeValue < rhs.m_timeValue;
++         return compare(rhs) == LessThan;
++   }
++#endif
+     bool operator>(const MediaTime& rhs) const { return compare(rhs) == GreaterThan; }
+     bool operator!=(const MediaTime& rhs) const { return compare(rhs) != EqualTo; }
+     bool operator==(const MediaTime& rhs) const { return compare(rhs) == EqualTo; }
+diff --git a/Source/WebCore/Modules/mediasource/SampleMap.cpp b/Source/WebCore/Modules/mediasource/SampleMap.cpp
+index 07cf5d7c09ad..47102c0ad4cc 100644
+--- a/Source/WebCore/Modules/mediasource/SampleMap.cpp
++++ b/Source/WebCore/Modules/mediasource/SampleMap.cpp
+@@ -110,10 +110,10 @@ void SampleMap::addSample(MediaSample& sample)
+ {
+     MediaTime presentationTime = sample.presentationTime();
+ 
+-    presentationOrder().m_samples.insert(PresentationOrderSampleMap::MapType::value_type(presentationTime, &sample));
++    presentationOrder().m_samples.insert(presentationOrder().m_samples.end(), PresentationOrderSampleMap::MapType::value_type(presentationTime, &sample));
+ 
+     auto decodeKey = DecodeOrderSampleMap::KeyType(sample.decodeTime(), presentationTime);
+-    decodeOrder().m_samples.insert(DecodeOrderSampleMap::MapType::value_type(decodeKey, &sample));
++    decodeOrder().m_samples.insert(decodeOrder().m_samples.end(), DecodeOrderSampleMap::MapType::value_type(decodeKey, &sample));
+ 
+     m_totalSize += sample.sizeInBytes();
+ }
+diff --git a/Source/WebCore/Modules/mediasource/SourceBuffer.cpp b/Source/WebCore/Modules/mediasource/SourceBuffer.cpp
+index 08729a3a1bfb..ca3ad35569f2 100644
+--- a/Source/WebCore/Modules/mediasource/SourceBuffer.cpp
++++ b/Source/WebCore/Modules/mediasource/SourceBuffer.cpp
+@@ -1075,14 +1075,16 @@ void SourceBuffer::evictCodedFrames(size_t newDataSize)
+ 
+     const auto safeToRemoveRange = PlatformTimeRanges(minimumRangeStart, rangeEnd);
+     while (rangeStart > minimumRangeStart) {
+-        LOG(MediaSource, "SourceBuffer::evictCodedFrames(%p) - evicting: extraMemoryCost: %zu, rangeStart: %f, rangeEnd: %f",
+-                this, extraMemoryCost(), rangeStart.toDouble(), rangeEnd.toDouble());
+-
+         auto removalRange = PlatformTimeRanges(rangeStart, rangeEnd);
+         removalRange.intersectWith(safeToRemoveRange);
+         auto intersectedRanges = removalRange;
+         intersectedRanges.intersectWith(buffered);
+ 
++        if (intersectedRanges.length() > 0) {
++            LOG(MediaSource, "SourceBuffer::evictCodedFrames(%p) - evicting: extraMemoryCost: %zu, rangeStart: %f, rangeEnd: %f",
++                this, extraMemoryCost(), rangeStart.toDouble(), rangeEnd.toDouble());
++        }
++
+         removeFramesWhileFull(intersectedRanges);
+ 
+         if (!m_bufferFull)
+@@ -1143,9 +1145,9 @@ static void maximumBufferSizeDefaults(size_t& maxBufferSizeVideo, size_t& maxBuf
+     }
+ 
+     if (!maxBufferSizeAudio)
+-        maxBufferSizeAudio = 3 * 1024 * 1024;
++        maxBufferSizeAudio = 2 * 1024 * 1024;
+     if (!maxBufferSizeVideo)
+-        maxBufferSizeVideo = 30 * 1024 * 1024;
++        maxBufferSizeVideo = 15 * 1024 * 1024;
+     if (!maxBufferSizeText)
+         maxBufferSizeText = 1 * 1024 * 1024;
+ }
+@@ -1644,7 +1646,7 @@ void SourceBuffer::sourceBufferPrivateDidReceiveSample(MediaSample& sample)
+         // ↳ If last decode timestamp for track buffer is set and the difference between decode timestamp and
+         // last decode timestamp is greater than 2 times last frame duration:
+         if (trackBuffer.lastDecodeTimestamp.isValid() && (decodeTimestamp < trackBuffer.lastDecodeTimestamp
+-            || (trackBuffer.greatestDecodeDuration.isValid() && abs(decodeTimestamp - trackBuffer.lastDecodeTimestamp) > (trackBuffer.greatestDecodeDuration * 2)))) {
++            || (trackBuffer.greatestDecodeDuration.isValid() && (decodeTimestamp - trackBuffer.lastDecodeTimestamp) > (trackBuffer.greatestDecodeDuration * 2)))) {
+ 
+             // 1.6.1:
+             if (m_mode == AppendMode::Segments) {
+diff --git a/Source/WebCore/loader/FrameLoader.cpp b/Source/WebCore/loader/FrameLoader.cpp
+index c85fcc1ebafe..62b545f1cf5c 100644
+--- a/Source/WebCore/loader/FrameLoader.cpp
++++ b/Source/WebCore/loader/FrameLoader.cpp
+@@ -129,6 +129,7 @@
+ #include <wtf/SystemTracing.h>
+ #include <wtf/text/CString.h>
+ #include <wtf/text/WTFString.h>
++#include "SchemeRegistry.h"
+ 
+ #if ENABLE(WEB_ARCHIVE) || ENABLE(MHTML)
+ #include "Archive.h"
+@@ -1950,7 +1951,8 @@ void FrameLoader::commitProvisionalLoad()
+         // We are doing this here because we know for sure that a new page is about to be loaded.
+         PageCache::singleton().addIfCacheable(*history().currentItem(), m_frame.page());
+         
+-        WebCore::jettisonExpensiveObjectsOnTopLevelNavigation();
++        if (pdl && SchemeRegistry::shouldLoadURLSchemeAsEmptyDocument(pdl->request().url().protocol().toStringWithoutCopying()))
++            WebCore::jettisonExpensiveObjectsOnTopLevelNavigation();
+     }
+ 
+     if (m_loadType != FrameLoadType::Replace)
+diff --git a/Source/WebCore/loader/MixedContentChecker.cpp b/Source/WebCore/loader/MixedContentChecker.cpp
+index 050cb79ea657..1a5eee4dd56a 100644
+--- a/Source/WebCore/loader/MixedContentChecker.cpp
++++ b/Source/WebCore/loader/MixedContentChecker.cpp
+@@ -75,7 +75,8 @@ bool MixedContentChecker::canDisplayInsecureContent(SecurityOrigin& securityOrig
+         return true;
+ 
+     bool allowed = !isStrictMode && (m_frame.settings().allowDisplayOfInsecureContent() || type == ContentType::ActiveCanWarn) && !m_frame.document()->geolocationAccessed();
+-    logWarning(allowed, "display", url);
++    if (!allowed)
++       logWarning(allowed, "display", url);
+ 
+     if (allowed) {
+         m_frame.document()->setFoundMixedContent(SecurityContext::MixedContentType::Inactive);
+@@ -94,7 +95,8 @@ bool MixedContentChecker::canRunInsecureContent(SecurityOrigin& securityOrigin,
+         return false;
+ 
+     bool allowed = !m_frame.document()->isStrictMixedContentMode() && m_frame.settings().allowRunningOfInsecureContent() && !m_frame.document()->geolocationAccessed() && !m_frame.document()->secureCookiesAccessed();
+-    logWarning(allowed, "run", url);
++    if (!allowed)
++       logWarning(allowed, "run", url);
+ 
+     if (allowed) {
+         m_frame.document()->setFoundMixedContent(SecurityContext::MixedContentType::Active);
+diff --git a/Source/WebCore/loader/cache/CachedResourceLoader.cpp b/Source/WebCore/loader/cache/CachedResourceLoader.cpp
+index 9d3d108113cc..2288dd4d5a62 100644
+--- a/Source/WebCore/loader/cache/CachedResourceLoader.cpp
++++ b/Source/WebCore/loader/cache/CachedResourceLoader.cpp
+@@ -524,6 +524,10 @@ bool CachedResourceLoader::canRequest(CachedResource::Type type, const URL& url,
+     if (!checkInsecureContent(type, url))
+         return false;
+ 
++    static bool disableImages = !!getenv("WPE_DISABLE_IMAGE");
++    if (disableImages && CachedResource::Type::ImageResource == type)
++        return false;
++
+     return true;
+ }
+ 
+diff --git a/Source/WebCore/page/MemoryRelease.cpp b/Source/WebCore/page/MemoryRelease.cpp
+index f31f5d9fdc05..760ef877bdba 100644
+--- a/Source/WebCore/page/MemoryRelease.cpp
++++ b/Source/WebCore/page/MemoryRelease.cpp
+@@ -94,7 +94,10 @@ static void releaseCriticalMemory(Synchronous synchronous)
+         document->fontSelector().emptyCaches();
+     }
+ 
+-    GCController::singleton().deleteAllCode(JSC::DeleteAllCodeIfNotCollecting);
++    static bool enableCodeDeletion = !getenv("WPE_DISABLE_JIT_CODE_DELETION");
++    if (enableCodeDeletion && synchronous == Synchronous::Yes) {
++        GCController::singleton().deleteAllCode(JSC::DeleteAllCodeIfNotCollecting);
++    }
+ 
+ #if ENABLE(VIDEO)
+     for (auto* mediaElement : HTMLMediaElement::allMediaElements()) {
+@@ -194,7 +197,25 @@ void logMemoryStatisticsAtTimeOfDeath()
+ 
+ #if !PLATFORM(COCOA)
+ void platformReleaseMemory(Critical) { }
+-void jettisonExpensiveObjectsOnTopLevelNavigation() { }
++void jettisonExpensiveObjectsOnTopLevelNavigation()
++{
++    // based on code from cocoa/MemoryReleaseCocoa.mm
++    // Protect against doing excessive jettisoning during repeated navigations.
++    const auto minimumTimeSinceNavigation = 2s;
++
++    auto now = std::chrono::steady_clock::now();
++    static auto timeOfLastNavigation = now;
++    bool shouldJettison = (timeOfLastNavigation == now) || (now - timeOfLastNavigation >= minimumTimeSinceNavigation);
++    timeOfLastNavigation = now;
++
++    if (!shouldJettison)
++        return;
++
++    RunLoop::main().dispatch([]{
++        GCController::singleton().deleteAllCode(JSC::DeleteAllCodeIfNotCollecting);
++        releaseMemory(Critical::Yes, Synchronous::Yes);
++    });
++}
+ void registerMemoryReleaseNotifyCallbacks() { }
+ #endif
+ 
+diff --git a/Source/WebCore/platform/graphics/gstreamer/mse/AppendPipeline.cpp b/Source/WebCore/platform/graphics/gstreamer/mse/AppendPipeline.cpp
+index f4a109c4063f..b531026e46ed 100644
+--- a/Source/WebCore/platform/graphics/gstreamer/mse/AppendPipeline.cpp
++++ b/Source/WebCore/platform/graphics/gstreamer/mse/AppendPipeline.cpp
+@@ -45,6 +45,11 @@
+ GST_DEBUG_CATEGORY_EXTERN(webkit_mse_debug);
+ #define GST_CAT_DEFAULT webkit_mse_debug
+ 
++#if defined(NDEBUG)
++#undef LOG_DISABLED
++#define LOG_DISABLED 1
++#endif
++
+ namespace WebCore {
+ 
+ GType AppendPipeline::s_endOfAppendMetaType = 0;
+diff --git a/Source/WebCore/platform/graphics/texmap/coordinated/TiledBackingStore.cpp b/Source/WebCore/platform/graphics/texmap/coordinated/TiledBackingStore.cpp
+index 3be4311deaa0..153ede82937d 100644
+--- a/Source/WebCore/platform/graphics/texmap/coordinated/TiledBackingStore.cpp
++++ b/Source/WebCore/platform/graphics/texmap/coordinated/TiledBackingStore.cpp
+@@ -280,8 +280,12 @@ void TiledBackingStore::computeCoverAndKeepRect(const IntRect& visibleRect, IntR
+     // If we cover more that the actual viewport we can be smart about which tiles we choose to render.
+     if (m_coverAreaMultiplier > 1) {
+         // The initial cover area covers equally in each direction, according to the coverAreaMultiplier.
++#if 0
+         coverRect.inflateX(visibleRect.width() * (m_coverAreaMultiplier - 1) / 2);
+         coverRect.inflateY(visibleRect.height() * (m_coverAreaMultiplier - 1) / 2);
++#else
++        coverRect.inflate(visibleRect.height() * (m_coverAreaMultiplier - 1) / 2);
++#endif
+         keepRect = coverRect;
+ 
+         if (m_trajectoryVector != FloatPoint::zero()) {
+diff --git a/Source/WebCore/rendering/RenderLayerCompositor.cpp b/Source/WebCore/rendering/RenderLayerCompositor.cpp
+index aa476fdfd8ef..cafc42384126 100644
+--- a/Source/WebCore/rendering/RenderLayerCompositor.cpp
++++ b/Source/WebCore/rendering/RenderLayerCompositor.cpp
+@@ -286,6 +286,8 @@ RenderLayerCompositor::RenderLayerCompositor(RenderView& renderView)
+     , m_updateCompositingLayersTimer(*this, &RenderLayerCompositor::updateCompositingLayersTimerFired)
+     , m_layerFlushTimer(*this, &RenderLayerCompositor::layerFlushTimerFired)
+ {
++    Document *doc = renderView.frameView().frame().document();
++    m_enableYoutubeWorkarounds = doc && doc->origin().contains("www.youtube.com");
+ }
+ 
+ RenderLayerCompositor::~RenderLayerCompositor()
+@@ -2547,6 +2549,9 @@ bool RenderLayerCompositor::requiresCompositingForAnimation(RenderLayerModelObje
+     if (!(m_compositingTriggers & ChromeClient::AnimationTrigger))
+         return false;
+ 
++    if (m_enableYoutubeWorkarounds && renderer.style().hasAnimationsOrTransitions() && renderer.hasTransform())
++        return true;
++
+     if (auto* element = renderer.element()) {
+         if (auto* timeline = element->document().existingTimeline()) {
+             if (timeline->runningAnimationsForElementAreAllAccelerated(*element))
+diff --git a/Source/WebCore/rendering/RenderLayerCompositor.h b/Source/WebCore/rendering/RenderLayerCompositor.h
+index 4dc6135b9a1d..eb6a850bc5db 100644
+--- a/Source/WebCore/rendering/RenderLayerCompositor.h
++++ b/Source/WebCore/rendering/RenderLayerCompositor.h
+@@ -559,6 +559,7 @@ private:
+     bool m_hasPendingLayerFlush { false };
+     bool m_layerNeedsCompositingUpdate { false };
+     bool m_viewBackgroundIsTransparent { false };
++    bool m_enableYoutubeWorkarounds { false };
+ 
+ #if !LOG_DISABLED || ENABLE(RESOURCE_USAGE)
+     int m_rootLayerUpdateCount { 0 };
+diff --git a/Source/WebKit/NetworkProcess/soup/NetworkDataTaskSoup.cpp b/Source/WebKit/NetworkProcess/soup/NetworkDataTaskSoup.cpp
+index f0ad09563778..e9a8cbfe8524 100644
+--- a/Source/WebKit/NetworkProcess/soup/NetworkDataTaskSoup.cpp
++++ b/Source/WebKit/NetworkProcess/soup/NetworkDataTaskSoup.cpp
+@@ -173,6 +173,8 @@ void NetworkDataTaskSoup::createRequest(ResourceRequest&& request)
+ #else
+     g_signal_connect(static_cast<NetworkSessionSoup&>(m_session.get()).soupSession(), "request-started", G_CALLBACK(requestStartedCallback), this);
+ #endif
++
++    m_readPriority = (request.priority() >= ResourceLoadPriority::High) ? G_PRIORITY_HIGH : RunLoopSourcePriority::AsyncIONetwork;
+ }
+ 
+ void NetworkDataTaskSoup::clearRequest()
+@@ -731,7 +733,7 @@ void NetworkDataTaskSoup::read()
+     RefPtr<NetworkDataTaskSoup> protectedThis(this);
+     ASSERT(m_inputStream);
+     m_readBuffer.grow(gDefaultReadBufferSize);
+-    g_input_stream_read_async(m_inputStream.get(), m_readBuffer.data(), m_readBuffer.size(), RunLoopSourcePriority::AsyncIONetwork, m_cancellable.get(),
++    g_input_stream_read_async(m_inputStream.get(), m_readBuffer.data(), m_readBuffer.size(), m_readPriority, m_cancellable.get(),
+         reinterpret_cast<GAsyncReadyCallback>(readCallback), protectedThis.leakRef());
+ }
+ 
+diff --git a/Source/WebKit/NetworkProcess/soup/NetworkDataTaskSoup.h b/Source/WebKit/NetworkProcess/soup/NetworkDataTaskSoup.h
+index d711c790c374..498e90585b3d 100644
+--- a/Source/WebKit/NetworkProcess/soup/NetworkDataTaskSoup.h
++++ b/Source/WebKit/NetworkProcess/soup/NetworkDataTaskSoup.h
+@@ -139,6 +139,7 @@ private:
+     WebCore::NetworkLoadMetrics m_networkLoadMetrics;
+     MonotonicTime m_startTime;
+     RunLoop::Timer<NetworkDataTaskSoup> m_timeoutSource;
++    int m_readPriority;
+ };
+ 
+ } // namespace WebKit
+diff --git a/Source/WebKit/Shared/CoordinatedGraphics/threadedcompositor/CompositingRunLoop.cpp b/Source/WebKit/Shared/CoordinatedGraphics/threadedcompositor/CompositingRunLoop.cpp
+index f03e241bb296..91568a471d67 100644
+--- a/Source/WebKit/Shared/CoordinatedGraphics/threadedcompositor/CompositingRunLoop.cpp
++++ b/Source/WebKit/Shared/CoordinatedGraphics/threadedcompositor/CompositingRunLoop.cpp
+@@ -221,7 +221,7 @@ void CompositingRunLoop::compositionCompleted(LockHolder& stateLocker)
+             m_state.pendingUpdate = false;
+             m_state.update = UpdateState::Scheduled;
+             if (!m_state.isSuspended)
+-                m_updateTimer.startOneShot(0_s);
++               startUpdateTimer();
+             return;
+         }
+ 
+@@ -254,7 +254,7 @@ void CompositingRunLoop::updateCompleted(LockHolder& stateLocker)
+             m_state.pendingUpdate = false;
+             m_state.update = UpdateState::Scheduled;
+             if (!m_state.isSuspended)
+-                m_updateTimer.startOneShot(0_s);
++                 startUpdateTimer();
+             return;
+         }
+ 
+@@ -276,6 +276,31 @@ void CompositingRunLoop::updateTimerFired()
+         m_state.update = UpdateState::InProgress;
+     }
+     m_updateFunction();
++    m_updateTime = MonotonicTime::now();
++}
++
++static MonotonicTime g_throttleEndTime = MonotonicTime::nan();
++
++void throttleUpdatesForNextThreeSeconds()
++{
++    g_throttleEndTime = MonotonicTime::now() + Seconds(3.0);
++}
++
++void CompositingRunLoop::startUpdateTimer()
++{
++    if (m_updateTimer.isActive())
++        return;
++
++    static const bool disableUpdateThrottling = !!getenv("WPE_DISABLE_COMPOSITOR_THROTTLING");
++    if ( !disableUpdateThrottling && !std::isnan(g_throttleEndTime) ) {
++        if (MonotonicTime::now() < g_throttleEndTime)  {
++           m_updateTimer.startOneShot(0.25_s);
++           return;
++         }
++         g_throttleEndTime = MonotonicTime::nan();
++    }
++
++    m_updateTimer.startOneShot(0_s);
+ }
+ 
+ } // namespace WebKit
+diff --git a/Source/WebKit/Shared/CoordinatedGraphics/threadedcompositor/CompositingRunLoop.h b/Source/WebKit/Shared/CoordinatedGraphics/threadedcompositor/CompositingRunLoop.h
+index c8303e9319c4..77ce4c178860 100644
+--- a/Source/WebKit/Shared/CoordinatedGraphics/threadedcompositor/CompositingRunLoop.h
++++ b/Source/WebKit/Shared/CoordinatedGraphics/threadedcompositor/CompositingRunLoop.h
+@@ -73,11 +73,13 @@ private:
+     };
+ 
+     void updateTimerFired();
++    void startUpdateTimer();
+ 
+     RunLoop::Timer<CompositingRunLoop> m_updateTimer;
+     Function<void ()> m_updateFunction;
+     Lock m_dispatchSyncConditionMutex;
+     Condition m_dispatchSyncCondition;
++    MonotonicTime m_updateTime { MonotonicTime::nan() };
+ 
+ 
+     struct {
+diff --git a/Source/WebKit/WebProcess/Network/WebLoaderStrategy.cpp b/Source/WebKit/WebProcess/Network/WebLoaderStrategy.cpp
+index 1433fbda9700..59dfac663b0d 100644
+--- a/Source/WebKit/WebProcess/Network/WebLoaderStrategy.cpp
++++ b/Source/WebKit/WebProcess/Network/WebLoaderStrategy.cpp
+@@ -79,6 +79,8 @@
+ namespace WebKit {
+ using namespace WebCore;
+ 
++void throttleUpdatesForNextThreeSeconds();
++
+ WebLoaderStrategy::WebLoaderStrategy()
+     : m_internallyFailedLoadTimer(RunLoop::main(), this, &WebLoaderStrategy::internallyFailedLoadTimerFired)
+ {
+@@ -205,6 +207,16 @@ void WebLoaderStrategy::scheduleLoad(ResourceLoader& resourceLoader, CachedResou
+     }
+ #endif
+ 
++    static bool enableThrottleHack = false;
++    if (resource->type() == CachedResource::Type::MainResource)
++    {
++        enableThrottleHack = resourceLoader.request().url().string().contains("youtube.com");
++    }
++    if (enableThrottleHack && resourceLoader.request().url().string().contains("get_video_info"))
++    {
++        throttleUpdatesForNextThreeSeconds();
++    }
++
+ #if ENABLE(SERVICE_WORKER)
+     WebServiceWorkerProvider::singleton().handleFetch(resourceLoader, resource, sessionID, shouldClearReferrerOnHTTPSToHTTPRedirect, [trackingParameters, sessionID, shouldClearReferrerOnHTTPSToHTTPRedirect, maximumBufferingTime = maximumBufferingTime(resource), resourceLoader = makeRef(resourceLoader)] (ServiceWorkerClientFetch::Result result) mutable {
+         if (result != ServiceWorkerClientFetch::Result::Unhandled) {
+diff --git a/Source/WebKit/WebProcess/WebCoreSupport/WebChromeClient.cpp b/Source/WebKit/WebProcess/WebCoreSupport/WebChromeClient.cpp
+index 410c15d4a19f..e07c19ca67fa 100644
+--- a/Source/WebKit/WebProcess/WebCoreSupport/WebChromeClient.cpp
++++ b/Source/WebKit/WebProcess/WebCoreSupport/WebChromeClient.cpp
+@@ -595,12 +595,20 @@ void WebChromeClient::scroll(const IntSize& scrollDelta, const IntRect& scrollRe
+ 
+ IntPoint WebChromeClient::screenToRootView(const IntPoint& point) const
+ {
++#if PLATFORM(WPE)
++    return point;
++#else
+     return m_page.screenToRootView(point);
++#endif
+ }
+ 
+ IntRect WebChromeClient::rootViewToScreen(const IntRect& rect) const
+ {
++#if PLATFORM(WPE)
++    return rect;
++#else
+     return m_page.rootViewToScreen(rect);
++#endif
+ }
+     
+ #if PLATFORM(IOS)
+diff --git a/Source/WebKit/WebProcess/WebPage/CoordinatedGraphics/CompositingCoordinator.cpp b/Source/WebKit/WebProcess/WebPage/CoordinatedGraphics/CompositingCoordinator.cpp
+index 4ec0f5ea1a31..5d010689b98b 100644
+--- a/Source/WebKit/WebProcess/WebPage/CoordinatedGraphics/CompositingCoordinator.cpp
++++ b/Source/WebKit/WebProcess/WebPage/CoordinatedGraphics/CompositingCoordinator.cpp
+@@ -160,7 +160,7 @@ void CompositingCoordinator::syncDisplayState()
+ double CompositingCoordinator::nextAnimationServiceTime() const
+ {
+     // According to the requestAnimationFrame spec, rAF callbacks should not be faster than 60FPS.
+-    static const double MinimalTimeoutForAnimations = 1. / 60.;
++    static const double MinimalTimeoutForAnimations = 1. / 30.;
+     return std::max<double>(0., MinimalTimeoutForAnimations - timestamp() + m_lastAnimationServiceTime);
+ }
+ 
+diff --git a/Source/cmake/OptionsWPE.cmake b/Source/cmake/OptionsWPE.cmake
+index 1553e7052722..bbbd23784133 100644
+--- a/Source/cmake/OptionsWPE.cmake
++++ b/Source/cmake/OptionsWPE.cmake
+@@ -210,12 +210,14 @@ if (COMPILER_IS_GCC_OR_CLANG AND UNIX AND NOT APPLE)
+     # The GCC documentation is poor in that it says the option is target dependent,
+     # but fails to decribe on which targets it is supported. I didn't fancy reading
+     # the source to find out.
+-    if (CMAKE_COMPILER_IS_GNUCC AND (WTF_CPU_ARM64 OR WTF_CPU_ARM))
++    if (CMAKE_COMPILER_IS_GNUCC AND (WTF_CPU_ARM64 OR WTF_CPU_ARM OR WTF_CPU_MIPS))
+         set(CMAKE_COMPILER_SIZE_OPT_FLAGS " -finline-limit=90 -fsection-anchors")
+     endif ()
+     set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE}${CMAKE_COMPILER_SIZE_OPT_FLAGS} -ffunction-sections -fdata-sections")
+     set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE}${CMAKE_COMPILER_SIZE_OPT_FLAGS} -ffunction-sections -fdata-sections -fno-rtti")
+     set(CMAKE_SHARED_LINKER_FLAGS_RELEASE "${CMAKE_SHARED_LINKER_FLAGS_RELEASE} -Wl,--gc-sections")
++    set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} -fno-stack-protector")
++    set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -fno-stack-protector")
+ endif ()
+ 
+ include(GStreamerChecks)
+-- 
+2.14.2
+

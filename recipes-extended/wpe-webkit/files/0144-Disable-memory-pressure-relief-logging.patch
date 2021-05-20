@@ -1,0 +1,26 @@
+From 7f738ef7854ee559129b35fb9512a5546c5c3d8b Mon Sep 17 00:00:00 2001
+From: Eugene Mutavchi <Ievgen_Mutavchi@comcast.com>
+Date: Fri, 28 Jun 2019 09:56:02 -0400
+Subject: [PATCH 1/3] Disable memory pressure relief logging
+
+---
+ Source/WebKit/UIProcess/WebProcessPool.cpp | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/Source/WebKit/UIProcess/WebProcessPool.cpp b/Source/WebKit/UIProcess/WebProcessPool.cpp
+index 392b43e..29b5f87 100644
+--- a/Source/WebKit/UIProcess/WebProcessPool.cpp
++++ b/Source/WebKit/UIProcess/WebProcessPool.cpp
+@@ -759,7 +759,8 @@ WebProcessProxy& WebProcessPool::createNewWebProcess(WebsiteDataStore& websiteDa
+ #endif
+ 
+ #if OS(LINUX)
+-    parameters.shouldEnableMemoryPressureReliefLogging = true;
++    static bool enableReliefLogging = !!getenv("WPE_ENABLE_RELIEF_LOGGING");
++    parameters.shouldEnableMemoryPressureReliefLogging = enableReliefLogging;
+     if (MemoryPressureMonitor::isEnabled())
+         parameters.memoryPressureMonitorHandle = MemoryPressureMonitor::singleton().createHandle();
+ #endif
+-- 
+2.7.4
+

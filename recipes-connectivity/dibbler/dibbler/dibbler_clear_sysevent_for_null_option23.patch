@@ -1,0 +1,23 @@
+Index: dibbler-1.0.1/scripts/notify-scripts/client-notify-bsd.sh
+===================================================================
+--- dibbler-1.0.1.orig/scripts/notify-scripts/client-notify-bsd.sh
++++ dibbler-1.0.1/scripts/notify-scripts/client-notify-bsd.sh
+@@ -11,6 +11,7 @@ LOGFILE=/var/lib/dibbler/client.sh-log
+ set >> $LOGFILE
+ RESOLV_CONF="/etc/resolv.conf"
+ RESOLV_CONF_TMP="/tmp/resolv_tmp.conf"
++SYSEVENT_CLEAR_TMP="/tmp/sysevent_clear_tmp.txt"
+ R=""
+ 
+ mta_dhcp_option_received=0
+@@ -318,6 +319,10 @@ if [ "$SRV_OPTION23" != "" ] && [ "$SRV_
+ 
+      sysevent set wan6_ns "$SRV_OPTION23"
+      sysevent set ipv6_nameserver "$SRV_OPTION23"
++else
++     sysevent set wan6_ns ""
++     sysevent set ipv6_nameserver ""
++     echo "OPTION 23 null , clear sysevents wan6_ns and ipv6_nameserver " >> $SYSEVENT_CLEAR_TMP
+ fi
+ 
+ if [ "$SRV_OPTION24" != "" ]; then

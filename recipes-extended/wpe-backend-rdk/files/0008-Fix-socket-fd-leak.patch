@@ -1,0 +1,35 @@
+From 1b9b5480c98930a76caec4e30da0ffae6cafe27c Mon Sep 17 00:00:00 2001
+From: Eugene Mutavchi <Ievgen_Mutavchi@comcast.com>
+Date: Tue, 2 Feb 2021 02:33:47 +0000
+Subject: [PATCH] Fix socket fd leak
+
+---
+ src/util/ipc.cpp | 10 ++++++++--
+ 1 file changed, 8 insertions(+), 2 deletions(-)
+
+diff --git a/src/util/ipc.cpp b/src/util/ipc.cpp
+index 4dca150..69afee6 100644
+--- a/src/util/ipc.cpp
++++ b/src/util/ipc.cpp
+@@ -152,10 +152,16 @@ void Client::initialize(Handler& handler, int fd)
+ 
+ void Client::deinitialize()
+ {
+-    if (m_source)
++    if (m_source) {
+         g_source_destroy(m_source);
+-    if (m_socket)
++        g_source_unref(m_source);
++        m_source = nullptr;
++    }
++    if (m_socket) {
++        g_socket_close(m_socket, NULL);
+         g_object_unref(m_socket);
++        m_socket = nullptr;
++    }
+ 
+     m_handler = nullptr;
+ }
+-- 
+2.17.1
+

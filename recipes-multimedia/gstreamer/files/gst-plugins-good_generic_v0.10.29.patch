@@ -1,0 +1,201 @@
+Date: Mon Sep 16 21:29:16 2013
+
+From: cfbc554cc5488ff87fb6602ce7cc0615e3bcad66 Mon Sep 16 21:32:20 2013
+
+Subject: [PATCH] gst-plugins-good: add RDK generic patch
+
+	Taken from https://svn3.teamccp.com/svn/rdk/rdk/releases/generic/components/opensource/gst-plugins-good-0.10.29/trunk/
+
+Source: GITHUB
+
+License: LGPL-2.1-or-later
+
+Upstream-Status: Submitted [ https://github.com/cisco/meta-cisco-oss/commit/4cdc2375dc9d7198227fc63a1501598ea439fcbd#diff-5a58b160430a004d6cee378a188824e7 ]
+
+Signed-off-by: Nicolas Dechesne <nicolas.dechesne@linaro.org>
+---
+
+diff -aNurd --binary gst-plugins-good-0.10.29/ext/soup/gstsouphttpsrc.c gst-plugins-good/ext/soup/gstsouphttpsrc.c
+--- gst-plugins-good-0.10.29/ext/soup/gstsouphttpsrc.c	2013-07-15 00:53:03.872736548 -0400
++++ gst-plugins-good/ext/soup/gstsouphttpsrc.c	2013-07-15 00:54:35.047590324 -0400
+@@ -88,6 +88,11 @@
+ 
+ GST_DEBUG_CATEGORY_STATIC (souphttpsrc_debug);
+ #define GST_CAT_DEFAULT souphttpsrc_debug
++#define DEFAULT_STARTPTS         0
++#define DEFAULT_ENDPTS           0
++#define DEFAULT_GOPSIZE          15
++#define DEFAULT_NUMBFRAMESPERGOP 5
++#define DEFAULT_HTTP_STATUS 0
+ 
+ static GstStaticPadTemplate srctemplate = GST_STATIC_PAD_TEMPLATE ("src",
+     GST_PAD_SRC,
+@@ -113,7 +118,12 @@
+   PROP_IRADIO_URL,
+   PROP_IRADIO_TITLE,
+   PROP_TIMEOUT,
+-  PROP_EXTRA_HEADERS
++  PROP_EXTRA_HEADERS,
++  PROP_STARTPTS, /*start PTS*/
++  PROP_ENDPTS, /*end PTS*/
++  PROP_GOPSIZE,
++  PROP_NUMBFRAMESPERGOP,
++  PROP_HTTP_STATUS,
+ };
+ 
+ #define DEFAULT_USER_AGENT           "GStreamer souphttpsrc "
+@@ -299,6 +309,38 @@
+           "Name of currently playing song", NULL,
+           G_PARAM_READABLE | G_PARAM_STATIC_STRINGS));
+ 
++///////////////////////////////////////////////////////////////
++  g_object_class_install_property (gobject_class, PROP_STARTPTS,
++      g_param_spec_ulong ("startPTS", "startPTS",
++          "Value in seconds", 0,
++          G_MAXULONG, DEFAULT_STARTPTS,
++          (GParamFlags)(G_PARAM_READWRITE)));
++
++  g_object_class_install_property (gobject_class, PROP_ENDPTS,
++      g_param_spec_ulong ("endPTS", "endPTS",
++          "Value in seconds", 0,
++          G_MAXULONG, DEFAULT_ENDPTS,
++          (GParamFlags)(G_PARAM_READWRITE)));
++
++  g_object_class_install_property (gobject_class, PROP_GOPSIZE,
++      g_param_spec_ulong ("GopSize", "GopSize",
++          "number of frames", 0,
++          G_MAXULONG, DEFAULT_GOPSIZE,
++          (GParamFlags)(G_PARAM_READWRITE)));
++
++  g_object_class_install_property (gobject_class, PROP_NUMBFRAMESPERGOP,
++      g_param_spec_ulong ("numbframes", "numbframes",
++          "number of b frames", 0,
++          G_MAXULONG, DEFAULT_NUMBFRAMESPERGOP,
++          (GParamFlags)(G_PARAM_READWRITE)));
++
++  g_object_class_install_property (gobject_class, PROP_HTTP_STATUS,
++      g_param_spec_int ("http-status", "http-status",
++          "http status received by neon lib (from the server) and modifies codes are available (0 = default).", 0,
++          1000, DEFAULT_HTTP_STATUS,
++          (GParamFlags)(G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
++//////////////////////////////////////////////////////////////////////
++
+   gstbasesrc_class->start = GST_DEBUG_FUNCPTR (gst_soup_http_src_start);
+   gstbasesrc_class->stop = GST_DEBUG_FUNCPTR (gst_soup_http_src_stop);
+   gstbasesrc_class->unlock = GST_DEBUG_FUNCPTR (gst_soup_http_src_unlock);
+@@ -333,6 +375,12 @@
+   src->iradio_url = NULL;
+   g_free (src->iradio_title);
+   src->iradio_title = NULL;
++
++  src->startPTS = DEFAULT_STARTPTS; /*start PTS is initialized 0*/
++  src->endPTS = DEFAULT_ENDPTS; /*end PTS is initialized to 0*/
++  src->gopSize = DEFAULT_GOPSIZE; /*GopSize is initialized to 15*/
++  src->numbframespergop = DEFAULT_NUMBFRAMESPERGOP; /*bframespergop is initialized to 0*/
++  src->http_status = DEFAULT_HTTP_STATUS;
+ }
+ 
+ static void
+@@ -473,6 +521,22 @@
+       src->extra_headers = s ? gst_structure_copy (s) : NULL;
+       break;
+     }
++    case PROP_STARTPTS:
++        src->startPTS = g_value_get_ulong (value);
++        g_print("NEON^ set PROPERTY ^^^^startPTS = %lu\n\n", src->startPTS);
++      break;
++    case PROP_ENDPTS:
++        src->endPTS = g_value_get_ulong (value);
++      break;
++    case PROP_GOPSIZE:
++        src->gopSize = g_value_get_ulong (value);
++      break;
++    case PROP_NUMBFRAMESPERGOP:
++        src->numbframespergop = g_value_get_ulong (value);
++      break;
++    case PROP_HTTP_STATUS:
++        src->http_status = g_value_get_int (value);
++      break;
+     default:
+       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
+       break;
+@@ -546,6 +610,22 @@
+     case PROP_EXTRA_HEADERS:
+       gst_value_set_structure (value, src->extra_headers);
+       break;
++    case PROP_STARTPTS:
++        g_value_set_ulong (value, src->startPTS);
++//      g_print("NEON^ GET PROPERTY ^^^^startPTS = %lu\n\n", neonhttpsrc->startPTS);
++      break;
++    case PROP_ENDPTS:
++        g_value_set_ulong (value, src->endPTS);
++      break;
++    case PROP_GOPSIZE:
++        g_value_set_ulong (value, src->gopSize);
++      break;
++    case PROP_NUMBFRAMESPERGOP:
++        g_value_set_ulong (value, src->numbframespergop);
++      break;
++    case PROP_HTTP_STATUS:
++        g_value_set_int(value, src->http_status);
++        break;
+     default:
+       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
+       break;
+@@ -764,6 +844,40 @@
+               src->content_size));
+     }
+   }
++  const gchar *timeStampHeader;
++  const gchar *gopsize;
++  const gchar *numbFramespergop;
++  gulong startPTS = 0, endPTS = 0;
++  timeStampHeader = soup_message_headers_get (msg->response_headers, "PresentationTimeStamps.ochn.org");
++  g_print("^^^^SOUP^^^^^Got timeStampHeader from soup_message_headers_get %s\n\n", timeStampHeader);
++  if (timeStampHeader != NULL)
++  {
++    g_print("^^^^SOUP^^^^^timeStampHeader is not null, but is -> %s\n\n", timeStampHeader);
++    sscanf (timeStampHeader, "startPTS=%08lx endPTS=%08lx", &startPTS, &endPTS);
++    //sscanf (timeStampHeader, "PresentationTimeStamps.ochn.org: startPTS=%08lx endPTS=%08lx", &startPTS, &endPTS);
++    g_print("^^^^SOUP^^^^^startPTS = %lu, endPTS = %lu\n\n", startPTS, endPTS);
++    src->startPTS = startPTS;//(startPTS >> 1)&0xffffffff;
++    src->endPTS = endPTS;//(endPTS >> 1)&0xffffffff;
++    g_print("^^^^SOUP^^^^^startPTS = %lu, endPTS = %lu\n\n", src->startPTS, src->endPTS);
++  }
++  g_print("^^^^SOUP^^^^^Getting gopsizeheader from soup_message_headers_get\n\n");
++  gopsize = soup_message_headers_get (msg->response_headers, "FramesPerGOP.schange.com");
++  g_print("^^^^SOUP^^^^^Got gopsizeheader from soup_message_headers_get %s\n\n", gopsize);
++
++  if(gopsize != NULL)
++  {
++        src->gopSize = g_ascii_strtoull(gopsize,NULL,10) ;
++  }
++
++  g_print("^^^^SOUP^^^^^Getting bframespergopheader from soup_message_headers_get\n\n");
++  numbFramespergop = soup_message_headers_get (msg->response_headers, "BFramesPerGOP.schange.com");
++  g_print("^^^^SOUP^^^^^Got gopsizeheader from soup_message_headers_get %s\n\n", numbFramespergop);
++
++  if(numbFramespergop != NULL)
++  {
++        src->numbframespergop = g_ascii_strtoull(numbFramespergop,NULL,10) ;
++  }
++
+ 
+   /* Icecast stuff */
+   tag_list = gst_tag_list_new ();
+diff -aNurd --binary gst-plugins-good-0.10.29/ext/soup/gstsouphttpsrc.h gst-plugins-good/ext/soup/gstsouphttpsrc.h
+--- gst-plugins-good-0.10.29/ext/soup/gstsouphttpsrc.h	2013-07-15 00:53:03.872736548 -0400
++++ gst-plugins-good/ext/soup/gstsouphttpsrc.h	2013-07-15 00:54:35.047590324 -0400
+@@ -87,6 +87,12 @@
+   GstStructure *extra_headers;
+ 
+   guint timeout;
++  /*typedef unsigned long gulong, start and end PTS coming as HTTP responce*/
++  gulong startPTS;
++  gulong endPTS;
++  gulong gopSize;
++  gulong numbframespergop;
++  gint http_status;
+ };
+ 
+ struct _GstSoupHTTPSrcClass {

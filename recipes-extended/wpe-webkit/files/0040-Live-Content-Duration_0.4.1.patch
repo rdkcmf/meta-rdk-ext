@@ -1,0 +1,35 @@
+From e291b4b68417ca587cc85f74e3ad61b623213fe4 Mon Sep 17 00:00:00 2001
+From: Gurdal Oruklu <Gurdal_Oruklu@comcast.com>
+Date: Tue, 23 Jan 2018 11:56:41 -0800
+Subject: [PATCH] Live content duration
+
+---
+ Source/WebCore/platform/graphics/gstreamer/mse/AppendPipeline.cpp | 5 +----
+ 1 file changed, 1 insertion(+), 4 deletions(-)
+
+diff --git a/Source/WebCore/platform/graphics/gstreamer/mse/AppendPipeline.cpp b/Source/WebCore/platform/graphics/gstreamer/mse/AppendPipeline.cpp
+index 35a60c7c5ba..6237579b2c5 100644
+--- a/Source/WebCore/platform/graphics/gstreamer/mse/AppendPipeline.cpp
++++ b/Source/WebCore/platform/graphics/gstreamer/mse/AppendPipeline.cpp
+@@ -817,7 +817,7 @@ void AppendPipeline::didReceiveInitializationSegment()
+     WebCore::SourceBufferPrivateClient::InitializationSegment initializationSegment;
+ 
+     GST_DEBUG("Notifying SourceBuffer for track %s", (m_track) ? m_track->id().string().utf8().data() : nullptr);
+-    initializationSegment.duration = m_mediaSourceClient->duration();
++    initializationSegment.duration = m_initialDuration.isValid() ? m_initialDuration : m_mediaSourceClient->duration();
+ 
+     switch (m_streamType) {
+     case Audio: {
+@@ -1154,9 +1154,6 @@ void AppendPipeline::connectDemuxerSrcPadToAppsink(GstPad* demuxerSrcPad)
+     }
+ #endif
+ 
+-    if (m_mediaSourceClient->duration().isInvalid() && m_initialDuration > MediaTime::zeroTime())
+-        m_mediaSourceClient->durationChanged(m_initialDuration);
+-
+     parseDemuxerSrcPadCaps(gst_caps_ref(caps.get()));
+ 
+     switch (m_streamType) {
+-- 
+2.16.2
+

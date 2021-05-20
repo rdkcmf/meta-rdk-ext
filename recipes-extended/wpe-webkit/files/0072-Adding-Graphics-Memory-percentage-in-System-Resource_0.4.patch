@@ -1,0 +1,128 @@
+From 211568e092f2eba2c4b1f78e7f7a0e78d4764c50 Mon Sep 17 00:00:00 2001
+From: nrajang <nambirajan.g@lnttechservices.com>
+Date: Thu, 12 Jul 2018 16:55:58 +0000
+Subject: [PATCH] Adding Graphics Memory percentage in System Resource
+
+Signed-off-by: nrajang <nambirajan.g@lnttechservices.com>
+---
+ Source/WebCore/page/ResourceUsageData.cpp          |  1 +
+ Source/WebCore/page/ResourceUsageData.h            |  1 +
+ .../page/linux/ResourceUsageOverlayLinux.cpp       |  4 ++
+ .../page/linux/ResourceUsageThreadLinux.cpp        | 55 ++++++++++++++++++++++
+ 4 files changed, 61 insertions(+)
+
+diff --git a/Source/WebCore/page/ResourceUsageData.cpp b/Source/WebCore/page/ResourceUsageData.cpp
+index 7a170026b8e..6263871ba48 100644
+--- a/Source/WebCore/page/ResourceUsageData.cpp
++++ b/Source/WebCore/page/ResourceUsageData.cpp
+@@ -48,6 +48,7 @@ ResourceUsageData::ResourceUsageData()
+ 
+ ResourceUsageData::ResourceUsageData(const ResourceUsageData& other)
+     : cpu(other.cpu)
++    , gpu(other.gpu)
+     , totalDirtySize(other.totalDirtySize)
+     , totalExternalSize(other.totalExternalSize)
+     , timeOfNextEdenCollection(other.timeOfNextEdenCollection)
+diff --git a/Source/WebCore/page/ResourceUsageData.h b/Source/WebCore/page/ResourceUsageData.h
+index c881538bb55..7e0ad980440 100644
+--- a/Source/WebCore/page/ResourceUsageData.h
++++ b/Source/WebCore/page/ResourceUsageData.h
+@@ -67,6 +67,7 @@ struct ResourceUsageData {
+     ResourceUsageData(const ResourceUsageData& data);
+ 
+     float cpu { 0 };
++    size_t gpu { 0 };
+     size_t totalDirtySize { 0 };
+     size_t totalExternalSize { 0 };
+     std::array<MemoryCategoryInfo, MemoryCategory::NumberOfCategories> categories;
+diff --git a/Source/WebCore/page/linux/ResourceUsageOverlayLinux.cpp b/Source/WebCore/page/linux/ResourceUsageOverlayLinux.cpp
+index 97f30b26803..952521f6d70 100644
+--- a/Source/WebCore/page/linux/ResourceUsageOverlayLinux.cpp
++++ b/Source/WebCore/page/linux/ResourceUsageOverlayLinux.cpp
+@@ -120,6 +120,10 @@ private:
+         string = "Full GC: " + gcTimerString(gData.timeOfNextFullCollection, now);
+         context.drawText(m_textFont, TextRun(string), position);
+         position.move(0, gFontSize + 2);
++
++        string = "Graphics Memory: " + (gData.gpu > 0 ? String::format("%d%%", gData.gpu) : String("N/A"));
++        context.drawText(m_textFont, TextRun(string), position);
++        position.move(0, gFontSize + 2);
+     }
+ 
+     void notifyFlushRequired(const GraphicsLayer*) override
+diff --git a/Source/WebCore/page/linux/ResourceUsageThreadLinux.cpp b/Source/WebCore/page/linux/ResourceUsageThreadLinux.cpp
+index b2e9dd46883..191c1761de4 100644
+--- a/Source/WebCore/page/linux/ResourceUsageThreadLinux.cpp
++++ b/Source/WebCore/page/linux/ResourceUsageThreadLinux.cpp
+@@ -143,6 +143,59 @@ static float cpuUsage()
+     return clampTo<float>(usage, 0, 100);
+ }
+ 
++static size_t calculateGraphicsMemoryUsage()
++{
++    FILE *file = fopen("/proc/brcm/core", "r");
++    if (!file)
++        return 0;
++
++    char *buffer;
++    size_t size = 0;
++    static const unsigned maxAppPerLength = 5;
++    static const unsigned maxRowLength = 75;
++    ssize_t len=0;
++
++    while((len=getline(&buffer, &size, file)) != -1)
++    {
++        if(strstr(buffer,"APP") || strstr(buffer,"GFX"))
++        {
++            char appUsedPercentage[maxAppPerLength];
++            char appRow[maxRowLength];
++            char *token;
++            char *ptr;
++            int pos = 0;
++
++            strncpy(appRow,buffer,len);
++
++            for ( token = strtok_r(appRow, " ", &ptr);
++                  token;
++                  token = strtok_r(NULL," ", &ptr) )
++            {
++                if(pos==6)
++                {
++                    ssize_t length = strlen(token);
++                    strncpy(appUsedPercentage,token,length);
++                }
++
++                if((pos==8) && ((!strncmp(token,"APP",3)) || (!strncmp(token,"GFX",3))))
++                {
++                    char *savePtr;
++                    char *val=strtok_r(appUsedPercentage,"%",&savePtr);
++                    size_t i=atoi(val);
++                    free(buffer);
++                    fclose(file);
++                    return i;
++                }
++                pos++;
++            }
++        }
++    }
++
++    free(buffer);
++    fclose(file);
++    return 0;
++}
++
+ void ResourceUsageThread::platformThreadBody(JSC::VM* vm, ResourceUsageData& data)
+ {
+     data.cpu = cpuUsage();
+@@ -169,6 +222,8 @@ void ResourceUsageThread::platformThreadBody(JSC::VM* vm, ResourceUsageData& dat
+ 
+     data.timeOfNextEdenCollection = vm->heap.edenActivityCallback()->nextFireTime();
+     data.timeOfNextFullCollection = vm->heap.fullActivityCallback()->nextFireTime();
++
++    data.gpu = calculateGraphicsMemoryUsage();
+ }
+ 
+ } // namespace WebCore
+-- 
+2.16.2
+

@@ -1,0 +1,58 @@
+Date: Mar 15 20:17:09 2016
+
+From: 0807c09dfb22995a5312977bdfb1f1cc5baacd07 Mar 24 18:04:45 2016
+
+Subject: [PATCH] DELIA-9255: Converted to use strtoimax.
+
+	strtoll is not able to convert the big numbers that
+        we passed in the seconds.
+
+Source: COMCAST
+
+License: LGPL-2.1-or-later
+
+Upstream-Status: Pending
+
+Signed-off-by: Balaji Punnuru <balaji_punnuru@cable.comcast.com>
+---
+
+Index: git/src/shared/time-util.c
+===================================================================
+--- git.orig/src/shared/time-util.c
++++ git/src/shared/time-util.c
+@@ -725,7 +725,7 @@ int parse_sec(const char *t, usec_t *use
+                 }
+ 
+                 errno = 0;
+-                l = strtoll(p, &e, 10);
++                l = strtoimax(p, &e, 10);
+ 
+                 if (errno > 0)
+                         return -errno;
+@@ -737,7 +737,7 @@ int parse_sec(const char *t, usec_t *use
+                         char *b = e + 1;
+ 
+                         errno = 0;
+-                        z = strtoll(b, &e, 10);
++                        z = strtoimax(b, &e, 10);
+                         if (errno > 0)
+                                 return -errno;
+ 
+@@ -838,7 +838,7 @@ int parse_nsec(const char *t, nsec_t *ns
+                 }
+ 
+                 errno = 0;
+-                l = strtoll(p, &e, 10);
++                l = strtoimax(p, &e, 10);
+ 
+                 if (errno > 0)
+                         return -errno;
+@@ -850,7 +850,7 @@ int parse_nsec(const char *t, nsec_t *ns
+                         char *b = e + 1;
+ 
+                         errno = 0;
+-                        z = strtoll(b, &e, 10);
++                        z = strtoimax(b, &e, 10);
+                         if (errno > 0)
+                                 return -errno;
+ 

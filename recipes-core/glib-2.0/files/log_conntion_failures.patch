@@ -1,0 +1,61 @@
+Copyright (C) 1991, 1999 Free Software Foundation, Inc.
+
+This library is free software; you can redistribute it and/or
+modify it under the terms of the GNU Lesser General Public
+License as published by the Free Software Foundation; either
+version 2.1 of the License, or (at your option) any later version.
+
+This library is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+Lesser General Public License for more details.
+
+You should have received a copy of the GNU Lesser General Public
+License along with this library; if not, write to the Free Software
+Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
+
+Date: Jul 30 09:49:15 2019
+
+From: 4728b5b35eedb22c1b7b95d529edb631d278dc3e Oct 02 16:48:41 2019
+
+Subject: [PATCH] RDK-24647: backport happy eyeballs v0
+
+	This is parital backport of happy-eyeballs implemented in GLib's GIO in
+	https://gitlab.gnome.org/GNOME/glib/issues/1555
+
+	It should be just enough to enable parallel connection via async
+	API. With 250 ms as default timeout for starting next parallel attempt.
+
+	libsoup's change interleaves IPv4/IPv6 addresses, so we try both
+	family addresses in parallel.
+
+Source: GITLAB
+
+Upstream-Status: Pending
+
+Signed-off-by: Eugene Mutavchi <Ievgen_Mutavchi@comcast.com>
+
+---
+
+Index: glib-2.48.1/gio/gsocketclient.c
+===================================================================
+--- glib-2.48.1.orig/gio/gsocketclient.c
++++ glib-2.48.1/gio/gsocketclient.c
+@@ -184,7 +184,7 @@ clarify_connect_error (GError
+       else if (G_IS_INET_SOCKET_ADDRESS (connectable))
+ 	name = tmp_name = g_inet_address_to_string (g_inet_socket_address_get_address (G_INET_SOCKET_ADDRESS (connectable)));
+       else
+-	name = NULL;
++	name = tmp_name = g_socket_connectable_to_string (connectable);
+ 
+       if (name)
+ 	g_prefix_error (&error, _("Could not connect to %s: "), name);
+@@ -1503,6 +1503,8 @@ g_socket_client_connected_callback (GObj
+ 			     data->current_addr);
+       set_last_error (data, error);
+ 
++      g_warning("%s. Trying next ip.",error->message);
++
+       /* try next one */
+       enumerator_next_async (data);
+       return;

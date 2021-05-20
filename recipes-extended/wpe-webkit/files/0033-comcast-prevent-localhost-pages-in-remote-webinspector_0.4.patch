@@ -1,0 +1,214 @@
+From b8b985eab5d2c63c35ccdd9ba749c3a75aedaaeb Mon Sep 17 00:00:00 2001
+From: mgopalakirshnan <manigandan.gopalakrishnan@lnttechservices.com>
+Date: Fri, 5 Jan 2018 12:19:14 +0000
+Subject: [PATCH] 0033-comcast-prevent-localhost-pages-in-remote-webinspector
+
+---
+ .../InspectorServer/WebInspectorServer.cpp         | 114 ++++++++++++++++++++-
+ .../UIProcess/InspectorServer/WebInspectorServer.h |   2 +
+ .../InspectorServer/wpe/WebInspectorServerWPE.cpp  |   2 +
+ 3 files changed, 115 insertions(+), 3 deletions(-)
+
+diff --git a/Source/WebKit/UIProcess/InspectorServer/WebInspectorServer.cpp b/Source/WebKit/UIProcess/InspectorServer/WebInspectorServer.cpp
+index 4909a1b2c8d..76605dff72a 100644
+--- a/Source/WebKit/UIProcess/InspectorServer/WebInspectorServer.cpp
++++ b/Source/WebKit/UIProcess/InspectorServer/WebInspectorServer.cpp
+@@ -33,7 +33,13 @@
+ #include "HTTPHeaderNames.h"
+ #include "HTTPRequest.h"
+ #include "WebInspectorProxy.h"
++#include "WebPageProxy.h"
+ #include "WebSocketServerConnection.h"
++#include <wtf/text/StringBuilder.h>
++#include <arpa/inet.h>
++#include <sys/socket.h>
++#include <netdb.h>
++#include <ifaddrs.h>
+ 
+ using namespace WebCore;
+ 
+@@ -41,7 +47,15 @@ namespace WebKit {
+ 
+ static unsigned pageIdFromRequestPath(const String& path)
+ {
+-    size_t start = path.reverseFind('/');
++    size_t start;
++
++    if(path.startsWith("/devtools/page/"))
++        start = path.reverseFind('/');
++    else if (path.startsWith("/Main.html?page="))
++        start = path.reverseFind('=');
++    else
++        return 0;
++
+     String numberString = path.substring(start + 1, path.length() - start - 1);
+ 
+     bool ok = false;
+@@ -100,8 +114,67 @@ String WebInspectorServer::inspectorUrlForPageID(int)
+     return String();
+ }
+ 
++bool WebInspectorServer::isLocalHost(int pageId)
++{
++    struct ifaddrs *ifaddr, *tmp;
++    int  s,family = 0;
++    char host[NI_MAXHOST];
++
++    // find the localhost page
++    WebInspectorProxy* client = m_clientMap.get(pageId);
++    if(client && client->inspectedPage())
++    {
++        if(client->inspectedPage()->pageLoadState().activeURL().find("localhost:") != notFound)
++            return true;
++        if(client->inspectedPage()->pageLoadState().activeURL().find("file://") != notFound)
++            return true;
++    }
++    else
++        return true;
++
++    //getting device's ip addresses
++    if (getifaddrs(&ifaddr) == -1)
++    {
++        perror("getifaddrs");
++        return true;
++    }
++
++    for (tmp = ifaddr; tmp != NULL; tmp = tmp->ifa_next)
++    {
++        if(tmp->ifa_addr == NULL)
++            continue;
++
++        family = tmp->ifa_addr->sa_family;
++        if (family == AF_INET || family == AF_INET6)
++        {
++            s = getnameinfo(tmp->ifa_addr,
++                    (family == AF_INET) ? sizeof(struct sockaddr_in) : sizeof(struct sockaddr_in6),
++                    host, NI_MAXHOST,
++                    NULL, 0, NI_NUMERICHOST);
++            if (s != 0)
++            {
++                freeifaddrs(ifaddr);
++                return true;
++            }
++            if(client->inspectedPage()->pageLoadState().activeURL().find(host) != notFound)
++            {
++                freeifaddrs(ifaddr);
++                return true;
++            }
++        }
++    }
++
++    freeifaddrs(ifaddr);
++    return false;
++}
++
++
+ void WebInspectorServer::sendMessageOverConnection(unsigned pageIdForConnection, const String& message)
+ {
++    // Ignore the localhost page
++    if(isLocalHost(pageIdForConnection))
++        return;
++
+     WebSocketServerConnection* connection = m_connectionMap.get(pageIdForConnection);
+     if (connection)
+         connection->sendWebSocketMessage(message);
+@@ -112,6 +185,16 @@ void WebInspectorServer::didReceiveUnrecognizedHTTPRequest(WebSocketServerConnec
+     // request->url() contains only the path extracted from the HTTP request line
+     // and URL is poor at parsing incomplete URLs, so extract the interesting parts manually.
+     String path = request->url();
++    bool isLocalAddr = false;
++    unsigned pageId = pageIdFromRequestPath(path);
++
++    if (pageId)
++    {
++        // Ignore the localhost page
++        if(isLocalHost(pageId))
++            isLocalAddr = true;
++    }
++
+     size_t pathEnd = path.find('?');
+     if (pathEnd == notFound)
+         pathEnd = path.find('#');
+@@ -122,12 +205,25 @@ void WebInspectorServer::didReceiveUnrecognizedHTTPRequest(WebSocketServerConnec
+     // to ask for header data and then let the platform abstraction write the payload straight on the connection.
+     Vector<char> body;
+     String contentType;
+-    bool found = platformResourceForPath(path, body, contentType);
++    bool found = false;
++    if(!isLocalAddr)
++    {
++        found = platformResourceForPath(path, body, contentType);
++    }
++    else
++    {
++        //404 Page Not Found response for localhost page
++        StringBuilder builder;
++        builder.appendLiteral("<!DOCTYPE html><html><head></head><body>404 Page Not Found.</body></html>");
++        CString errorHTML = builder.toString().utf8();
++        body.append(errorHTML.data(), errorHTML.length());
++        contentType = "text/html; charset=utf-8";
++    }
+ 
+     HTTPHeaderMap headerFields;
+     headerFields.set(HTTPHeaderName::Connection, "close");
+     headerFields.set(HTTPHeaderName::ContentLength, String::number(body.size()));
+-    if (found)
++    if (found || isLocalAddr)
+         headerFields.set(HTTPHeaderName::ContentType, contentType);
+ 
+     // Send when ready and close immediately afterwards.
+@@ -173,6 +269,13 @@ void WebInspectorServer::didEstablishWebSocketConnection(WebSocketServerConnecti
+         return;
+     }
+ 
++    // Ignore connections to the localhost page
++    if(isLocalHost(pageId))
++    {
++        connection->shutdownNow();
++        return;
++    }
++
+     // Map the pageId to the connection in case we need to close the connection locally.
+     connection->setIdentifier(pageId);
+     m_connectionMap.set(pageId, connection);
+@@ -187,6 +290,11 @@ void WebInspectorServer::didReceiveWebSocketMessage(WebSocketServerConnection* c
+     unsigned pageId = connection->identifier();
+     ASSERT(pageId);
+     WebInspectorProxy* client = m_clientMap.get(pageId);
++
++    // Ignore the localhost page
++    if(isLocalHost(pageId))
++        return;
++
+     client->dispatchMessageFromRemoteFrontend(message);
+ }
+ 
+diff --git a/Source/WebKit/UIProcess/InspectorServer/WebInspectorServer.h b/Source/WebKit/UIProcess/InspectorServer/WebInspectorServer.h
+index 2a64c7c7b56..f315e4659bd 100644
+--- a/Source/WebKit/UIProcess/InspectorServer/WebInspectorServer.h
++++ b/Source/WebKit/UIProcess/InspectorServer/WebInspectorServer.h
+@@ -52,6 +52,8 @@ private:
+     WebInspectorServer();
+     ~WebInspectorServer();
+ 
++    bool isLocalHost(int pageId);
++
+     // WebSocketServerClient implementation. Events coming from remote connections.
+     void didReceiveUnrecognizedHTTPRequest(WebSocketServerConnection*, Ref<HTTPRequest>&&) final;
+     bool didReceiveWebSocketUpgradeHTTPRequest(WebSocketServerConnection*, Ref<HTTPRequest>&&) final;
+diff --git a/Source/WebKit/UIProcess/InspectorServer/wpe/WebInspectorServerWPE.cpp b/Source/WebKit/UIProcess/InspectorServer/wpe/WebInspectorServerWPE.cpp
+index 8bd1f18496f..45c364a6561 100644
+--- a/Source/WebKit/UIProcess/InspectorServer/wpe/WebInspectorServerWPE.cpp
++++ b/Source/WebKit/UIProcess/InspectorServer/wpe/WebInspectorServerWPE.cpp
+@@ -110,6 +110,8 @@ void WebInspectorServer::buildPageList(Vector<char>& data, String& contentType)
+     builder.appendLiteral("[ ");
+     ClientMap::iterator end = m_clientMap.end();
+     for (ClientMap::iterator it = m_clientMap.begin(); it != end; ++it) {
++        if(isLocalHost(it->key))
++            continue;
+         WebPageProxy* webPage = it->value->inspectedPage();
+         if (it != m_clientMap.begin())
+             builder.appendLiteral(", ");
+-- 
+2.14.2
+

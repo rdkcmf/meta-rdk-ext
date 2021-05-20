@@ -1,0 +1,48 @@
+Date: Jun 12 17:55:05 2018
+
+From: 15bca94a4eaafd42d66c530ea56f3fe4ad78b4bd Jun 13 06:27:23 2018
+
+Subject: [PATCH] DELIA-27559 - [AAMP] Crash on switching from encrypted period to clear period
+
+	Flush crypto_info stored previous trak's senc on trak change
+
+Source: COMCAST
+
+License: LGPL-2.1-or-later
+
+Upstream-Status: Pending
+
+Signed-off-by: Christo Joseph <Christo_Joseph@comcast.com>
+---
+
+Index: gst-plugins-good-1.10.4/gst/isomp4/qtdemux.c
+===================================================================
+--- gst-plugins-good-1.10.4.orig/gst/isomp4/qtdemux.c
++++ gst-plugins-good-1.10.4/gst/isomp4/qtdemux.c
+@@ -2417,6 +2417,18 @@ gst_qtdemux_stream_flush_samples_data (G
+   stream->duration_last_moof = 0;
+ }
+ 
++static void gst_qtdemux_stream_flush_crypto_info (GstQTDemux * qtdemux,
++    QtDemuxStream * stream)
++{
++  QtDemuxCencSampleSetInfo *info =
++      (QtDemuxCencSampleSetInfo *) stream->protection_scheme_info;
++  if (info && info->crypto_info) {
++    GST_WARNING_OBJECT (qtdemux, "Flush existing crypto_info");
++    g_ptr_array_free (info->crypto_info, TRUE);
++    info->crypto_info = NULL;
++  }
++}
++
+ static void
+ gst_qtdemux_stream_clear (GstQTDemux * qtdemux, QtDemuxStream * stream)
+ {
+@@ -9708,6 +9720,7 @@ qtdemux_parse_trak (GstQTDemux * qtdemux
+     /* flush samples data from this track from previous moov */
+     gst_qtdemux_stream_flush_segments_data (qtdemux, stream);
+     gst_qtdemux_stream_flush_samples_data (qtdemux, stream);
++    gst_qtdemux_stream_flush_crypto_info (qtdemux, stream);
+   }
+   /* need defaults for fragments */
+   qtdemux_parse_trex (qtdemux, stream, &dummy, &dummy, &dummy);

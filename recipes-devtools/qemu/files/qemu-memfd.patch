@@ -1,0 +1,36 @@
+Date: Tue, 28 Nov 2017 11:51:27 +0100
+From: 75e5b70e6b5dcc4f2219992d7cffa462aa406af0 Mon Sep 17 00:00:00 2001
+From: Paolo Bonzini <pbonzini@redhat.com>
+Subject: [PATCH] memfd: fix configure test 
+Source: COMCAST
+License: GPLV2
+Upstream-Status: Backport
+Signed-off-by: Matta Nancharayya <Nancharayya_Matta@comcast.com>
+Index: qemu-2.7.0/configure
+===================================================================
+--- qemu-2.7.0.orig/configure
++++ qemu-2.7.0/configure
+@@ -3648,7 +3648,7 @@ fi
+ # check if memfd is supported
+ memfd=no
+ cat > $TMPC << EOF
+-#include <sys/memfd.h>
++#include <sys/mman.h>
+ 
+ int main(void)
+ {
+Index: qemu-2.7.0/util/memfd.c
+===================================================================
+--- qemu-2.7.0.orig/util/memfd.c
++++ qemu-2.7.0/util/memfd.c
+@@ -31,9 +31,7 @@
+ 
+ #include "qemu/memfd.h"
+ 
+-#ifdef CONFIG_MEMFD
+-#include <sys/memfd.h>
+-#elif defined CONFIG_LINUX
++#if defined CONFIG_LINUX && !defined CONFIG_MEMFD
+ #include <sys/syscall.h>
+ #include <asm/unistd.h>
+ 

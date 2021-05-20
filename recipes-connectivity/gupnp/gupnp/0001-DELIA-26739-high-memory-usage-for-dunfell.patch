@@ -1,0 +1,65 @@
+From c88feb4b913b66c8732b10af083666ea59a43a14 Mon Sep 17 00:00:00 2001
+From: jkuria217 <Josekutty_Kuriakose@cable.comcast.com>
+Date: Fri, 5 Jun 2020 20:41:45 +0000
+Subject: [PATCH] DELIA-26739-high memory usage for dunfell
+
+---
+ libgupnp/gupnp-service.c | 17 ++++++++++++++++-
+ 1 file changed, 16 insertions(+), 1 deletion(-)
+
+diff --git a/libgupnp/gupnp-service.c b/libgupnp/gupnp-service.c
+index ce25ca5..fafba0a 100644
+--- a/libgupnp/gupnp-service.c
++++ b/libgupnp/gupnp-service.c
+@@ -31,6 +31,7 @@
+ #include <gmodule.h>
+ #include <libsoup/soup-date.h>
+ #include <string.h>
++#include <netinet/in.h>
+ 
+ #include "gupnp-service.h"
+ #include "gupnp-root-device.h"
+@@ -1187,6 +1188,16 @@ send_initial_state (SubscriptionData *data)
+         g_free (mem);
+ }
+ 
++gboolean compare (gpointer key, gpointer value, gpointer user_data)
++{
++        SubscriptionData *nvalue;
++        nvalue = (SubscriptionData *) value;
++        if(g_strrstr(g_strstrip((char *)nvalue->callbacks->data), g_strstrip((char *)user_data)) == NULL)
++        {
++                return FALSE;
++        }
++        return TRUE;
++}
+ 
+ /* Subscription request */
+ static void
+@@ -1196,6 +1207,9 @@ subscribe (GUPnPService *service,
+ {
+         SubscriptionData *data;
+         char *start, *end, *uri;
++        struct sockaddr_in sa;
++        int res = 0;
++	char ipAddr[20]={0};
+         GUPnPServicePrivate *priv;
+         GUPnPContext *context;
+ 
+@@ -1236,7 +1250,7 @@ subscribe (GUPnPService *service,
+ 
+                 return;
+         }
+-
++        sscanf((char *)data->callbacks->data, "http://%99[^:]", ipAddr);
+         /* Add service and SID */
+         data->service = service;
+         data->sid     = generate_sid ();
+@@ -1254,6 +1268,7 @@ subscribe (GUPnPService *service,
+         g_source_unref (data->timeout_src);
+ 
+         /* Add to hash */
++	res = g_hash_table_foreach_remove (priv->subscriptions, compare, ipAddr);
+         g_hash_table_insert (priv->subscriptions,
+                              data->sid,
+                              data);

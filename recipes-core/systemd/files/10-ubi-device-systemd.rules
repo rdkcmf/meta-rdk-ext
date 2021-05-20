@@ -1,0 +1,2 @@
+# TAG systemd for ubi device
+KERNEL=="ubi*", SUBSYSTEM=="ubi", TAG+="systemd"

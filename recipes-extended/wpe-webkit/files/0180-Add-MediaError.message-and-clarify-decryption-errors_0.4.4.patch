@@ -1,0 +1,368 @@
+From: efde1195a7b8e4896efb841b671b0f4d74b46b7c Mon Sep 17 00:00:00 2001
+From: Ievgen Mutavchi <Ievgen_Mutavchi@comcast.com>
+Date: Thu, 13 Feb 2020 11:05:44 -0500
+Subject: [PATCH 2/2] Add MediaError.message and clarify decryption errors
+Source: COMCAST
+License: GPLV2
+Upstream-Status: None
+Signed-off-by: Eugene Mutavchi <Ievgen_Mutavchi@comcast.com>
+
+---
+ Source/WebCore/html/HTMLMediaElement.cpp           | 14 +++++++++----
+ Source/WebCore/html/MediaError.h                   |  4 ++++
+ Source/WebCore/html/MediaError.idl                 |  1 +
+ Source/WebCore/platform/graphics/MediaPlayer.cpp   |  7 ++++++-
+ Source/WebCore/platform/graphics/MediaPlayer.h     |  2 ++
+ .../WebCore/platform/graphics/MediaPlayerPrivate.h |  1 +
+ .../gstreamer/MediaPlayerPrivateGStreamer.cpp      | 22 ++++++++++++---------
+ .../gstreamer/MediaPlayerPrivateGStreamer.h        |  3 +++
+ .../WebKitCommonEncryptionDecryptorGStreamer.cpp   | 23 +++++++++++-----------
+ .../eme/WebKitOpenCDMDecryptorGStreamer.cpp        | 13 +++++++++---
+ 10 files changed, 61 insertions(+), 29 deletions(-)
+
+diff --git a/Source/WebCore/html/HTMLMediaElement.cpp b/Source/WebCore/html/HTMLMediaElement.cpp
+index bddf843..1afa803 100644
+--- a/Source/WebCore/html/HTMLMediaElement.cpp
++++ b/Source/WebCore/html/HTMLMediaElement.cpp
+@@ -2128,7 +2128,9 @@ void HTMLMediaElement::noneSupported()
+ 
+     // 6.1 - Set the error attribute to a new MediaError object whose code attribute is set to
+     // MEDIA_ERR_SRC_NOT_SUPPORTED.
+-    m_error = MediaError::create(MediaError::MEDIA_ERR_SRC_NOT_SUPPORTED);
++    m_error = m_player
++        ? MediaError::create(MediaError::MEDIA_ERR_SRC_NOT_SUPPORTED, m_player->errorMessage())
++        : MediaError::create(MediaError::MEDIA_ERR_SRC_NOT_SUPPORTED);
+ 
+     // 6.2 - Forget the media element's media-resource-specific text tracks.
+     forgetResourceSpecificTracks();
+@@ -2161,12 +2163,14 @@ void HTMLMediaElement::mediaLoadingFailedFatally(MediaPlayer::NetworkState error
+     stopPeriodicTimers();
+     m_loadState = WaitingForSource;
+ 
++    const auto getErrorMessage = [&] () { return m_player ? m_player->errorMessage() : emptyString(); };
++
+     // 2 - Set the error attribute to a new MediaError object whose code attribute is
+     // set to MEDIA_ERR_NETWORK/MEDIA_ERR_DECODE.
+     if (error == MediaPlayer::NetworkError)
+-        m_error = MediaError::create(MediaError::MEDIA_ERR_NETWORK);
++        m_error = MediaError::create(MediaError::MEDIA_ERR_NETWORK, getErrorMessage());
+     else if (error == MediaPlayer::DecodeError)
+-        m_error = MediaError::create(MediaError::MEDIA_ERR_DECODE);
++        m_error = MediaError::create(MediaError::MEDIA_ERR_DECODE, getErrorMessage());
+     else
+         ASSERT_NOT_REACHED();
+ 
+@@ -2699,7 +2703,9 @@ void HTMLMediaElement::mediaPlayerInitializationDataEncountered(const String& in
+ 
+ void HTMLMediaElement::mediaPlayerDecryptErrorEncountered()
+ {
+-    m_error = MediaError::create(MediaError::MEDIA_ERR_ENCRYPTED);
++    m_error = m_player
++        ? MediaError::create(MediaError::MEDIA_ERR_ENCRYPTED, m_player->errorMessage())
++        : MediaError::create(MediaError::MEDIA_ERR_ENCRYPTED);
+     if (!m_asyncEventQueue.hasPendingEventsOfType(eventNames().errorEvent))
+         scheduleEvent(eventNames().errorEvent);
+ }
+diff --git a/Source/WebCore/html/MediaError.h b/Source/WebCore/html/MediaError.h
+index d0762d7..28717be 100644
+--- a/Source/WebCore/html/MediaError.h
++++ b/Source/WebCore/html/MediaError.h
+@@ -44,13 +44,17 @@ public:
+     };
+ 
+     static Ref<MediaError> create(Code code) { return adoptRef(*new MediaError(code)); }
++    static Ref<MediaError> create(Code code, String message) { return adoptRef(*new MediaError(code, message)); }
+ 
+     Code code() const { return m_code; }
++    String message() const { return m_message; }
+ 
+ private:
+     MediaError(Code code) : m_code(code) { }
++    MediaError(Code code, String message) : m_code(code), m_message(message) { }
+ 
+     Code m_code;
++    String m_message;
+ };
+ 
+ } // namespace WebCore
+diff --git a/Source/WebCore/html/MediaError.idl b/Source/WebCore/html/MediaError.idl
+index 960a4eb..862791a 100644
+--- a/Source/WebCore/html/MediaError.idl
++++ b/Source/WebCore/html/MediaError.idl
+@@ -33,4 +33,5 @@
+       const unsigned short MEDIA_ERR_SRC_NOT_SUPPORTED = 4;
+       [Conditional=LEGACY_ENCRYPTED_MEDIA] const unsigned short MEDIA_ERR_ENCRYPTED = 5;
+       readonly attribute unsigned short code;
++      readonly attribute DOMString message;
+ };
+diff --git a/Source/WebCore/platform/graphics/MediaPlayer.cpp b/Source/WebCore/platform/graphics/MediaPlayer.cpp
+index ecb30cc..9dc2a0e 100644
+--- a/Source/WebCore/platform/graphics/MediaPlayer.cpp
++++ b/Source/WebCore/platform/graphics/MediaPlayer.cpp
+@@ -1201,7 +1201,7 @@ void MediaPlayer::networkStateChanged()
+     // let the next engine try.
+     if (m_private->networkState() >= FormatError && m_private->readyState() < HaveMetadata) {
+         client().mediaPlayerEngineFailedToLoad();
+-        if (installedMediaEngines().size() > 1 && (m_contentType.isEmpty() || nextBestMediaEngine(m_currentMediaEngine))) {
++        if (installedMediaEngines().size() > 1 && !m_contentType.isEmpty() && nextBestMediaEngine(m_currentMediaEngine)) {
+             m_reloadTimer.startOneShot(0_s);
+             return;
+         }
+@@ -1556,6 +1556,11 @@ const PAL::Logger& MediaPlayer::mediaPlayerLogger()
+ }
+ #endif
+ 
++String MediaPlayer::errorMessage() const
++{
++    return m_private->errorMessage();
++}
++
+ }
+ 
+ namespace WebCore {
+diff --git a/Source/WebCore/platform/graphics/MediaPlayer.h b/Source/WebCore/platform/graphics/MediaPlayer.h
+index 7a460b0..2a5e228 100644
+--- a/Source/WebCore/platform/graphics/MediaPlayer.h
++++ b/Source/WebCore/platform/graphics/MediaPlayer.h
+@@ -649,6 +649,8 @@ public:
+     const void* mediaPlayerLogIdentifier() { return client().mediaPlayerLogIdentifier(); }
+ #endif
+ 
++    String errorMessage() const;
++
+ private:
+     MediaPlayer(MediaPlayerClient&);
+ 
+diff --git a/Source/WebCore/platform/graphics/MediaPlayerPrivate.h b/Source/WebCore/platform/graphics/MediaPlayerPrivate.h
+index 75ade39..c68121c 100644
+--- a/Source/WebCore/platform/graphics/MediaPlayerPrivate.h
++++ b/Source/WebCore/platform/graphics/MediaPlayerPrivate.h
+@@ -284,6 +284,7 @@ public:
+ 
+     virtual void platformSuspend() { }
+     virtual void platformResume() { }
++    virtual String errorMessage() const { return {}; }
+ };
+ 
+ }
+diff --git a/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp b/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp
+index 76c2804..810ef59 100644
+--- a/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp
++++ b/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp
+@@ -1150,8 +1150,11 @@ void MediaPlayerPrivateGStreamer::handleMessage(GstMessage* message)
+ 
+         GST_DEBUG_BIN_TO_DOT_FILE_WITH_TS(GST_BIN(m_pipeline.get()), GST_DEBUG_GRAPH_SHOW_ALL, "webkit-video.error");
+ 
++        m_errorMessage = err->message;
+         error = MediaPlayer::Empty;
+         if (g_error_matches(err.get(), GST_STREAM_ERROR, GST_STREAM_ERROR_CODEC_NOT_FOUND)
++            || g_error_matches(err.get(), GST_STREAM_ERROR, GST_STREAM_ERROR_DECRYPT)
++            || g_error_matches(err.get(), GST_STREAM_ERROR, GST_STREAM_ERROR_DECRYPT_NOKEY)
+             || g_error_matches(err.get(), GST_STREAM_ERROR, GST_STREAM_ERROR_WRONG_TYPE)
+             || g_error_matches(err.get(), GST_STREAM_ERROR, GST_STREAM_ERROR_FAILED)
+             || g_error_matches(err.get(), GST_CORE_ERROR, GST_CORE_ERROR_MISSING_PLUGIN)
+@@ -2647,15 +2650,15 @@ void MediaPlayerPrivateGStreamer::handleDecryptionError(const GstStructure* stru
+ {
+     ASSERT(isMainThread());
+ 
+-    RunLoop::main().dispatch([this, weakThis = m_weakPtrFactory.createWeakPtr(*this)] {
+-        if (!weakThis)
+-            return;
++    if (gst_structure_has_field_typed(structure, "error-message", G_TYPE_STRING)) {
++        const gchar* errorMessage = gst_structure_get_string(structure, "error-message");
++        m_errorMessage = errorMessage;
++    }
+ 
+-        GST_WARNING("scheduling decryptionErrorEncountered event");
+-        fprintf(stderr, "HTML5 video: Playback failed: Decryption error [%s]\n",m_url.string().utf8().data());
+-        loadingFailed(MediaPlayer::FormatError);
+-        m_player->decryptErrorEncountered(); // override the error code
+-    });
++    GST_WARNING("scheduling decryptionErrorEncountered event");
++    fprintf(stderr, "HTML5 video: Playback failed: Decryption error [%s]\n",m_url.string().utf8().data());
++    loadingFailed(MediaPlayer::FormatError);
++    m_player->decryptErrorEncountered(); // override the error code
+ }
+ 
+ void MediaPlayerPrivateGStreamer::cdmInstanceAttached(const CDMInstance& instance)
+@@ -2663,7 +2666,8 @@ void MediaPlayerPrivateGStreamer::cdmInstanceAttached(const CDMInstance& instanc
+     if(m_cdmInstance.get() != &instance && m_cdmInstance)
+         const_cast<CDMInstance*>(m_cdmInstance.get())->setTracker(nullptr);
+     MediaPlayerPrivateGStreamerBase::cdmInstanceAttached(instance);
+-    const_cast<CDMInstance*>(m_cdmInstance.get())->setTracker(m_tracker);
++    if (m_cdmInstance)
++        const_cast<CDMInstance*>(m_cdmInstance.get())->setTracker(m_tracker);
+ }
+ 
+ void MediaPlayerPrivateGStreamer::cdmInstanceDetached(const CDMInstance& instance)
+diff --git a/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.h b/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.h
+index 42d249d..dd33dbe 100644
+--- a/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.h
++++ b/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.h
+@@ -143,6 +143,7 @@ public:
+     bool m_reportedPlaybackFailed;
+     bool m_reportedPlaybackEOS;
+ 
++    String errorMessage() const override { return m_errorMessage; }
+ 
+ private:
+     static void getSupportedTypes(HashSet<String, ASCIICaseInsensitiveHash>&);
+@@ -279,6 +280,8 @@ private:
+     HashMap<AtomicString, RefPtr<InbandMetadataTextTrackPrivateGStreamer>> m_metadataTracks;
+ #endif
+     virtual bool isMediaSource() const { return false; }
++
++    String m_errorMessage;
+ };
+ }
+ 
+diff --git a/Source/WebCore/platform/graphics/gstreamer/eme/WebKitCommonEncryptionDecryptorGStreamer.cpp b/Source/WebCore/platform/graphics/gstreamer/eme/WebKitCommonEncryptionDecryptorGStreamer.cpp
+index 260b272..792b802 100644
+--- a/Source/WebCore/platform/graphics/gstreamer/eme/WebKitCommonEncryptionDecryptorGStreamer.cpp
++++ b/Source/WebCore/platform/graphics/gstreamer/eme/WebKitCommonEncryptionDecryptorGStreamer.cpp
+@@ -234,7 +234,7 @@ static GstFlowReturn webkitMediaCommonEncryptionDecryptTransformInPlace(GstBaseT
+             priv->m_protectionEvents.append(GRefPtr<GstEvent>(static_cast<GstEvent*>(g_value_get_boxed(gst_value_list_get_value(streamEncryptionEventsList, i)))));
+         gst_structure_remove_field(protectionMeta->info, "stream-encryption-events");
+         if (!gst_structure_n_fields(protectionMeta->info)) {
+-            GST_ERROR_OBJECT(self, "buffer %p did not have enough protection meta-data", buffer);
++            GST_ELEMENT_ERROR (self, STREAM, FAILED, ("Not enough protection meta-data"), ("Buffer %p did not have enough protection meta-data", buffer));
+             return GST_FLOW_NOT_SUPPORTED;
+         }
+     }
+@@ -243,7 +243,7 @@ static GstFlowReturn webkitMediaCommonEncryptionDecryptTransformInPlace(GstBaseT
+     value = gst_structure_get_value(protectionMeta->info, "kid");
+     GstBuffer* keyIDBuffer = nullptr;
+     if (!value) {
+-        GST_ERROR_OBJECT(self, "No key ID available for encrypted sample");
++        GST_ELEMENT_ERROR (self, STREAM, DECRYPT_NOKEY, ("No key ID available for encrypted sample"), (NULL));
+         return GST_FLOW_NOT_SUPPORTED;
+     }
+ 
+@@ -252,7 +252,7 @@ static GstFlowReturn webkitMediaCommonEncryptionDecryptTransformInPlace(GstBaseT
+     if (!priv->m_protectionEvents.isEmpty()) {
+         GstMappedBuffer mappedKeyID(keyIDBuffer, GST_MAP_READ);
+         if (!mappedKeyID) {
+-            GST_ERROR_OBJECT(self, "Failed to map key ID buffer");
++            GST_ELEMENT_ERROR (self, STREAM, FAILED, ("Failed to map key ID buffer."), (NULL));
+             return GST_FLOW_NOT_SUPPORTED;
+         }
+         auto keyId = WebCore::SharedBuffer::create(mappedKeyID.data(), mappedKeyID.size());
+@@ -271,7 +271,7 @@ static GstFlowReturn webkitMediaCommonEncryptionDecryptTransformInPlace(GstBaseT
+                 GST_DEBUG_OBJECT(self, "flushing");
+                 return GST_FLOW_FLUSHING;
+             } else {
+-                GST_ERROR_OBJECT(self, "key not available");
++                GST_ELEMENT_ERROR (self, STREAM, DECRYPT_NOKEY, ("Key not available"), (NULL));
+                 return GST_FLOW_NOT_SUPPORTED;
+             }
+         }
+@@ -287,7 +287,7 @@ static GstFlowReturn webkitMediaCommonEncryptionDecryptTransformInPlace(GstBaseT
+         }
+ 
+         if (!priv->m_keyReceived) {
+-            GST_ERROR_OBJECT(self, "key not available");
++            GST_ELEMENT_ERROR (self, STREAM, DECRYPT_NOKEY, ("Key not available"), (NULL));
+             return GST_FLOW_NOT_SUPPORTED;
+         }
+ 
+@@ -296,14 +296,14 @@ static GstFlowReturn webkitMediaCommonEncryptionDecryptTransformInPlace(GstBaseT
+ 
+     unsigned ivSize;
+     if (!gst_structure_get_uint(protectionMeta->info, "iv_size", &ivSize)) {
+-        GST_ERROR_OBJECT(self, "Failed to get iv_size");
++        GST_ELEMENT_ERROR (self, STREAM, FAILED, ("Failed to get iv_size"), (NULL));
+         gst_buffer_remove_meta(buffer, reinterpret_cast<GstMeta*>(protectionMeta));
+         return GST_FLOW_NOT_SUPPORTED;
+     }
+ 
+     gboolean encrypted;
+     if (!gst_structure_get_boolean(protectionMeta->info, "encrypted", &encrypted)) {
+-        GST_ERROR_OBJECT(self, "Failed to get encrypted flag");
++        GST_ELEMENT_ERROR (self, STREAM, FAILED, ("Failed to get encrypted flag"), (NULL));
+         gst_buffer_remove_meta(buffer, reinterpret_cast<GstMeta*>(protectionMeta));
+         return GST_FLOW_NOT_SUPPORTED;
+     }
+@@ -317,7 +317,7 @@ static GstFlowReturn webkitMediaCommonEncryptionDecryptTransformInPlace(GstBaseT
+ 
+     unsigned subSampleCount;
+     if (!gst_structure_get_uint(protectionMeta->info, "subsample_count", &subSampleCount)) {
+-        GST_ERROR_OBJECT(self, "Failed to get subsample_count");
++        GST_ELEMENT_ERROR (self, STREAM, FAILED, ("Failed to get subsample_count"), (NULL));
+         gst_buffer_remove_meta(buffer, reinterpret_cast<GstMeta*>(protectionMeta));
+         return GST_FLOW_NOT_SUPPORTED;
+     }
+@@ -326,7 +326,7 @@ static GstFlowReturn webkitMediaCommonEncryptionDecryptTransformInPlace(GstBaseT
+     if (subSampleCount) {
+         value = gst_structure_get_value(protectionMeta->info, "subsamples");
+         if (!value) {
+-            GST_ERROR_OBJECT(self, "Failed to get subsamples");
++            GST_ELEMENT_ERROR (self, STREAM, FAILED, ("Failed to get subsamples"), (NULL));
+             gst_buffer_remove_meta(buffer, reinterpret_cast<GstMeta*>(protectionMeta));
+             return GST_FLOW_NOT_SUPPORTED;
+         }
+@@ -346,14 +346,14 @@ static GstFlowReturn webkitMediaCommonEncryptionDecryptTransformInPlace(GstBaseT
+ 
+     WebKitMediaCommonEncryptionDecryptClass* klass = WEBKIT_MEDIA_CENC_DECRYPT_GET_CLASS(self);
+     if (!klass->setupCipher(self, keyIDBuffer)) {
+-        GST_ERROR_OBJECT(self, "Failed to configure cipher");
++        GST_ELEMENT_ERROR (self, STREAM, FAILED, ("Failed to configure cipher"), (NULL));
+         gst_buffer_remove_meta(buffer, reinterpret_cast<GstMeta*>(protectionMeta));
+         return GST_FLOW_NOT_SUPPORTED;
+     }
+ 
+     value = gst_structure_get_value(protectionMeta->info, "iv");
+     if (!value) {
+-        GST_ERROR_OBJECT(self, "Failed to get IV for sample");
++        GST_ELEMENT_ERROR (self, STREAM, FAILED, ("Failed to get IV for sample"), (NULL));
+         klass->releaseCipher(self);
+         gst_buffer_remove_meta(buffer, reinterpret_cast<GstMeta*>(protectionMeta));
+         return GST_FLOW_NOT_SUPPORTED;
+@@ -365,7 +365,6 @@ static GstFlowReturn webkitMediaCommonEncryptionDecryptTransformInPlace(GstBaseT
+         GST_ERROR_OBJECT(self, "Decryption failed");
+         klass->releaseCipher(self);
+         gst_buffer_remove_meta(buffer, reinterpret_cast<GstMeta*>(protectionMeta));
+-        gst_element_post_message(GST_ELEMENT(self), gst_message_new_element(GST_OBJECT(self), gst_structure_new_empty("drm-decryption-error-encountered")));
+         return GST_FLOW_NOT_SUPPORTED;
+     }
+ 
+diff --git a/Source/WebCore/platform/graphics/gstreamer/eme/WebKitOpenCDMDecryptorGStreamer.cpp b/Source/WebCore/platform/graphics/gstreamer/eme/WebKitOpenCDMDecryptorGStreamer.cpp
+index 8713e16..46ea110 100644
+--- a/Source/WebCore/platform/graphics/gstreamer/eme/WebKitOpenCDMDecryptorGStreamer.cpp
++++ b/Source/WebCore/platform/graphics/gstreamer/eme/WebKitOpenCDMDecryptorGStreamer.cpp
+@@ -198,7 +198,7 @@ static bool webKitMediaOpenCDMDecryptorDecrypt(WebKitMediaCommonEncryptionDecryp
+ 
+     GstMappedBuffer mappedKeyID(keyIDBuffer, GST_MAP_READ);
+     if (!mappedKeyID) {
+-        GST_ERROR_OBJECT(self, "Failed to map key ID buffer");
++        GST_ELEMENT_ERROR (self, STREAM, DECRYPT, ("Failed to map key ID buffer."), (NULL));
+         return false;
+     }
+ 
+@@ -209,7 +209,7 @@ static bool webKitMediaOpenCDMDecryptorDecrypt(WebKitMediaCommonEncryptionDecryp
+         auto& cdmInstanceOpenCDM = downcast<WebCore::CDMInstanceOpenCDM>(*cdmInstance);
+         priv->m_openCdmSession.reset(opencdm_get_system_session(cdmInstanceOpenCDM.ocdmSystem(), mappedKeyID.data(), mappedKeyID.size(), WEBCORE_GSTREAMER_EME_LICENSE_KEY_RESPONSE_TIMEOUT.millisecondsAs<uint32_t>()));
+         if (!priv->m_openCdmSession) {
+-            GST_ERROR_OBJECT(self, "session is empty or unusable");
++            GST_ELEMENT_ERROR (self, STREAM, DECRYPT, ("Session is empty or unusable."), (NULL));
+             return false;
+         }
+     }
+@@ -217,7 +217,14 @@ static bool webKitMediaOpenCDMDecryptorDecrypt(WebKitMediaCommonEncryptionDecryp
+     // Decrypt cipher.
+     GST_TRACE_OBJECT(self, "decrypting");
+     if (int errorCode = opencdm_gstreamer_session_decrypt(priv->m_openCdmSession.get(), buffer, subSamplesBuffer, subSampleCount, ivBuffer, keyIDBuffer, 0)) {
+-        GST_ERROR_OBJECT(self, "subsample decryption failed, error code %d", errorCode);
++        GUniquePtr<gchar> errorMessage (g_strdup_printf("Subsample decryption failed (code=%d)", errorCode));
++        gst_element_post_message(
++            GST_ELEMENT(self),
++            gst_message_new_element(
++                GST_OBJECT(self),
++                gst_structure_new("drm-decryption-error-encountered",
++                                  "error-message", G_TYPE_STRING, errorMessage.get(), NULL)));
++        GST_ELEMENT_ERROR(self, STREAM, DECRYPT, ("%s", errorMessage.get()), (NULL));
+         return false;
+     }
+ 
+-- 
+2.7.4
+

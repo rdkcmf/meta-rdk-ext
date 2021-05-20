@@ -1,0 +1,90 @@
+Date: Jul 12 00:34:42 2019
+
+From: 837ee6c389fe88f3d713b5db743f27b16e59c0af Aug 28 06:47:39 2019
+
+Subject: [PATCH] TCXB6-6009 :XDNS protected browsing feature is not working.
+
+        Added to flag to detect whether the client is under protect browse feature 
+	and so that all its dns requests are send to desired DNS server.
+
+Source: COMCAST
+
+License: GPL-2.0-or-later
+
+Upstream-Status: Pending
+
+Signed-off-by: Sudheep kolipaka <sudheep_kolipaka@comcast.com>
+---
+
+diff -ruN dnsmasq-2.78.orig/src/arp.c dnsmasq-2.78/src/arp.c
+--- dnsmasq-2.78.orig/src/arp.c	2019-07-18 21:32:59.124446506 +0000
++++ dnsmasq-2.78/src/arp.c	2019-07-18 21:28:13.924292259 +0000
+@@ -330,6 +330,11 @@
+                                my_syslog(LOG_WARNING, _("#### XDNS : find_dnsoverride_server() Error Param! invalid iptype: %d !"), iptype);
+                                return 0; // fail
+                        }
++
++                       if(strcmp(macaddr, XDNS_NULL_MAC) != 0)
++                        {
++                                daemon->protected_browsing_enable=1;   //Enabling Protected browsing Flag
++                        }
+                        		return 1; //success
+                }
+ 	       if(strcmp(p->macaddr, macaddr) == 0 && count==1){      //for secondary XDNS
+@@ -367,7 +372,8 @@
+ 			my_syslog(LOG_WARNING, _("#### XDNS : find_dnsoverride_defaultserver(%x)secondary XDNS Error Param!!"), serv2);
+ 		}
+ 	}
+-	
++
++	daemon->protected_browsing_enable=0;       //Disabling Protected browsing Flag	
+ 	return retval;
+ }
+ 
+diff -ruN dnsmasq-2.78.orig/src/dnsmasq.h dnsmasq-2.78/src/dnsmasq.h
+--- dnsmasq-2.78.orig/src/dnsmasq.h	2019-07-18 21:32:59.124446506 +0000
++++ dnsmasq-2.78/src/dnsmasq.h	2019-07-18 21:28:58.708316645 +0000
+@@ -993,6 +993,7 @@
+   struct server *servers;
+   struct server *dns_override_server; /* for XDNS */
+   struct server *dns_override_server2; /* for Secondary XDNS */
++  int protected_browsing_enable;
+   struct ipsets *ipsets;
+   int log_fac; /* log facility */
+   char *log_file; /* optional log file */
+diff -ruN dnsmasq-2.78.orig/src/forward.c dnsmasq-2.78/src/forward.c
+--- dnsmasq-2.78.orig/src/forward.c	2019-07-18 21:32:59.128446508 +0000
++++ dnsmasq-2.78/src/forward.c	2019-07-18 21:30:25.576363513 +0000
+@@ -576,7 +576,14 @@
+                 }
+                 else
+                 {
+-                        xdnsserver=daemon->dns_override_server2;
++                        if(daemon->protected_browsing_enable || !daemon->dns_override_server2)
++                        {
++                                xdnsserver=daemon->dns_override_server;
++                        }
++                        else
++                        {
++                                xdnsserver=daemon->dns_override_server2;
++                        }
+                 }
+ 
+ 
+diff -ruN dnsmasq-2.78.orig/src/network.c dnsmasq-2.78/src/network.c
+--- dnsmasq-2.78.orig/src/network.c	2019-07-18 21:32:59.124446506 +0000
++++ dnsmasq-2.78/src/network.c	2019-07-18 21:31:47.184407599 +0000
+@@ -1690,7 +1690,12 @@
+ 		}
+ 		else
+ 		{
+-		       (*pprec)->next = (struct dnsoverride_record*)entry;	
++                        temp=*pprec;
++                        while(temp->next != NULL)
++                        {
++                                temp=temp->next;
++                        }
++		       temp->next = (struct dnsoverride_record*)entry;	
+ 		}
+ 
+        }

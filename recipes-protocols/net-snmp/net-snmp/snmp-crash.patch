@@ -1,0 +1,90 @@
+Date: Jan 20 19:25:53 2016
+
+From: 633d3019920370d0cb2e61f1742ba7b4581be691 Apr 15 20:04:53 2016
+
+Subject: [PATCH] ARRISXB3-4114:Recreated patches from rdkb repo
+
+	Bringing in the patches from rdkb/ccsp repo.
+
+Source: COMCAST
+
+License: BSD-2-Clause
+
+Upstream-Status: Pending
+
+Signed-off-by: Balaji Punnuru <balaji_punnuru@cable.comcast.com>
+---
+
+diff --git a/snmplib/snmp_api.c b/snmplib/snmp_api.c
+index df0dc1c..add5152 100644
+--- a/snmplib/snmp_api.c
++++ b/snmplib/snmp_api.c
+@@ -5000,6 +5000,13 @@ _sess_async_send(void *sessp,
+         }
+     }
+ 
++    /**
++     * XXX hack: if reqid == 0, will cause double free.
++    */
++    if (reqid == 0) {
++        fprintf(stderr, "%s: reqid == 0 !!!!!!!!\n", __FUNCTION__);
++        return ~0x0;
++    }
+     return reqid;
+ }
+ 
+@@ -5064,9 +5071,17 @@ snmp_free_varbind(netsnmp_variable_list * var)
+ {
+     netsnmp_variable_list *ptr;
+     while (var) {
+-        ptr = var->next_variable;
+-        snmp_free_var(var);
+-        var = ptr;
++        if(var->next_variable != NULL)
++        {
++           ptr = var->next_variable;
++           snmp_free_var(var);
++           var = ptr;
++        }
++        else
++        {
++	   snmp_free_var(var);
++           break;
++        }
+     }
+ }
+ 
+diff --git a/snmplib/snmp_client.c b/snmplib/snmp_client.c
+index ae57613..e64e2f5 100644
+--- a/snmplib/snmp_client.c
++++ b/snmplib/snmp_client.c
+@@ -1047,6 +1047,14 @@ snmp_synch_response_cb(netsnmp_session * ss,
+     } else
+         state->waiting = 1;
+ 
++    /**
++     * XXX: hack for request ID == 0 caused double free
++     */
++    if (state->reqid == ~0x0) {
++        fprintf(stderr, "%s: reqid == ~0x0 recover\n", __FUNCTION__);
++        state->reqid = 0;
++    }
++
+     while (state->waiting) {
+         numfds = 0;
+         FD_ZERO(&fdset);
+@@ -1139,6 +1147,14 @@ snmp_sess_synch_response(void *sessp,
+     } else
+         state->waiting = 1;
+ 
++    /**
++     * XXX: hack for request ID == 0 caused double free
++     */
++    if (state->reqid == ~0x0) {
++        fprintf(stderr, "%s: reqid == ~0x0 recover\n", __FUNCTION__);
++        state->reqid = 0;
++    }
++
+     while (state->waiting) {
+         numfds = 0;
+         FD_ZERO(&fdset);

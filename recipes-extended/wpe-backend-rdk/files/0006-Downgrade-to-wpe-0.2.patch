@@ -1,0 +1,34 @@
+From 90bb02833e0472fb889d0ba406ef5859217416cf Mon Sep 17 00:00:00 2001
+From: Eugene Mutavchi <Ievgen_Mutavchi@comcast.com>
+Date: Sat, 19 Sep 2020 02:47:42 +0000
+Subject: [PATCH] Downgrade to wpe-0.2
+
+---
+ cmake/FindWPE.cmake | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/cmake/FindWPE.cmake b/cmake/FindWPE.cmake
+index a062481..7f4ffd2 100644
+--- a/cmake/FindWPE.cmake
++++ b/cmake/FindWPE.cmake
+@@ -29,7 +29,7 @@
+ # ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ 
+ find_package(PkgConfig)
+-pkg_check_modules(PC_WPE QUIET wpe-1.0)
++pkg_check_modules(PC_WPE QUIET wpe-0.2)
+ 
+ find_path(WPE_INCLUDE_DIRS
+     NAMES wpe/wpe.h
+@@ -37,7 +37,7 @@ find_path(WPE_INCLUDE_DIRS
+ )
+ 
+ find_library(WPE_LIBRARIES
+-    NAMES wpe-1.0
++    NAMES wpe-0.2
+     HINTS ${PC_WPE_LIBDIR} ${PC_WPE_LIBRARY_DIRS}
+ )
+ 
+-- 
+2.24.0
+

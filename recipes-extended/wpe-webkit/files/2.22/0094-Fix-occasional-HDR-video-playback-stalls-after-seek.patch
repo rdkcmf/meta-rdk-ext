@@ -1,0 +1,47 @@
+From af1c8eca15712462739908a6fcf3f145eb49ad56 Mon Sep 17 00:00:00 2001
+From: Ievgen Mutavchi <Ievgen_Mutavchi@comcast.com>
+Date: Sun, 26 Apr 2020 12:08:56 -0400
+Subject: [PATCH 83/93] Fix occasional HDR video playback stalls after seek
+Source: COMCAST
+License: GPLV2
+Upstream-Status: None
+Signed-off-by: Eugene Mutavchi <Ievgen_Mutavchi@comcast.com>
+
+---
+ .../gstreamer/mse/MediaPlayerPrivateGStreamerMSE.h         | 3 +++
+ .../graphics/gstreamer/mse/WebKitMediaSourceGStreamer.cpp  | 7 ++++---
+ 2 files changed, 7 insertions(+), 3 deletions(-)
+
+Index: git/Source/WebCore/platform/graphics/gstreamer/mse/MediaPlayerPrivateGStreamerMSE.h
+===================================================================
+--- git.orig/Source/WebCore/platform/graphics/gstreamer/mse/MediaPlayerPrivateGStreamerMSE.h
++++ git/Source/WebCore/platform/graphics/gstreamer/mse/MediaPlayerPrivateGStreamerMSE.h
+@@ -94,6 +94,9 @@ public:
+ #endif
+ 
+    MediaTime maxTimeLoaded() const override;
++
++   bool gstSeekCompleted() const { return m_gstSeekCompleted; }
++
+ private:
+     static void getSupportedTypes(HashSet<String, ASCIICaseInsensitiveHash>&);
+     static MediaPlayer::SupportsType supportsType(const MediaEngineSupportParameters&);
+Index: git/Source/WebCore/platform/graphics/gstreamer/mse/WebKitMediaSourceGStreamer.cpp
+===================================================================
+--- git.orig/Source/WebCore/platform/graphics/gstreamer/mse/WebKitMediaSourceGStreamer.cpp
++++ git/Source/WebCore/platform/graphics/gstreamer/mse/WebKitMediaSourceGStreamer.cpp
+@@ -848,10 +848,11 @@ static void notifyReadyForMoreSamplesMai
+     }
+ 
+     WebCore::MediaPlayerPrivateGStreamerMSE* mediaPlayerPrivate = source->priv->mediaPlayerPrivate;
+-    if (mediaPlayerPrivate && !mediaPlayerPrivate->seeking())
+-        appsrcStream->sourceBuffer->notifyReadyForMoreSamples();
+-
++    bool shouldNotify = mediaPlayerPrivate && mediaPlayerPrivate->gstSeekCompleted();
+     GST_OBJECT_UNLOCK(source);
++
++    if (shouldNotify)
++        appsrcStream->sourceBuffer->notifyReadyForMoreSamples();
+ }
+ 
+ void webKitMediaSrcSetMediaPlayerPrivate(WebKitMediaSrc* source, WebCore::MediaPlayerPrivateGStreamerMSE* mediaPlayerPrivate)

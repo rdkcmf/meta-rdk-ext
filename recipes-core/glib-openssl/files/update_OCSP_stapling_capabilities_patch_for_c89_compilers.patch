@@ -1,0 +1,40 @@
+From 9209aea416833a51b7b9bec0473db935dd387b17 Mon Sep 17 00:00:00 2001
+From: Chun-wei Fan <fanchunwei@src.gnome.org>
+Date: Tue, 21 Aug 2018 11:31:39 +0800
+Subject: [PATCH] gtlsfiledatabase-openssl.c: Fix build on C89 compilers
+
+Ensure variables are declared on the top of the block.
+---
+ tls/openssl/gtlsfiledatabase-openssl.c | 5 +++--
+ 1 file changed, 3 insertions(+), 2 deletions(-)
+
+diff --git a/tls/openssl/gtlsfiledatabase-openssl.c b/tls/openssl/gtlsfiledatabase-openssl.c
+index 49c3d70..e45a619 100644
+--- a/tls/openssl/gtlsfiledatabase-openssl.c
++++ b/tls/openssl/gtlsfiledatabase-openssl.c
+@@ -757,6 +757,7 @@ g_tls_file_database_openssl_verify_ocsp_response (GTlsDatabase    *database,
+   X509_STORE *store = NULL;
+   OCSP_BASICRESP *basic_resp = NULL;
+   int ocsp_status = 0;
++  int i;
+ 
+   ocsp_status = OCSP_response_status (resp);
+   if (ocsp_status != OCSP_RESPONSE_STATUS_SUCCESSFUL)
+@@ -786,7 +787,7 @@ g_tls_file_database_openssl_verify_ocsp_response (GTlsDatabase    *database,
+       goto end;
+     }
+ 
+-  for (int i = 0; i < sk_X509_num (priv->trusted); i++)
++  for (i = 0; i < sk_X509_num (priv->trusted); i++)
+     {
+       X509_STORE_add_cert (store, sk_X509_value (priv->trusted, i));
+     }
+@@ -797,7 +798,7 @@ g_tls_file_database_openssl_verify_ocsp_response (GTlsDatabase    *database,
+       goto end;
+     }
+ 
+-  for (int i = 0; i < OCSP_resp_count (basic_resp); i++)
++  for (i = 0; i < OCSP_resp_count (basic_resp); i++)
+     {
+       OCSP_SINGLERESP *single_resp = OCSP_resp_get0 (basic_resp, i);
+       ASN1_GENERALIZEDTIME *revocation_time = NULL;

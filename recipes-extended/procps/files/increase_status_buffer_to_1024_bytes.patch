@@ -1,0 +1,86 @@
+Copyright 2014 Thorsten Lorenz.
+All rights reserved.
+
+Permission is hereby granted, free of charge, to any person
+obtaining a copy of this software and associated documentation
+files (the "Software"), to deal in the Software without
+restriction, including without limitation the rights to use,
+copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the
+Software is furnished to do so, subject to the following
+conditions:
+
+The above copyright notice and this permission notice shall be
+included in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
+OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
+HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+OTHER DEALINGS IN THE SOFTWARE.
+
+Date: Mar 09 10:48:53 2015
+
+From: 7989ab778a172ad55b2268c21ffb9a604a8c93d7 Mar 09 10:48:53 2015
+
+Subject: [PATCH] CISCOXI4-3407: move procps patches to common layer
+
+	procps needs to raise buffer size for
+	proc status and its a general change should be part of
+	SOC independent area
+
+Source: GIT
+
+Upstream-Status: Submitted [ https://www.gitorious.org/procps/procps/commit/7933435584aa1fd75460f4c7715a3d4855d97c1c  ]
+
+Signed-off-by: Eric Dumazet <eric.dumazet@gmail.com>
+---
+
+--- a/proc/readproc.c	2006-06-16 08:18:13.000000000 +0000
++++ b/proc/readproc.c	2015-02-27 11:44:01.000000000 +0000
+@@ -27,6 +27,15 @@
+ #include <sys/types.h>
+ #include <sys/stat.h>
+ 
++/* Max # of bytes to expect in /proc/%d/status.
++
++   This may be a crazy amount if lots of supplementary groups are
++   listed.  Most kernels will limit the contents to 32 (NGROUPS_SMALL)
++   groups, but kernels > 3.2.29 may show ALL of the supplementary
++   groups...
++*/
++#define PROC_STATUS_BUFSIZE 8192
++
+ // sometimes it's easier to do this manually, w/o gcc helping
+ #ifdef PROF
+ extern void __cyg_profile_func_enter(void*,void*);
+@@ -534,7 +543,7 @@
+ // room to spare.
+ static proc_t* simple_readproc(PROCTAB *restrict const PT, proc_t *restrict const p) {
+     static struct stat sb;		// stat() buffer
+-    static char sbuf[1024];	// buffer for stat,statm
++    static char sbuf[PROC_STATUS_BUFSIZE];	// buffer for stat,statm
+     char *restrict const path = PT->path;
+     unsigned flags = PT->flags;
+ 
+@@ -611,7 +620,7 @@
+ // path is a path to the task, with some room to spare.
+ static proc_t* simple_readtask(PROCTAB *restrict const PT, const proc_t *restrict const p, proc_t *restrict const t, char *restrict const path) {
+     static struct stat sb;		// stat() buffer
+-    static char sbuf[1024];	// buffer for stat,statm
++    static char sbuf[PROC_STATUS_BUFSIZE];	// buffer for stat,statm
+     unsigned flags = PT->flags;
+ 
+ //printf("hhh\n");
+@@ -1034,7 +1043,7 @@
+  * and filled out proc_t structure.
+  */
+ proc_t * get_proc_stats(pid_t pid, proc_t *p) {
+-	static char path[PATH_MAX], sbuf[1024];
++	static char path[PATH_MAX], sbuf[PROC_STATUS_BUFSIZE];
+ 	struct stat statbuf;
+ 
+ 	sprintf(path, "/proc/%d", pid);

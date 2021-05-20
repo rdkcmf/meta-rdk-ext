@@ -1,0 +1,27 @@
+From 22f676a4cc56b24f42fff05b2a6443c8c61ae602 Mon Sep 17 00:00:00 2001
+From: aansar001c <AzamAyub_Ansari@cable.comcast.com>
+Date: Fri, 4 Jan 2019 10:53:17 -0500
+Subject: [PATCH] amazon video fix. continue without parser.
+
+---
+ Source/WebCore/platform/graphics/gstreamer/mse/PlaybackPipeline.cpp | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/Source/WebCore/platform/graphics/gstreamer/mse/PlaybackPipeline.cpp b/Source/WebCore/platform/graphics/gstreamer/mse/PlaybackPipeline.cpp
+index c3a7a96..0ab7ed5 100644
+--- a/Source/WebCore/platform/graphics/gstreamer/mse/PlaybackPipeline.cpp
++++ b/Source/WebCore/platform/graphics/gstreamer/mse/PlaybackPipeline.cpp
+@@ -243,8 +243,8 @@ void PlaybackPipeline::attachTrack(RefPtr<SourceBufferPrivateGStreamer> sourceBu
+         || !g_strcmp0(mediaType, "audio/x-vorbis"))
+         stream->parser = nullptr;
+     else {
+-        GST_ERROR_OBJECT(stream->parent, "Unsupported media format: %s", mediaType);
+-        return;
++        stream->parser = nullptr;
++        GST_WARNING_OBJECT(stream->parent, "Continue without parser for media format: %s", mediaType);
+     }
+ #else
+     stream->parser = nullptr;
+-- 
+1.9.1
+

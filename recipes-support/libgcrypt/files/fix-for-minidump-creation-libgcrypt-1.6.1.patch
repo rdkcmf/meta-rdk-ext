@@ -1,0 +1,46 @@
+From 277eafdf65b9e5c01ee0a9467f154f14e332ce12 Mon Sep 17 00:00:00 2001
+From: Balaji Selvam <balaji_selvam@comcast.com>
+Date: Mon, 25 May 2020 05:13:04 +0000
+
+Subject: [PATCH] BCOM-3348 : Web/Network process mini-dump fail
+
+        Changed the process capabilities so that
+        there won't be any issues in minidump creation
+
+Source: COMCAST
+License: LGPL-2.0-or-later
+Upstream-Status: Pending
+
+Signed-off-by: santhosh pabbathi <santhosh_pabbathi@comcast.com>
+
+---
+ src/secmem.c | 8 ++++++--
+ 1 file changed, 6 insertions(+), 2 deletions(-)
+
+diff --git a/src/secmem.c b/src/secmem.c
+index 2bf7d8c..ff5022e 100644
+--- a/src/secmem.c
++++ b/src/secmem.c
+@@ -246,13 +246,17 @@ lock_pool (void *p, size_t n)
+   {
+     cap_t cap;
+ 
+-    cap = cap_from_text ("cap_ipc_lock+ep");
++    log_info ("Changing the process capabilities \n");
++//    cap = cap_from_text ("cap_ipc_lock+ep");
++    cap = cap_from_text ("cap_ipc_lock+eip");
+     cap_set_proc (cap);
+     cap_free (cap);
+     err = no_mlock? 0 : mlock (p, n);
+     if (err && errno)
+       err = errno;
+-    cap = cap_from_text ("cap_ipc_lock+p");
++    log_info ("Changing the process capabilities \n");
++//    cap = cap_from_text ("cap_ipc_lock+p");
++    cap = cap_from_text ("cap_ipc_lock+eip");
+     cap_set_proc (cap);
+     cap_free(cap);
+   }
+-- 
+2.24.0
+

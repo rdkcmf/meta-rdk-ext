@@ -1,0 +1,36 @@
+
+Date: May 19, 2020 4:05 PM
+From: Rakhil P E <Rakhil_PuthiyaveettilEdachena@comcast.com>
+Subject: RDK-28677 - Build error with meta-openembedded rdk/dunfell branch
+while building from rdk/dunfell branch libwebsocket is using 4.0.1 version and lws_extension_callback_pm_deflate was not exposed through libwebsockets.so
+Source: COMCAST
+License: BSD-3-Clause
+Upstream-Status: None
+Signed-off-by: Rakhil P E <Rakhil_PuthiyaveettilEdachena@comcast.com>
+
+Index: git/include/libwebsockets/lws-ws-ext.h
+===================================================================
+--- git.orig/include/libwebsockets/lws-ws-ext.h
++++ git/include/libwebsockets/lws-ws-ext.h
+@@ -184,7 +184,7 @@ lws_ext_parse_options(const struct lws_e
+  *
+  * Built-in callback implementing RFC7692 permessage-deflate
+  */
+-LWS_EXTERN int
++LWS_VISIBLE LWS_EXTERN int
+ lws_extension_callback_pm_deflate(struct lws_context *context,
+ 				  const struct lws_extension *ext,
+ 				  struct lws *wsi,
+Index: git/lib/core-net/wsi.c
+===================================================================
+--- git.orig/lib/core-net/wsi.c
++++ git/lib/core-net/wsi.c
+@@ -540,7 +540,7 @@ lws_get_urlarg_by_name(struct lws *wsi,
+  * extensions disabled.
+  */
+ 
+-int
++LWS_VISIBLE int
+ lws_extension_callback_pm_deflate(struct lws_context *context,
+                                   const struct lws_extension *ext,
+                                   struct lws *wsi,

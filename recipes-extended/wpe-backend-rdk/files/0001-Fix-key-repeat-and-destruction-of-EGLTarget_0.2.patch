@@ -1,0 +1,66 @@
+From 75eb48b0661ec07595a84293f520c91170532a94 Mon Sep 17 00:00:00 2001
+From: Eugene Mutavchi <Ievgen_Mutavchi@comcast.com>
+Date: Wed, 6 Mar 2019 09:13:52 -0500
+Subject: [PATCH] Fix-key-repeat-and-destruction-of-EGLTarget
+
+---
+ src/westeros/WesterosViewbackendInput.cpp |  2 +-
+ src/westeros/renderer-backend.cpp         | 15 +++++++++++++++
+ 2 files changed, 16 insertions(+), 1 deletion(-)
+
+diff --git a/src/westeros/WesterosViewbackendInput.cpp b/src/westeros/WesterosViewbackendInput.cpp
+index 0482aa4..b42ad17 100644
+--- a/src/westeros/WesterosViewbackendInput.cpp
++++ b/src/westeros/WesterosViewbackendInput.cpp
+@@ -174,7 +174,7 @@ gboolean WesterosViewbackendInput::repeatDelayTimeout(void* userData)
+     auto& handlerData = backend_input.m_handlerData;
+ 
+     handleKeyEvent(userData, handlerData.repeatData.key, handlerData.repeatData.state, handlerData.repeatData.time);
+-    handlerData.repeatData.eventSource = g_timeout_add(handlerData.repeatInfo.rate, static_cast<GSourceFunc>(repeatRateTimeout), userData);
++    handlerData.repeatData.eventSource = g_timeout_add(1000 / handlerData.repeatInfo.rate, static_cast<GSourceFunc>(repeatRateTimeout), userData);
+     return G_SOURCE_REMOVE;
+ }
+ 
+diff --git a/src/westeros/renderer-backend.cpp b/src/westeros/renderer-backend.cpp
+index 6921573..b63b604 100644
+--- a/src/westeros/renderer-backend.cpp
++++ b/src/westeros/renderer-backend.cpp
+@@ -187,6 +187,7 @@ public:
+     struct wl_compositor* compositor() const { return m_compositor; }
+ 
+     void initialize();
++    void invalidate();
+ 
+ private:
+     static struct wl_registry_listener s_registryListener;
+@@ -221,6 +222,14 @@ Backend::~Backend()
+         wl_display_disconnect(m_display);
+ }
+ 
++void Backend::invalidate()
++{
++    if (m_eventSource) {
++        g_source_destroy(m_eventSource);
++        m_eventSource = nullptr;
++    }
++}
++
+ void Backend::initialize()
+ {
+     if (m_eventSource != nullptr)
+@@ -293,6 +302,12 @@ EGLTarget::~EGLTarget()
+         wl_egl_window_destroy(m_window);
+     if (m_surface)
+         wl_surface_destroy(m_surface);
++
++    if (m_backend && m_backend->display()) {
++        wl_display_flush(m_backend->display());
++        wl_display_roundtrip(m_backend->display());
++        const_cast<Backend&>(*m_backend).invalidate();
++    }
+ }
+ 
+ void EGLTarget::initialize(const Backend& backend, uint32_t width, uint32_t height)
+-- 
+2.7.4
+

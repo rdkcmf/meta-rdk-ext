@@ -1,0 +1,114 @@
+Dropbear - a SSH2 server
+ 
+Copyright (c) 2002,2003 Matt Johnston
+All rights reserved.
+ 
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+ 
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+ 
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE. */
+
+Date: Mar 02 19:34:43 2017
+
+From: b27c25cf22e70ff1b04bbac4e14dd2f52f93082a Mar 03 09:03:32 2017
+
+Subject: [PATCH] DELIA-19655: Added support to handle ipv6 address 
+
+	Dropbear is failing to parse ipv6 address if
+        it was given in the hostname. Added support to
+        parse ipv4 as well as ipv6.
+
+Source: COMCAST
+
+Upstream-Status: Pending
+
+Signed-off-by: Balaji Punnuru <balaji_punnuru@cable.comcast.com>
+---
+Index: dropbear-2014.63/cli-runopts.c
+===================================================================
+--- dropbear-2014.63.orig/cli-runopts.c
++++ dropbear-2014.63/cli-runopts.c
+@@ -72,10 +72,12 @@ static void printhelp() {
+ #endif
+ #ifdef ENABLE_CLI_LOCALTCPFWD
+ 					"-L <[listenaddress:]listenport:remotehost:remoteport> Local port forwarding\n"
++					"-L <[[listenaddress]:]listenport:[remotehost]:remoteport> Local port forwarding using ipv6 Address\n"
+ 					"-g    Allow remote hosts to connect to forwarded ports\n"
+ #endif
+ #ifdef ENABLE_CLI_REMOTETCPFWD
+ 					"-R <[listenaddress:]listenport:remotehost:remoteport> Remote port forwarding\n"
++					"-R <[[listenaddress]:]listenport:[remotehost]:remoteport> Local port forwarding using ipv6 Address\n"
+ #endif
+ 					"-W <receive_window_buffer> (default %d, larger may be faster, max 1MB)\n"
+ 					"-K <keepalive>  (0 is never, default %d)\n"
+@@ -709,6 +711,17 @@ static void addforward(const char* origs
+ 		TRACE(("part2 == NULL"))
+ 		goto fail;
+ 	}
++        if (*part1 == '[') {
++		part1++;//skip first character
++		part2 = strstr(part1,"]:");
++		if (part2 == NULL) {
++			TRACE(("part2 == NULL"))
++			goto fail;
++		}
++                *part2 = '\0';
++		part2++;
++        }
++
+ 	*part2 = '\0';
+ 	part2++;
+ 
+@@ -717,14 +730,34 @@ static void addforward(const char* origs
+ 		TRACE(("part3 == NULL"))
+ 		goto fail;
+ 	}
++        if (*part2 == '[') {
++		part2++;//skip first character
++		part3 = strstr(part2,"]:");
++		if (part3 == NULL) {
++			TRACE(("part3 == NULL"))
++			goto fail;
++		}
++                *part3 = '\0';
++		part3++;
++        }
+ 	*part3 = '\0';
+ 	part3++;
+ 
+-	part4 = strchr(part3, ':');
+-	if (part4) {
+-		*part4 = '\0';
+-		part4++;
+-	}
++        if (*part3 == '[') {
++		part3++;//skip first character
++		part4 = strstr(part3,"]:");
++		if (part4 != NULL) {
++			*part4 = '\0';
++			part4 += 2;
++		}
++        } 
++        else {
++		part4 = strchr(part3, ':');
++		if (part4) {
++			*part4 = '\0';
++			part4++;
++		}
++        }
+ 
+ 	if (part4) {
+ 		listenaddr = part1;

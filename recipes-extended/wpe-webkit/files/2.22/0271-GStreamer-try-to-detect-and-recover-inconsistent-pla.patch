@@ -1,0 +1,117 @@
+From 904273cdd692e4839a09cc0da2c8bd36421b2fd1 Mon Sep 17 00:00:00 2001
+From: Ievgen Mutavchi <Ievgen_Mutavchi@comcast.com>
+Date: Thu, 8 Apr 2021 09:48:49 -0400
+Subject: [PATCH] [GStreamer] try to detect and recover inconsistent playing
+ state
+
+A series of buffer flushings could leave pipeline in an
+inconsistent state: top-level bin in playing with sinks in paused.
+This happens if flush is triggered in the middle of
+paused-to-playing transition which was started by gst bin async
+handling of ASYNC_DONE message.
+---
+ .../gstreamer/MediaPlayerPrivateGStreamer.cpp      | 60 ++++++++++++++++++++++
+ .../gstreamer/MediaPlayerPrivateGStreamer.h        |  2 +
+ 2 files changed, 62 insertions(+)
+
+diff --git a/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp b/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp
+index 5455dd0..27f644e 100644
+--- a/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp
++++ b/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp
+@@ -1384,6 +1384,8 @@ void MediaPlayerPrivateGStreamer::handleMessage(GstMessage* message)
+             break;
+         updateStates();
+ 
++        checkPlayingConsitency();
++
+         // Construct a filename for the graphviz dot file output.
+         GstState newState;
+         gst_message_parse_state_changed(message, &currentState, &newState, nullptr);
+@@ -3009,6 +3011,64 @@ void MediaPlayerPrivateGStreamer::elementSetupCallback(MediaPlayerPrivateGStream
+ #endif
+ }
+ 
++void MediaPlayerPrivateGStreamer::checkPlayingConsitency()
++{
++    if (!m_pipeline)
++        return;
++
++    static auto iterateSinks = [](GstBin* bin, GstIteratorFoldFunction foldFunc) -> gboolean {
++        GValue ret = G_VALUE_INIT;
++        g_value_init (&ret, G_TYPE_BOOLEAN);
++        g_value_set_boolean (&ret, TRUE);
++        GstIterator *iter = gst_bin_iterate_sinks(bin);
++        for (;;) {
++            auto res = gst_iterator_fold (iter, foldFunc, &ret, nullptr);
++            if (GST_ITERATOR_RESYNC == res) {
++                gst_iterator_resync (iter);
++                continue;
++            }
++            break;
++        }
++        gst_iterator_free(iter);
++        return g_value_get_boolean(&ret);
++    };
++
++    static GstIteratorFoldFunction allPlayingFoldFunc = [](const GValue *vitem, GValue* ret, gpointer) -> gboolean {
++        GstObject *item = GST_OBJECT(g_value_get_object (vitem));
++        if (!GST_IS_ELEMENT(item))
++            return FALSE;
++        GstState state, pending;
++        gst_element_get_state(GST_ELEMENT(item), &state, &pending, 0);
++        if (state != GST_STATE_PLAYING && pending != GST_STATE_PLAYING) {
++            g_value_set_boolean (ret, FALSE);
++            return FALSE;
++        }
++        if (GST_IS_BIN (item)) {
++            if (iterateSinks(GST_BIN(item), allPlayingFoldFunc) == FALSE) {
++                g_value_set_boolean (ret, FALSE);
++                return FALSE;
++            }
++        }
++        return TRUE;
++    };
++
++    GstState state, pending;
++    gst_element_get_state(m_pipeline.get(), &state, &pending, 0);
++    if (state == GST_STATE_PLAYING && pending == GST_STATE_VOID_PENDING) {
++        bool areAllSinksPlaying = (iterateSinks(GST_BIN(m_pipeline.get()), allPlayingFoldFunc) == TRUE);
++        if ( !areAllSinksPlaying ) {
++            if ( !m_didTryToRecoverPlayingState ) {
++                GST_WARNING("Playbin is in PLAYING state but some sinks aren't, trying to recover.");
++                m_didTryToRecoverPlayingState = true;
++                gst_element_set_state(m_pipeline.get(), GST_STATE_PAUSED);
++                gst_element_set_state(m_pipeline.get(), GST_STATE_PLAYING);
++            }
++        } else {
++            m_didTryToRecoverPlayingState = false;
++        }
++    }
++}
++
+ }
+ 
+ #endif // USE(GSTREAMER)
+diff --git a/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.h b/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.h
+index e8ec7ee..00a631b 100644
+--- a/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.h
++++ b/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.h
+@@ -240,6 +240,7 @@ protected:
+ 
+     void ensureAudioSourceProvider();
+     void setAudioStreamProperties(GObject*);
++    void checkPlayingConsitency();
+ 
+     static void setAudioStreamPropertiesCallback(MediaPlayerPrivateGStreamer*, GObject*);
+ 
+@@ -309,6 +310,7 @@ private:
+     virtual bool isMediaSource() const { return false; }
+ 
+     String m_errorMessage;
++    bool m_didTryToRecoverPlayingState { false };
+ };
+ }
+ 
+-- 
+2.7.4
+

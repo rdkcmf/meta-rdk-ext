@@ -1,0 +1,46 @@
+From 412aa1bee0fb6b77ea43364ee84b0c36482f5777 Mon Sep 17 00:00:00 2001
+From: jkuria217 <Josekutty_Kuriakose@cable.comcast.com>
+Date: Fri, 5 Jun 2020 21:03:59 +0000
+Subject: [PATCH] DELIA-42416 CallStranger fix for dunfell
+
+---
+ libgupnp/gupnp-service.c | 19 ++++++++++++++++++-
+ 1 file changed, 18 insertions(+), 1 deletion(-)
+
+diff --git a/libgupnp/gupnp-service.c b/libgupnp/gupnp-service.c
+index fafba0a..2ae7b16 100644
+--- a/libgupnp/gupnp-service.c
++++ b/libgupnp/gupnp-service.c
+@@ -47,6 +47,15 @@
+ 
+ #include "guul.h"
+ 
++
++#define IN_IS_ADDR_PRIVATE(a)  (    \
++        (((a) & htonl(0xff000000)) == htonl (0x0A000000)) || \
++        (((a) & htonl(0xfff00000)) == htonl (0xAC100000)) || \
++        (((a) & htonl(0xffff0000)) == htonl (0xC0A80000)) || \
++        (((a) & htonl(0xffff0000)) == htonl (0xA9FE0000)) || \
++        (((a) & htonl(0xffff0000)) == htonl (0x7F000000)))
++
++
+ #define SUBSCRIPTION_TIMEOUT 300 /* DLNA (7.2.22.1) enforced */
+ 
+ 
+@@ -1250,7 +1259,15 @@ subscribe (GUPnPService *service,
+ 
+                 return;
+         }
+-        sscanf((char *)data->callbacks->data, "http://%99[^:]", ipAddr);
++        sscanf((char *)data->callbacks->data, "http://%19[^:,';/]", ipAddr);
++        if (!((ipAddr[0] != '\0') && (inet_pton(AF_INET,ipAddr, &(sa.sin_addr))) && (IN_IS_ADDR_PRIVATE(sa.sin_addr.s_addr))))
++        {
++                g_message("CallStranger : Invalid ip %s in xupnp subscription data callback",ipAddr);
++                soup_message_set_status (msg, SOUP_STATUS_PRECONDITION_FAILED);
++
++                g_slice_free (SubscriptionData, data);
++                return;
++        }
+         /* Add service and SID */
+         data->service = service;
+         data->sid     = generate_sid ();

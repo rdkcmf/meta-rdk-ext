@@ -1,0 +1,40 @@
+From f401d667e75943c5604cc467e4e8a7b0d0a222e2 Mon Sep 17 00:00:00 2001
+From: Jaga <jagadheesan_duraisamy@comcast.com>
+Date: Wed, 19 Feb 2020 10:29:45 +0000
+Subject: [PATCH] openssl deprecated-declarations
+
+Reason for change: Fixed build issues triggered due to new compiler options [-Werror=deprecated-declarations] added with gcc 9.2
+
+Source: COMCAST
+
+License: LGPLv2.1 & LWS-exceptions
+
+Upstream-Status: Pending
+
+Signed-off-by: Jaga <jagadheesan_duraisamy@comcast.com>
+---
+ lib/ssl.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/lib/ssl.c b/lib/ssl.c
+index 2d91555a..d682e9b2 100644
+--- a/lib/ssl.c
++++ b/lib/ssl.c
+@@ -255,7 +255,7 @@ lws_ssl_destroy(struct libwebsocket_context *context)
+ 
+ #if (OPENSSL_VERSION_NUMBER < 0x01000000) || defined(USE_WOLFSSL)
+ 	ERR_remove_state(0);
+-#else
++#elif (OPENSSL_VERSION_NUMBER < 0x10100000L)
+ 	ERR_remove_thread_state(NULL);
+ #endif
+ 	ERR_free_strings();
+@@ -713,7 +713,7 @@ lws_ssl_context_destroy(struct libwebsocket_context *context)
+ 
+ #if (OPENSSL_VERSION_NUMBER < 0x01000000) || defined(USE_WOLFSSL)
+ 	ERR_remove_state(0);
+-#else
++#elif (OPENSSL_VERSION_NUMBER < 0x10100000L)
+ 	ERR_remove_thread_state(NULL);
+ #endif
+ 	ERR_free_strings();

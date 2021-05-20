@@ -1,0 +1,75 @@
+From 3647ceab598ae1ae36235c91557eebd35458499b Mon Sep 17 00:00:00 2001
+From: Eugene Mutavchi <Ievgen_Mutavchi@comcast.com>
+Date: Thu, 29 Nov 2018 09:27:26 -0500
+Subject: [PATCH] Fix readyState update while seeking and reporting of buffered
+ range
+
+---
+ Source/WebCore/Modules/mediasource/SourceBuffer.cpp                | 7 ++++++-
+ .../graphics/gstreamer/mse/MediaPlayerPrivateGStreamerMSE.cpp      | 7 +++++++
+ 2 files changed, 13 insertions(+), 1 deletion(-)
+
+diff --git a/Source/WebCore/Modules/mediasource/SourceBuffer.cpp b/Source/WebCore/Modules/mediasource/SourceBuffer.cpp
+index e401297..0b208c6 100644
+--- a/Source/WebCore/Modules/mediasource/SourceBuffer.cpp
++++ b/Source/WebCore/Modules/mediasource/SourceBuffer.cpp
+@@ -770,6 +770,7 @@ void SourceBuffer::removeCodedFrames(const MediaTime& start, const MediaTime& en
+     // 1. Let start be the starting presentation timestamp for the removal range.
+     MediaTime durationMediaTime = m_source->duration();
+     MediaTime currentMediaTime = m_source->currentTime();
++    bool shouldStallPlayback = false;
+ 
+     // 2. Let end be the end presentation timestamp for the removal range.
+     // 3. For each track buffer in this source buffer, run the following steps:
+@@ -868,11 +869,14 @@ void SourceBuffer::removeCodedFrames(const MediaTime& start, const MediaTime& en
+         // and less than the remove end timestamp, and HTMLMediaElement.readyState is greater than HAVE_METADATA, then set
+         // the HTMLMediaElement.readyState attribute to HAVE_METADATA and stall playback.
+         if (m_active && currentMediaTime >= start && currentMediaTime < end && m_private->readyState() > MediaPlayer::HaveMetadata)
+-            m_private->setReadyState(MediaPlayer::HaveMetadata);
++            shouldStallPlayback = true;
+     }
+     
+     updateBufferedFromTrackBuffers();
+ 
++    if (shouldStallPlayback)
++        m_private->setReadyState(MediaPlayer::HaveMetadata);
++
+     // 4. If buffer full flag equals true and this object is ready to accept more bytes, then set the buffer full flag to false.
+     // No-op
+ 
+@@ -2156,6 +2160,7 @@ void SourceBuffer::updateBufferedFromTrackBuffers()
+     // a single range of {0, 0}.
+     if (highestEndTime.isNegativeInfinite()) {
+         m_buffered->ranges() = PlatformTimeRanges();
++        setBufferedDirty(true);
+         return;
+     }
+ 
+diff --git a/Source/WebCore/platform/graphics/gstreamer/mse/MediaPlayerPrivateGStreamerMSE.cpp b/Source/WebCore/platform/graphics/gstreamer/mse/MediaPlayerPrivateGStreamerMSE.cpp
+index 4e09d62..96b3b2d 100644
+--- a/Source/WebCore/platform/graphics/gstreamer/mse/MediaPlayerPrivateGStreamerMSE.cpp
++++ b/Source/WebCore/platform/graphics/gstreamer/mse/MediaPlayerPrivateGStreamerMSE.cpp
+@@ -224,6 +224,7 @@ void MediaPlayerPrivateGStreamerMSE::seek(const MediaTime& time)
+                               toString(current).utf8().data(), toString(time).utf8().data(),
+                               m_url.string().utf8().data());
+ 
++    MediaPlayer::ReadyState oldReadyState = m_readyState;
+     MediaTime previousSeekTime = m_seekTime;
+     m_seekTime = time;
+ 
+@@ -234,6 +235,12 @@ void MediaPlayerPrivateGStreamerMSE::seek(const MediaTime& time)
+     }
+ 
+     m_isEndReached = false;
++    if (m_seeking && oldReadyState > MediaPlayer::HaveMetadata) {
++        m_readyState = MediaPlayer::HaveMetadata;
++        GST_DEBUG("changing readyState while seeking: %s -> %s", dumpReadyState(oldReadyState), dumpReadyState(m_readyState));
++        m_player->readyStateChanged();
++    }
++
+     GST_DEBUG("m_seeking=%s, m_seekTime=%s", boolForPrinting(m_seeking), toString(m_seekTime).utf8().data());
+ }
+ 
+-- 
+2.7.4
+

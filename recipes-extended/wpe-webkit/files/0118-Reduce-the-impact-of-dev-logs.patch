@@ -1,0 +1,29 @@
+From 5cf065c17bf088657a234320b900db54a90cdb22 Mon Sep 17 00:00:00 2001
+From: Eugene Mutavchi <Ievgen_Mutavchi@comcast.com>
+Date: Tue, 22 Jan 2019 11:10:15 -0500
+Subject: [PATCH 1/2] Reduce the impact of dev logs
+
+---
+ Source/WTF/wtf/Assertions.h | 6 +++++-
+ 1 file changed, 5 insertions(+), 1 deletion(-)
+
+diff --git a/Source/WTF/wtf/Assertions.h b/Source/WTF/wtf/Assertions.h
+index 179f518..8dc2077 100644
+--- a/Source/WTF/wtf/Assertions.h
++++ b/Source/WTF/wtf/Assertions.h
+@@ -421,7 +421,11 @@ WTF_EXPORT_PRIVATE NO_RETURN_DUE_TO_CRASH void WTFCrashWithSecurityImplication()
+ #if LOG_DISABLED
+ #define LOG(channel, ...) ((void)0)
+ #else
+-#define LOG(channel, ...) WTFLog(&LOG_CHANNEL(channel), __VA_ARGS__)
++#define LOG(channel, ...)                                       \
++    do {                                                        \
++        if (LOG_CHANNEL(channel).state == WTFLogChannelOn)      \
++            WTFLog(&LOG_CHANNEL(channel), __VA_ARGS__);         \
++    } while (0)
+ #endif
+ 
+ /* LOG_VERBOSE */
+-- 
+2.7.4
+

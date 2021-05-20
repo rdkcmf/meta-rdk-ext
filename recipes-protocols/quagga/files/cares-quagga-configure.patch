@@ -1,0 +1,25 @@
+From 7b5368632ea6d3c854a572f2d1191a756df6913b Mon Sep 17 00:00:00 2001
+From: Balaji Punnuru <balaji_punnuru@cable.comcast.com>
+Date: Fri, 17 May 2019 12:07:52 -0400
+Subject: [PATCH] Fixed issues with LDADD Macros, and wrong cares check.
+
+Signed-off-by: Balaji Punnuru <balaji_punnuru@cable.comcast.com>
+---
+ nhrpd/Makefile.am | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/nhrpd/Makefile.am b/nhrpd/Makefile.am
+index a9f70e2..2da0df8 100644
+--- a/nhrpd/Makefile.am
++++ b/nhrpd/Makefile.am
+@@ -30,7 +30,7 @@ nhrpd_SOURCES = \
+ 	nhrp_vty.c \
+ 	nhrp_main.c
+ 
+-nhrpd_LDADD = ../lib/libzebra.la @LIBCAP@ @CARES_LIBS@
++nhrpd_LDADD = ../lib/libzebra.la $(LIBCAP) $(CARES_LIBS)
+ 
+ noinst_HEADERS = debug.h netlink.h nhrpd.h vici.h znl.h list.h \
+ 	nhrp_protocol.h os.h zbuf.h
+-- 
+2.1.4

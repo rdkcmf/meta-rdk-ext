@@ -1,0 +1,166 @@
+Copyright (C) 1991, 1999 Free Software Foundation, Inc.
+
+This library is free software; you can redistribute it and/or
+modify it under the terms of the GNU Lesser General Public
+License as published by the Free Software Foundation; either
+version 2.1 of the License, or (at your option) any later version.
+
+This library is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+Lesser General Public License for more details.
+
+You should have received a copy of the GNU Lesser General Public
+License along with this library; if not, write to the Free Software
+Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
+
+Date: Sun, 9 Nov 2014 13:51:09 -0200
+
+From: f3d945d5f2b9d7d44032c461af588c6d54f5664b Mon Sep 17 00:00:00 2001
+
+Subject: [PATCH 2/3] BZ#16469: don't drop trailing dot in res_nquerydomain(..., name, NULL, ...)
+
+	If we drop it here, we will fail to detect a duplicate trailing dot
+	later on.  Retaining, OTOH, has no ill effects whatsoever, and it even
+	saves us the trouble of copying the domain name minus the trailing
+	dot, like we used to do.
+
+	for ChangeLog
+
+		[BZ #16469]
+		* NEWS:	 Update.
+		* resolv/res_query.c (__libc_res_nquerydomain): Retain trailing dot.
+		* posix/tst-getaddrinfo5.c: New.
+		* posix/Makefile (tests): Add it.
+
+Source: GIT
+
+Upstream-Status: Submitted [ https://git.powerel.org/powerel7/base/raw/commit/f3d945d5f2b9d7d44032c461af588c6d54f5664b ]
+
+Signed-off-by: Alexandre Oliva <aoliva@redhat.com>
+
+---
+ ChangeLog                |  9 +++++++
+ NEWS                     |  8 +++---
+ posix/Makefile           |  2 +-
+ posix/tst-getaddrinfo5.c | 69 ++++++++++++++++++++++++++++++++++++++++++++++++
+ resolv/res_query.c       | 13 ++-------
+ 5 files changed, 85 insertions(+), 16 deletions(-)
+ create mode 100644 posix/tst-getaddrinfo5.c
+
+diff --git a/posix/tst-getaddrinfo5.c b/posix/tst-getaddrinfo5.c
+new file mode 100644
+index 0000000..cfebb9b
+--- /dev/null
++++ b/posix/tst-getaddrinfo5.c
+@@ -0,0 +1,69 @@
++/* Test host lookup with double dots at the end, [BZ #16469].
++   Copyright (C) 2014 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <http://www.gnu.org/licenses/>.  */
++
++#include <sys/types.h>
++#include <sys/socket.h>
++#include <netdb.h>
++#include <string.h>
++
++static int
++test (void)
++{
++  static char host1[] = "localhost..";
++  static char host2[] = "www.gnu.org..";
++  static char *hosts[] = { host1, host2 };
++  int i;
++  int pass = 0;
++
++  for (i = 0; i < sizeof (hosts) / sizeof (*hosts); i++)
++    {
++      char *host = hosts[i];
++      size_t len = strlen (host);
++      struct addrinfo *ai;
++
++      /* If the name doesn't resolve with a single dot at the
++	 end, skip it.  */
++      host[len-1] = 0;
++      if (getaddrinfo (host, NULL, NULL, &ai) != 0)
++	{
++	  printf ("resolving \"%s\" failed, skipping this hostname\n", host);
++	  continue;
++	}
++      printf ("resolving \"%s\" worked, proceeding to test\n", host);
++      freeaddrinfo (ai);
++
++      /* If it resolved with a single dot, check that it doesn't with
++	 a second trailing dot.  */
++      host[len-1] = '.';
++      if (getaddrinfo (host, NULL, NULL, &ai) == 0)
++	{
++	  printf ("resolving \"%s\" worked, test failed\n", host);
++	  return 1;
++	}
++      printf ("resolving \"%s\" failed, test passed\n", host);
++      pass = 1;
++    }
++
++  /* We want at least one successful name resolution for the test to
++     succeed.  */
++  return pass ? 0 : 2;
++}
++
++#define TEST_FUNCTION test ()
++#define TIMEOUT 10
++#include "../test-skeleton.c"
+diff --git a/resolv/res_query.c b/resolv/res_query.c
+index e4ee2a6..33eeeb7 100644
+--- a/resolv/res_query.c
++++ b/resolv/res_query.c
+@@ -535,8 +535,7 @@ res_nsearch(res_state statp,
+ libresolv_hidden_def (res_nsearch)
+ 
+ /*
+- * Perform a call on res_query on the concatenation of name and domain,
+- * removing a trailing dot from name if domain is NULL.
++ * Perform a call on res_query on the concatenation of name and domain.
+  */
+ static int
+ __libc_res_nquerydomain(res_state statp,
+@@ -561,10 +560,6 @@ __libc_res_nquerydomain(res_state statp,
+ 		       name, domain?domain:"<Nil>", class, type);
+ #endif
+ 	if (domain == NULL) {
+-		/*
+-		 * Check for trailing '.';
+-		 * copy without '.' if present.
+-		 */
+ 		n = strlen(name);
+ 
+ 		/* Decrement N prior to checking it against MAXDNAME
+@@ -575,11 +570,7 @@ __libc_res_nquerydomain(res_state statp,
+ 			RES_SET_H_ERRNO(statp, NO_RECOVERY);
+ 			return (-1);
+ 		}
+-		if (name[n] == '.') {
+-			strncpy(nbuf, name, n);
+-			nbuf[n] = '\0';
+-		} else
+-			longname = name;
++		longname = name;
+ 	} else {
+ 		n = strlen(name);
+ 		d = strlen(domain);
+-- 
+2.1.4
+

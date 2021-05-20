@@ -1,0 +1,124 @@
+From c48d8965f5a2b26d2f22388b750df701cc6d2691 Mon Sep 17 00:00:00 2001
+From: "Vivek.A" <Vivek_Arumugam@comcast.com>
+Date: Fri, 7 May 2021 15:20:29 +0000
+Subject: [PATCH] Port TTS plugin changes to wpe-0.4.4
+
+Change-Id: Ifbbd6a86231cbbacecdfbd1d386e0aaf8005d903
+---
+ Source/WebCore/CMakeLists.txt                |  1 +
+ Source/WebKit/WebProcess/WebPage/WebPage.cpp | 35 +++++++++++++++++++-
+ Source/WebKit/WebProcess/WebPage/WebPage.h   |  2 ++
+ 3 files changed, 37 insertions(+), 1 deletion(-)
+
+diff --git a/Source/WebCore/CMakeLists.txt b/Source/WebCore/CMakeLists.txt
+index 95415cbde89c..7ba9c5ab4977 100644
+--- a/Source/WebCore/CMakeLists.txt
++++ b/Source/WebCore/CMakeLists.txt
+@@ -3257,6 +3257,7 @@ set(WebCore_LIBRARIES
+     ${ZLIB_LIBRARIES}
+     JavaScriptCore${DEBUG_SUFFIX}
+     PAL${DEBUG_SUFFIX}
++    rdkat
+     TTSClient
+ )
+ 
+diff --git a/Source/WebKit/WebProcess/WebPage/WebPage.cpp b/Source/WebKit/WebProcess/WebPage/WebPage.cpp
+index c39ba8a5da0f..f705af67f3c5 100644
+--- a/Source/WebKit/WebProcess/WebPage/WebPage.cpp
++++ b/Source/WebKit/WebProcess/WebPage/WebPage.cpp
+@@ -247,6 +247,8 @@
+ #include <WebCore/MediaPlayerRequestInstallMissingPluginsCallback.h>
+ #endif
+ 
++#include <rdkat.h>
++
+ using namespace JSC;
+ using namespace WebCore;
+ 
+@@ -256,9 +258,18 @@ static const Seconds pageScrollHysteresisDuration { 300_ms };
+ static const Seconds initialLayerVolatilityTimerInterval { 20_ms };
+ static const Seconds maximumLayerVolatilityTimerInterval { 2_s };
+ 
++// Enable RDKAT Processing for WebKitBrowserPlugin
++static bool pluginAXEnabled = !!getenv("ENABLE_WEBKITBROWSER_PLUGIN_ACCESSIBILITY");
++
+ #define RELEASE_LOG_IF_ALLOWED(...) RELEASE_LOG_IF(isAlwaysOnLoggingAllowed(), Layers, __VA_ARGS__)
+ #define RELEASE_LOG_ERROR_IF_ALLOWED(...) RELEASE_LOG_ERROR_IF(isAlwaysOnLoggingAllowed(), Layers, __VA_ARGS__)
+ 
++WTF::WeakPtr<WebPage> g_pageHandle;
++static void SetMediaVolume(void *data, float volume) {
++    if(data && g_pageHandle && data == g_pageHandle.get())
++        g_pageHandle->setMediaVolume(volume);
++}
++
+ class SendStopResponsivenessTimer {
+ public:
+     ~SendStopResponsivenessTimer()
+@@ -359,6 +370,8 @@ WebPage::WebPage(uint64_t pageID, WebPageCreationParameters&& parameters)
+ {
+     ASSERT(m_pageID);
+ 
++    RDK_AT::Initialize();
++
+     m_pageGroup = WebProcess::singleton().webPageGroup(parameters.pageGroupData);
+ 
+ #if PLATFORM(IOS)
+@@ -3061,7 +3074,19 @@ void WebPage::updatePreferences(const WebPreferencesStore& store)
+     m_artificialPluginInitializationDelayEnabled = store.getBoolValueForKey(WebPreferencesKey::artificialPluginInitializationDelayEnabledKey());
+ 
+     m_scrollingPerformanceLoggingEnabled = store.getBoolValueForKey(WebPreferencesKey::scrollingPerformanceLoggingEnabledKey());
+-    m_accessibilityEnabled = store.getBoolValueForKey(WebPreferencesKey::accessibilityEnabledKey());
++
++    bool axEnabled = pluginAXEnabled || store.getBoolValueForKey(WebPreferencesKey::accessibilityEnabledKey());
++    if(m_accessibilityEnabled != axEnabled) {
++        m_accessibilityEnabled = axEnabled;
++
++        if(axEnabled) {
++            WebCore::AXObjectCache::enableAccessibility();
++        } else {
++            WebCore::AXObjectCache::disableAccessibility();
++            if(m_page && m_page->mainFrame().document())
++                m_page->mainFrame().document()->clearAXObjectCache();
++        }
++    }
+ 
+ #if PLATFORM(COCOA)
+     m_pdfPluginEnabled = store.getBoolValueForKey(WebPreferencesKey::pdfPluginEnabledKey());
+@@ -5378,6 +5403,14 @@ void WebPage::didCommitLoad(WebFrame* frame)
+     if (!frame->isMainFrame())
+         return;
+ 
++    g_pageHandle = m_weakPtrFactory.createWeakPtr(*this);
++    bool axEnabled = pluginAXEnabled;
++    axEnabled |= m_accessibilityEnabled && WebCore::AXObjectCache::accessibilityEnabled();
++    WTFLogAlways("%s RDKAT processing for WPE", axEnabled ? "Enable" : "Disable");
++
++    RDK_AT::EnableProcessing(axEnabled);
++    RDK_AT::SetVolumeControlCallback(SetMediaVolume, axEnabled ? this : nullptr);
++
+     // If previous URL is invalid, then it's not a real page that's being navigated away from.
+     // Most likely, this is actually the first load to be committed in this page.
+     if (frame->coreFrame()->loader().previousURL().isValid())
+diff --git a/Source/WebKit/WebProcess/WebPage/WebPage.h b/Source/WebKit/WebProcess/WebPage/WebPage.h
+index 5214e48ea906..4ffa74d2e17c 100644
+--- a/Source/WebKit/WebProcess/WebPage/WebPage.h
++++ b/Source/WebKit/WebProcess/WebPage/WebPage.h
+@@ -68,6 +68,7 @@
+ #include <wtf/Seconds.h>
+ #include <wtf/WallTime.h>
+ #include <wtf/text/WTFString.h>
++#include <wtf/WeakPtr.h>
+ 
+ #if HAVE(ACCESSIBILITY) && (PLATFORM(GTK) || PLATFORM(WPE))
+ #include "WebPageAccessibilityObject.h"
+@@ -1590,6 +1591,7 @@ private:
+ 
+     HashMap<String, RefPtr<WebURLSchemeHandlerProxy>> m_schemeToURLSchemeHandlerProxyMap;
+     HashMap<uint64_t, WebURLSchemeHandlerProxy*> m_identifierToURLSchemeHandlerProxyMap;
++    WTF::WeakPtrFactory<WebPage> m_weakPtrFactory;
+ };
+ 
+ } // namespace WebKit
+-- 
+2.29.0
+

@@ -1,0 +1,291 @@
+Source: RDK Management
+License: Apache 2.0
+Upstream-Status: Pending
+Signed-off-by: savidha_elumalai@comcast.com
+
+From: SAVIDHA E <e.savidha@ltts.com>
+Date: Tue, 29 Apr 2020
+Subject: [PATCH] common
+
+--- git1/kinesis-video-c-producer/CMakeLists.txt	2020-04-28 06:01:43.811797914 +0000
++++ git/kinesis-video-c-producer/CMakeLists.txt	2020-04-28 05:37:49.240470176 +0000
+@@ -64,7 +64,7 @@
+     if(DEFINED ENV{KINESIS_VIDEO_PRODUCER_C_SRC})
+         set(KINESIS_VIDEO_PRODUCER_C_SRC $ENV{KINESIS_VIDEO_PRODUCER_C_SRC})
+     else()
+-        set(KINESIS_VIDEO_PRODUCER_C_SRC "${CMAKE_CURRENT_SOURCE_DIR}/../kinesis-video-producer-c")
++        set(KINESIS_VIDEO_PRODUCER_C_SRC "${CMAKE_CURRENT_SOURCE_DIR}/../kinesis-video-c-producer")
+     endif()
+ 
+     if(DEFINED ENV{KINESIS_VIDEO_OPEN_SOURCE_SRC})
+@@ -73,11 +73,11 @@
+         set(KINESIS_VIDEO_OPEN_SOURCE_SRC "${CMAKE_CURRENT_SOURCE_DIR}/../kinesis-video-native-build/downloads")
+     endif()
+ 
+-    if (DEFINED ENV{KVS_JSMN_ROOT})
+-        set(KVS_JSMN_ROOT $ENV{KVS_JSMN_ROOT})
+-    else()
+-        message( FATAL_ERROR "No JSMN root specified." )
+-    endif()
++#    if (DEFINED ENV{KVS_JSMN_ROOT})
++#        set(KVS_JSMN_ROOT $ENV{KVS_JSMN_ROOT})
++#    else()
++#        message( FATAL_ERROR "No JSMN root specified." )
++#    endif()
+ 
+     message(STATUS "Kinesis Video PIC path is ${KINESIS_VIDEO_PIC_SRC}")
+     message(STATUS "Kinesis Video Producer path is ${KINESIS_VIDEO_PRODUCER_SRC}")
+@@ -155,8 +155,8 @@
+             ${KINESIS_VIDEO_PRODUCER_C_SRC}/src/source/IotAuthCallback.c
+             ${KINESIS_VIDEO_PRODUCER_C_SRC}/src/source/ConnectionStaleStateMachine.c
+             ${KINESIS_VIDEO_PRODUCER_C_SRC}/src/source/ContinuousRetryStreamCallbacks.c
+-            ${KINESIS_VIDEO_PRODUCER_C_SRC}/src/source/StateMachineData.c
+-            ${KINESIS_VIDEO_PRODUCER_C_SRC}/src/source/StreamErrorReportStateMachine.c
++#            ${KINESIS_VIDEO_PRODUCER_C_SRC}/src/source/StateMachineData.c
++#            ${KINESIS_VIDEO_PRODUCER_C_SRC}/src/source/StreamErrorReportStateMachine.c
+             ${KINESIS_VIDEO_PRODUCER_C_SRC}/src/source/StreamLatencyStateMachine.c
+             ${KINESIS_VIDEO_PRODUCER_C_SRC}/src/source/StreamCallbacksProvider.c
+             ${KINESIS_VIDEO_PRODUCER_C_SRC}/src/source/FileLoggerPlatformCallbackProvider.c
+@@ -173,11 +173,17 @@
+     include_directories(${OPEN_SRC_INCLUDE_DIRS})
+     include_directories(${KVS_JSMN_ROOT}/include)
+ 
++INCLUDE_DIRECTORIES( "."
++                        ${KVS_VIDEO_C_PRODUCER_ROOT}/src/include
++                   )
++
+     add_library(kvsproducerc SHARED ${PRODUCER_C_SOURCE_FILES})
+ 
+     target_link_libraries(kvsproducerc
+-            ${KvsPic}
+-            ${Jsmn}
++	    kvspic
++    	    jsmn
++ 	    pthread
++	    dl
+             ${PRODUCER_C_LIBRARIES})
+ 
+     add_executable(kvsVideoOnlyStreamingSample ${KINESIS_VIDEO_PRODUCER_C_SRC}/samples/KvsVideoOnlyStreamingSample.c)
+@@ -189,7 +195,7 @@
+     endif()
+ 
+     install(TARGETS kvsproducerc
+-            DESTINATION ${KVS_INSTALL_PATH})
++            DESTINATION lib)
+     install(TARGETS kvsVideoOnlyStreamingSample
+-            DESTINATION ${KVS_INSTALL_PATH})
++            DESTINATION bin)
+ endif()
+--- git1/kinesis-video-c-producer/src/CMakeLists.txt	2020-04-28 06:01:43.823797006 +0000
++++ git/kinesis-video-c-producer/src/CMakeLists.txt	2020-04-28 05:38:54.099582534 +0000
+@@ -14,7 +14,7 @@
+ 
+ add_library(${PROJECT_NAME} SHARED ${HEADERS} ${SOURCE})
+ target_link_libraries(${PROJECT_NAME} ${BP_BUILD_LIB_DIRS}
+-  client heap trace view mkvgen utils curl crypto ssl jsmn)
++  client heap trace view mkvgen utils curl crypto ssl jsmn kvspic)
+ 
+ install(TARGETS ${PROJECT_NAME} DESTINATION lib)
+ install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/
+--- git1/kinesis-video-gstreamer-plugin/CMakeLists.txt	2020-04-28 06:01:43.827796703 +0000
++++ git/kinesis-video-gstreamer-plugin/CMakeLists.txt	2020-04-28 05:45:20.146354198 +0000
+@@ -10,7 +10,7 @@
+ if (DEFINED ENV{KINESIS_VIDEO_STREAMS_PRODUCER_SDK_SOURCE_DIR})
+     set(KINESIS_VIDEO_STREAMS_PRODUCER_SDK_SOURCE_DIR $ENV{KINESIS_VIDEO_STREAMS_PRODUCER_SDK_SOURCE_DIR})
+ else ()
+-    set(KINESIS_VIDEO_STREAMS_PRODUCER_SDK_SOURCE_DIR "../")
++    set(KINESIS_VIDEO_STREAMS_PRODUCER_SDK_SOURCE_DIR "..")
+ endif ()
+ 
+ set(PLUGIN_PRJ_DIR ".")
+@@ -82,7 +82,7 @@
+ pkg_check_modules (GLIB2        REQUIRED    glib-2.0)
+ pkg_check_modules (GST          REQUIRED    gstreamer-1.0)
+ pkg_check_modules (GST_APP      REQUIRED    gstreamer-app-1.0)
+-pkg_check_modules (LOG4CPLUS    REQUIRED    log4cplus=1.2.0)
++#pkg_check_modules (LOG4CPLUS    REQUIRED    log4cplus=1.2.0)
+ pkg_check_modules (GOBJ2        REQUIRED    gobject-2.0)
+ pkg_check_modules (GST_CHECK    REQUIRED    gstreamer-check-1.0)
+ pkg_check_modules (GST_BASE     REQUIRED    gstreamer-base-1.0)
+@@ -132,22 +132,22 @@
+ set(GST_PLUGIN_SOURCE_FILES
+         ${KINESIS_VIDEO_GST_PLUGIN_SRC}/gstkvssink.cpp
+         ${KINESIS_VIDEO_GST_PLUGIN_SRC}/gstkvssink.h
+-        ${KINESIS_VIDEO_GST_PLUGIN_SRC}/KvsSinkRotatingCredentialProvider.h
+-        ${KINESIS_VIDEO_GST_PLUGIN_SRC}/KvsSinkRotatingCredentialProvider.cpp
++#        ${KINESIS_VIDEO_GST_PLUGIN_SRC}/KvsSinkRotatingCredentialProvider.h
++#        ${KINESIS_VIDEO_GST_PLUGIN_SRC}/KvsSinkRotatingCredentialProvider.cpp
+         ${KINESIS_VIDEO_GST_PLUGIN_SRC}/KvsSinkStreamCallbackProvider.h
+         ${KINESIS_VIDEO_GST_PLUGIN_SRC}/KvsSinkStreamCallbackProvider.cpp
+         ${KINESIS_VIDEO_GST_PLUGIN_SRC}/KvsSinkClientCallbackProvider.h
+         ${KINESIS_VIDEO_GST_PLUGIN_SRC}/KvsSinkClientCallbackProvider.cpp
+         ${KINESIS_VIDEO_GST_PLUGIN_SRC}/KvsSinkDeviceInfoProvider.h
+         ${KINESIS_VIDEO_GST_PLUGIN_SRC}/KvsSinkDeviceInfoProvider.cpp
+-        ${KINESIS_VIDEO_GST_PLUGIN_SRC}/StreamLatencyStateMachine.h
+-        ${KINESIS_VIDEO_GST_PLUGIN_SRC}/StreamLatencyStateMachine.cpp
+-        ${KINESIS_VIDEO_GST_PLUGIN_SRC}/ConnectionStaleStateMachine.h
+-        ${KINESIS_VIDEO_GST_PLUGIN_SRC}/ConnectionStaleStateMachine.cpp
+-        ${KINESIS_VIDEO_GST_PLUGIN_SRC}/KvsSinkStaticCredentialProvider.h
+-        ${KINESIS_VIDEO_GST_PLUGIN_SRC}/KvsSinkStaticCredentialProvider.cpp
+-        ${KINESIS_VIDEO_GST_PLUGIN_SRC}/KvsSinkIotCertCredentialProvider.h
+-        ${KINESIS_VIDEO_GST_PLUGIN_SRC}/KvsSinkIotCertCredentialProvider.cpp
++#        ${KINESIS_VIDEO_GST_PLUGIN_SRC}/StreamLatencyStateMachine.h
++#        ${KINESIS_VIDEO_GST_PLUGIN_SRC}/StreamLatencyStateMachine.cpp
++#        ${KINESIS_VIDEO_GST_PLUGIN_SRC}/ConnectionStaleStateMachine.h
++#        ${KINESIS_VIDEO_GST_PLUGIN_SRC}/ConnectionStaleStateMachine.cpp
++#        ${KINESIS_VIDEO_GST_PLUGIN_SRC}/KvsSinkStaticCredentialProvider.h
++#        ${KINESIS_VIDEO_GST_PLUGIN_SRC}/KvsSinkStaticCredentialProvider.cpp
++#        ${KINESIS_VIDEO_GST_PLUGIN_SRC}/KvsSinkIotCertCredentialProvider.h
++#        ${KINESIS_VIDEO_GST_PLUGIN_SRC}/KvsSinkIotCertCredentialProvider.cpp
+         ${KINESIS_VIDEO_GST_PLUGIN_SRC}/Util/KvsSinkUtil.h
+         ${KINESIS_VIDEO_GST_PLUGIN_SRC}/Util/KvsSinkUtil.cpp)
+ 
+@@ -180,6 +180,13 @@
+ 
+ link_directories(${OPEN_SRC_LIBRARY_DIRS})
+ 
++INCLUDE_DIRECTORIES( "."
++                        ${KVS_VIDEO_PIC_ROOT}/src/client/include
++                        ${KVS_VIDEO_PIC_ROOT}/src/common/include 
++                        ${KVS_VIDEO_C_PRODUCER_ROOT}/src/include
++                        ${KVS_VIDEO_PRODUCER_ROOT}/src/credential-providers/
++                   )
++
+ add_library(gstkvssink MODULE ${GST_PLUGIN_SOURCE_FILES})
+ 
+ add_executable(kvs_producer_plugin_demo ${KINESIS_VIDEO_GST_PLUGIN_DEMO_SRC}/kvs_producer_plugin_demo.cpp)
+@@ -191,11 +198,12 @@
+ 
+ target_link_libraries(gstkvssink
+         ${KVSSINK_LIBRARIES}
+-        ${PRODUCER})
++        kvspic
++        KinesisVideoProducer)
+ 
+ target_link_libraries(kvs_producer_plugin_demo
+         ${KVSSINK_DEMO_LIBRARIES}
+-        ${PRODUCER})
++        KinesisVideoProducer)
+ 
+ target_link_libraries(kvs_producer_plugin_rtsp_demo
+         ${KVSSINK_DEMO_LIBRARIES})
+@@ -203,3 +211,8 @@
+ target_link_libraries(gstkvsplugintest
+        ${GST_CHECK_LIBRARIES}
+        ${KVSSINK_DEMO_LIBRARIES})
++
++install(TARGETS gstkvssink DESTINATION lib/gstreamer-1.0 )
++install(TARGETS kvs_producer_plugin_demo DESTINATION bin )
++install(TARGETS kvs_producer_plugin_rtsp_demo DESTINATION bin)
++install(TARGETS gstkvsplugintest DESTINATION bin)
+--- git1/kinesis-video-pic/CMakeLists.txt	2020-04-28 06:01:43.831796400 +0000
++++ git/kinesis-video-pic/CMakeLists.txt	2020-04-28 05:47:22.689034507 +0000
+@@ -146,6 +146,29 @@
+     add_library(kvspic STATIC ${PIC_SOURCE_FILES})
+     target_link_libraries(kvspic)
+ 
++    install(TARGETS kvspic DESTINATION lib)
++
++install(DIRECTORY ${KINESIS_VIDEO_PIC_SRC}/src/client/include/ DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}"
++       FILES_MATCHING PATTERN "*.h" PATTERN ".git" EXCLUDE PATTERN "oe-logs" EXCLUDE PATTERN "oe-workdir" EXCLUDE)
++
++install(DIRECTORY ${KINESIS_VIDEO_PIC_SRC}/src/common/include/ DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}"
++        FILES_MATCHING PATTERN "*.h" PATTERN ".git" EXCLUDE PATTERN "oe-logs" EXCLUDE PATTERN "oe-workdir" EXCLUDE)
++
++install(DIRECTORY ${KINESIS_VIDEO_PIC_SRC}/src/heap/include/ DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}"
++        FILES_MATCHING PATTERN "*.h" PATTERN ".git" EXCLUDE PATTERN "oe-logs" EXCLUDE PATTERN "oe-workdir" EXCLUDE)
++
++install(DIRECTORY ${KINESIS_VIDEO_PIC_SRC}/src/trace/include/ DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}"
++        FILES_MATCHING PATTERN "*.h" PATTERN ".git" EXCLUDE PATTERN "oe-logs" EXCLUDE PATTERN "oe-workdir" EXCLUDE)
++
++install(DIRECTORY ${KINESIS_VIDEO_PIC_SRC}/src/mkvgen/include/ DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}"
++        FILES_MATCHING PATTERN "*.h" PATTERN ".git" EXCLUDE PATTERN "oe-logs" EXCLUDE PATTERN "oe-workdir" EXCLUDE)
++
++install(DIRECTORY ${KINESIS_VIDEO_PIC_SRC}/src/view/include/ DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}"
++        FILES_MATCHING PATTERN "*.h" PATTERN ".git" EXCLUDE PATTERN "oe-logs" EXCLUDE PATTERN "oe-workdir" EXCLUDE)
++
++install(DIRECTORY ${KINESIS_VIDEO_PIC_SRC}/src/utils/include/ DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}"
++        FILES_MATCHING PATTERN "*.h" PATTERN ".git" EXCLUDE PATTERN "oe-logs" EXCLUDE PATTERN "oe-workdir" EXCLUDE)
++
+     if(PIC_TEST)
+         set(CMAKE_CXX_STANDARD 11)
+ 
+--- git1/kinesis-video-producer/CMakeLists.txt	2020-04-28 06:01:43.839795795 +0000
++++ git/kinesis-video-producer/CMakeLists.txt	2020-04-28 05:47:55.966506114 +0000
+@@ -28,4 +28,4 @@
+ enable_testing()
+ add_subdirectory(src)
+ 
+-add_subdirectory(tst)
++#add_subdirectory(tst)
+--- git1/kinesis-video-producer/src/CMakeLists.txt	2020-04-28 06:01:43.839795795 +0000
++++ git/kinesis-video-producer/src/CMakeLists.txt	2020-04-28 05:50:21.359469465 +0000
+@@ -9,13 +9,24 @@
+ 
+ get_property(dirs DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY INCLUDE_DIRECTORIES)
+ 
++INCLUDE_DIRECTORIES( "."
++                        ${KVS_VIDEO_PIC_ROOT}/src/client/include
++                        ${KVS_VIDEO_PIC_ROOT}/src/utils/include
++                        ${KVS_VIDEO_PIC_ROOT}/src/mkvgen/include
++                       ${KVS_VIDEO_PIC_ROOT}/src/view/include
++                       ${KVS_VIDEO_PIC_ROOT}/src/heap/include
++                       ${KVS_VIDEO_PIC_ROOT}/src/common/include 
++                       ${KVS_VIDEO_C_PRODUCER_ROOT}/src/include)
++
+ add_library(${PROJECT_NAME} SHARED ${HEADERS} ${SOURCE})
+ 
+ # FIXME
+ # pipeline path doesn't pick up the kinesis video platform independent libs (client, duration, heap, etc.)
+ # because they are built as static libraries and not shared. Consider changing that package to 
+ # build shared libraries.
+-target_link_libraries(${PROJECT_NAME} ${BP_BUILD_LINK_LIBS} client duration heap mkvgen trace utils view)
++#target_link_libraries(${PROJECT_NAME} ${BP_BUILD_LINK_LIBS} client duration heap mkvgen trace utils view)
++
++target_link_libraries(${PROJECT_NAME} ${BP_BUILD_LINK_LIBS} curl log4cplus crypto cjson jsmn kvspic kvsproducerc)
+ 
+ set_property(TARGET ${PROJECT_NAME} PROPERTY CXX_STANDARD 14)
+ 
+@@ -24,3 +35,15 @@
+ install (DIRECTORY ${CMAKE_SOURCE_DIR}/src/
+         PUBLIC_HEADER DESTINATION ${CMAKE_INSTALL_PREFIX}/include
+         FILES_MATCHING PATTERN "*.h*")
++
++install(DIRECTORY "${KVS_VIDEO_PRODUCER_ROOT}/src/common/" DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}"   
++        FILES_MATCHING PATTERN "*.h" PATTERN ".git" EXCLUDE PATTERN "oe-logs" EXCLUDE PATTERN "oe-workdir" EXCLUDE)
++               
++install(DIRECTORY "${KVS_VIDEO_PRODUCER_ROOT}/src/credential-providers/" DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}"     
++        FILES_MATCHING PATTERN "*.h" PATTERN ".git" EXCLUDE PATTERN "oe-logs" EXCLUDE PATTERN "oe-workdir" EXCLUDE)
++       
++install(DIRECTORY "${KVS_VIDEO_PRODUCER_ROOT}/src/" DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}"  
++        FILES_MATCHING PATTERN "*.h" PATTERN ".git" EXCLUDE PATTERN "oe-logs" EXCLUDE PATTERN "oe-workdir" EXCLUDE)    
++       
++install(DIRECTORY "${KVS_VIDEO_C_PRODUCER_ROOT}/src/include/" DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}"        
++        FILES_MATCHING PATTERN "*.h" PATTERN ".git" EXCLUDE PATTERN "oe-logs" EXCLUDE PATTERN "oe-workdir" EXCLUDE)
+--- git1/kinesis-video-producer/tst/CMakeLists.txt	2020-04-28 06:01:43.839795795 +0000
++++ git/kinesis-video-producer/tst/CMakeLists.txt	2020-04-28 05:51:47.840911320 +0000
+@@ -6,12 +6,23 @@
+ 
+ set(INCLUDES_PATH "${CMAKE_CURRENT_SOURCE_DIR}/../src/")
+ 
++INCLUDE_DIRECTORIES( "."
++                        ${KVS_VIDEO_PIC_ROOT}/src/client/include
++                        ${KVS_VIDEO_PIC_ROOT}/src/utils/include
++                        ${KVS_VIDEO_PIC_ROOT}/src/mkvgen/include
++                       ${KVS_VIDEO_PIC_ROOT}/src/view/include
++                       ${KVS_VIDEO_PIC_ROOT}/src/heap/include
++                       ${KVS_VIDEO_PIC_ROOT}/src/common/include 
++                       ${KVS_VIDEO_C_PRODUCER_ROOT}/src/include)
++
+ include_directories(${INCLUDES_PATH})
+ include_directories(${BP_BUILD_INCLUDE_DIRS})
+ link_directories(${BP_BUILD_LIB})
+ 
+ add_executable(${PROJECT_NAME} ${ProducerTestSources})
+ target_link_libraries(${PROJECT_NAME} KinesisVideoProducer ${BP_TEST_BUILD_LINK_LIBS})
+-target_link_libraries(${PROJECT_NAME} gtest client heap trace view mkvgen utils)
++#target_link_libraries(${PROJECT_NAME} gtest client heap trace view mkvgen utils)
++
++target_link_libraries(${PROJECT_NAME} ${BP_BUILD_LINK_LIBS} curl log4cplus crypto cjson jsmn)
+ 
+ add_test(${PROJECT_NAME} ${PROJECT_NAME})

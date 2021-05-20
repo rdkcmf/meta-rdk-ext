@@ -1,0 +1,564 @@
+Date: Tue, 16 Jan 2018 21:37:52 -0800
+
+From: 257a88310112a1f5e372aed4ddc9d1abcd553e25 Mon Sep 17 00:00:00 2001
+
+Subject: [PATCH] wpe 0.4 configuration fixes for RDK build
+
+	New version of WPE (based on 2017.07.28 Webkit) requires gcc > 5.x
+	It's a significant update so most of Comcast patches had to be modified.
+	WPE recipe v0.4 will use the new master branch from Metro's repository.
+
+	WPE 0.4 also requires the newer version of OpenCDM from upstream
+	Metrological repository.
+
+Source: COMCAST
+
+License: BSD-2-Clause
+
+Upstream-Status: Pending
+
+Signed-off-by: Gurdal Oruklu <Gurdal_Oruklu@comcast.com>
+---
+ .gitignore                                         |   2 +
+ Source/WebCore/css/StyleResolver.cpp               |   2 +
+ Source/WebCore/loader/FrameLoader.cpp              |   2 +-
+ .../mse/MediaPlayerPrivateGStreamerMSE.cpp         |   4 +-
+ Source/WebCore/rendering/RenderBlockFlow.cpp       |   4 +
+ Source/WebKit/PlatformWPE.cmake                    |   2 +
+ .../WebKit/Shared/API/c/mac/WKObjCTypeWrapperRef.h |   2 +
+ .../WebKit/Shared/unix/BreakpadExceptionHandler.h  |  28 +++
+ .../InspectorServer/soup/WebSocketServerSoup.cpp   |   6 +-
+ Source/cmake/FindWaylandEGL.cmake                  |  46 ++++
+ Source/cmake/GStreamerDefinitions.cmake            |   2 +-
+ Source/cmake/OptionsWPE.cmake                      |   2 +-
+ Tools/wpe/examples/launcher/CMakeLists.txt         |  27 +++
+ Tools/wpe/examples/launcher/main.cpp               | 247 +++++++++++++++++++++
+ 14 files changed, 367 insertions(+), 9 deletions(-)
+ create mode 100644 Source/WebKit/Shared/unix/BreakpadExceptionHandler.h
+ create mode 100644 Source/cmake/FindWaylandEGL.cmake
+ create mode 100644 Tools/wpe/examples/launcher/CMakeLists.txt
+ create mode 100644 Tools/wpe/examples/launcher/main.cpp
+
+diff --git a/.gitignore b/.gitignore
+index 56caa891a9c..48fe229695b 100644
+--- a/.gitignore
++++ b/.gitignore
+@@ -114,3 +114,5 @@ __cmake_systeminformation/
+ 
+ # Ignore YouCompleteMe symlinks
+ .ycm_extra_conf.py
++.pc/
++patches/
+diff --git a/Source/WebCore/css/StyleResolver.cpp b/Source/WebCore/css/StyleResolver.cpp
+index 3500a018199..64d7991f2a5 100644
+--- a/Source/WebCore/css/StyleResolver.cpp
++++ b/Source/WebCore/css/StyleResolver.cpp
+@@ -779,9 +779,11 @@ static bool hasEffectiveDisplayNoneForDisplayContents(const Element& element)
+     // FIXME: <g>, <use> and <tspan> have special (?) behavior for display:contents in the current draft spec.
+     if (is<SVGElement>(element))
+         return true;
++#if ENABLE(MATHML)
+     // Not sure MathML code can handle it.
+     if (is<MathMLElement>(element))
+         return true;
++#endif
+     if (!is<HTMLElement>(element))
+         return false;
+     return tagNames.get().contains(element.localName());
+diff --git a/Source/WebCore/loader/FrameLoader.cpp b/Source/WebCore/loader/FrameLoader.cpp
+index 085826affd6..8f250dd189f 100644
+--- a/Source/WebCore/loader/FrameLoader.cpp
++++ b/Source/WebCore/loader/FrameLoader.cpp
+@@ -126,7 +126,7 @@
+ #include <wtf/SystemTracing.h>
+ #include <wtf/text/CString.h>
+ #include <wtf/text/WTFString.h>
+-
++#include "SchemeRegistry.h"
+ #if ENABLE(WEB_ARCHIVE) || ENABLE(MHTML)
+ #include "Archive.h"
+ #endif
+diff --git a/Source/WebCore/platform/graphics/gstreamer/mse/MediaPlayerPrivateGStreamerMSE.cpp b/Source/WebCore/platform/graphics/gstreamer/mse/MediaPlayerPrivateGStreamerMSE.cpp
+index 2753ddb0c63..fec8a353d4d 100644
+--- a/Source/WebCore/platform/graphics/gstreamer/mse/MediaPlayerPrivateGStreamerMSE.cpp
++++ b/Source/WebCore/platform/graphics/gstreamer/mse/MediaPlayerPrivateGStreamerMSE.cpp
+@@ -742,9 +742,7 @@ static HashSet<String, ASCIICaseInsensitiveHash>& mimeTypeCache()
+         HashSet<String, ASCIICaseInsensitiveHash> set;
+         const char* mimeTypes[] = {
+             "video/mp4",
+-            "audio/mp4",
+-            "video/webm",
+-            "audio/webm"
++            "audio/mp4"
+         };
+         for (auto& type : mimeTypes)
+             set.add(type);
+diff --git a/Source/WebCore/rendering/RenderBlockFlow.cpp b/Source/WebCore/rendering/RenderBlockFlow.cpp
+index c5c6d6c1674..4d573c8eea5 100644
+--- a/Source/WebCore/rendering/RenderBlockFlow.cpp
++++ b/Source/WebCore/rendering/RenderBlockFlow.cpp
+@@ -430,7 +430,11 @@ bool RenderBlockFlow::willCreateColumns(std::optional<unsigned> desiredColumnCou
+     // The following types are not supposed to create multicol context.
+     if (isFileUploadControl() || isTextControl() || isListBox())
+         return false;
++#if ENABLE(MATHML)
+     if (isRenderSVGBlock() || isRenderMathMLBlock() || isRubyRun())
++#else
++    if (isRenderSVGBlock() || isRubyRun())
++#endif
+         return false;
+ 
+     if (!firstChild())
+diff --git a/Source/WebKit/PlatformWPE.cmake b/Source/WebKit/PlatformWPE.cmake
+index ec3564ec3ee..836e1ab5d91 100644
+--- a/Source/WebKit/PlatformWPE.cmake
++++ b/Source/WebKit/PlatformWPE.cmake
+@@ -683,6 +683,8 @@ if (EXPORT_DEPRECATED_WEBKIT2_C_API)
+ 
+         ${WEBKIT_DIR}/UIProcess/API/C/soup/WKCookieManagerSoup.h
+         ${WEBKIT_DIR}/UIProcess/API/C/soup/WKSoupSession.h
++
++        ${WEBKIT_DIR}/UIProcess/API/cpp/WKRetainPtr.h
+     )
+ 
+     install(FILES ${WPE_INSTALLED_WEBKIT_HEADERS}
+diff --git a/Source/WebKit/Shared/API/c/mac/WKObjCTypeWrapperRef.h b/Source/WebKit/Shared/API/c/mac/WKObjCTypeWrapperRef.h
+index 35d4943a6cb..1af5fe4efa1 100644
+--- a/Source/WebKit/Shared/API/c/mac/WKObjCTypeWrapperRef.h
++++ b/Source/WebKit/Shared/API/c/mac/WKObjCTypeWrapperRef.h
+@@ -28,6 +28,8 @@
+ 
+ #include <Foundation/Foundation.h>
+ #include <WebKit/WKBase.h>
++#include <WebKit/WKRetainPtr.h>
++#include <WebKit/WKSerializedScriptValue.h>
+ 
+ #ifdef __cplusplus
+ extern "C" {
+diff --git a/Source/WebKit/Shared/unix/BreakpadExceptionHandler.h b/Source/WebKit/Shared/unix/BreakpadExceptionHandler.h
+new file mode 100644
+index 00000000000..a4b5d8fe04b
+--- /dev/null
++++ b/Source/WebKit/Shared/unix/BreakpadExceptionHandler.h
+@@ -0,0 +1,28 @@
++#ifndef BreakpadExceptionHandler_h
++#define BreakpadExceptionHandler_h
++
++#if defined (USE_BREAKPAD)
++#include "config.h"
++#include <client/linux/handler/exception_handler.h>
++
++namespace
++{
++// called by 'google_breakpad::ExceptionHandler' on every crash
++bool breakpadCallback(const google_breakpad::MinidumpDescriptor& descriptor, void* context, bool succeeded)
++{
++  (void) descriptor;
++  (void) context;
++  return succeeded;
++}
++
++void installExceptionHandler()
++{
++  static google_breakpad::ExceptionHandler* excHandler = NULL;
++  delete excHandler;
++  const char* BREAKPAD_MINIDUMP_DIR = "/opt/minidumps";
++  excHandler = new google_breakpad::ExceptionHandler(google_breakpad::MinidumpDescriptor(BREAKPAD_MINIDUMP_DIR), NULL, breakpadCallback, NULL, true, -1);
++}
++}
++#endif
++
++#endif // BreakpadExceptionHandler_h
+diff --git a/Source/WebKit/UIProcess/InspectorServer/soup/WebSocketServerSoup.cpp b/Source/WebKit/UIProcess/InspectorServer/soup/WebSocketServerSoup.cpp
+index bf3e019e6d5..4de0643773c 100644
+--- a/Source/WebKit/UIProcess/InspectorServer/soup/WebSocketServerSoup.cpp
++++ b/Source/WebKit/UIProcess/InspectorServer/soup/WebSocketServerSoup.cpp
+@@ -40,10 +40,10 @@ namespace WebKit {
+ 
+ static gboolean connectionCallback(GSocketService* /*service*/, GSocketConnection* connection, GObject* /*sourceObject*/, WebSocketServer* server)
+ {
+-#if !LOG_DISABLED
++#if 0 //!LOG_DISABLED
+     GRefPtr<GSocketAddress> socketAddress = adoptGRef(g_socket_connection_get_remote_address(connection, 0));
+     GUniquePtr<gchar> addressString(g_inet_address_to_string(g_inet_socket_address_get_address(G_INET_SOCKET_ADDRESS(socketAddress.get()))));
+-    LOG(InspectorServer, "New Connection from %s:%d.", addressString.get(), g_inet_socket_address_get_port(G_INET_SOCKET_ADDRESS(socketAddress.get())));
++    LOG("New Connection from %s:%d.", addressString.get(), g_inet_socket_address_get_port(G_INET_SOCKET_ADDRESS(socketAddress.get())));
+ #endif
+ 
+     auto webSocketConnection = std::make_unique<WebSocketServerConnection>(server->client(), server);
+@@ -62,7 +62,7 @@ void WebSocketServer::platformInitialize()
+ 
+ bool WebSocketServer::platformListen(const String& bindAddress, unsigned short port)
+ {
+-    LOG(InspectorServer, "Listen to address=%s, port=%d.", bindAddress.utf8().data(), port);
++    //LOG(InspectorServer, "Listen to address=%s, port=%d.", bindAddress.utf8().data(), port);
+     GRefPtr<GInetAddress> address = adoptGRef(g_inet_address_new_from_string(bindAddress.utf8().data()));
+     GRefPtr<GSocketAddress> socketAddress = adoptGRef(g_inet_socket_address_new(address.get(), port));
+     return g_socket_listener_add_address(G_SOCKET_LISTENER(m_socketService.get()), socketAddress.get(), G_SOCKET_TYPE_STREAM, G_SOCKET_PROTOCOL_TCP, 0, 0, 0);
+diff --git a/Source/cmake/FindWaylandEGL.cmake b/Source/cmake/FindWaylandEGL.cmake
+new file mode 100644
+index 00000000000..e5b015adc45
+--- /dev/null
++++ b/Source/cmake/FindWaylandEGL.cmake
+@@ -0,0 +1,46 @@
++# - Try to find wayland-egl.
++# Once done, this will define
++#
++#  WAYLAND_EGL_INCLUDE_DIRS - the wayland-egl include directories
++#  WAYLAND_EGL_LIBRARIES - link these to use wayland-egl.
++#
++# Copyright (C) 2015 Igalia S.L.
++#
++# Redistribution and use in source and binary forms, with or without
++# modification, are permitted provided that the following conditions
++# are met:
++# 1.  Redistributions of source code must retain the above copyright
++#     notice, this list of conditions and the following disclaimer.
++# 2.  Redistributions in binary form must reproduce the above copyright
++#     notice, this list of conditions and the following disclaimer in the
++#     documentation and/or other materials provided with the distribution.
++#
++# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDER AND ITS CONTRIBUTORS ``AS
++# IS'' AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO,
++# THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
++# PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR ITS
++# CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
++# EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
++# PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS;
++# OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
++# WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
++# OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
++# ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
++
++find_package(PkgConfig)
++pkg_check_modules(PC_WAYLAND_EGL wayland-egl)
++
++find_path(WAYLAND_EGL_INCLUDE_DIRS
++    NAMES wayland-egl.h
++    HINTS ${PC_WAYLAND_EGL_INCLUDE_DIRS} ${PC_WAYLAND_EGL_INCUDEDIR}
++)
++
++find_library(WAYLAND_EGL_LIBRARIES
++    NAMES ${PC_WAYLAND_EGL_LIBRARIES}
++    HINTS ${PC_WAYLAND_EGL_LIBRARY_DIRS} ${PC_WAYLAND_EGL_LIBDIR}
++)
++
++include(FindPackageHandleStandardArgs)
++FIND_PACKAGE_HANDLE_STANDARD_ARGS(WAYLAND_EGL DEFAULT_MSG WAYLAND_EGL_LIBRARIES)
++
++mark_as_advanced(WAYLAND_EGL_INCLUDE_DIRS WAYLAND_EGL_LIBRARIES)
+diff --git a/Source/cmake/GStreamerDefinitions.cmake b/Source/cmake/GStreamerDefinitions.cmake
+index bcf49efdbb0..b0363728747 100644
+--- a/Source/cmake/GStreamerDefinitions.cmake
++++ b/Source/cmake/GStreamerDefinitions.cmake
+@@ -3,7 +3,7 @@ WEBKIT_OPTION_DEFAULT_PORT_VALUE(ENABLE_VIDEO_TRACK PRIVATE ON)
+ WEBKIT_OPTION_DEFAULT_PORT_VALUE(ENABLE_WEB_AUDIO PUBLIC ON)
+ 
+ WEBKIT_OPTION_DEFINE(USE_GSTREAMER "Whether to use GStreamer support for Media" PRIVATE ON)
+-WEBKIT_OPTION_DEFINE(USE_GSTREAMER_GL "Whether to enable support for GStreamer GL" PRIVATE ON)
++WEBKIT_OPTION_DEFINE(USE_GSTREAMER_GL "Whether to enable support for GStreamer GL" PRIVATE OFF)
+ WEBKIT_OPTION_DEFINE(USE_GSTREAMER_WEBKIT_HTTP_SRC "Whether to enable support for Media resources loading with WebKit" PRIVATE ON)
+ WEBKIT_OPTION_DEFINE(USE_GSTREAMER_MPEGTS "Whether to enable support for MPEG-TS" PRIVATE OFF)
+ WEBKIT_OPTION_DEFINE(USE_HOLE_PUNCH_EXTERNAL "Transparent hole for the video player, rendering done by external application" PRIVATE OFF)
+diff --git a/Source/cmake/OptionsWPE.cmake b/Source/cmake/OptionsWPE.cmake
+index c68e5b356a2..0b8950ecde6 100644
+--- a/Source/cmake/OptionsWPE.cmake
++++ b/Source/cmake/OptionsWPE.cmake
+@@ -80,7 +80,7 @@ find_package(Fontconfig 2.8.0 REQUIRED)
+ find_package(Freetype2 2.4.2 REQUIRED)
+ find_package(HarfBuzz 0.9.18 REQUIRED)
+ find_package(JPEG REQUIRED)
+-find_package(LibGcrypt 1.6.0 REQUIRED)
++find_package(LibGcrypt 1.5.3 REQUIRED)
+ find_package(LibSoup 2.42.0 REQUIRED)
+ find_package(LibXml2 2.8.0 REQUIRED)
+ find_package(LibXslt 1.1.7 REQUIRED)
+diff --git a/Tools/wpe/examples/launcher/CMakeLists.txt b/Tools/wpe/examples/launcher/CMakeLists.txt
+new file mode 100644
+index 00000000000..f796063d0c8
+--- /dev/null
++++ b/Tools/wpe/examples/launcher/CMakeLists.txt
+@@ -0,0 +1,27 @@
++set(WPELAUNCHER_DIR "${TOOLS_DIR}/wpe/examples/launcher")
++
++set(WPELauncher_SOURCES
++    ${WPELAUNCHER_DIR}/main.cpp
++)
++
++set(WPELauncher_INCLUDE_DIRECTORIES
++    ${CMAKE_BINARY_DIR}
++    ${CMAKE_SOURCE_DIR}/Source
++    ${FORWARDING_HEADERS_DIR}
++    ${WTF_DIR}
++)
++
++set(WPELauncher_SYSTEM_INCLUDE_DIRECTORIES
++    ${GLIB_INCLUDE_DIRS}
++)
++
++set(WPELauncher_LIBRARIES
++    WebKit
++    ${GLIB_LIBRARIES}
++)
++
++include_directories(SYSTEM ${WPELauncher_SYSTEM_INCLUDE_DIRECTORIES})
++add_executable(WPELauncher ${WPELauncher_SOURCES})
++target_include_directories(WPELauncher PUBLIC ${WPELauncher_INCLUDE_DIRECTORIES})
++target_link_libraries(WPELauncher ${WPELauncher_LIBRARIES})
++install(TARGETS WPELauncher DESTINATION "${EXEC_INSTALL_DIR}")
+diff --git a/Tools/wpe/examples/launcher/main.cpp b/Tools/wpe/examples/launcher/main.cpp
+new file mode 100644
+index 00000000000..81e685605bf
+--- /dev/null
++++ b/Tools/wpe/examples/launcher/main.cpp
+@@ -0,0 +1,247 @@
++/*
++* Copyright (C) 2014 Igalia S.L
++* Copyright (C) 2016 Apple Inc.
++* Copyright (C) 2016 Comcast
++* All rights reserved.
++*  This library is free software; you can redistribute it and/or
++*  modify it under the terms of the GNU Lesser General Public
++*  License as published by the Free Software Foundation; either
++*  version 2 of the License, or (at your option) any later version.
++*
++*  This library is distributed in the hope that it will be useful,
++*  but WITHOUT ANY WARRANTY; without even the implied warranty of
++*  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++*  Lesser General Public License for more details.
++*
++*  You should have received a copy of the GNU Lesser General Public
++*  License along with this library; if not, write to the Free Software
++*  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
++*/
++
++#include <WebKit/WKContext.h>
++#include <WebKit/WKFramePolicyListener.h>
++#include <WebKit/WKPageGroup.h>
++#include <WebKit/WKPageConfigurationRef.h>
++#include <WebKit/WKPage.h>
++#include <WebKit/WKRetainPtr.h>
++#include <WebKit/WKString.h>
++#include <WebKit/WKURL.h>
++#include <WebKit/WKView.h>
++#include <WebKit/WKPreferencesRef.h>
++#include <WebKit/WKPreferencesRefPrivate.h>
++#include <glib.h>
++#include <WebKit/WKUserMediaPermissionRequest.h>
++//#include <WebKit/WKUserMediaPermissionCheck.h>
++#include <WebKit/WKArray.h>
++#include <string>
++
++static WKViewRef createView(WKPageConfigurationRef);
++
++std::string toStdString(WKStringRef string)
++{
++    size_t size = WKStringGetMaximumUTF8CStringSize(string);
++    auto buffer = std::make_unique<char[]>(size);
++    size_t len = WKStringGetUTF8CString(string, buffer.get(), size);
++
++    return std::string(buffer.get(), len - 1);
++}
++
++void decidePolicyForUserMediaPermissionRequestCallBack(WKPageRef, WKFrameRef, WKSecurityOriginRef, WKSecurityOriginRef, WKUserMediaPermissionRequestRef permissionRequest, const void* /* clientInfo */)
++{
++    WKRetainPtr<WKArrayRef> audioDeviceUIDs = WKUserMediaPermissionRequestAudioDeviceUIDs(permissionRequest);
++    WKRetainPtr<WKArrayRef> videoDeviceUIDs = WKUserMediaPermissionRequestVideoDeviceUIDs(permissionRequest);
++
++    if (WKArrayGetSize(videoDeviceUIDs.get()) || WKArrayGetSize(audioDeviceUIDs.get())) {
++        WKRetainPtr<WKStringRef> videoDeviceUID;
++        if (WKArrayGetSize(videoDeviceUIDs.get()))
++            videoDeviceUID = reinterpret_cast<WKStringRef>(WKArrayGetItemAtIndex(videoDeviceUIDs.get(), 0));
++        else
++            videoDeviceUID = WKStringCreateWithUTF8CString("");
++
++        WKRetainPtr<WKStringRef> audioDeviceUID;
++        if (WKArrayGetSize(audioDeviceUIDs.get()))
++            audioDeviceUID = reinterpret_cast<WKStringRef>(WKArrayGetItemAtIndex(audioDeviceUIDs.get(), 0));
++        else
++            audioDeviceUID = WKStringCreateWithUTF8CString("");
++
++        printf("Accept: audio='%s' video='%s'\n", toStdString(audioDeviceUID.get()).c_str(), toStdString(videoDeviceUID.get()).c_str());
++
++        WKUserMediaPermissionRequestAllow(permissionRequest, audioDeviceUID.get(), videoDeviceUID.get());
++    }
++}
++/*
++void checkUserMediaPermissionForOrigin(WKPageRef page, WKFrameRef frame,
++                                       WKSecurityOriginRef userMediaDocumentOrigin,
++                                       WKSecurityOriginRef topLevelDocumentOrigin,
++                                       WKUserMediaPermissionCheckRef devicesRequest, const void *)
++{
++    WKUserMediaPermissionCheckSetUserMediaAccessInfo(
++        devicesRequest,
++        WKStringCreateWithUTF8CString("test-test"),
++        true);
++}
++*/
++static WKPageUIClientV6 createPageUIClient()
++{
++    WKPageUIClientV6 pageUIClient = {
++        { 6, nullptr },
++        nullptr, // createNewPage_deprecatedForUseWithV0
++        nullptr, // showPage
++        nullptr, // close
++        nullptr, // takeFocus
++        nullptr, // focus
++        nullptr, // unfocus
++        nullptr, // runJavaScriptAlert_deprecatedForUseWithV0
++        nullptr, // runJavaScriptConfirm_deprecatedForUseWithV0
++        nullptr, // runJavaScriptPrompt_deprecatedForUseWithV0
++        nullptr, // setStatusText
++        nullptr, // mouseDidMoveOverElement_deprecatedForUseWithV0
++        nullptr, // missingPluginButtonClicked_deprecatedForUseWithV0
++        nullptr, // didNotHandleKeyEvent
++        nullptr, // didNotHandleWheelEvent
++        nullptr, // toolbarsAreVisible
++        nullptr, // setToolbarsAreVisible
++        nullptr, // menuBarIsVisible
++        nullptr, // setMenuBarIsVisible
++        nullptr, // statusBarIsVisible
++        nullptr, // setStatusBarIsVisible
++        nullptr, // isResizable
++        nullptr, // setIsResizable
++        nullptr, // getWindowFrame
++        nullptr, // setWindowFrame
++        nullptr, // runBeforeUnloadConfirmPanel
++        nullptr, // didDraw
++        nullptr, // pageDidScroll
++        nullptr, // exceededDatabaseQuota
++        nullptr, // runOpenPanel
++        nullptr, // decidePolicyForGeolocationPermissionRequest
++        nullptr, // headerHeight
++        nullptr, // footerHeight
++        nullptr, // drawHeader
++        nullptr, // drawFooter
++        nullptr, // printFrame
++        nullptr, // runModal
++        nullptr, // unused1
++        nullptr, // saveDataToFileInDownloadsFolder
++        nullptr, // shouldInterruptJavaScript_unavailable
++        nullptr, // createNewPage_deprecatedForUseWithV1
++        nullptr, // mouseDidMoveOverElement
++        nullptr, // decidePolicyForNotificationPermissionRequest
++        nullptr, // unavailablePluginButtonClicked_deprecatedForUseWithV1
++        nullptr, // showColorPicker
++        nullptr, // hideColorPicker
++        nullptr, // unavailablePluginButtonClicked
++        nullptr, // pinnedStateDidChange
++        nullptr, // didBeginTrackingPotentialLongMousePress
++        nullptr, // didRecognizeLongMousePress
++        nullptr, // didCancelTrackingPotentialLongMousePress
++        nullptr, // isPlayingAudioDidChange
++        decidePolicyForUserMediaPermissionRequestCallBack, // decidePolicyForUserMediaPermissionRequest
++        nullptr, // didClickAutoFillButton
++        nullptr, // runJavaScriptAlert
++        nullptr, // runJavaScriptConfirm
++        nullptr, // runJavaScriptPrompt
++        nullptr, // mediaSessionMetadataDidChange
++        // createNewPage
++        [](WKPageRef, WKPageConfigurationRef pageConfiguration, WKNavigationActionRef, WKWindowFeaturesRef, const void*) -> WKPageRef {
++            auto view = createView(pageConfiguration);
++            auto page = WKViewGetPage(view);
++            WKRetain(page);
++            return page;
++        },
++        0, // runJavaScriptAlert
++        0, // runJavaScriptConfirm
++        0, // runJavaScriptPrompt
++        nullptr, //checkUserMediaPermissionForOrigin,
++    };
++    return pageUIClient;
++}
++
++static WKPageNavigationClientV0 createPageNavigationClient()
++{
++    WKPageNavigationClientV0 navigationClient = {
++        { 0, nullptr },
++        // decidePolicyForNavigationAction
++        [](WKPageRef, WKNavigationActionRef, WKFramePolicyListenerRef listener, WKTypeRef, const void*) {
++            WKFramePolicyListenerUse(listener);
++        },
++        // decidePolicyForNavigationResponse
++        [](WKPageRef, WKNavigationResponseRef, WKFramePolicyListenerRef listener, WKTypeRef, const void*) {
++            WKFramePolicyListenerUse(listener);
++        },
++        nullptr, // decidePolicyForPluginLoad
++        nullptr, // didStartProvisionalNavigation
++        nullptr, // didReceiveServerRedirectForProvisionalNavigation
++        nullptr, // didFailProvisionalNavigation
++        nullptr, // didCommitNavigation
++        nullptr, // didFinishNavigation
++        nullptr, // didFailNavigation
++        nullptr, // didFailProvisionalLoadInSubframe
++        nullptr, // didFinishDocumentLoad
++        nullptr, // didSameDocumentNavigation
++        nullptr, // renderingProgressDidChange
++        nullptr, // canAuthenticateAgainstProtectionSpace
++        nullptr, // didReceiveAuthenticationChallenge
++        nullptr, // webProcessDidCrash
++        nullptr, // copyWebCryptoMasterKey
++        nullptr, // didBeginNavigationGesture
++        nullptr, // willEndNavigationGesture
++        nullptr, // didEndNavigationGesture
++        nullptr, // didRemoveNavigationGestureSnapshot
++    };
++    return navigationClient;
++}
++
++static WKViewRef createView(WKPageConfigurationRef pageConfiguration)
++{
++    auto view = WKViewCreate(pageConfiguration);
++    auto page = WKViewGetPage(view);
++
++    auto pageUIClient = createPageUIClient();
++    WKPageSetPageUIClient(page, &pageUIClient.base);
++
++    auto pageNavigationClient = createPageNavigationClient();
++    WKPageSetPageNavigationClient(page, &pageNavigationClient.base);
++
++    const char* userAgent = getenv("USER_AGENT");
++    if (userAgent)
++        WKPageSetCustomUserAgent(page, WKStringCreateWithUTF8CString(userAgent));
++
++    return view;
++}
++
++int main(int argc, char* argv[])
++{
++    GMainLoop* loop = g_main_loop_new(g_main_context_default(), FALSE);
++
++    auto context = adoptWK(WKContextCreate());
++    auto pageGroupIdentifier = adoptWK(WKStringCreateWithUTF8CString("WPEPageGroup"));
++    auto pageGroup = adoptWK(WKPageGroupCreateWithIdentifier(pageGroupIdentifier.get()));
++    auto pageConfiguration = adoptWK(WKPageConfigurationCreate());
++    WKPageConfigurationSetContext(pageConfiguration.get(), context.get());
++    WKPageConfigurationSetPageGroup(pageConfiguration.get(), pageGroup.get());
++
++    auto preferences = adoptWK(WKPreferencesCreate());
++    WKPageGroupSetPreferences(pageGroup.get(), preferences.get());
++    WKPageConfigurationSetPreferences(pageConfiguration.get(), preferences.get());
++    WKPreferencesSetAllowRunningOfInsecureContent(preferences.get(), true);
++    WKPreferencesSetAllowDisplayOfInsecureContent(preferences.get(), true);
++    WKPreferencesSetLogsPageMessagesToSystemConsoleEnabled(preferences.get(), true);
++
++    auto view = adoptWK(createView(pageConfiguration.get()));
++
++    const char* url = "http://www.webkit.org/blog-files/3d-transforms/poster-circle.html";
++    if (argc > 1)
++        url = argv[1];
++
++    auto shellURL = adoptWK(WKURLCreateWithUTF8CString(url));
++    WKPageLoadURL(WKViewGetPage(view.get()), shellURL.get());
++
++    WKPreferencesSetTabToLinksEnabled(preferences.get(), true);
++    WKPreferencesSetSpatialNavigationEnabled(preferences.get(), true);
++
++    g_main_loop_run(loop);
++
++    g_main_loop_unref(loop);
++    return 0;
++}
+-- 
+2.15.1
+

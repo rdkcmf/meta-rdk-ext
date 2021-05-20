@@ -1,0 +1,209 @@
+Date: Oct 05 12:53:21 2015
+
+From: 082bcac1f4ae43cd7f627b367696ca8d4e4a3219 Oct 05 12:53:21 2015
+
+Subject: [PATCH] BCOM-831, BCOM-832: Added xre template.
+
+	Added new template and hooks  for xre process.
+
+Source: COMCAST
+
+License: LGPL-2.1-or-later
+
+Upstream-Status: Pending
+
+Signed-off-by: Balaji Punnuru <balaji_punnuru@cable.comcast.com>
+---
+
+Index: lxc-1.1.2/hooks/Makefile.am
+===================================================================
+--- lxc-1.1.2.orig/hooks/Makefile.am
++++ lxc-1.1.2/hooks/Makefile.am
+@@ -4,6 +4,7 @@ hooks_SCRIPTS = \
+ 	clonehostname \
+ 	mountecryptfsroot \
+ 	ubuntu-cloud-prep \
+-	squid-deb-proxy-client
++	squid-deb-proxy-client \
++	rdksystemdhook
+ 
+ EXTRA_DIST=$(hooks_SCRIPTS)
+Index: lxc-1.1.2/hooks/rdksystemdhook
+===================================================================
+--- /dev/null
++++ lxc-1.1.2/hooks/rdksystemdhook
+@@ -0,0 +1,174 @@
++#!/bin/sh
++#
++# Make the cloned container aware of squid-deb-proxy settings at start.
++#
++# Copyright ©  2014 Christopher Glass.
++#
++# This library is free software; you can redistribute it and/or modify
++# it under the terms of the GNU General Public License version 2, as
++# published by the Free Software Foundation.
++#
++# This program is distributed in the hope that it will be useful,
++# but WITHOUT ANY WARRANTY; without even the implied warranty of
++# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++# GNU General Public License for more details.
++#
++# You should have received a copy of the GNU General Public License along
++# with this program; if not, write to the Free Software Foundation, Inc.,
++# 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
++
++# When starting a container, inject the squid-deb-proxy-client proxy
++# address in the container's apt configuration.
++# This script should be added to templates as a pre-start script, such as:
++#lxc.hook.start=/usr/share/lxc/hooks/rdksystemdhook
++
++tmpdir="/tmp"
++rm -rf  $tmpdir/etc/systemd
++rm -rf  $tmpdir/lib/systemd
++mkdir -p $tmpdir/etc/systemd
++mkdir -p $tmpdir/lib/systemd
++cp -r /etc/systemd/* $tmpdir/etc/systemd
++cp -r /lib/systemd/* $tmpdir/lib/systemd
++
++## Cleanup files under /etc/systemd
++rm -f $tmpdir/etc/systemd/syslog.service
++rm -f $tmpdir/etc/systemd/serial-getty@ttyS0.service
++rm -rf $tmpdir/etc/systemd/system/halt.*
++rm -f $tmpdir/etc/systemd/system/local-fs.target.wants/*
++rm -f $tmpdir/etc/systemd/system/default.target
++rm -f $tmpdir/lib/systemd/system/dbus.service
++
++ln -s /lib/systemd/system/dbusmount.service $tmpdir/etc/systemd/system/local-fs.target.wants/
++ln -s /lib/systemd/system/networkmount.service $tmpdir/etc/systemd/system/local-fs.target.wants/
++ln -s /lib/systemd/system/udevmount.service $tmpdir/etc/systemd/system/local-fs.target.wants/
++
++for i in  `ls $tmpdir/etc/systemd/system/multi-user.target.wants | grep -v remote-fs.target | grep -v xre-receiver | grep -v cgconfig | grep -v cgrules | grep -v cgrpmemory | grep -v cgrpmemorytest`
++do
++    rm -f $tmpdir/etc/systemd/system/multi-user.target.wants/$i
++done
++
++for i in  `ls $tmpdir/etc/systemd/system/sysinit.target.wants | grep -v systemd-timesync`
++do
++    rm -f $tmpdir/etc/systemd/system/sysinit.target.wants/$i
++done
++
++ln -sf /lib/systemd/system/xre-receiver.service $tmpdir/etc/systemd/system/multi-user.target.wants/
++ln -sf /lib/systemd/system/cgconfig.service $tmpdir/etc/systemd/system/multi-user.target.wants/
++ln -sf /lib/systemd/system/cgrules.service $tmpdir/etc/systemd/system/multi-user.target.wants/
++ln -sf /lib/systemd/system/cgrpmemory.service $tmpdir/etc/systemd/system/multi-user.target.wants/
++ln -sf /lib/systemd/system/cgrpmemorytest.service $tmpdir/etc/systemd/system/multi-user.target.wants/
++ln -sf /lib/systemd/system/$LXC_NAME-dump-log.timer $tmpdir/etc/systemd/system/multi-user.target.wants/
++rm -rf $tmpdir/etc/systemd/reboot.target.wants
++rm -rf $tmpdir/etc/systemd/sockets.target.wants
++
++
++for i in `ls $tmpdir/etc/systemd/system | grep -v getty.target.wants | grep -v multi-user.target.wants | grep -v local-fs.target.wants | grep -v sysinit.target.wants`
++do
++   rm -rf $tmdir/etc/systemd/system/$i
++done
++
++
++cat<<EOF >$tmpdir/lib/systemd/system/dbusmount.service
++[Unit]
++Description=A platform agnostic TV Guide
++
++
++[Service]
++ExecStartPre=/bin/sh -c "/bin/mkdir -p /var/run/dbus"
++ExecStart=/bin/mount --bind /dbusmount /var/run/dbus
++
++[Install]
++WantedBy=local-fs.target
++EOF
++
++cat<<EOF >$tmpdir/lib/systemd/system/udevmount.service
++[Unit]
++Description=A platform agnostic TV Guide
++
++
++[Service]
++ExecStartPre=/bin/sh -c "/bin/mkdir -p /var/run/udev/data"
++ExecStart=/bin/mount --bind /udevmount /var/run/udev/data
++[Install]
++WantedBy=local-fs.target
++EOF
++
++cat<<EOF >$tmpdir/lib/systemd/system/xre-receiver.service
++[Unit]
++Description=A platform agnostic TV Guide
++
++
++[Service]
++ExecStart=/lib/rdk/runAppManager.sh
++Restart=always
++
++[Install]
++WantedBy=multi-user.target
++EOF
++
++
++cat<<EOF >$tmpdir/lib/systemd/system/cgconfig.service
++[Unit]
++Description= Start/Stop the workload manager
++After=xre-receiver.service
++Requires=xre-receiver.service
++
++[Service]
++Type=oneshot
++RemainAfterExit=yes
++ExecStart=/bin/sh -c '/etc/cgconfig start'
++ExecStop=/bin/sh -c '/etc/cgconfig stop'
++
++[Install]
++WantedBy=multi-user.target
++EOF
++
++cat<<EOF >$tmpdir/lib/systemd/system/cgrules.service
++[Unit]
++Description= Start/Stop the CGroups Rules Engine Daemon
++After=cgconfig.service xre-receiver.service
++Requires=xre-receiver.service
++
++[Service]
++Type=oneshot
++RemainAfterExit=yes
++ExecStart=/bin/sh -c '/etc/cgred start'
++ExecStop=/bin/sh -c '/etc/cgred stop'
++
++[Install]
++WantedBy=multi-user.target
++EOF
++
++cat<<EOF >$tmpdir/lib/systemd/system/cgrpmemory.service
++[Unit]
++Description= Start/Stop the workload manager
++After=cgconfig.service cgrules.service
++
++[Service]
++SyslogIdentifier=cgrpmemory
++Type=oneshot
++RemainAfterExit=yes
++ExecStart=/bin/sh -c '/usr/bin/cgrpmemutils lxc/xre/limitmem memory.pressure_level critical &'
++
++[Install]
++WantedBy=multi-user.target
++EOF
++
++cat<<EOF >$tmpdir/lib/systemd/system/cgrpmemorytest.service
++[Unit]
++Description= Start/Stop the workload manager
++After=cgconfig.service cgrules.service
++
++[Service]
++SyslogIdentifier=cgrpmemorytest
++Type=oneshot
++RemainAfterExit=yes
++ExecStart=/bin/sh -c '/usr/bin/cgrpmemutils lxc/xre/testmem memory.pressure_level critical &'
++
++[Install]
++WantedBy=multi-user.target
++EOF
++
++mount -o bind /tmp/etc/systemd /etc/systemd
++mount -o bind /tmp/lib/systemd /lib/systemd
++

@@ -1,0 +1,71 @@
+Date: Thu, 15 Oct 2015 02:57:57 +0300
+
+From e4eaf99a31a8036da1552e5634b3dcfdd768810e Mon Sep 17 00:00:00 2001
+
+Subject: [PATCH] DELIA-9255: Added support for Nano second in Date command.
+
+        basic: parse_timestamp UTC and fractional seconds support
+        This is needed to add filter for micro seconds.
+
+Source: COMCAST
+
+License: LGPL-2.1-or-later
+
+Upstream-Status: Pending
+
+Signed-off-by: Hristo Venev <hristo@venev.name>
+Signed-off-by: Balaji Punnuru <balaji_punnuru@cable.comcast.com>
+---
+
+Index: git/src/shared/time-util.c
+===================================================================
+--- git.orig/src/shared/time-util.c
++++ git/src/shared/time-util.c
+@@ -72,6 +72,36 @@ dual_timestamp* dual_timestamp_from_real
+         return ts;
+ }
+ 
++time_t mktime_or_timegm(struct tm *tm, bool utc) {
++        return utc ? timegm(tm) : mktime(tm);
++}
++
++struct tm *localtime_or_gmtime_r(const time_t *t, struct tm *tm, bool utc) {
++        return utc ? gmtime_r(t, tm) : localtime_r(t, tm);
++}
++
++char* endswith_no_case(const char *s, const char *postfix) {
++        size_t sl, pl;
++
++        assert(s);
++        assert(postfix);
++
++        sl = strlen(s);
++        pl = strlen(postfix);
++
++        if (pl == 0)
++                return (char*) s + sl;
++
++        if (sl < pl)
++                return NULL;
++
++        if (strcasecmp(s + sl - pl, postfix) != 0)
++                return NULL;
++
++        return (char*) s + sl - pl;
++}
++
++
+ dual_timestamp* dual_timestamp_from_monotonic(dual_timestamp *ts, usec_t u) {
+         int64_t delta;
+         assert(ts);
+Index: git/src/shared/time-util.h
+===================================================================
+--- git.orig/src/shared/time-util.h
++++ git/src/shared/time-util.h
+@@ -103,3 +103,6 @@ int get_timezones(char ***l);
+ bool timezone_is_valid(const char *name);
+ 
+ clockid_t clock_boottime_or_monotonic(void);
++time_t mktime_or_timegm(struct tm *tm, bool utc);
++struct tm *localtime_or_gmtime_r(const time_t *t, struct tm *tm, bool utc);
++char *endswith_no_case(const char *s, const char *postfix) _pure_;

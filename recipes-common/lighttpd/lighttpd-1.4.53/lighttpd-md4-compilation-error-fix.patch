@@ -1,0 +1,25 @@
+
+License: BSD-3-Clause
+Date: Dec 13, 2019 4:05 PM
+From: Change-Id: I56605d17f33c04ea06658184e0d5cf1f00280188 
+
+Subject: RDKB-22373: Upgrade lighttpd to 1.4.53
+Porting the patches added to lighttpd-1.4.45 version to latest 1.4.53 version as well.
+Older patches are slightly modified to make it compatible with latest version.
+
+Source: Comcast
+Upstream-Status: None
+Signed-off-by: Rakhil P E <Rakhil_PuthiyaveettilEdachena@comcast.com>
+
+Index: lighttpd-1.4.53/src/mod_authn_file.c
+===================================================================
+--- lighttpd-1.4.53.orig/src/mod_authn_file.c
++++ lighttpd-1.4.53/src/mod_authn_file.c
+@@ -15,6 +15,7 @@
+ #endif
+ 
+ #include "sys-crypto.h"
++#undef USE_OPENSSL_CRYPTO
+ #ifdef USE_OPENSSL_CRYPTO
+ #include <openssl/md4.h>
+ #endif

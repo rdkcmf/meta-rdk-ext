@@ -1,0 +1,281 @@
+lxc: linux Container library
+
+Authors:
+Daniel Lezcano <daniel.lezcano@free.fr>
+
+This library is free software; you can redistribute it and/or
+modify it under the terms of the GNU Lesser General Public
+License as published by the Free Software Foundation; either
+version 2.1 of the License, or (at your option) any later version.
+
+This library is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+Lesser General Public License for more details.
+
+ou should have received a copy of the GNU Lesser General Public
+License along with this library; if not, write to the Free Software
+Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
+
+Date: Thu, 19 Jan 2017 10:32:14 +0100
+
+From 6de5eff0d9ba2bd589989042602f0797ce599291 Mon Sep 17 00:00:00 2001
+
+Subject: [PATCH] RDKCOM-659: Modify lxc-attach to spawn process with non-root uid/gid
+
+	Added new function to support the removing of root priviliges.
+	Changing user or group of a process shall only be
+	done by a call to setresuid() and setresgid() and
+	shall always be confirmed by a call to getresuid()
+	and getresgid(). A safe behavior in case of failure
+	must be implemented.
+	
+Source: LGI 
+
+Upstream-Status: Submitted
+
+Signed-off-by: adam-bienkunski-red <adam.bienkunski@redembedded.com>
+---
+
+
+diff --git a/src/lxc/arguments.h b/src/lxc/arguments.h
+index c00f0a2..610c00d 100644
+--- a/src/lxc/arguments.h
++++ b/src/lxc/arguments.h
+@@ -149,6 +149,8 @@ struct lxc_arguments {
+ 	{"logpriority", required_argument, 0, 'l'}, \
+ 	{"lxcpath", required_argument, 0, 'P'}, \
+ 	{"rcfile", required_argument, 0, OPT_RCFILE}, \
++	{"uid", required_argument, 0, 'u'}, \
++	{"gid", required_argument, 0, 'g'}, \
+ 	{0, 0, 0, 0}
+ 
+ /* option keys for long only options */
+diff --git a/src/lxc/attach.c b/src/lxc/attach.c
+index d5ae2bc..8524e41 100644
+--- a/src/lxc/attach.c
++++ b/src/lxc/attach.c
+@@ -78,6 +78,122 @@
+ 
+ lxc_log_define(lxc_attach, lxc);
+ 
++/*
++ * drop_root_privileges(int new_gid, int new_uid)
++ * 	new_gid - new group id for process
++ * 	new_uid - new user id for process
++ *
++ * 		RQ_S-NASC3-LNXENV-SE-1490
++ * Changing user or group of a process shall only be
++ * done by a call to setresuid() and setresgid() and
++ * shall always be confirmed by a call to getresuid()
++ * and getresgid(). A safe behavior in case of failure
++ * must be implemented.
++*/
++static void drop_root_privileges(int new_gid, int new_uid)
++{
++	uid_t real, eff, saved;
++	uid_t uid = (uid_t)new_uid;
++	gid_t gid = (gid_t)new_gid;
++	gid_t *groups, *effgroups;
++	int ngroups=20, neffgroups=20, nmatchedgroups;
++	int i,j;
++	struct passwd *pw;
++
++	groups = malloc(ngroups * sizeof (gid_t));
++	effgroups = malloc(neffgroups * sizeof (gid_t));
++
++	pw = getpwuid(uid);
++	if (pw == NULL)
++	{
++		SYSERROR("NO PASSWD ENTRY AVAILABLE for %d",uid);
++		exit(EXIT_FAILURE);
++	}
++
++	if (getgrouplist(pw->pw_name, pw->pw_gid, groups, &ngroups) == -1)
++	{
++		SYSERROR("getgrouplist() returned -1; ngroups = %d\n", ngroups);
++		exit(EXIT_FAILURE);
++	}
++
++	if (setgroups(ngroups, groups) != 0)
++	{
++		SYSERROR("Failed setting all user groups");
++		exit(EXIT_FAILURE);
++	}
++
++	if (setresgid(gid, gid, gid) != 0)
++	{
++		SYSERROR("Failed changing GID to %d",gid);
++		exit(EXIT_FAILURE);
++	}
++
++	if (setresuid(uid, uid, uid) != 0)
++	{
++		SYSERROR("Failed changing UID to %d",uid);
++		exit(EXIT_FAILURE);
++	}
++
++	if (getresuid(&real, &eff, &saved) != 0)
++	{
++		SYSERROR("Failed reading UID");
++		exit(EXIT_FAILURE);
++	}
++
++	if (real != uid || eff != uid || saved != uid)
++	{
++		SYSERROR("UID sanity check failed");
++		exit(EXIT_FAILURE);
++	}
++
++	if (getresgid(&real, &eff, &saved) != 0)
++	{
++		SYSERROR("Failed reading GID");
++		exit(EXIT_FAILURE);
++	}
++
++	if (real != gid || eff != gid || saved != gid)
++	{
++		SYSERROR("GID sanity check failed");
++		exit(EXIT_FAILURE);
++	}
++
++	neffgroups = getgroups(neffgroups, effgroups);
++	if (neffgroups == -1)
++	{
++		SYSERROR("getgroups() returned -1;\n");
++		exit(EXIT_FAILURE);
++	}
++	else if (neffgroups != ngroups)
++	{
++		SYSERROR("User groups sanity check failed: mismatch in number of groups. Expected %d but got %d groups.\n", ngroups, neffgroups);
++		exit(EXIT_FAILURE);
++	}
++
++	nmatchedgroups = 0;
++	for(i=0;i<neffgroups;i++)
++	{
++		for(j=0;j<ngroups;j++)
++		{
++			if (effgroups[i] == groups[j])
++			{
++				nmatchedgroups++;
++				break;
++			}
++		}
++	}
++	if (neffgroups != nmatchedgroups)
++	{
++		SYSERROR("User groups sanity check failed: mismatch in groups. Only %d groups matched of %d\n", nmatchedgroups, neffgroups);
++		exit(EXIT_FAILURE);
++	}
++
++	free(groups);
++	free(effgroups);
++
++	NOTICE("Dropped root privileges. Now running as UID %u GID %u \n", uid, gid);
++}
++
+ static int lsm_openat(int procfd, pid_t pid, int on_exec)
+ {
+ 	int ret = -1;
+@@ -1133,8 +1249,8 @@ static int attach_child_main(void* data)
+ 		shutdown(ipc_socket, SHUT_RDWR);
+ 		rexit(-1);
+ 	}
+-
+ 	/* set user / group id */
++
+ 	new_uid = 0;
+ 	new_gid = 0;
+ 	/* ignore errors, we will fall back to root in that case
+@@ -1278,6 +1394,11 @@ static int attach_child_main(void* data)
+ 				SYSERROR("Unable to clear CLOEXEC from fd");
+ 	}
+ 
++	if ((options->custom_uid) && (options->custom_gid) && (options->uid ==  (uid_t)-1) && (options->gid == (gid_t)-1))
++	{
++		drop_root_privileges(options->custom_gid, options->custom_uid);
++	}
++
+ 	/* we're done, so we can now do whatever the user intended us to do */
+ 	rexit(payload->exec_function(payload->exec_payload));
+ }
+@@ -1285,7 +1406,6 @@ static int attach_child_main(void* data)
+ int lxc_attach_run_command(void* payload)
+ {
+ 	lxc_attach_command_t* cmd = (lxc_attach_command_t*)payload;
+-
+ 	execvp(cmd->program, cmd->argv);
+ 	SYSERROR("failed to exec '%s'", cmd->program);
+ 	return -1;
+diff --git a/src/lxc/attach_options.h b/src/lxc/attach_options.h
+index 3c54e7c..3c202e9 100644
+--- a/src/lxc/attach_options.h
++++ b/src/lxc/attach_options.h
+@@ -106,6 +106,9 @@ typedef struct lxc_attach_options_t {
+ 	 */
+ 	gid_t gid;
+ 
++	uid_t custom_uid;
++	gid_t custom_gid;
++
+ 	/*! Environment policy */
+ 	lxc_attach_env_policy_t env_policy;
+ 
+@@ -140,6 +143,8 @@ typedef struct lxc_attach_options_t {
+ 		/* .initial_cwd = */    NULL, \
+ 		/* .uid = */            (uid_t)-1, \
+ 		/* .gid = */            (gid_t)-1, \
++		/* .custom_uid = */     (uid_t)0, \
++		/* .custom_gid = */     (gid_t)0, \
+ 		/* .env_policy = */     LXC_ATTACH_KEEP_ENV, \
+ 		/* .extra_env_vars = */ NULL, \
+ 		/* .extra_keep_env = */ NULL, \
+diff --git a/src/lxc/tools/lxc_attach.c b/src/lxc/tools/lxc_attach.c
+index 4dd3883..c9f69f8 100644
+--- a/src/lxc/tools/lxc_attach.c
++++ b/src/lxc/tools/lxc_attach.c
+@@ -66,6 +66,8 @@ static const struct option my_longopts[] = {
+ 	{"set-var", required_argument, 0, 'v'},
+ 	{"pty-log", required_argument, 0, 'L'},
+ 	{"rcfile", required_argument, 0, 'f'},
++	{"uid", required_argument, 0, 'u'},
++	{"gid", required_argument, 0, 'g'},
+ 	LXC_COMMON_OPTIONS
+ };
+ 
+@@ -74,6 +76,8 @@ static signed long new_personality = -1;
+ static int namespace_flags = -1;
+ static int remount_sys_proc = 0;
+ static lxc_attach_env_policy_t env_policy = LXC_ATTACH_KEEP_ENV;
++static uid_t uid = 0;
++static gid_t gid = 0;
+ static char **extra_env = NULL;
+ static ssize_t extra_env_size = 0;
+ static char **extra_keep = NULL;
+@@ -183,6 +187,12 @@ static int my_parser(struct lxc_arguments* args, int c, char* arg)
+ 	case 'f':
+ 		args->rcfile = arg;
+ 		break;
++	case 'u':
++		uid= atoi(arg);
++		break;
++	case 'g':
++		gid = atoi(arg);
++		break;
+ 	}
+ 
+ 	return 0;
+@@ -442,6 +452,9 @@ int main(int argc, char *argv[])
+ 	attach_options.env_policy = env_policy;
+ 	attach_options.extra_env_vars = extra_env;
+ 	attach_options.extra_keep_env = extra_keep;
++	attach_options.custom_uid= uid;
++	attach_options.custom_gid = gid;
++
+ 
+ 	if (my_args.argc > 0) {
+ 		command.program = my_args.argv[0];
+-- 
+2.7.4
+

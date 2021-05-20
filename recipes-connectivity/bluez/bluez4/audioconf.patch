@@ -1,0 +1,30 @@
+Date: Oct 23 16:36:48 2015
+
+From: 	b547e69b8bbaf507bf28e9e4a311b7da70a722b2 Oct 27 16:10:54 2015 
+
+Subject: [PATCH] RDK-3720: Add Bluetooth support for audio
+
+	Support for Bluetooth audio sink.
+	
+Source: COMCAST
+
+License: GPL-2.0-or-later
+
+Upstream-Status: Pending
+
+Signed-off-by: Mike Kahn <Mike.Kahn@arris.com>
+---
+
+Index: bluez-4.101/audio/audio.conf
+===================================================================
+--- bluez-4.101.orig/audio/audio.conf
++++ bluez-4.101/audio/audio.conf
+@@ -10,6 +10,8 @@
+ # If we want to disable support for specific services
+ # Defaults to supporting all implemented services
+ #Disable=Gateway,Source,Socket
++Enable=Source
++Disable=Socket
+ 
+ # SCO routing. Either PCM or HCI (in which case audio is routed to/from ALSA)
+ # Defaults to HCI

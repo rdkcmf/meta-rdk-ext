@@ -1,0 +1,32 @@
+Date: Jan 06 04:04:04 2016
+
+From: 7fc437126395fa2c8f7d2157091a52704c6fa5c5  Jan 07 00:04:59 2016
+
+Subject: [PATCH] DELIA-12051: Fixed errors with processing trailing dots in domain name.
+
+	According to RFC1035, 2.3.1 it is ok to have trailing
+        "." in the domain name. Existing code base marks the domain
+        as bad when trailing dot is seen, hence the fix.
+
+Source: COMCAST
+
+License: GPL-2-or-later
+
+Upstream-Status: Pending
+
+Signed-off-by: Balaji Punnuru <balaji_punnuru@cable.comcast.com>
+---
+
+Index: busybox-1.22.1/networking/udhcp/dhcpc.c
+===================================================================
+--- busybox-1.22.1.orig/networking/udhcp/dhcpc.c
++++ busybox-1.22.1/networking/udhcp/dhcpc.c
+@@ -194,6 +194,8 @@ static int good_hostname(const char *nam
+ 			//Do we want this?
+ 			//return ((name - start) < 1025); /* NS_MAXDNAME */
+ 		name++;
++		if (*name == '\0')
++			return 1;
+ 	}
+ }
+ 

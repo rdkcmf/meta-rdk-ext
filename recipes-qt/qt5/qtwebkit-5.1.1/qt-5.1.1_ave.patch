@@ -1,0 +1,153 @@
+Date: Dec 26 14:04:33 2014 
+
+From: ebe2fb32c1964e3c8e7fe5f333546cc22d984fa3 Dec 26 14:04:33 2014
+
+Subject: [PATCH] RDKSYSINTSW-1535: Patched webkit required for ave
+
+	AVE needs to webkit patches to extract java script object.
+	and operate directly on it.
+
+Source: COMCAST
+
+License: LGPL-2.0-or-later
+
+Upstream-Status: Pending
+
+Signed-off-by: Balaji Punnuru <balaji_punnuru@cable.comcast.com>
+---
+
+Index: qtwebkit-opensource-src-5.1.1/Source/WebKit/qt/WidgetApi/qwebframe.cpp
+===================================================================
+--- qtwebkit-opensource-src-5.1.1.orig/Source/WebKit/qt/WidgetApi/qwebframe.cpp
++++ qtwebkit-opensource-src-5.1.1/Source/WebKit/qt/WidgetApi/qwebframe.cpp
+@@ -923,6 +923,13 @@ QWebSecurityOrigin QWebFrame::securityOr
+     return d->securityOrigin();
+ }
+ 
++//COMCAST MODIFICATION BEGIN [AVE]
++void* QWebFrame::jsGlobalContext()
++{
++    return d->jsGlobalContext();
++}
++//COMCAST MODIFICATION END [AVE]
++
+ QWebFrame *QWebFramePrivate::kit(const QWebFrameAdapter* frameAdapter)
+ {
+     return static_cast<const QWebFramePrivate*>(frameAdapter)->q;
+Index: qtwebkit-opensource-src-5.1.1/Source/WebKit/qt/WidgetApi/qwebframe.h
+===================================================================
+--- qtwebkit-opensource-src-5.1.1.orig/Source/WebKit/qt/WidgetApi/qwebframe.h
++++ qtwebkit-opensource-src-5.1.1/Source/WebKit/qt/WidgetApi/qwebframe.h
+@@ -201,6 +201,9 @@ public:
+     virtual bool event(QEvent *);
+ 
+     QWebSecurityOrigin securityOrigin() const;
++//COMCAST MODIFICATION BEGIN [AVE]
++    void* jsGlobalContext();
++//COMCAST MODIFICATION END [AVE]
+     QWebFrameAdapter* handle() const;
+ 
+ public Q_SLOTS:
+Index: qtwebkit-opensource-src-5.1.1/Source/WebKit/qt/WebCoreSupport/QWebFrameAdapter.cpp
+===================================================================
+--- qtwebkit-opensource-src-5.1.1.orig/Source/WebKit/qt/WebCoreSupport/QWebFrameAdapter.cpp
++++ qtwebkit-opensource-src-5.1.1/Source/WebKit/qt/WebCoreSupport/QWebFrameAdapter.cpp
+@@ -440,8 +440,14 @@ void QWebFrameAdapter::renderCompositedL
+     WebCore::Page* page = frame->page();
+     if (!page)
+         return;
+-    if (TextureMapperLayerClientQt* client = static_cast<ChromeClientQt*>(page->chrome()->client())->m_textureMapperLayerClient.get())
++// COMCAST MODIFICATION BEGIN [TBS]
++    if (TextureMapperLayerClientQt* client = static_cast<ChromeClientQt*>(page->chrome()->client())->m_textureMapperLayerClient.get()) {
++        context->save();
++        context->clip(frame->view()->visibleContentRect());
+         client->renderCompositedLayers(context, clip);
++        context->restore();
++    }
++// COMCAST MODIFICATION END [TBS]
+ }
+ #endif
+ // FIXME: this might not be necessary, but for the sake of not breaking things, we'll use that for now.
+@@ -634,19 +640,22 @@ bool QWebFrameAdapter::renderFromTiledBa
+ 
+     int scrollX = view->scrollX();
+     int scrollY = view->scrollY();
+-    context.translate(-scrollX, -scrollY);
++//COMCAST MODIFICATION BEGIN [BACKPORT]
++    QRect frameRect = view->frameRect();
+ 
+     for (int i = 0; i < vector.size(); ++i) {
+         const QRect& clipRect = vector.at(i);
+ 
+-        painter->save();
+-
+-        QRect rect = clipRect.translated(scrollX, scrollY);
+-        painter->setClipRect(rect, Qt::IntersectClip);
++        context.save();
++        QRect rect = clipRect.intersected(frameRect);
++        context.translate(-scrollX, -scrollY);
++        rect.translate(scrollX, scrollY);
++        context.clip(rect);
+ 
+         frame->tiledBackingStore()->paint(&context, rect);
+ 
+-        painter->restore();
++        context.restore();
++//COMCAST MODIFICATION END [BACKPORT]
+     }
+ 
+ #if USE(ACCELERATED_COMPOSITING)
+@@ -981,3 +990,16 @@ void QWebFrameAdapter::setDelegatesScrol
+     ASSERT(frame->view());
+     frame->view()->setDelegatesScrolling(resizesToContents);
+ }
++
++//COMCAST MODIFICATION BEGIN [AVE]
++void* QWebFrameAdapter::jsGlobalContext()
++{
++    ScriptController* script = frame->script();
++    if (!script)
++        return 0;
++
++    JSC::ExecState *exec = script->globalObject(mainThreadNormalWorld())->globalExec();
++
++    return (void*)toGlobalRef(exec);
++}
++//COMCAST MODIFICATION END [AVE]
+Index: qtwebkit-opensource-src-5.1.1/Source/WebKit/qt/WebCoreSupport/QWebFrameAdapter.h
+===================================================================
+--- qtwebkit-opensource-src-5.1.1.orig/Source/WebKit/qt/WebCoreSupport/QWebFrameAdapter.h
++++ qtwebkit-opensource-src-5.1.1/Source/WebKit/qt/WebCoreSupport/QWebFrameAdapter.h
+@@ -238,6 +238,10 @@ public:
+     WebCore::Scrollbar* horizontalScrollBar() const;
+     WebCore::Scrollbar* verticalScrollBar() const;
+ 
++//COMCAST MODIFICATION BEGIN [AVE]
++    void* jsGlobalContext();
++//COMCAST MODIFICATION END [AVE]
++
+     WebCore::Frame *frame;
+     WebCore::FrameLoaderClientQt *frameLoaderClient;
+     QUrl url;
+Index: qtwebkit-opensource-src-5.1.1/Source/api.pri
+===================================================================
+--- qtwebkit-opensource-src-5.1.1.orig/Source/api.pri
++++ qtwebkit-opensource-src-5.1.1/Source/api.pri
+@@ -107,3 +107,17 @@ qnx {
+     QMAKE_EXTRA_TARGETS += dummyfile
+     GENERATED_SOURCES += $$dummyfile.target
+ }
++
++#COMCAST MODIFICATION BEGIN [AVE]
++expose_js_core_headers:!build_pass {
++    JS_CORE_HEADERS_OUTDIR=$$MODULE_BASE_OUTDIR/include/$$MODULE_INCNAME/$$VERSION/$$MODULE_INCNAME/private/JavaScriptCore
++    JS_CORE_HEADERS_INCDIR=$$MODULE_BASE_DIR/JavaScriptCore/API
++
++    EXPOSE_JS_CORE_HEADERS_CMD="mkdir -p \"$$JS_CORE_HEADERS_OUTDIR\" && cp \"$$JS_CORE_HEADERS_INCDIR\"/*.h  \"$$JS_CORE_HEADERS_OUTDIR\""
++    system($$EXPOSE_JS_CORE_HEADERS_CMD)|error("Failed to run: $$EXPOSE_JS_CORE_HEADERS_CMD")
++
++    js_core_headers.files = $$files($$JS_CORE_HEADERS_OUTDIR/*)
++    js_core_headers.path = $$[QT_INSTALL_HEADERS]/$$MODULE_INCNAME/$$VERSION/$$MODULE_INCNAME/private/JavaScriptCore
++    INSTALLS += js_core_headers
++}
++#COMCAST MODIFICATION END [AVE]

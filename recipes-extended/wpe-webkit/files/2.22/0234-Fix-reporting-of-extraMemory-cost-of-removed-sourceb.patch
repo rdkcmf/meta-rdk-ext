@@ -1,0 +1,24 @@
+From 9ab123b8375f027bb9fd5e1e05eb54ff60634bc3 Mon Sep 17 00:00:00 2001
+From: Eugene Mutavchi <Ievgen_Mutavchi@comcast.com>
+Date: Mon, 8 Feb 2021 17:06:20 +0000
+Subject: [PATCH] Fix reporting of extraMemory cost of removed sourcebuffers
+
+---
+ Source/WebCore/Modules/mediasource/SourceBuffer.cpp | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/Source/WebCore/Modules/mediasource/SourceBuffer.cpp b/Source/WebCore/Modules/mediasource/SourceBuffer.cpp
+index c3e59fffef37..6e89fedd27af 100644
+--- a/Source/WebCore/Modules/mediasource/SourceBuffer.cpp
++++ b/Source/WebCore/Modules/mediasource/SourceBuffer.cpp
+@@ -451,6 +451,7 @@ void SourceBuffer::removedFromMediaSource()
+     m_private->removedFromMediaSource();
+     m_source = nullptr;
+     m_asyncEventQueue.cancelAllEvents();
++    m_reportedExtraMemoryCost = 0;
+ }
+ 
+ void SourceBuffer::seekToTime(const MediaTime& time)
+-- 
+2.17.1
+

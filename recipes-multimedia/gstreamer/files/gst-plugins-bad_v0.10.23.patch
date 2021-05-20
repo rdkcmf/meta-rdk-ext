@@ -1,0 +1,84 @@
+Date: Sat Apr 19 10:22:28 2014 
+
+From: 8d3878ca5ee3c716411961cbfc555745183dc816 	Sat Apr 19 10:22:28 2014 
+
+Subject: [PATCH] gstreamer: Enable and fix support for fbdev
+
+	gstreamer: Enable and fix support for fbdev
+
+Source: COMCAST
+
+License: LGPL-2.1-or-later
+
+Upstream-Status: Pending
+
+Signed-off-by: Khem Raj <khem_raj@cable.comcast.com>
+---
+
+diff -rupN gst-plugins-bad-0.10.23.ori/sys/fbdev/gstfbdevsink.c gst-plugins-bad-0.10.23/sys/fbdev/gstfbdevsink.c
+--- gst-plugins-bad-0.10.23.ori/sys/fbdev/gstfbdevsink.c	2014-03-04 02:07:31.201798657 -0800
++++ gst-plugins-bad-0.10.23/sys/fbdev/gstfbdevsink.c	2014-03-04 02:08:43.941801424 -0800
+@@ -43,6 +43,8 @@ enum
+ {
+   ARG_0,
+   ARG_DEVICE,
++  ARG_XPOS,
++  ARG_YPOS
+ };
+ 
+ static void gst_fbdevsink_base_init (gpointer g_class);
+@@ -185,8 +187,7 @@ gst_fbdevsink_getcaps (GstBaseSink * bsi
+       "bpp", G_TYPE_INT, fbdevsink->varinfo.bits_per_pixel,
+       "depth", G_TYPE_INT, fbdevsink->varinfo.red.length +
+       fbdevsink->varinfo.green.length +
+-      fbdevsink->varinfo.blue.length +
+-      fbdevsink->varinfo.transp.length,
++      fbdevsink->varinfo.blue.length ,
+       "endianness", G_TYPE_INT, endianness,
+       "red_mask", G_TYPE_INT, rmask,
+       "green_mask", G_TYPE_INT, gmask, "blue_mask", G_TYPE_INT, bmask, NULL);
+@@ -313,7 +314,8 @@ gst_fbdevsink_set_property (GObject * ob
+     const GValue * value, GParamSpec * pspec)
+ {
+   GstFBDEVSink *fbdevsink;
+-
++  char* tmp;
++  int pos;
+   fbdevsink = GST_FBDEVSINK (object);
+ 
+   switch (prop_id) {
+@@ -322,6 +324,21 @@ gst_fbdevsink_set_property (GObject * ob
+       fbdevsink->device = g_value_dup_string (value);
+       break;
+     }
++    case ARG_XPOS:
++      tmp = g_value_dup_string (value);
++	 pos =atoi(tmp);
++      if(pos < fbdevsink->varinfo.xres)
++	  fbdevsink->cx= pos;
++
++	  free(tmp);
++	break;
++	case ARG_YPOS:
++            tmp = g_value_dup_string (value);
++	   pos =atoi(tmp);
++	  if(pos < fbdevsink->varinfo.yres)
++	  fbdevsink->cy= pos;
++	  free(tmp);
++	break;
+     default:
+       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
+       break;
+@@ -397,6 +414,12 @@ gst_fbdevsink_class_init (GstFBDEVSinkCl
+   g_object_class_install_property (G_OBJECT_CLASS (klass), ARG_DEVICE,
+       g_param_spec_string ("device", "device",
+           "The framebuffer device eg: /dev/fb0", NULL, G_PARAM_READWRITE));
++g_object_class_install_property (G_OBJECT_CLASS (klass), ARG_XPOS,
++      g_param_spec_string ("xpos", "xpos",
++          "The framebuffer xpos eg: 300", NULL, G_PARAM_READWRITE));
++  g_object_class_install_property (G_OBJECT_CLASS (klass), ARG_YPOS,
++      g_param_spec_string ("ypos", "ypos",
++          "The framebuffer ypos eg: 300", NULL, G_PARAM_READWRITE));
+ 
+   gstvs_class->set_caps = GST_DEBUG_FUNCPTR (gst_fbdevsink_setcaps);
+   gstvs_class->get_caps = GST_DEBUG_FUNCPTR (gst_fbdevsink_getcaps);

@@ -1,0 +1,44 @@
+From cdce645a87c83aa7575c5477e3752e4cc0c155d2 Mon Sep 17 00:00:00 2001
+From: Siva Sankar Raja <sivasankar_raja@comcast.com>
+Source: COMCAST
+License: LICENSE-LGPL-2.1
+Upstream-Status: Pending
+Signed-off-by: Siva Sankar Raja <sivasankar_raja@comcast.com>
+Date: Fri, 28 Jun 2019 18:54:28 +0000
+Subject: [PATCH] comcast-DelayedAudio-test
+
+---
+ .../platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp      | 5 +++++
+ .../graphics/gstreamer/mse/MediaPlayerPrivateGStreamerMSE.cpp        | 3 +++
+ 2 files changed, 8 insertions(+)
+
+Index: git/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp
+===================================================================
+--- git.orig/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp
++++ git/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp
+@@ -463,6 +463,11 @@ bool MediaPlayerPrivateGStreamer::change
+         return true;
+     }
+ 
++    if (m_readyState <= MediaPlayer::HaveMetadata && newState == GST_STATE_PLAYING) {
++        GST_DEBUG("Rejected state change to playing, buffers are not ready yet");
++        return true;
++    }
++
+     GST_DEBUG("Changing state change to %s from %s with %s pending", gst_element_state_get_name(newState),
+         gst_element_state_get_name(currentState), gst_element_state_get_name(pending));
+ 
+Index: git/Source/WebCore/platform/graphics/gstreamer/mse/MediaPlayerPrivateGStreamerMSE.cpp
+===================================================================
+--- git.orig/Source/WebCore/platform/graphics/gstreamer/mse/MediaPlayerPrivateGStreamerMSE.cpp
++++ git/Source/WebCore/platform/graphics/gstreamer/mse/MediaPlayerPrivateGStreamerMSE.cpp
+@@ -635,6 +635,9 @@ void MediaPlayerPrivateGStreamerMSE::upd
+                 GST_DEBUG("m_readyState=%s", dumpReadyState(m_readyState));
+                 m_networkState = MediaPlayer::Loaded;
+             } else {
++                if (m_mediaSource)
++                    m_mediaSource->monitorSourceBuffers();
++
+                 m_readyState = MediaPlayer::HaveFutureData;
+                 GST_DEBUG("m_readyState=%s", dumpReadyState(m_readyState));
+                 m_networkState = MediaPlayer::Loading;

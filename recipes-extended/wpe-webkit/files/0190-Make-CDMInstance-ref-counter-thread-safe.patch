@@ -1,0 +1,33 @@
+From 4a5bb86abe1bb11a27e21588b43a93b5021a7fcb Mon Sep 17 00:00:00 2001
+From: Ievgen Mutavchi <Ievgen_Mutavchi@comcast.com>
+Date: Tue, 13 Oct 2020 11:47:01 -0400
+Subject: [PATCH] Make CDMInstance ref counter thread safe
+
+---
+ Source/WebCore/platform/encryptedmedia/CDMInstance.h | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/Source/WebCore/platform/encryptedmedia/CDMInstance.h b/Source/WebCore/platform/encryptedmedia/CDMInstance.h
+index 62128b8..079668d 100644
+--- a/Source/WebCore/platform/encryptedmedia/CDMInstance.h
++++ b/Source/WebCore/platform/encryptedmedia/CDMInstance.h
+@@ -34,6 +34,7 @@
+ #include <wtf/Forward.h>
+ #include <wtf/Optional.h>
+ #include <wtf/RefCounted.h>
++#include <wtf/ThreadSafeRefCounted.h>
+ #include <wtf/TypeCasts.h>
+ #include <wtf/Vector.h>
+ 
+@@ -56,7 +57,7 @@ public:
+     virtual void enqueueMessageWithTask(MessageType, Ref<SharedBuffer>&&) = 0;
+ };
+ 
+-class CDMInstance : public RefCounted<CDMInstance> {
++class CDMInstance : public ThreadSafeRefCounted<CDMInstance> {
+ public:
+     virtual ~CDMInstance() { }
+ 
+-- 
+2.7.4
+

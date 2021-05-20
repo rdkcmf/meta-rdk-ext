@@ -1,0 +1,75 @@
+Index: dnsmasq-2.83/src/arp.c
+===================================================================
+--- dnsmasq-2.83.orig/src/arp.c
++++ dnsmasq-2.83/src/arp.c
+@@ -318,6 +318,11 @@ int find_dnsoverride_server(char* macadd
+                                return 0; // fail
+                        }
+ 
++                       if(strcmp(macaddr, XDNS_NULL_MAC) != 0)
++                       {
++                               daemon->protected_browsing_enable=1;   //Enabling Protected browsing Flag
++                       }
++
+                        return 1; //success
+ 
+                }
+@@ -357,7 +362,7 @@ int find_dnsoverride_defaultserver(union
+ 			my_syslog(LOG_WARNING, _("#### XDNS : find_dnsoverride_defaultserver(%x)secondary XDNS Error Param!!"), serv2);
+ 		}
+ 	}
+-
++	daemon->protected_browsing_enable=0;       //Disabling Protected browsing Flag
+ 	return retval;
+ }
+ 
+Index: dnsmasq-2.83/src/dnsmasq.h
+===================================================================
+--- dnsmasq-2.83.orig/src/dnsmasq.h
++++ dnsmasq-2.83/src/dnsmasq.h
+@@ -1059,6 +1059,7 @@ extern struct daemon {
+   struct server *servers;
+   struct server *dns_override_server; /* for XDNS */
+   struct server *dns_override_server2; /* for Secondary XDNS */
++  int protected_browsing_enable;
+   struct ipsets *ipsets;
+   int log_fac; /* log facility */
+   char *log_file; /* optional log file */
+Index: dnsmasq-2.83/src/forward.c
+===================================================================
+--- dnsmasq-2.83.orig/src/forward.c
++++ dnsmasq-2.83/src/forward.c
+@@ -635,7 +635,14 @@ static int forward_query(int udpfd, unio
+                  }
+                  else
+                  {
+-                         xdnsserver=daemon->dns_override_server2;
++                        if(daemon->protected_browsing_enable || !daemon->dns_override_server2)
++                        {
++                                xdnsserver=daemon->dns_override_server;
++                        }
++                        else
++                        {
++                                xdnsserver=daemon->dns_override_server2;
++                        }
+                  }
+ 
+ 			if(option_bool(OPT_DNS_OVERRIDE) && xdnsserver)
+Index: dnsmasq-2.83/src/network.c
+===================================================================
+--- dnsmasq-2.83.orig/src/network.c
++++ dnsmasq-2.83/src/network.c
+@@ -1810,7 +1810,12 @@ static int create_dnsoverride_servers(st
+ 	       }
+ 	       else
+ 	       {
+-		       (*pprec)->next = (struct dnsoverride_record*)entry;
++                       temp=*pprec;
++                       while(temp->next != NULL)
++                       {
++                               temp=temp->next;
++                       }
++		       temp->next = (struct dnsoverride_record*)entry;
+ 	       }
+        }
+        return 1; //success

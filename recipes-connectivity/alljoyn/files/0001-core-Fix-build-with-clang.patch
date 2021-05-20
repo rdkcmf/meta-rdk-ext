@@ -1,0 +1,140 @@
+From ed76c92cec16c2c61f98a80f00c9d6bd53493134 Mon Sep 17 00:00:00 2001
+From: Khem Raj <raj.khem@gmail.com>
+Date: Mon, 28 Sep 2015 22:15:46 -0700
+Subject: [PATCH] core: Fix build with clang
+
+These are assorted fixes to help codebase compile with clang
+no functional changes expected as such
+
+Change-Id: I73ef703c6837647756a09de62718575dd6461007
+Signed-off-by: Khem Raj <raj.khem@gmail.com>
+---
+ core/alljoyn/alljoyn_core/src/NamedPipeClientTransport.h        | 3 ---
+ core/alljoyn/alljoyn_core/src/posix/NamedPipeClientTransport.cc | 4 ++--
+ core/alljoyn/alljoyn_core/test/bbjoin.cc                        | 3 +--
+ core/alljoyn/alljoyn_core/test/bbsigtest.cc                     | 2 +-
+ core/alljoyn/common/crypto/ECC/cng/CryptoECC.cc                 | 2 --
+ core/alljoyn/common/crypto/ECC/generic/CryptoECC.cc             | 2 --
+ core/alljoyn/common/inc/qcc/platform.h                          | 2 +-
+ core/alljoyn/common/src/Debug.cc                                | 2 +-
+ 8 files changed, 6 insertions(+), 14 deletions(-)
+
+diff --git a/core/alljoyn/alljoyn_core/src/NamedPipeClientTransport.h b/core/alljoyn/alljoyn_core/src/NamedPipeClientTransport.h
+index 87d7466..ddcf1e5 100644
+--- a/core/alljoyn/alljoyn_core/src/NamedPipeClientTransport.h
++++ b/core/alljoyn/alljoyn_core/src/NamedPipeClientTransport.h
+@@ -101,9 +101,6 @@ class NamedPipeClientTransport : public ClientTransport {
+      * transport has no name it is not available.
+      */
+     static bool IsAvailable() { return NamedPipeTransportName != NULL; }
+-
+-  private:
+-    BusAttachment& m_bus;               /**< The message bus for this transport */
+ };
+ 
+ } // namespace ajn
+diff --git a/core/alljoyn/alljoyn_core/src/posix/NamedPipeClientTransport.cc b/core/alljoyn/alljoyn_core/src/posix/NamedPipeClientTransport.cc
+index 84c092e..22ec43f 100644
+--- a/core/alljoyn/alljoyn_core/src/posix/NamedPipeClientTransport.cc
++++ b/core/alljoyn/alljoyn_core/src/posix/NamedPipeClientTransport.cc
+@@ -57,8 +57,8 @@ QStatus NamedPipeClientTransport::Connect(const char* connectSpec, const Session
+ }
+ 
+ NamedPipeClientTransport::NamedPipeClientTransport(BusAttachment& bus)
+-    : ClientTransport(bus), m_bus(bus)
++    : ClientTransport(bus)
+ {
+ }
+ 
+-} // namespace ajn
+\ No newline at end of file
++} // namespace ajn
+diff --git a/core/alljoyn/alljoyn_core/test/bbjoin.cc b/core/alljoyn/alljoyn_core/test/bbjoin.cc
+index ad91cc4..f4a8c44 100644
+--- a/core/alljoyn/alljoyn_core/test/bbjoin.cc
++++ b/core/alljoyn/alljoyn_core/test/bbjoin.cc
+@@ -240,7 +240,7 @@ static MyAboutData g_aboutData("en");
+ 
+ class MyAboutListener : public AboutListener {
+   public:
+-    MyAboutListener(MyBusListener& myBusListener) : busListener(&myBusListener), sessionId(0) { }
++    MyAboutListener(MyBusListener& myBusListener) : busListener(&myBusListener) { }
+     void Announced(const char* busName, uint16_t version, SessionPort port,
+                    const MsgArg& objectDescriptionArg, const MsgArg& aboutDataArg) {
+         QCC_UNUSED(version);
+@@ -266,7 +266,6 @@ class MyAboutListener : public AboutListener {
+     }
+   private:
+     MyBusListener* busListener;
+-    SessionId sessionId;
+ };
+ 
+ class LocalTestObject : public BusObject {
+diff --git a/core/alljoyn/alljoyn_core/test/bbsigtest.cc b/core/alljoyn/alljoyn_core/test/bbsigtest.cc
+index 1bb5c0d..b5e9704 100644
+--- a/core/alljoyn/alljoyn_core/test/bbsigtest.cc
++++ b/core/alljoyn/alljoyn_core/test/bbsigtest.cc
+@@ -152,7 +152,7 @@ class LocalTestObject : public BusObject {
+             QCC_LogError(status, ("Error sending signal."));
+         }
+         std::cout << "<=== Sending signal with " << rand_len << "bytes" << std::endl;
+-        delete buf;
++        delete [] buf;
+         u++;
+         qcc::Sleep(1000);
+         return status;
+diff --git a/core/alljoyn/common/crypto/ECC/cng/CryptoECC.cc b/core/alljoyn/common/crypto/ECC/cng/CryptoECC.cc
+index 9068844..a278913 100644
+--- a/core/alljoyn/common/crypto/ECC/cng/CryptoECC.cc
++++ b/core/alljoyn/common/crypto/ECC/cng/CryptoECC.cc
+@@ -53,8 +53,6 @@ struct ECDSASig {
+ 
+ typedef ECDSASig ECDSA_sig_t;
+ 
+-static const size_t U32_ECDSASIG_SZ = 2 * ECC_BIGVAL_SZ;
+-
+ struct Crypto_ECC::ECCState {
+   public:
+     BCRYPT_KEY_HANDLE ecdsaPrivateKey;
+diff --git a/core/alljoyn/common/crypto/ECC/generic/CryptoECC.cc b/core/alljoyn/common/crypto/ECC/generic/CryptoECC.cc
+index e9b8a7f..ca28d47 100644
+--- a/core/alljoyn/common/crypto/ECC/generic/CryptoECC.cc
++++ b/core/alljoyn/common/crypto/ECC/generic/CryptoECC.cc
+@@ -57,8 +57,6 @@ typedef ECCBigVal bigval_t;
+ typedef ECCAffinePoint affine_point_t;
+ typedef ECDSASig ECDSA_sig_t;
+ 
+-static const size_t U32_ECDSASIG_SZ = 2 * ECC_BIGVAL_SZ;
+-
+ struct Crypto_ECC::ECCState {
+   public:
+ 
+diff --git a/core/alljoyn/common/inc/qcc/platform.h b/core/alljoyn/common/inc/qcc/platform.h
+index c4031cd..9b05d9e 100644
+--- a/core/alljoyn/common/inc/qcc/platform.h
++++ b/core/alljoyn/common/inc/qcc/platform.h
+@@ -60,7 +60,7 @@
+ 
+ 
+ 
+-#if (__GNUC__ >= 4) || ((__GNUC__ == 3) && (__GNUC_MINOR__ >= 1))
++#if ((__GNUC__ >= 4) || ((__GNUC__ == 3) && (__GNUC_MINOR__ >= 1))) && !defined(__clang__)
+ #define QCC_DEPRECATED(func) func __attribute__((deprecated)) /**< mark a function as deprecated in gcc. */
+ #else
+ #define QCC_DEPRECATED(func) func /**< not all gcc versions support the deprecated attribute. */
+diff --git a/core/alljoyn/common/src/Debug.cc b/core/alljoyn/common/src/Debug.cc
+index da3e957..d809e45 100644
+--- a/core/alljoyn/common/src/Debug.cc
++++ b/core/alljoyn/common/src/Debug.cc
+@@ -362,7 +362,7 @@ void DebugContext::Process(DbgMsgType type, const char* module, const char* file
+ 
+     GenPrefix(oss, type, module, filename, lineno, dbgControl->PrintThread(), dbgUseEpoch);
+ 
+-    if (msg != NULL) {
++    if (msg[0] != '\0') {
+         oss.append(msg);
+     }
+ 
+-- 
+2.5.3
+

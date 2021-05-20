@@ -1,0 +1,25 @@
+From 4935a8cf6cb4f0bf2d6e670a6b5f3642be291620 Mon Sep 17 00:00:00 2001
+From: Siva Sankar Raja <sivasankar_raja@comcast.com>
+Source: COMCAST
+License: LICENSE-LGPL-2.1
+Upstream-Status: Pending
+Signed-off-by: Siva Sankar Raja <sivasankar_raja@comcast.com>
+Date: Fri, 5 Jul 2019 17:52:16 +0000
+Subject: [PATCH] [MSE] Report 'ended' after seek
+
+---
+ .../platform/graphics/gstreamer/mse/MediaPlayerPrivateGStreamerMSE.cpp   | 1 -
+ 1 file changed, 1 deletion(-)
+
+Index: git/Source/WebCore/platform/graphics/gstreamer/mse/MediaPlayerPrivateGStreamerMSE.cpp
+===================================================================
+--- git.orig/Source/WebCore/platform/graphics/gstreamer/mse/MediaPlayerPrivateGStreamerMSE.cpp
++++ git/Source/WebCore/platform/graphics/gstreamer/mse/MediaPlayerPrivateGStreamerMSE.cpp
+@@ -559,7 +559,6 @@ void MediaPlayerPrivateGStreamerMSE::wai
+ 
+ void MediaPlayerPrivateGStreamerMSE::seekCompleted()
+ {
+-    m_eosMarked = false;
+     if (m_mseSeekCompleted)
+         return;
+ 

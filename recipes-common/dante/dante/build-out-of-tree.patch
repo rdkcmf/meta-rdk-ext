@@ -1,0 +1,97 @@
+Fix out of tree builds
+
+Signed-off-by: Khem Raj <raj.khem@gmail.com>
+
+Upstream-Status: Pending
+
+Index: dante-1.4.1/libscompat.m4
+===================================================================
+--- dante-1.4.1.orig/libscompat.m4	2014-09-28 20:18:41.017409216 -0700
++++ dante-1.4.1/libscompat.m4	2014-09-28 20:18:41.133409216 -0700
+@@ -218,7 +218,7 @@
+ #XXXold?: difftime
+ for func in $CLIENTONLY $SHAREDFUNCS; do
+     var=ac_cv_func_${func}
+-    if test ! -s "libscompat/${func}.c"; then
++    if test ! -s "`dirname $0`/libscompat/${func}.c"; then
+ 	AC_MSG_WARN([error: libscompat file for $func missing])
+ 	exit 1
+     fi
+@@ -238,7 +238,7 @@
+ unset SOCKDCOMPAT
+ for func in $SERVERONLY $SHAREDFUNCS; do
+     var=ac_cv_func_${func}
+-    if test ! -s "libscompat/${func}.c"; then
++    if test ! -s "`dirname $0`/libscompat/${func}.c"; then
+ 	AC_MSG_WARN([error: libscompat file for $func missing])
+ 	exit 1
+     fi
+Index: dante-1.4.1/sockopt.m4
+===================================================================
+--- dante-1.4.1.orig/sockopt.m4	2014-09-28 20:18:41.017409216 -0700
++++ dante-1.4.1/sockopt.m4	2014-09-28 20:18:41.133409216 -0700
+@@ -546,10 +546,10 @@
+ #generate source file
+ case $APP in
+     dante)
+-	SOCKOPTSRC="lib/sockopt_gen.c"
++	SOCKOPTSRC="`dirname $0`/lib/sockopt_gen.c"
+ 	;;
+     *)
+-	SOCKOPTSRC="src/sockopt_gen.c"
++	SOCKOPTSRC="`dirname $0`/src/sockopt_gen.c"
+ 	;;
+ esac
+ cp /dev/null $SOCKOPTSRC
+Index: dante-1.4.1/mapfile.m4
+===================================================================
+--- dante-1.4.1.orig/mapfile.m4	2014-09-28 20:18:41.017409216 -0700
++++ dante-1.4.1/mapfile.m4	2014-09-28 20:25:28.057409216 -0700
+@@ -4,8 +4,9 @@
+ 
+ STDDIRS="lib/" #socks shared/dynamic libraries (Rfoo functions)
+ for symdir in $STDDIRS; do
++    mkdir -p $symdir
+     cp /dev/null $symdir/$MAPFILE
+-    cat include/symbols_common.txt >> $symdir/$MAPFILE
++    cat `dirname $0`/include/symbols_common.txt >> $symdir/$MAPFILE
+ done
+ 
+ PLDDIRS="dlib/" #preloading (standard, non-Rfoo functions)
+@@ -13,29 +14,30 @@
+    PLDDIRS="$PLDDIRS dlib64/"
+ fi
+ for symdir in $PLDDIRS; do
+-    cat include/symbols_preload.txt >> $symdir/$MAPFILE
++    mkdir -p $symdir
++    cat `dirname $0`/include/symbols_preload.txt >> $symdir/$MAPFILE
+ 
+     #platform dependent symbols
+     case $host in
+ 	*-*-darwin*)
+-	    cat include/symbols_darwin.txt >> $symdir/$MAPFILE
++	    cat `dirname $0`/include/symbols_darwin.txt >> $symdir/$MAPFILE
+ 	    ;;
+ 
+ 	*-*-linux-*)
+ 	    if test x"${stdio_preload}" = xt; then
+-		cat include/symbols_glibc.txt >> $symdir/$MAPFILE
++		cat `dirname $0`/include/symbols_glibc.txt >> $symdir/$MAPFILE
+ 	    fi
+ 	    ;;
+ 
+        *-*-solaris*)
+-	    cat include/symbols_osol.txt >> $symdir/$MAPFILE
++	    cat `dirname $0`/include/symbols_osol.txt >> $symdir/$MAPFILE
+ 	    if test x"${stdio_preload}" = xt; then
+-		cat include/symbols_osol_stdio.txt >> $symdir/$MAPFILE
++		cat `dirname $0`/include/symbols_osol_stdio.txt >> $symdir/$MAPFILE
+ 	    fi
+ 	    ;;
+ 
+ 	*-*-freebsd*)
+-	    cat include/symbols_freebsd.txt >> $symdir/$MAPFILE
++	    cat `dirname $0`/include/symbols_freebsd.txt >> $symdir/$MAPFILE
+ 	    ;;
+     esac
+ done

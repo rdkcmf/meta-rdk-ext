@@ -1,0 +1,59 @@
+From 8de0ee1091c5f9de159132a6e5640ac87abd70aa Mon Sep 17 00:00:00 2001
+From: Siva Sankar Raja <sivasankar_raja@comcast.com>
+Source: COMCAST
+License: LICENSE-LGPL-2.1
+Upstream-Status: Pending
+Signed-off-by: Siva Sankar Raja <sivasankar_raja@comcast.com>
+Date: Thu, 4 Jul 2019 08:42:55 +0000
+Subject: [PATCH] comcast-Initial-support-for-playback-at-different-rates
+
+---
+ Source/WebCore/Modules/mediasource/MediaSource.cpp |   3 +-
+ .../WebCore/Modules/mediasource/SourceBuffer.cpp   |   8 +-
+ Source/WebCore/Modules/mediasource/SourceBuffer.h  |   2 +-
+ .../gstreamer/MediaPlayerPrivateGStreamer.cpp      |  13 ++-
+ .../gstreamer/MediaPlayerPrivateGStreamer.h        |   6 +-
+ .../mse/MediaPlayerPrivateGStreamerMSE.cpp         | 119 ++++++++++++++++-----
+ .../gstreamer/mse/MediaPlayerPrivateGStreamerMSE.h |   5 +-
+ 7 files changed, 119 insertions(+), 37 deletions(-)
+
+Index: git/Source/WebCore/platform/graphics/gstreamer/mse/MediaPlayerPrivateGStreamerMSE.cpp
+===================================================================
+--- git.orig/Source/WebCore/platform/graphics/gstreamer/mse/MediaPlayerPrivateGStreamerMSE.cpp
++++ git/Source/WebCore/platform/graphics/gstreamer/mse/MediaPlayerPrivateGStreamerMSE.cpp
+@@ -67,6 +67,8 @@
+ #include "CDMClearKey.h"
+ #endif
+ 
++#include "GCController.h"
++
+ // We shouldn't accept media that the player can't actually play.
+ // AAC supports up to 96 channels.
+ #define MEDIA_MAX_AAC_CHANNELS 96
+@@ -94,6 +96,8 @@ static const char* dumpReadyState(WebCor
+     }
+ }
+ 
++static int gActivePlayerNum = 0;
++
+ GST_DEBUG_CATEGORY(webkit_mse_debug);
+ #define GST_CAT_DEFAULT webkit_mse_debug
+ 
+@@ -138,11 +142,17 @@ bool MediaPlayerPrivateGStreamerMSE::isA
+ MediaPlayerPrivateGStreamerMSE::MediaPlayerPrivateGStreamerMSE(MediaPlayer* player)
+     : MediaPlayerPrivateGStreamer(player)
+ {
++    // This is a workaround for the case when web app doesn't release player explicitly
++    ++gActivePlayerNum;
++    if (gActivePlayerNum > 1)
++        GCController::singleton().garbageCollectOnNextRunLoop();
++
+     GST_TRACE("creating the player (%p)", this);
+ }
+ 
+ MediaPlayerPrivateGStreamerMSE::~MediaPlayerPrivateGStreamerMSE()
+ {
++    --gActivePlayerNum;
+     GST_TRACE("destroying the player (%p)", this);
+ 
+     for (auto iterator : m_appendPipelinesMap)

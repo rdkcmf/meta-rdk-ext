@@ -1,0 +1,19 @@
+We strip the binaries in OE so lets remove it from makefile
+
+Signed-off-by: Khem Raj <raj.khem@gmail.com>
+Upstream-Status: Inappropriate[OE-Specific]
+Index: mongoose/Makefile
+===================================================================
+--- mongoose.orig/Makefile	2014-10-24 08:35:52.237534596 +0000
++++ mongoose/Makefile	2014-10-24 16:05:56.429534596 +0000
+@@ -28,8 +28,8 @@
+ LIB=		_$(PROG).so
+ 
+ linux:
+-	$(CC) $(LINFLAGS) mongoose.c -shared -fPIC -fpic -s -o $(LIB)
+-	$(CC) $(LINFLAGS) mongoose.c main.c -s -o $(PROG)
++	$(CC) $(LINFLAGS) mongoose.c -shared -fPIC -fpic -o $(LIB)
++	$(CC) $(LINFLAGS) mongoose.c main.c -o $(PROG)
+ bsd:
+ 	$(CC) $(CFLAGS) mongoose.c -shared -lpthread -s -fpic -fPIC -o $(LIB)
+ 	$(CC) $(CFLAGS) mongoose.c main.c -lpthread -s -o $(PROG)

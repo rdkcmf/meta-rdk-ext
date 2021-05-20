@@ -1,0 +1,71 @@
+From 256c67e7fb3271136faddb571eac12c2bacb1cfa Mon Sep 17 00:00:00 2001
+From: Ievgen Mutavchi <Ievgen_Mutavchi@comcast.com>
+Date: Sun, 26 Apr 2020 12:28:55 -0400
+Subject: [PATCH] Add MediaError.message and clarify decryption errors
+
+---
+ Source/WebCore/html/HTMLMediaElement.cpp           | 14 +++++++++----
+ Source/WebCore/html/MediaError.h                   |  4 ++++
+ Source/WebCore/html/MediaError.idl                 |  1 +
+ Source/WebCore/platform/graphics/MediaPlayer.cpp   |  7 ++++++-
+ Source/WebCore/platform/graphics/MediaPlayer.h     |  3 +++
+ .../WebCore/platform/graphics/MediaPlayerPrivate.h |  1 +
+ .../gstreamer/MediaPlayerPrivateGStreamer.cpp      | 22 ++++++++++++--------
+ .../gstreamer/MediaPlayerPrivateGStreamer.h        |  4 ++++
+ .../WebKitCommonEncryptionDecryptorGStreamer.cpp   | 24 +++++++++++-----------
+ .../eme/WebKitOpenCDMDecryptorGStreamer.cpp        | 13 +++++++++---
+ 10 files changed, 64 insertions(+), 29 deletions(-)
+
+Index: git/Source/WebCore/html/HTMLMediaElement.cpp
+===================================================================
+--- git.orig/Source/WebCore/html/HTMLMediaElement.cpp
++++ git/Source/WebCore/html/HTMLMediaElement.cpp
+@@ -2804,7 +2804,9 @@ void HTMLMediaElement::mediaPlayerInitia
+ 
+ void HTMLMediaElement::mediaPlayerDecryptErrorEncountered()
+ {
+-    m_error = MediaError::create(MediaError::MEDIA_ERR_ENCRYPTED);
++    m_error = m_player
++        ? MediaError::create(MediaError::MEDIA_ERR_ENCRYPTED, m_player->errorMessage())
++        : MediaError::create(MediaError::MEDIA_ERR_ENCRYPTED);
+     if (!m_asyncEventQueue.hasPendingEventsOfType(eventNames().errorEvent))
+         scheduleEvent(eventNames().errorEvent);
+ }
+Index: git/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp
+===================================================================
+--- git.orig/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp
++++ git/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp
+@@ -2257,15 +2257,15 @@ void MediaPlayerPrivateGStreamer::handle
+ {
+     ASSERT(isMainThread());
+ 
+-    RunLoop::main().dispatch([this, weakThis = m_weakPtrFactory.createWeakPtr(*this)] {
+-        if (!weakThis)
+-            return;
++    if (gst_structure_has_field_typed(structure, "error-message", G_TYPE_STRING)) {
++        const gchar* errorMessage = gst_structure_get_string(structure, "error-message");
++        m_errorMessage = errorMessage;
++    }
+ 
+-        GST_WARNING("scheduling decryptionErrorEncountered event");
+-        fprintf(stderr, "HTML5 video: Playback failed: Decryption error [%s]\n", m_url.string().utf8().data());
+-        loadingFailed(MediaPlayer::FormatError);
+-        m_player->decryptErrorEncountered(); // override the error code
+-    });
++    GST_WARNING("scheduling decryptionErrorEncountered event");
++    fprintf(stderr, "HTML5 video: Playback failed: Decryption error [%s]\n", m_url.string().utf8().data());
++    loadingFailed(MediaPlayer::FormatError);
++    m_player->decryptErrorEncountered(); // override the error code
+ }
+ 
+ void MediaPlayerPrivateGStreamer::cdmInstanceAttached(CDMInstance& instance)
+@@ -2273,7 +2273,8 @@ void MediaPlayerPrivateGStreamer::cdmIns
+     if(m_cdmInstance.get() != &instance && m_cdmInstance)
+         const_cast<CDMInstance*>(m_cdmInstance.get())->setTracker(nullptr);
+     MediaPlayerPrivateGStreamerBase::cdmInstanceAttached(instance);
+-    const_cast<CDMInstance*>(m_cdmInstance.get())->setTracker(m_tracker);
++    if (m_cdmInstance)
++        const_cast<CDMInstance*>(m_cdmInstance.get())->setTracker(m_tracker);
+ }
+ 
+ void MediaPlayerPrivateGStreamer::cdmInstanceDetached(CDMInstance& instance)

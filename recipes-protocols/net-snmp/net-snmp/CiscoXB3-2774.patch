@@ -1,0 +1,74 @@
+Date: Aug 02 22:16:41 2017
+
+From: f60826c6b219cabc24497e49b838bfd7d16d3a10 Aug 09 07:31:23 2017
+
+Subject: [PATCH] CISCOXB3-2774: netsnmp leaking memory test
+
+	netsnmp leaking memory test
+
+Source: COMCAST
+
+License: BSD-2-Clause
+
+Upstream-Status: Pending
+
+Signed-off-by: Thanh Nguyen<thanh.nguyen@technicolor.com>
+---
+
+Index: net-snmp-5.7.2/snmplib/snmp_api.c
+===================================================================
+--- net-snmp-5.7.2.orig/snmplib/snmp_api.c	2017-08-02 07:57:19.396947307 -0400
++++ net-snmp-5.7.2/snmplib/snmp_api.c	2017-08-02 08:11:45.153574659 -0400
+@@ -5131,25 +5131,36 @@
+         (*sptr->pdu_free) (pdu);
+     }
+ 
+-       /*Added below lines to make sure if pdu variable is zero or
+-	equal to the previous one than no need to free it.*/
+-
+-	if(pdu->variables==0)
+-	{
+-	     return;
+-	}
+-	else if((pdu_temp) && (pdu_temp->variables==pdu->variables)&&(pdu_temp == pdu))
++       /*Added below line to make sure if pdu variable equal to the previous one than no need to free it.*/
++	if((pdu_temp) && (pdu_temp->variables==pdu->variables)&&(pdu_temp == pdu))
+ 	{
+     	     return;
+         }
+-    snmp_free_varbind(pdu->variables);
+-    SNMP_FREE(pdu->enterprise);
+-    SNMP_FREE(pdu->community);
+-    SNMP_FREE(pdu->contextEngineID);
+-    SNMP_FREE(pdu->securityEngineID);
+-    SNMP_FREE(pdu->contextName);
+-    SNMP_FREE(pdu->securityName);
+-    SNMP_FREE(pdu->transport_data);
++
++	if(pdu->variables!=NULL)
++        	snmp_free_varbind(pdu->variables);
++
++    	if(pdu->enterprise != NULL)
++        	SNMP_FREE(pdu->enterprise);
++
++	if (pdu->community != NULL)	
++		SNMP_FREE(pdu->community);
++
++	if (pdu->contextEngineID != NULL)
++		SNMP_FREE(pdu->contextEngineID);
++
++	if (pdu->securityEngineID != NULL)
++		SNMP_FREE(pdu->securityEngineID);
++
++	if (pdu->contextName != NULL)
++		SNMP_FREE(pdu->contextName);
++
++	if (pdu->securityName != NULL)
++		SNMP_FREE(pdu->securityName);
++
++	if (pdu->transport_data != NULL)
++		SNMP_FREE(pdu->transport_data);
++
+     memset(pdu, 0, sizeof(netsnmp_pdu));
+     pdu_temp = pdu;
+ 

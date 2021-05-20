@@ -1,0 +1,19 @@
+From 2d59658aabdfc0b62039d444d31de9feeb10e299 Mon Sep 17 00:00:00 2001
+From: jkuria217 <Josekutty_Kuriakose@cable.comcast.com>
+Date: Tue, 4 Feb 2020 22:46:34 +0000
+Subject: [PATCH] tld-parser to use python3
+
+---
+ libsoup/tld-parser.py | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/libsoup/tld-parser.py b/libsoup/tld-parser.py
+index 5d9d2ba..a743471 100755
+--- a/libsoup/tld-parser.py
++++ b/libsoup/tld-parser.py
+@@ -1,4 +1,4 @@
+-#!/usr/bin/env python
++#!/usr/bin/env python3
+ 
+ # Generate tld rules
+ # Copyright (C) 2012 Red Hat, Inc.

@@ -1,0 +1,164 @@
+##########################################
+Date: Dec 19, 2019 1:41 AM
+From: Id03e48e3b8709f9ef6d361b4d922c75424463fd4 commit for version 5.7.2/5.7.3
+Subject: To support existing rdk_enhancement patch on netsnmp version 5.8
+Source: COMCAST
+License: "BSD & MIT"
+Upstream-Status: Pending
+Signed-off-by: Saranya Natarajan <Saranya_Natarajan@cable.comcast.com>
+##########################################
+Index: net-snmp-5.8/agent/mibgroup/agentx/protocol.c
+===================================================================
+--- net-snmp-5.8.orig/agent/mibgroup/agentx/protocol.c
++++ net-snmp-5.8/agent/mibgroup/agentx/protocol.c
+@@ -2077,6 +2077,13 @@ agentx_check_packet(u_char * packet, siz
+     if (packet_len < 20)
+         return 0;               /* minimum header length == 20 */
+ 
++ // If packet is invalid, return
++       if (packet == NULL)
++       {
++               printf("agentx_check_packet(): packet is NULL !\n");
++               return 0;
++       }
++
+     return agentx_parse_int(packet + 16,
+                             *(packet +
+                               2) & AGENTX_FLAGS_NETWORK_BYTE_ORDER) + 20;
+Index: net-snmp-5.8/agent/mibgroup/host/hr_proc.c
+===================================================================
+--- net-snmp-5.8.orig/agent/mibgroup/host/hr_proc.c
++++ net-snmp-5.8/agent/mibgroup/host/hr_proc.c
+@@ -156,7 +156,8 @@ header_hrproc(struct variable *vp,
+ 	 *
+ 	 *********************/
+ 
+-
++oid Vividlogi_EnterprisesOID[10] =
++{ 1, 3, 6, 1, 4, 1, 31800, 1, 1, 1 };
+ u_char         *
+ var_hrproc(struct variable * vp,
+            oid * name,
+@@ -174,8 +175,10 @@ var_hrproc(struct variable * vp,
+ 
+     switch (vp->magic) {
+     case HRPROC_ID:
+-        *var_len = nullOidLen;
+-        return (u_char *) nullOid;
++        /*        *var_len = nullOidLen;
++        return (u_char *) nullOid;*/
++        *var_len = sizeof(Vividlogi_EnterprisesOID);
++        return (u_char *) Vividlogi_EnterprisesOID;
+     case HRPROC_LOAD:
+         cpu = netsnmp_cpu_get_byIdx( proc_idx & HRDEV_TYPE_MASK, 0 );
+         if ( !cpu || !cpu->history || !cpu->history[0].total_hist ||
+@@ -222,6 +225,10 @@ const char     *
+ describe_proc(int idx)
+ {
+     netsnmp_cpu_info *cpu = netsnmp_cpu_get_byIdx( idx & HRDEV_TYPE_MASK, 0 );
++    if(NULL != cpu)
++    {
++        snprintf(cpu->descr, sizeof(cpu->descr), "computer micro-processor %d", (idx & HRDEV_TYPE_MASK));
++    }
+     return (cpu ? cpu->descr : NULL );
+ }
+ 
+Index: net-snmp-5.8/include/net-snmp/library/snmp_api.h
+===================================================================
+--- net-snmp-5.8.orig/include/net-snmp/library/snmp_api.h
++++ net-snmp-5.8/include/net-snmp/library/snmp_api.h
+@@ -125,7 +125,7 @@ typedef struct request_list {
+     NETSNMP_IMPORT void     snmp_set_detail(const char *);
+ 
+ #define SNMP_MAX_RCV_MSG_SIZE      65536
+-#define SNMP_MAX_MSG_SIZE          1472 /* ethernet MTU minus IP/UDP header */
++#define SNMP_MAX_MSG_SIZE          10240 /* ethernet MTU minus IP/UDP header */
+ #define SNMP_MAX_MSG_V3_HDRS       (4+3+4+7+7+3+7+16)   /* fudge factor=16 */
+ #define SNMP_MAX_ENG_SIZE          32
+ #define SNMP_MAX_SEC_NAME_SIZE     256
+Index: net-snmp-5.8/snmplib/snmp_alarm.c
+===================================================================
+--- net-snmp-5.8.orig/snmplib/snmp_alarm.c
++++ net-snmp-5.8/snmplib/snmp_alarm.c
+@@ -215,7 +215,8 @@ run_alarms(void)
+         clientreg = a->clientreg;
+         a->flags |= SA_FIRED;
+         DEBUGMSGTL(("snmp_alarm", "run alarm %d\n", clientreg));
+-        (*(a->thecallback)) (clientreg, a->clientarg);
++        /* Jun-10-2010: COMMENTED: Due to frequent crash triggered// (*(a->thecallback)) (clientreg, a->clientarg);*/
++
+         DEBUGMSGTL(("snmp_alarm", "alarm %d completed\n", clientreg));
+ 
+         a = sa_find_specific(clientreg);
+@@ -316,14 +317,14 @@ set_an_alarm(void)
+         it.it_value = delta;
+         timerclear(&it.it_interval);
+ 
+-        signal(SIGALRM, alarm_handler);
++//        signal(SIGALRM, alarm_handler);
+         setitimer(ITIMER_REAL, &it, NULL);
+         DEBUGMSGTL(("snmp_alarm", "schedule alarm %d in %ld.%03ld seconds\n",
+                     nextalarm, (long) delta.tv_sec, (long)(delta.tv_usec / 1000)));
+ # else  /* HAVE_SETITIMER */
+ #  ifdef SIGALRM
+-        signal(SIGALRM, alarm_handler);
+-        alarm(delta.tv_sec);
++//        signal(SIGALRM, alarm_handler);
++//        alarm(delta.tv_sec);
+         DEBUGMSGTL(("snmp_alarm",
+                     "schedule alarm %d in roughly %ld seconds\n", nextalarm,
+                     delta.tv_sec));
+Index: net-snmp-5.8/snmplib/snmp_api.c
+===================================================================
+--- net-snmp-5.8.orig/snmplib/snmp_api.c
++++ net-snmp-5.8/snmplib/snmp_api.c
+@@ -6204,14 +6204,24 @@ _sess_read(void *sessp, netsnmp_large_fd
+         SNMP_FREE(opaque);
+         return -1;
+     }
+-
+-    {
++    /*
++     * Document outstanding error conditions if any.
++     */
++    if ((length < 0) || ((isp->packet_len + length) < 0) || ((isp->packet_len + length) > (1<<22))){
++        printf("%s: %s: %d: length = %d, packet_len = %u, packet_len + length = %d, crash fix available in while loop to avoid crash.\n", __FILE__, __FUNCTION__, __LINE__, length, isp->packet_len, (isp->packet_len + length));
++    }
++     if (transport->flags & NETSNMP_TRANSPORT_FLAG_STREAM){
+         u_char *pptr = isp->packet;
+ 	void *ocopy = NULL;
+ 
+         isp->packet_len += length;
+ 
+-        while (isp->packet_len > 0) {
++//        while (isp->packet_len > 0) {
++         /*
++         * Added addtional check for large lengths that arise out of calculations outside this loop...
++         * ...OR due to calculations within this loop that use potentially invalid data from the packet.
++         */
++        while ((isp->packet_len > 0) && ((isp->packet_len) < (1<<22))) {
+ 
+             /*
+              * Get the total data length we're expecting (and need to wait
+@@ -6242,7 +6252,8 @@ _sess_read(void *sessp, netsnmp_large_fd
+ 		DEBUGMSGTL(("sess_read", "fd %d closed\n", transport->sock));
+                 transport->f_close(transport);
+                 SNMP_FREE(opaque);
+-                /** XXX-rks: why no SNMP_FREE(isp->packet); ?? */
++                /** XXX-rks: why no SNMP_FREE(isp->packet); ?? */\
++                printf("%s: %s: %d: ERROR: packet_len = %u, transport closed.\n", __FILE__, __FUNCTION__, __LINE__, (isp->packet_len + length));
+                 return -1;
+             }
+ 
+Index: net-snmp-5.8/agent/mibgroup/mibII/vacm_conf.c
+===================================================================
+--- net-snmp-5.8.orig/agent/mibgroup/mibII/vacm_conf.c
++++ net-snmp-5.8/agent/mibgroup/mibII/vacm_conf.c
+@@ -758,6 +758,7 @@ vacm_gen_com2sec(int commcount, const ch
+         DEBUGMSGTL((publishtoken, "passing: %s %s\n", "group", line));
+         vacm_parse_group("group", line);
+     }
++    printf(" vacm_gen_com2sec of :::: MANU ::: printf %s",line);
+ }
+ 
+ void

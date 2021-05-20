@@ -1,0 +1,37 @@
+From 850eec031250b29e32d686153907d78a99856d17 Mon Sep 17 00:00:00 2001
+From: mselva006c <mani_selvaraj@comcast.com>
+Date: Wed, 26 Feb 2020 21:08:33 +0000
+Subject: [PATCH] RDK-22703 RDK-27733 : Added support for AmazonRemote
+
+        Rename patch
+        Disable  Secondary services discovery Receiving additional events
+        which prevent a successful connnection to Amazon Remote. Temporary change only.
+        Will need to be enabled back later. - Scan and Pair/Connect to AmazonRemote.
+
+Source: COMCAST
+License: GPL-2.0-or-later
+Upstream-Status: Pending
+Signed-off-by: mselva006c <mani_selvaraj@comcast.com>
+---
+ src/shared/gatt-client.c | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/src/shared/gatt-client.c b/src/shared/gatt-client.c
+index 29254cb..d99d86b 100644
+--- a/src/shared/gatt-client.c
++++ b/src/shared/gatt-client.c
+@@ -1248,10 +1248,14 @@ secondary:
+ 	if (client->discovery_req)
+ 		return;
+ 
++#if 0
+ 	util_debug(client->debug_callback, client->debug_data,
+ 				"Failed to start secondary service discovery");
+ 	discovery_op_unref(op);
+ 	success = false;
++#else
++	return;
++#endif
+ 
+ done:
+ 	discovery_op_complete(op, success, att_ecode);

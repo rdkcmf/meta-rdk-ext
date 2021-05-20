@@ -1,0 +1,35 @@
+From 2b06bc11df04e1338b4e0ea534633a714403ce69 Mon Sep 17 00:00:00 2001
+From: Wojciech Konieczny <wojciech.konieczny@redembedded.com>
+Date: Tue, 21 Jul 2020 15:50:54 +0200
+Subject: [PATCH] Scaling on missing repeating composition platforms
+
+Signed-off-by: Wojciech Konieczny <wojciech.konieczny@consult.red>
+---
+ src/westeros/WesterosViewbackendOutput.cpp | 11 +++++++++++
+ 1 file changed, 11 insertions(+)
+
+diff --git a/src/westeros/WesterosViewbackendOutput.cpp b/src/westeros/WesterosViewbackendOutput.cpp
+index 170a9c9..52854d7 100644
+--- a/src/westeros/WesterosViewbackendOutput.cpp
++++ b/src/westeros/WesterosViewbackendOutput.cpp
+@@ -36,6 +36,17 @@ void WesterosViewbackendOutput::handleModeCallback( void *userData, uint32_t fla
+     auto& me = *static_cast<WesterosViewbackendOutput*>(userData);
+     if (!me.m_viewbackend || (flags != WesterosViewbackendModeCurrent))
+         return;
++    // We will send an internal size change, now we need to update the output
++    // size of our nested compositor instance.  We have requested this compositor
++    // instance to be a repeater, but on devices where repeating composition is not
++    // supported by the Wayland-egl implementation, the compositor output size must
++    // be updated.  If the compositor were a repeater, it will perform no rendering but
++    // instead forward buffers to the upstream compositor and no compositor output size
++    // change would be required (but should be done anyway).
++    if (me.m_compositor )
++    {
++       WstCompositorSetOutputSize( me.m_compositor, width, height );
++    }
+ 
+     ModeData *modeData = new ModeData { userData, width, height };
+     g_ptr_array_add(me.m_modeDataArray, modeData);
+-- 
+2.17.1
+

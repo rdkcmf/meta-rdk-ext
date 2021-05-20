@@ -1,0 +1,83 @@
+From c9720a761e88e83265b4d75808533cdfbc66075b Mon Sep 17 00:00:00 2001
+From: Denys Vlasenko <vda.linux@googlemail.com>
+Date: Fri, 3 Aug 2018 18:27:00 +0200
+Subject: [PATCH] timeout: fix arguments to match coreutils
+
+Was: timeout [-t SECS] [-s SIG] PROG ARGS
+Is:  timeout [-s SIG] SECS PROG ARGS
+
+function                                             old     new   delta
+timeout_main                                         312     319      +7
+packed_usage                                       32882   32858     -24
+------------------------------------------------------------------------------
+(add/remove: 0/0 grow/shrink: 1/1 up/down: 7/-24)             Total: -17 bytes
+
+Signed-off-by: Denys Vlasenko <vda.linux@googlemail.com>
+
+Index: busybox-1.22.1/miscutils/timeout.c
+===================================================================
+--- busybox-1.22.1.orig/miscutils/timeout.c
++++ busybox-1.22.1/miscutils/timeout.c
+@@ -29,20 +29,28 @@
+  */
+ 
+ //usage:#define timeout_trivial_usage
+-//usage:       "[-t SECS] [-s SIG] PROG ARGS"
++//usage:       "[-s SIG] SECS PROG ARGS"
+ //usage:#define timeout_full_usage "\n\n"
+ //usage:       "Runs PROG. Sends SIG to it if it is not gone in SECS seconds.\n"
+-//usage:       "Defaults: SECS: 10, SIG: TERM."
++//usage:       "Default SIG: TERM."
+ 
+ #include "libbb.h"
+ 
++static const struct suffix_mult duration_suffixes[] = {
++        { "s", 1 },
++        { "m", 60 },
++        { "h", 60*60 },
++        { "d", 24*60*60 },
++        { "", 0 }
++};
++
+ int timeout_main(int argc, char **argv) MAIN_EXTERNALLY_VISIBLE;
+ int timeout_main(int argc UNUSED_PARAM, char **argv)
+ {
+ 	int signo;
+ 	int status;
+ 	int parent = 0;
+-	int timeout = 10;
++        int timeout;
+ 	pid_t pid;
+ #if !BB_MMU
+ 	char *sv1, *sv2;
+@@ -52,14 +60,19 @@ int timeout_main(int argc UNUSED_PARAM,
+ 	/* -p option is not documented, it is needed to support NOMMU. */
+ 
+ 	/* -t SECONDS; -p PARENT_PID */
+-	opt_complementary = "t+" USE_FOR_NOMMU(":p+");
+ 	/* '+': stop at first non-option */
+-	getopt32(argv, "+s:t:" USE_FOR_NOMMU("p:"), &opt_s, &timeout, &parent);
++        getopt32(argv, "+s:" USE_FOR_NOMMU("p:+"), &opt_s, &parent);
+ 	/*argv += optind; - no, wait for bb_daemonize_or_rexec! */
+ 	signo = get_signum(opt_s);
+ 	if (signo < 0)
+ 		bb_error_msg_and_die("unknown signal '%s'", opt_s);
+ 
++	if (!argv[optind])
++		bb_show_usage();
++	timeout = xatou_range_sfx(argv[optind++], 0, UINT_MAX, duration_suffixes);
++	if (!argv[optind]) /* no PROG? */
++		bb_show_usage();
++
+ 	/* We want to create a grandchild which will watch
+ 	 * and kill the grandparent. Other methods:
+ 	 * making parent watch child disrupts parent<->child link
+@@ -70,8 +83,6 @@ int timeout_main(int argc UNUSED_PARAM,
+ 
+ 	if (parent) /* we were re-execed, already grandchild */
+ 		goto grandchild;
+-	if (!argv[optind]) /* no PROG? */
+-		bb_show_usage();
+ 
+ #if !BB_MMU
+ 	sv1 = argv[optind];

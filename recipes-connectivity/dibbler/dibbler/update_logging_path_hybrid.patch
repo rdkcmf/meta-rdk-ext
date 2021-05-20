@@ -1,0 +1,67 @@
+Date: Oct 26 18:59:31 2016
+
+From: 8b781776c461e7c2d176405504f202a8504ddb9d Nov 02 23:40:56 2016
+
+Subject: [PATCH] DELIA-15649 : Adding guards to fix random crashes reported from rack
+
+	1] Adding guards to fix random crashes from rack
+		Buffer clean up is taken from latest upstream changes -
+		https://github.com/tomaszmrugalski/dibbler/commit/032a43a23ad830eda65a16e6661094a151434b34
+	2] Added additional debug logs to degug the crash further if reproduced
+
+Source: GITHUB
+
+License: GPL-2.0-or-later
+
+Upstream-Status: Submitted [ https://github.com/tomaszmrugalski/dibbler/commit/032a43a23ad830eda65a16e6661094a151434b34 ]
+
+Signed-off-by: skv01 <Shibu_KV@cable.comcast.com>
+---
+
+Index: dibbler-1.0.0RC2/Misc/Portable.h
+===================================================================
+--- dibbler-1.0.0RC2.orig/Misc/Portable.h
++++ dibbler-1.0.0RC2/Misc/Portable.h
+@@ -158,7 +158,7 @@ struct link_state_notify_t
+ #endif
+ 
+ #if defined(LINUX) || defined(BSD) || defined(SUNOS)
+-#define WORKDIR            "/var/lib/dibbler"
++#define WORKDIR            "/tmp/dibbler"
+ #define DEFAULT_SCRIPT     ""
+ #define CLNTCONF_FILE      "/etc/dibbler/client.conf"
+ #define SRVCONF_FILE       "/etc/dibbler/server.conf"
+@@ -166,14 +166,14 @@ struct link_state_notify_t
+ #define RESOLVCONF_FILE    "/etc/resolv.dnsmasq"
+ #define NTPCONF_FILE       "/etc/ntp.conf"
+ #define RADVD_FILE         "/etc/dibbler/radvd.conf"
+-#define CLNTPID_FILE       "/var/lib/dibbler/client.pid"
+-#define SRVPID_FILE        "/var/lib/dibbler/server.pid"
+-#define RELPID_FILE        "/var/lib/dibbler/relay.pid"
+-#define CLNTLOG_FILE       "/var/log/dibbler/dibbler-client.log"
++#define CLNTPID_FILE       "/tmp/dibbler/client.pid"
++#define SRVPID_FILE        "/tmp/dibbler/server.pid"
++#define RELPID_FILE        "/tmp/dibbler/relay.pid"
++#define CLNTLOG_FILE       "/opt/logs/dibbler.log"
+ #define SRVLOG_FILE        "/var/log/dibbler/dibbler-server.log"
+ #define RELLOG_FILE        "/var/log/dibbler/dibbler-relay.log"
+-#define CLNT_AAASPI_FILE   "/var/lib/dibbler/AAA/AAA-SPI"
+-#define SRV_KEYMAP_FILE    "/var/lib/dibbler/AAA/keys-mapping"
++#define CLNT_AAASPI_FILE   "/tmp/dibbler/AAA/AAA-SPI"
++#define SRV_KEYMAP_FILE    "/tmp/dibbler/AAA/keys-mapping"
+ #define NULLFILE           "/dev/null"
+ 
+ /* those defines were initially used on Linux only, but hopefully 
+Index: dibbler-1.0.0RC2/Misc/Portable.h.in
+===================================================================
+--- dibbler-1.0.0RC2.orig/Misc/Portable.h.in
++++ dibbler-1.0.0RC2/Misc/Portable.h.in
+@@ -169,7 +169,7 @@ struct link_state_notify_t
+ #define CLNTPID_FILE       "/tmp/dibbler/client.pid"
+ #define SRVPID_FILE        "/tmp/dibbler/server.pid"
+ #define RELPID_FILE        "/tmp/dibbler/relay.pid"
+-#define CLNTLOG_FILE       "/var/log/dibbler/dibbler-client.log"
++#define CLNTLOG_FILE       "/opt/logs/dibbler.log"
+ #define SRVLOG_FILE        "/var/log/dibbler/dibbler-server.log"
+ #define RELLOG_FILE        "/var/log/dibbler/dibbler-relay.log"
+ #define CLNT_AAASPI_FILE   "/tmp/dibbler/AAA/AAA-SPI"

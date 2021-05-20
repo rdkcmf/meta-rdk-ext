@@ -1,0 +1,42 @@
+From c33bd84b7787d8754f9255c0b973558cdd650c13 Mon Sep 17 00:00:00 2001
+From: Balaji Selvam <balaji_selvam@comcast.com>
+Date: Wed, 29 Jul 2020 19:30:06 +0000
+Subject: [PATCH] fixed build error on JSC
+/build/DerivedSources/ForwardingHeaders/JavaScriptCore/LocalAllocatorInlines.h:36:
+ undefined reference to `JSC::Heap::vm() const'
+Source: COMCAST
+License: LGPL-2.1-or-later
+Upstream-Status: Pending
+Signed-off-by: Balaji Selvam <Balaji_selvam@Comcast.Com>
+---
+ Source/JavaScriptCore/heap/HeapInlines.h           | 1 -
+ Source/JavaScriptCore/heap/LocalAllocatorInlines.h | 1 +
+ 2 files changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/Source/JavaScriptCore/heap/HeapInlines.h b/Source/JavaScriptCore/heap/HeapInlines.h
+index 0a1db29d4f34..a936bdcff70c 100644
+--- a/Source/JavaScriptCore/heap/HeapInlines.h
++++ b/Source/JavaScriptCore/heap/HeapInlines.h
+@@ -29,7 +29,6 @@
+ #include "Heap.h"
+ #include "HeapCellInlines.h"
+ #include "IndexingHeader.h"
+-#include "JSCallee.h"
+ #include "JSCast.h"
+ #include "Structure.h"
+ #include <type_traits>
+diff --git a/Source/JavaScriptCore/heap/LocalAllocatorInlines.h b/Source/JavaScriptCore/heap/LocalAllocatorInlines.h
+index c97b69e102b6..ebfb21abf8a8 100644
+--- a/Source/JavaScriptCore/heap/LocalAllocatorInlines.h
++++ b/Source/JavaScriptCore/heap/LocalAllocatorInlines.h
+@@ -25,6 +25,7 @@
+ 
+ #pragma once
+ 
++#include "HeapInlines.h"
+ #include "LocalAllocator.h"
+ 
+ namespace JSC {
+-- 
+2.17.1
+

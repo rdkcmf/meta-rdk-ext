@@ -1,0 +1,30 @@
+From cd31d99e325f478610224445eac9d07618cfa4f7 Mon Sep 17 00:00:00 2001
+From: Eugene Mutavchi <Ievgen_Mutavchi@comcast.com>
+Date: Mon, 2 Jul 2018 08:57:22 -0400
+Subject: [PATCH] [GStreamer] [MSE] don't try to advacne ready state on
+ playback pipeline failure
+
+---
+ .../graphics/gstreamer/mse/MediaPlayerPrivateGStreamerMSE.cpp       | 6 ++++++
+ 1 file changed, 6 insertions(+)
+
+diff --git a/Source/WebCore/platform/graphics/gstreamer/mse/MediaPlayerPrivateGStreamerMSE.cpp b/Source/WebCore/platform/graphics/gstreamer/mse/MediaPlayerPrivateGStreamerMSE.cpp
+index 017ec51..779ff42 100644
+--- a/Source/WebCore/platform/graphics/gstreamer/mse/MediaPlayerPrivateGStreamerMSE.cpp
++++ b/Source/WebCore/platform/graphics/gstreamer/mse/MediaPlayerPrivateGStreamerMSE.cpp
+@@ -441,6 +441,12 @@ void MediaPlayerPrivateGStreamerMSE::setReadyState(MediaPlayer::ReadyState ready
+     if (readyState == m_readyState)
+         return;
+ 
++    if (readyState > m_readyState && GST_STATE_CHANGE_FAILURE == gst_element_get_state(m_pipeline.get(), 0, 0, 0))
++    {
++        GST_DEBUG("Skip reaction to ready state change due pipeline failure");
++        return;
++    }
++
+     GST_DEBUG("Ready State Changed manually from %u to %u", m_readyState, readyState);
+     MediaPlayer::ReadyState oldReadyState = m_readyState;
+     m_readyState = readyState;
+-- 
+2.7.4
+

@@ -1,0 +1,233 @@
+From b63b6b4d11f84d9ef34980cb5d5c0e190d205546 Mon Sep 17 00:00:00 2001
+From: Gurdal Oruklu <gurdaloruklu@gmail.com>
+License: GPLV2
+Source: COMCAST
+Upstream-Status: None
+Date: Tue, 10 Sep 2019 17:19:02 +0000
+Subject: [PATCH] comcast VP9 support
+
+Signed-off-by: Gurdal Oruklu <gurdaloruklu@gmail.com>
+---
+ Source/WebCore/html/HTMLMediaElement.cpp           |  5 +-
+ .../gstreamer/MediaPlayerPrivateGStreamer.cpp      | 10 +++
+ .../gstreamer/WebKitWebSourceGStreamer.cpp         |  4 +-
+ .../graphics/gstreamer/mse/AppendPipeline.cpp      |  3 +
+ .../mse/MediaPlayerPrivateGStreamerMSE.cpp         | 71 ++++++++++++++++++++--
+ Source/cmake/OptionsWPE.cmake                      |  4 ++
+ 6 files changed, 89 insertions(+), 8 deletions(-)
+
+diff --git a/Source/WebCore/html/HTMLMediaElement.cpp b/Source/WebCore/html/HTMLMediaElement.cpp
+index 5d6279b..a5dfa41 100644
+--- a/Source/WebCore/html/HTMLMediaElement.cpp
++++ b/Source/WebCore/html/HTMLMediaElement.cpp
+@@ -418,7 +418,7 @@ HTMLMediaElement::HTMLMediaElement(const QualifiedName& tagName, Document& docum
+     , m_playbackControlsManagerBehaviorRestrictionsTimer(*this, &HTMLMediaElement::playbackControlsManagerBehaviorRestrictionsTimerFired)
+     , m_seekToPlaybackPositionEndedTimer(*this, &HTMLMediaElement::seekToPlaybackPositionEndedTimerFired)
+     , m_asyncEventQueue(*this)
+-    , m_lastTimeUpdateEventMovieTime(MediaTime::positiveInfiniteTime())
++    , m_lastTimeUpdateEventMovieTime(MediaTime::zeroTime())
+     , m_firstTimePlaying(true)
+     , m_playing(false)
+     , m_isWaitingUntilMediaCanStart(false)
+@@ -2966,7 +2966,8 @@ void HTMLMediaElement::seekTask()
+         clearSeeking();
+         return;
+     }
+-    time = seekableRanges->ranges().nearest(time);
++    if (seekableRanges->length())
++        time = seekableRanges->ranges().nearest(time);
+ 
+     m_sentEndEvent = false;
+     m_lastSeekTime = time;
+diff --git a/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp b/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp
+index bf85d7b..15cd8e7 100644
+--- a/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp
++++ b/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp
+@@ -77,6 +77,8 @@
+ #include "AudioSourceProviderGStreamer.h"
+ #endif
+ 
++#include "MediaPlayerPrivateGStreamerMSE.h"
++
+ GST_DEBUG_CATEGORY_EXTERN(webkit_media_player_debug);
+ #define GST_CAT_DEFAULT webkit_media_player_debug
+ 
+@@ -2234,6 +2236,14 @@ MediaPlayer::SupportsType MediaPlayerPrivateGStreamer::supportsType(const MediaE
+     if (mimeTypeSet().contains(parameters.type.containerType()))
+         result = parameters.type.codecs().isEmpty() ? MediaPlayer::MayBeSupported : MediaPlayer::IsSupported;
+ 
++#if PLATFORM(BROADCOM)
++    if (result != MediaPlayer::IsNotSupported) {
++        Vector<String> codecs = parameters.type.codecs();
++        if ((AtomicString("video/webm") == parameters.type.containerType() && codecs.isEmpty()) || !MediaPlayerPrivateGStreamerMSE::supportsAllCodecs(codecs))
++            result = MediaPlayer::IsNotSupported;
++    }
++#endif
++
+     return extendedSupportsType(parameters, result);
+ }
+ 
+diff --git a/Source/WebCore/platform/graphics/gstreamer/WebKitWebSourceGStreamer.cpp b/Source/WebCore/platform/graphics/gstreamer/WebKitWebSourceGStreamer.cpp
+index c71b03f..4a59ba6 100644
+--- a/Source/WebCore/platform/graphics/gstreamer/WebKitWebSourceGStreamer.cpp
++++ b/Source/WebCore/platform/graphics/gstreamer/WebKitWebSourceGStreamer.cpp
+@@ -263,7 +263,7 @@ static void webkit_web_src_init(WebKitWebSrc* src)
+     // here to not pause/unpause the SoupMessage too often and
+     // to make sure there's always some data available for
+     // GStreamer to handle.
+-    gst_app_src_set_max_bytes(priv->appsrc, 512 * 1024);
++    gst_app_src_set_max_bytes(priv->appsrc,  4 * 1024 * 1024);
+ 
+     // Emit the need-data signal if the queue contains less
+     // than 20% of data. Without this the need-data signal
+@@ -276,7 +276,7 @@ static void webkit_web_src_init(WebKitWebSrc* src)
+     // likely that libsoup already provides new data before
+     // the queue is really empty.
+     // This might need tweaking for ports not using libsoup.
+-    g_object_set(priv->appsrc, "min-percent", 20, nullptr);
++    g_object_set(priv->appsrc, "min-percent", 2, nullptr);
+ 
+     gst_base_src_set_automatic_eos(GST_BASE_SRC(priv->appsrc), FALSE);
+ 
+diff --git a/Source/WebCore/platform/graphics/gstreamer/mse/AppendPipeline.cpp b/Source/WebCore/platform/graphics/gstreamer/mse/AppendPipeline.cpp
+index 120dae4..bc8391b 100644
+--- a/Source/WebCore/platform/graphics/gstreamer/mse/AppendPipeline.cpp
++++ b/Source/WebCore/platform/graphics/gstreamer/mse/AppendPipeline.cpp
+@@ -1012,6 +1012,9 @@ GstFlowReturn AppendPipeline::handleNewAppsinkSample(GstElement* appsink)
+ static GRefPtr<GstElement>
+ createOptionalParserForFormat(GstPad* demuxerSrcPad)
+ {
++#if PLATFORM(BROADCOM)
++    return nullptr;
++#endif
+     GRefPtr<GstCaps> padCaps = adoptGRef(gst_pad_get_current_caps(demuxerSrcPad));
+     GstStructure* structure = gst_caps_get_structure(padCaps.get(), 0);
+     const char* mediaType = gst_structure_get_name(structure);
+diff --git a/Source/WebCore/platform/graphics/gstreamer/mse/MediaPlayerPrivateGStreamerMSE.cpp b/Source/WebCore/platform/graphics/gstreamer/mse/MediaPlayerPrivateGStreamerMSE.cpp
+index 104aea2..2391535 100644
+--- a/Source/WebCore/platform/graphics/gstreamer/mse/MediaPlayerPrivateGStreamerMSE.cpp
++++ b/Source/WebCore/platform/graphics/gstreamer/mse/MediaPlayerPrivateGStreamerMSE.cpp
+@@ -75,8 +75,13 @@
+ #define MEDIA_MAX_FRAMERATE 30.0f
+ #else
+ // Assume hardware video decoding acceleration up to 8K@60fps for the rest of the cases.
+-#define MEDIA_MAX_WIDTH 7680.0f
+-#define MEDIA_MAX_HEIGHT 4320.0f
++#if USE(WESTEROS_SINK)
++   #define MEDIA_MAX_WIDTH 3840.0f
++   #define MEDIA_MAX_HEIGHT 2160.0f
++#else
++   #define MEDIA_MAX_WIDTH 7680.0f
++   #define MEDIA_MAX_HEIGHT 4320.0f
++#endif
+ #define MEDIA_MAX_FRAMERATE 60.0f
+ #endif
+ 
+@@ -839,6 +844,36 @@ bool MediaPlayerPrivateGStreamerMSE::isTimeBuffered(const MediaTime &time) const
+ 
+ std::optional<PlatformVideoPlaybackQualityMetrics> MediaPlayerPrivateGStreamerMSE::videoPlaybackQualityMetrics()
+ {
++#if USE(WESTEROS_SINK) && PLATFORM(BROADCOM)
++    if (!m_videoSink)
++        return std::nullopt;
++    GRefPtr<GstPad> videoSinkPad = adoptGRef(gst_element_get_static_pad(m_videoSink.get(), "sink"));
++    if (!videoSinkPad)
++        return std::nullopt;
++    GstStructure *structure =
++        gst_structure_new("get_video_playback_quality",
++                          "total", G_TYPE_UINT, 0,
++                          "dropped", G_TYPE_UINT, 0,
++                          "corrupted", G_TYPE_UINT, 0,
++                          nullptr);
++    GstQuery *query = gst_query_new_custom(GST_QUERY_CUSTOM, structure);
++    if (!gst_pad_query(videoSinkPad.get(), query)) {
++        gst_query_unref(query);
++        return std::nullopt;
++    }
++    guint total = 0;
++    guint dropped = 0;
++    guint corrupted = 0;
++    structure = (GstStructure *)gst_query_get_structure(query);
++    if (!gst_structure_get_uint(structure, "total", &total))
++        total = 0;
++    if (!gst_structure_get_uint(structure, "dropped", &dropped))
++        dropped = 0;
++    if (!gst_structure_get_uint(structure, "corrupted", &corrupted))
++        corrupted = 0;
++    gst_query_unref(query);
++    return PlatformVideoPlaybackQualityMetrics(total, dropped, corrupted, 0);
++#endif
+     return PlatformVideoPlaybackQualityMetrics(
+         decodedFrameCount(),
+         droppedFrameCount(),
+@@ -901,6 +936,13 @@ HashSet<String, ASCIICaseInsensitiveHash>& MediaPlayerPrivateGStreamerMSE::mimeT
+         };
+         for (auto& type : mimeTypes)
+             set.add(type);
++
++        GList* demuxerFactories = gst_element_factory_list_get_elements(GST_ELEMENT_FACTORY_TYPE_DEMUXER, GST_RANK_MARGINAL);
++        if (gstRegistryHasElementForMediaType(demuxerFactories, "video/x-matroska")) {
++            set.add(AtomicString("video/webm"));
++            set.add(AtomicString("audio/webm"));
++        }
++        gst_plugin_feature_list_free(demuxerFactories);
+         return set;
+     }();
+     return cache;
+@@ -1026,6 +1068,18 @@ const static HashSet<AtomicString>& codecSet()
+         }
+ 
+ 
++#if PLATFORM(BROADCOM)
++        set.remove(AtomicString("vp8"));
++        set.remove(AtomicString("x-vp8"));
++#endif
++#if ENABLE(VP9_HDR)
++        if (gstRegistryHasElementForMediaType(videoDecoderFactories,"video/x-vp9")) {
++            set.add(AtomicString("vp09.00.*"));
++            set.add(AtomicString("vp09.01.*"));
++            set.add(AtomicString("vp09.02.*"));
++            set.add(AtomicString("vp9.2"));
++        }
++#endif
+         gst_plugin_feature_list_free(audioDecoderFactories);
+         gst_plugin_feature_list_free(videoDecoderFactories);
+ 
+@@ -1043,8 +1097,17 @@ bool MediaPlayerPrivateGStreamerMSE::supportsCodec(String codec)
+ 
+     for (const auto& pattern : codecSet()) {
+         bool codecMatchesPattern = !fnmatch(pattern.string().utf8().data(), codec.utf8().data(), 0);
+-        if (codecMatchesPattern)
+-            return true;
++        if (codecMatchesPattern) {
++            if (codec.startsWith("vp09")) {
++                auto fields = codec.split(".");
++                for (int i = 1; codecMatchesPattern && i < fields.size(); ++i) {
++                    bool ok;
++                    int val = fields[i].toInt(&ok);
++                    codecMatchesPattern = ok && val < 99;
++                }
++            }
++            return codecMatchesPattern;
++        }
+     }
+ 
+     return false;
+diff --git a/Source/cmake/OptionsWPE.cmake b/Source/cmake/OptionsWPE.cmake
+index 9b6218d..96750fc 100644
+--- a/Source/cmake/OptionsWPE.cmake
++++ b/Source/cmake/OptionsWPE.cmake
+@@ -164,6 +164,10 @@ if ( ENABLE_ENCRYPTED_MEDIA )
+     endif()
+ endif ()
+ 
++if (ENABLE_VP9_HDR)
++  add_definitions(-DENABLE_VP9_HDR=1)
++endif()
++
+ add_definitions(-DBUILDING_WPE__=1)
+ add_definitions(-DGETTEXT_PACKAGE="WPE")
+ add_definitions(-DDATA_DIR="${CMAKE_INSTALL_DATADIR}")
+-- 
+1.9.1
+

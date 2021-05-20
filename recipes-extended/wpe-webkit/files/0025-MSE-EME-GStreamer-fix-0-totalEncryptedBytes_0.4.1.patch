@@ -1,0 +1,91 @@
+From 135853b02a1e2563a048e133b65720e8d55b8e8c Mon Sep 17 00:00:00 2001
+From: Gurdal Oruklu <gurdal_oruklu@comcast.com>
+Date: Fri, 21 Dec 2018 19:35:06 +0000
+Subject: [PATCH] don't call decrypt when totalencrypted bytes is 0
+
+Signed-off-by: Gurdal Oruklu <gurdal_oruklu@comcast.com>
+---
+ .../eme/WebKitOpenCDMDecryptorGStreamer.cpp        | 67 ++++++++++++----------
+ 1 file changed, 36 insertions(+), 31 deletions(-)
+
+diff --git a/Source/WebCore/platform/graphics/gstreamer/eme/WebKitOpenCDMDecryptorGStreamer.cpp b/Source/WebCore/platform/graphics/gstreamer/eme/WebKitOpenCDMDecryptorGStreamer.cpp
+index 8e2d4a3927c..3a64c89d6ab 100644
+--- a/Source/WebCore/platform/graphics/gstreamer/eme/WebKitOpenCDMDecryptorGStreamer.cpp
++++ b/Source/WebCore/platform/graphics/gstreamer/eme/WebKitOpenCDMDecryptorGStreamer.cpp
+@@ -223,37 +223,42 @@ static bool webKitMediaOpenCDMDecryptorDecrypt(WebKitMediaCommonEncryptionDecryp
+         }
+         gst_byte_reader_set_pos(reader.get(), 0);
+ 
+-        // Build a new buffer storing the entire encrypted cipher.
+-        GUniquePtr<uint8_t> holdEncryptedData(reinterpret_cast<uint8_t*>(malloc(totalEncrypted)));
+-        uint8_t* encryptedData = holdEncryptedData.get();
+-        unsigned index = 0;
+-        for (position = 0; position < subSampleCount; position++) {
+-            gst_byte_reader_get_uint16_be(reader.get(), &inClear);
+-            gst_byte_reader_get_uint32_be(reader.get(), &inEncrypted);
+-            memcpy(encryptedData, mappedBuffer.data() + index + inClear, inEncrypted);
+-            index += inClear + inEncrypted;
+-            encryptedData += inEncrypted;
+-        }
+-        gst_byte_reader_set_pos(reader.get(), 0);
+-
+-        // Decrypt cipher.
+-        GST_TRACE_OBJECT(self, "decrypting (subsample)");
+-        if ((errorCode = priv->m_openCdm->Decrypt(holdEncryptedData.get(), static_cast<uint32_t>(totalEncrypted), mappedIV.data(), static_cast<uint32_t>(mappedIV.size()), mappedKeyID.size(), mappedKeyID.data(), WEBCORE_GSTREAMER_EME_LICENSE_KEY_RESPONSE_TIMEOUT.millisecondsAs<uint32_t>()))) {
+-            GST_ERROR_OBJECT(self, "subsample decryption failed, error code %d", errorCode);
+-            return false;
+-        }
+-
+-        // Re-build sub-sample data.
+-        index = 0;
+-        encryptedData = holdEncryptedData.get();
+-        unsigned total = 0;
+-        for (position = 0; position < subSampleCount; position++) {
+-            gst_byte_reader_get_uint16_be(reader.get(), &inClear);
+-            gst_byte_reader_get_uint32_be(reader.get(), &inEncrypted);
+-
+-            memcpy(mappedBuffer.data() + total + inClear, encryptedData + index, inEncrypted);
+-            index += inEncrypted;
+-            total += inClear + inEncrypted;
++        if (totalEncrypted > 0)
++        {
++            // Build a new buffer storing the entire encrypted cipher.
++            GUniquePtr<uint8_t> holdEncryptedData(reinterpret_cast<uint8_t*>(malloc(totalEncrypted)));
++            uint8_t* encryptedData = holdEncryptedData.get();
++            unsigned index = 0;
++            for (position = 0; position < subSampleCount; position++) {
++                gst_byte_reader_get_uint16_be(reader.get(), &inClear);
++                gst_byte_reader_get_uint32_be(reader.get(), &inEncrypted);
++                memcpy(encryptedData, mappedBuffer.data() + index + inClear, inEncrypted);
++                index += inClear + inEncrypted;
++                encryptedData += inEncrypted;
++            }
++            gst_byte_reader_set_pos(reader.get(), 0);
++
++            // Decrypt cipher.
++            GST_TRACE_OBJECT(self, "decrypting (subsample)");
++            if ((errorCode = priv->m_openCdm->Decrypt(holdEncryptedData.get(), static_cast<uint32_t>(totalEncrypted), mappedIV.data(), static_cast<uint32_t>(mappedIV.size()), mappedKeyID.size(), mappedKeyID.data(), WEBCORE_GSTREAMER_EME_LICENSE_KEY_RESPONSE_TIMEOUT.millisecondsAs<uint32_t>()))) {
++                GST_ERROR_OBJECT(self, "subsample decryption failed, error code %d", errorCode);
++                return false;
++            }
++
++            // Re-build sub-sample data.
++            index = 0;
++            encryptedData = holdEncryptedData.get();
++            unsigned total = 0;
++            for (position = 0; position < subSampleCount; position++) {
++                gst_byte_reader_get_uint16_be(reader.get(), &inClear);
++                gst_byte_reader_get_uint32_be(reader.get(), &inEncrypted);
++
++                memcpy(mappedBuffer.data() + total + inClear, encryptedData + index, inEncrypted);
++                index += inEncrypted;
++                total += inClear + inEncrypted;
++            }
++        } else {
++            GST_DEBUG_OBJECT(self, "totalEncrypted is 0, not calling decrypt() !");
+         }
+     } else {
+         GST_TRACE_OBJECT(self, "decrypting (no subsamples)");
+-- 
+2.16.2
+

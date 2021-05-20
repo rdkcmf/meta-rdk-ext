@@ -1,0 +1,48 @@
+Date: Apr 22 17:38:23 2016
+
+From: 018acd3cd6881c049872e84bbad05a9bd2c2383d Apr 22 17:38:23 2016
+
+Subject: [PATCH] AXG1V3-2426: Yocto: Cox box HDD can't be partitioned
+
+	Fix sgdisk build recipe to produce correct tools, and to contol this.
+
+Source: ARRIS
+
+License: GPL-1.0-or-later
+
+Upstream-Status: Pending
+
+Signed-off-by: Mikhail.Beloborodyy@arris.com
+---
+
+Index: git/diskio-unix.cc
+===================================================================
+--- git.orig/diskio-unix.cc
++++ git/diskio-unix.cc
+@@ -33,6 +33,16 @@
+ 
+ #include "diskio.h"
+ 
++template <bool b>
++struct StaticAssert {};
++
++// template specialized on true
++template <> struct StaticAssert<true>
++{
++    static void assert() {}
++};
++
++
+ using namespace std;
+ 
+ // Returns the official "real" name for a shortened version of same.
+@@ -273,6 +283,9 @@ int DiskIO::Seek(uint64_t sector) {
+    int retval = 1;
+    off_t seekTo, sought;
+ 
++   // added here to ensure that off_t is 64 bit. otherwise there will be strange effects on 2GB HDD
++   StaticAssert<sizeof(off_t) >= sizeof(uint64_t)>::assert(); // this would fail if you messed up with flags
++
+    // If disk isn't open, try to open it....
+    if (!isOpen) {
+       retval = OpenForRead();

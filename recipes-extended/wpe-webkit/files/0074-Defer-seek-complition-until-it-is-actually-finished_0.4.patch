@@ -1,0 +1,55 @@
+Date: Fri, 13 Jul 2018 08:38:50 -0400
+
+From: 1fca44c210e41e10e8513fd06bbf3486d7ab261b Mon Sep 17 00:00:00 2001
+
+Subject: [PATCH] XRE-13219, XRE-13227: Defer seek complition until it is actually finished
+
+	Defer seek complition until it is actually finished
+	And make sure h264parse always sends codec-data change
+
+Source: COMCAST
+
+License: BSD-2-Clause
+
+Upstream-Status: Pending
+
+Signed-off-by:  Eugene Mutavchi <Ievgen_Mutavchi@comcast.com>
+---
+ .../graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp     | 14 ++++++++++++++
+ 1 file changed, 14 insertions(+)
+
+diff --git a/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp b/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp
+index f42e0ac..60570ac 100644
+--- a/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp
++++ b/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp
+@@ -1155,6 +1155,12 @@ void MediaPlayerPrivateGStreamer::handleMessage(GstMessage* message)
+ 
+         if (!messageSourceIsPlaybin || m_delayingLoad)
+             break;
++
++        if (m_seeking)
++        {
++            asyncStateChangeDone();
++        }
++
+         updateStates();
+ 
+         // Construct a filename for the graphviz dot file output.
+@@ -1691,6 +1697,14 @@ void MediaPlayerPrivateGStreamer::asyncStateChangeDone()
+         if (m_seekIsPending)
+             updateStates();
+         else {
++            GstState state, newState;
++            GstStateChangeReturn getStateResult = gst_element_get_state(m_pipeline.get(), &state, &newState, 0);
++            if (getStateResult == GST_STATE_CHANGE_ASYNC
++                && !(state == GST_STATE_PLAYING && newState == GST_STATE_PAUSED)) {
++                GST_DEBUG("[Seek] Delaying seek finish");
++                return;
++            }
++
+             GST_DEBUG("[Seek] seeked to %s", toString(m_seekTime).utf8().data());
+             m_seeking = false;
+             m_cachedPosition = MediaTime::invalidTime();
+-- 
+2.7.4
+

@@ -1,0 +1,59 @@
+Date: Feb 26 17:13:35 2016
+
+From: 648f0fa11b9f2aa562dbe3ccd311aa2babb5b366 Feb 26 17:13:35 2016
+
+Subject: [PATCH] RDKSYSINTSW-2849, RDK-15439: Fixed Security vulnerability in dns resolution.
+
+        As mentioned in the ticket, client side dns resolver had
+        issues while processing two responses.
+        Backported the changes from glibc master branch.
+
+Source: COMCAST
+
+License: LGPL-2.1-or-later
+
+Upstream-Status: Pending
+
+Signed-off-by: Balaji Punnuru <balaji_punnuru@cable.comcast.com>
+
+---
+
+Index: libc/resolv/nss_dns/dns-host.c
+===================================================================
+--- libc.orig/resolv/nss_dns/dns-host.c
++++ libc/resolv/nss_dns/dns-host.c
+@@ -308,12 +308,13 @@ _nss_dns_gethostbyname4_r (const char *n
+   u_char *ans2p = NULL;
+   int nans2p = 0;
+   int resplen2 = 0;
++  int ans2p_malloced = 0;
+ 
+   int olderr = errno;
+   enum nss_status status;
+   int n = __libc_res_nsearch (&_res, name, C_IN, T_UNSPEC,
+ 			      host_buffer.buf->buf, 2048, &host_buffer.ptr,
+-			      &ans2p, &nans2p, &resplen2);
++			      &ans2p, &nans2p, &resplen2,&ans2p_malloced);
+   if (n < 0)
+     {
+       switch (errno)
+@@ -345,6 +346,9 @@ _nss_dns_gethostbyname4_r (const char *n
+       if (host_buffer.buf != orig_host_buffer)
+ 	free (host_buffer.buf);
+ 
++      if (ans2p_malloced)
++	free (ans2p);
++
+       return status;
+     }
+ 
+@@ -355,6 +359,9 @@ _nss_dns_gethostbyname4_r (const char *n
+   if (host_buffer.buf != orig_host_buffer)
+     free (host_buffer.buf);
+ 
++  if (ans2p_malloced)
++    free (ans2p);
++
+   return status;
+ }
+ 

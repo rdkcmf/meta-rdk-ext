@@ -1,0 +1,23 @@
+From ca39b7466e55d37bb9d7e65b2b0c07bd1f14ae25 Mon Sep 17 00:00:00 2001
+From: Ievgen Mutavchi <Ievgen_Mutavchi@comcast.com>
+Date: Fri, 14 Aug 2020 14:12:14 -0400
+Subject: [PATCH 2/2] Use SYSLOG instead of TRACE
+
+---
+ WebKitBrowser/WebKitBrowser.cpp | 12 ++++++------
+ 1 file changed, 6 insertions(+), 6 deletions(-)
+
+Index: git/WebKitBrowser/WebKitBrowser.cpp
+===================================================================
+--- git.orig/WebKitBrowser/WebKitBrowser.cpp
++++ git/WebKitBrowser/WebKitBrowser.cpp
+@@ -19,6 +19,9 @@
+ 
+ #include "WebKitBrowser.h"
+ 
++#undef TRACE
++#define TRACE SYSLOG
++
+ namespace WPEFramework {
+ 
+ namespace Plugin {

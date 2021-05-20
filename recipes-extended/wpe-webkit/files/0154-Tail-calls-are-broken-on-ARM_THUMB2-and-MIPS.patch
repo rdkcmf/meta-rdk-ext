@@ -1,0 +1,91 @@
+From 531548423f7c56b39b74324216868435b74ee7fe Mon Sep 17 00:00:00 2001
+From: nrajan002c <nambi_rajang@cable.comcast.com>
+Date: Wed, 11 Sep 2019 00:30:02 +0000
+Subject: [PATCH] Tail calls are broken on ARM_THUMB2 and MIPS
+
+Signed-off-by: nrajan002c <nambi_rajang@cable.comcast.com>
+---
+ JSTests/stress/tail-call-with-spilled-registers.js | 50 ++++++++++++++++++++++
+ Source/JavaScriptCore/bytecode/AccessCase.cpp      |  8 ++++
+ 2 files changed, 58 insertions(+)
+ create mode 100644 JSTests/stress/tail-call-with-spilled-registers.js
+
+diff --git a/JSTests/stress/tail-call-with-spilled-registers.js b/JSTests/stress/tail-call-with-spilled-registers.js
+new file mode 100644
+index 00000000000..d68d16009d9
+--- /dev/null
++++ b/JSTests/stress/tail-call-with-spilled-registers.js
+@@ -0,0 +1,50 @@
++//@ run("--useConcurrentJIT=false")
++
++"use strict";
++
++function assert(a, e) {
++  if (a !== e)
++    throw new Error('Expected: ' + e + ' but got: ' + a);
++}
++noInline(assert);
++
++function c3(v, b, c, d, e) {
++    return v + b + c + d + e;
++}
++noInline(c3);
++
++function c1(o) {
++    let ret = o.c2;
++    if (o.a)
++      assert(o.a, 126);
++    return o;
++}
++noInline(c1);
++
++function getter() {
++    let b = Math.random();
++    let c = Math.random();
++    let d = Math.random();
++    let e = Math.random();
++    return c3('test', b, c, d, e);
++}
++noInline(getter);
++
++let c = [];
++
++c[0] = {a: 126};
++c[0].foo = 0;
++c[0].c2 = 15;
++
++c[1] = {};
++c[1].bar = 99;
++
++c[2] = {};
++Object.defineProperty(c[2], 'c2', { get: getter });
++
++for (let i = 0; i < 10000; i++) {
++    if (numberOfDFGCompiles(c1) > 0)
++        c1(c[2]);
++    else
++        c1(c[i % 2]);
++}
+diff --git a/Source/JavaScriptCore/bytecode/AccessCase.cpp b/Source/JavaScriptCore/bytecode/AccessCase.cpp
+index 41986550474..0437ab3fabb 100644
+--- a/Source/JavaScriptCore/bytecode/AccessCase.cpp
++++ b/Source/JavaScriptCore/bytecode/AccessCase.cpp
+@@ -655,7 +655,15 @@ void AccessCase::generateImpl(AccessGenerationState& state)
+                 CCallHelpers::Zero, loadedValueGPR);
+ 
+             unsigned numberOfRegsForCall = CallFrame::headerSizeInRegisters + numberOfParameters;
++#if CPU(ARM_THUMB2) || CPU(MIPS)
++            // For ARMv7 and MIPS architectures, we need 8 extra bytes to
++            // guarantee that stack size have enough space to be reused by a
++            // tail call. Since sizeof(CallerFrameAndPC) == 8 for those architectures,
++            // we only need to calculate `numberOfBytesForCall = numberOfRegsForCall * sizeof(Register)`.
++            unsigned numberOfBytesForCall = numberOfRegsForCall * sizeof(Register);
++#else
+             unsigned numberOfBytesForCall = numberOfRegsForCall * sizeof(Register) - sizeof(CallerFrameAndPC);
++#endif
+ 
+             unsigned alignedNumberOfBytesForCall =
+             WTF::roundUpToMultipleOf(stackAlignmentBytes(), numberOfBytesForCall);
+-- 
+2.16.2
+

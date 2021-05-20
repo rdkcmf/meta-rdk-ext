@@ -1,0 +1,42 @@
+From 3f33a766d332459ad9d7d339e8e9d66966012d17 Mon Sep 17 00:00:00 2001
+From: Gurdal Oruklu <Gurdal_Oruklu@comcast.com>
+Date: Mon, 30 Jul 2018 22:48:26 -0700
+Subject: [PATCH] comcast add EAC3 support_0.4
+
+---
+ .../graphics/gstreamer/mse/MediaPlayerPrivateGStreamerMSE.cpp  | 10 ++++++----
+ 1 file changed, 6 insertions(+), 4 deletions(-)
+
+diff --git a/Source/WebCore/platform/graphics/gstreamer/mse/MediaPlayerPrivateGStreamerMSE.cpp b/Source/WebCore/platform/graphics/gstreamer/mse/MediaPlayerPrivateGStreamerMSE.cpp
+index b5822d10be9..93a8e6344cd 100644
+--- a/Source/WebCore/platform/graphics/gstreamer/mse/MediaPlayerPrivateGStreamerMSE.cpp
++++ b/Source/WebCore/platform/graphics/gstreamer/mse/MediaPlayerPrivateGStreamerMSE.cpp
+@@ -869,11 +869,11 @@ const static HashSet<AtomicString>& codecSet()
+             { VideoDecoder, "video/x-vp9", { "vp9", "x-vp9" } },
+             { AudioDecoder, "audio/x-vorbis", { "vorbis", "x-vorbis" } },
+             { AudioDecoder, "audio/x-opus", { "opus", "x-opus" } },
+-            { AudioDecoder, "audio/x-ac3", { } },
+-            { AudioDecoder, "audio/x-eac3", {"audio/x-ac3"} }
++            { AudioDecoder, "audio/x-ac3", {"x-ac3", "ac3" } },
++            { AudioDecoder, "audio/x-eac3", {"x-eac3", "ec3", "ec-3", "eac3"} }
+         } };
+ #else
+-        std::array<GstCapsWebKitMapping, 8> mapping = { {
++        std::array<GstCapsWebKitMapping, 10> mapping = { {
+             { VideoDecoder, "video/x-h264,  profile=(string){ constrained-baseline, baseline }", { "x-h264" } },
+             { VideoDecoder, "video/x-h264, stream-format=avc", { "avc*"} },
+             // An autoplugged h264parse in decodebin can convert from byte-stream to avc.
+@@ -882,7 +882,9 @@ const static HashSet<AtomicString>& codecSet()
+             { VideoDecoder, "video/x-vp8", { "vp8", "x-vp8" } },
+             { VideoDecoder, "video/x-vp9", { "vp9", "x-vp9" } },
+             { AudioDecoder, "audio/x-vorbis", { "vorbis", "x-vorbis" } },
+-            { AudioDecoder, "audio/x-opus", { "opus", "x-opus" } }
++            { AudioDecoder, "audio/x-opus", { "opus", "x-opus" } },
++            { AudioDecoder, "audio/x-ac3", {"x-ac3", "ac3" } },
++            { AudioDecoder, "audio/x-eac3", {"x-eac3", "ec3", "ec-3", "eac3"} }
+         } };
+ #endif
+         for (auto& current : mapping) {
+-- 
+2.16.2
+

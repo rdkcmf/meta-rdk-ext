@@ -1,0 +1,227 @@
+Date: Dec 05 09:22:20 2018
+
+From: 462992bf59541b643d194956ce4c245075a0dbf7 Dec 20 16:01:20 2018
+
+Subject: [PATCH] RDKB-15078: Merge XDNS patches + add patched from meta-rdk-mesh
+
+	XDNS - This patch provides support for DHCP fingerprint.
+	Adds XDNS support in dnsmasq. Changes in Dnsmasq opensource 2.78.
+        Modification in meta-rdk-ext for all platforms.
+        Add ccsp-xdns.bb to meta-rdk and package groups
+
+Source: COMCAST
+
+License: GPL-2.0-or-later
+
+Upstream-Status: Pending
+
+Signed-off-by: Murugan Viswanathan <Murugan.Viswanathan2@cognizant.com>
+---
+ 
+diff -ur dnsmasq-2.78.orig/src/dnsmasq.h dnsmasq-2.78/src/dnsmasq.h
+--- dnsmasq-2.78.orig/src/dnsmasq.h	2018-01-16 12:09:02.862152212 +0000
++++ dnsmasq-2.78/src/dnsmasq.h	2018-01-16 12:04:51.003816723 +0000
+@@ -669,6 +669,7 @@
+   unsigned char *clid;   /* clientid */
+   char *hostname, *fqdn; /* name from client-hostname option or config */
+   char *old_hostname;    /* hostname before it moved to another lease */
++  char *fingerprint;     /* DHCP fingerprint                         */
+   int flags;
+   time_t expires;        /* lease expiry */
+ #ifdef HAVE_BROKEN_RTC
+@@ -1347,6 +1348,7 @@
+ void lease_add_extradata(struct dhcp_lease *lease, unsigned char *data, 
+ 			 unsigned int len, int delim);
+ #endif
++void lease_add_fingerprint(struct dhcp_lease *lease, unsigned char *req_options);
+ #endif
+ 
+ /* rfc2131.c */
+diff -ur dnsmasq-2.78.orig/src/lease.c dnsmasq-2.78/src/lease.c
+--- dnsmasq-2.78.orig/src/lease.c	2018-01-16 12:09:02.866152185 +0000
++++ dnsmasq-2.78/src/lease.c	2018-01-16 12:08:09.450505095 +0000
+@@ -29,6 +29,7 @@
+   int clid_len, hw_len, hw_type;
+   int items;
+   char *domain = NULL;
++  char *dhcp_fingerprint = NULL;
+ 
+   *daemon->dhcp_buff3 = *daemon->dhcp_buff2 = '\0';
+ 
+@@ -41,6 +42,14 @@
+ # error Buffer size breakage in leasefile parsing.
+ #endif
+ 
++    dhcp_fingerprint = safe_malloc(DHCP_BUFF_SZ);
++    if (NULL == dhcp_fingerprint)
++    {
++        my_syslog (LOG_ERR, _("######## Failed to allocate the memory: %s : ##########"),dhcp_fingerprint);
++        return 0;
++    }
++    *dhcp_fingerprint = '\0';
++
+     while ((items=fscanf(leasestream, "%255s %255s", daemon->dhcp_buff3, daemon->dhcp_buff2)) == 2)
+       {
+ 	*daemon->namebuff = *daemon->dhcp_buff = *daemon->packet = '\0';
+@@ -51,16 +60,24 @@
+ 	  {
+ 	    daemon->duid_len = parse_hex(daemon->dhcp_buff2, (unsigned char *)daemon->dhcp_buff2, 130, NULL, NULL);
+ 	    if (daemon->duid_len < 0)
++            {
++              if (NULL != dhcp_fingerprint)
++                  free(dhcp_fingerprint);
+ 	      return 0;
++            }
+ 	    daemon->duid = safe_malloc(daemon->duid_len);
+ 	    memcpy(daemon->duid, daemon->dhcp_buff2, daemon->duid_len);
+ 	    continue;
+ 	  }
+ #endif
+ 	
+-	if (fscanf(leasestream, " %64s %255s %764s",
+-		   daemon->namebuff, daemon->dhcp_buff, daemon->packet) != 3)
++	if (fscanf(leasestream, " %64s %255s %255s %764s",
++		   daemon->namebuff, daemon->dhcp_buff, dhcp_fingerprint, daemon->packet) != 4)
++        {
++            if (NULL != dhcp_fingerprint)
++                free(dhcp_fingerprint);
+ 	  return 0;
++        }
+ 	
+ 	if (inet_pton(AF_INET, daemon->namebuff, &addr.addr.addr4))
+ 	  {
+@@ -92,7 +109,11 @@
+ 	  }
+ #endif
+ 	else
++        {
++            if (NULL != dhcp_fingerprint)
++                free(dhcp_fingerprint);
+ 	  return 0;
++        }
+ 
+ 	if (!lease)
+ 	  die (_("too many stored leases"), NULL, EC_MISC);
+@@ -106,6 +127,9 @@
+ 	if (strcmp(daemon->dhcp_buff, "*") !=  0)
+ 	  lease_set_hostname(lease, daemon->dhcp_buff, 0, domain, NULL);
+ 
++        if (strcmp(dhcp_fingerprint, "*") != 0)
++          lease->fingerprint = strdup(dhcp_fingerprint);
++
+ 	ei = atol(daemon->dhcp_buff3);
+ 
+ #ifdef HAVE_BROKEN_RTC
+@@ -124,9 +148,11 @@
+ 	   the startup synthesised SIGHUP. */
+ 	lease->flags &= ~(LEASE_NEW | LEASE_CHANGED);
+ 	
+-	*daemon->dhcp_buff3 = *daemon->dhcp_buff2 = '\0';
++	*daemon->dhcp_buff3 = *daemon->dhcp_buff2 = *dhcp_fingerprint = '\0';
+       }
+     
++    if (NULL != dhcp_fingerprint)
++        free(dhcp_fingerprint);
+     return (items == 0 || items == EOF);
+ }
+ 
+@@ -280,6 +327,8 @@
+ 
+ 	  ourprintf(&err, " %s ", daemon->addrbuff);
+ 	  ourprintf(&err, "%s ", lease->hostname ? lease->hostname : "*");
++
++          ourprintf(&err, "%s ", lease->fingerprint ? lease->fingerprint : "*");
+ 	  	  
+ 	  if (lease->clid && lease->clid_len != 0)
+ 	    {
+@@ -555,6 +607,12 @@
+ 	  file_dirty = 1;
+ 	  if (lease->hostname)
+ 	    dns_dirty = 1;
++
++          if (lease->fingerprint)
++            {
++             free(lease->fingerprint);
++              lease->fingerprint = NULL;
++            }
+ 	  
+  	  *up = lease->next; /* unlink */
+ 	  
+@@ -1181,9 +1239,55 @@
+   lease->extradata_len += len + 1; 
+ }
+ #endif
++#define SZ_FINGERPRINT  (256)
++void lease_add_fingerprint(struct dhcp_lease *lease, unsigned char *req_options)
++{
++  unsigned int i, len, left;
+ 
+-#endif
+-	  
++  if (req_options == NULL || req_options[0] == OPTION_END)
++  {
++    /*
++     * We were given empty options -- we are not allowed to generate an empty fingerprint string, in such case
++     * it should be set to NULL instead of ""
++     */
++    if (lease->fingerprint != NULL)
++      free(lease->fingerprint);
+ 
+-      
++    lease->fingerprint = NULL;
++    return;
++  }
++
++  if (lease->fingerprint != NULL)
++       free(lease->fingerprint);
++
++    lease->fingerprint = whine_malloc(SZ_FINGERPRINT);
++    if (lease->fingerprint == NULL)
++      return;
+ 
++  char *q = lease->fingerprint;
++  for (i = 0; req_options[i] != OPTION_END; i++)
++  {
++    left = (SZ_FINGERPRINT - (q - lease->fingerprint));
++    len  = snprintf(q,
++                    left,
++                    "%d%s",
++                    req_options[i],
++                    req_options[i+1] == OPTION_END ? "" : ",");
++    /*
++     * snprintf returns len that would have been written, not
++     * how much was actually written. This means return value
++     * can be higher then max length provided
++     */
++    if (len > left) {
++      /*
++       * Not enough room to append the entire otpion,
++       * so truncate after last option
++       */
++      *(q-1) = '\0';
++      break;
++    }
++    q += len;
++  }
++}
++
++#endif
+diff -ur dnsmasq-2.78.orig/src/rfc2131.c dnsmasq-2.78/src/rfc2131.c
+--- dnsmasq-2.78.orig/src/rfc2131.c	2018-01-16 12:09:02.870152158 +0000
++++ dnsmasq-2.78/src/rfc2131.c	2018-01-16 12:04:51.003816723 +0000
+@@ -1253,6 +1253,15 @@
+ 		}
+ 	    }
+ 	}
++      /* get options information                */
++      if (lease)
++        {
++          lease_add_fingerprint(lease, req_options);
++        }
++      else
++        {
++          my_syslog(LOG_INFO, "fingerprint: lease is null ");
++        }
+ 
+       if (message)
+ 	{

@@ -1,0 +1,91 @@
+From 88fc8f0bbe9ce1c751af653ef20d2ea9c3f6353e Mon Sep 17 00:00:00 2001
+From: Eugene Mutavchi <Ievgen_Mutavchi@comcast.com>
+Date: Wed, 6 Mar 2019 09:12:17 -0500
+Subject: [PATCH] Dynamic change to NonCompositedWebGL
+
+---
+ .../threadedcompositor/ThreadedCompositor.cpp           | 17 +++++++++++++++--
+ .../threadedcompositor/ThreadedCompositor.h             |  2 ++
+ .../WebProcess/WebPage/AcceleratedDrawingArea.cpp       | 11 ++++++++++-
+ 3 files changed, 27 insertions(+), 3 deletions(-)
+
+diff --git a/Source/WebKit/Shared/CoordinatedGraphics/threadedcompositor/ThreadedCompositor.cpp b/Source/WebKit/Shared/CoordinatedGraphics/threadedcompositor/ThreadedCompositor.cpp
+index 3c5aef0..1e5ec2d 100644
+--- a/Source/WebKit/Shared/CoordinatedGraphics/threadedcompositor/ThreadedCompositor.cpp
++++ b/Source/WebKit/Shared/CoordinatedGraphics/threadedcompositor/ThreadedCompositor.cpp
+@@ -118,6 +118,7 @@ void ThreadedCompositor::invalidate()
+         m_context = nullptr;
+         m_client.didDestroyGLContext();
+         m_scene = nullptr;
++        m_nonCompositedWebGLTimer = nullptr;
+     });
+     m_compositingRunLoop = nullptr;
+ }
+@@ -201,7 +202,7 @@ void ThreadedCompositor::forceRepaint()
+ 
+ void ThreadedCompositor::renderNonCompositedWebGL()
+ {
+-    m_client.willRenderFrame();
++    // m_client.willRenderFrame();
+ 
+     // Retrieve the scene attributes in a thread-safe manner.
+     // Do this in order to free the structures memory, as they are not really used in this case.
+@@ -213,7 +214,19 @@ void ThreadedCompositor::renderNonCompositedWebGL()
+         m_attributes.clientRendersNextFrame = true;
+     }
+ 
+-    m_client.didRenderFrame();
++    // m_client.didRenderFrame();
++
++    if (!m_nonCompositedWebGLTimer)
++        m_nonCompositedWebGLTimer = std::make_unique<RunLoop::Timer<ThreadedCompositor>>(
++            RunLoop::current(), this, &ThreadedCompositor::frameComplete);
++
++    if (!m_nonCompositedWebGLTimer->isActive()) {
++        const double MinimalTimeoutForAnimations = 1. / 60.;
++        const double now = monotonicallyIncreasingTime();
++        const double delay = std::max<double>(0., MinimalTimeoutForAnimations - now + m_frameCompleteTime);
++        m_frameCompleteTime = now + delay;
++        m_nonCompositedWebGLTimer->startOneShot(Seconds { delay });
++    }
+ }
+ 
+ void ThreadedCompositor::renderLayerTree()
+diff --git a/Source/WebKit/Shared/CoordinatedGraphics/threadedcompositor/ThreadedCompositor.h b/Source/WebKit/Shared/CoordinatedGraphics/threadedcompositor/ThreadedCompositor.h
+index d1a0f94..3a3eafb 100644
+--- a/Source/WebKit/Shared/CoordinatedGraphics/threadedcompositor/ThreadedCompositor.h
++++ b/Source/WebKit/Shared/CoordinatedGraphics/threadedcompositor/ThreadedCompositor.h
+@@ -111,6 +111,8 @@ private:
+     WebCore::TextureMapper::PaintFlags m_paintFlags { 0 };
+     bool m_inForceRepaint { false };
+     bool m_nonCompositedWebGLEnabled { false };
++    double m_frameCompleteTime { 0 };
++    std::unique_ptr<RunLoop::Timer<ThreadedCompositor>> m_nonCompositedWebGLTimer { nullptr };
+ 
+     std::unique_ptr<CompositingRunLoop> m_compositingRunLoop;
+ 
+diff --git a/Source/WebKit/WebProcess/WebPage/AcceleratedDrawingArea.cpp b/Source/WebKit/WebProcess/WebPage/AcceleratedDrawingArea.cpp
+index f7bdebf..fb869d6 100644
+--- a/Source/WebKit/WebProcess/WebPage/AcceleratedDrawingArea.cpp
++++ b/Source/WebKit/WebProcess/WebPage/AcceleratedDrawingArea.cpp
+@@ -158,7 +158,16 @@ void AcceleratedDrawingArea::setPaintingEnabled(bool paintingEnabled)
+ void AcceleratedDrawingArea::updatePreferences(const WebPreferencesStore& store)
+ {
+     m_webPage.corePage()->settings().setForceCompositingMode(store.getBoolValueForKey(WebPreferencesKey::forceCompositingModeKey()));
+-    m_webPage.corePage()->settings().setNonCompositedWebGLEnabled(store.getBoolValueForKey(WebPreferencesKey::nonCompositedWebGLEnabledKey()));
++
++    bool nonCompositedWebGLEnabled = store.getBoolValueForKey(WebPreferencesKey::nonCompositedWebGLEnabledKey());
++    if (nonCompositedWebGLEnabled != m_webPage.corePage()->settings().nonCompositedWebGLEnabled()) {
++        if (m_layerTreeHost) {
++            exitAcceleratedCompositingModeNow();
++            discardPreviousLayerTreeHost();
++        }
++        m_webPage.corePage()->settings().setNonCompositedWebGLEnabled(nonCompositedWebGLEnabled);
++    }
++
+     if (!m_layerTreeHost)
+         enterAcceleratedCompositingMode(nullptr);
+ }
+-- 
+2.7.4
+

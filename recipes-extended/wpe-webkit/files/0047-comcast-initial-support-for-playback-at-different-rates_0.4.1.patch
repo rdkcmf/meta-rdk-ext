@@ -1,0 +1,444 @@
+Date: Wed, 3 Oct 2018 02:45:47 +0000
+
+From: 60b87619d8d77853d7b1866dd780a57ce7ed26be Mon Sep 17 00:00:00 2001
+
+Subject: [PATCH] wpe 0.4 configuration fixes for RDK build
+
+	Initial support for playback at different rates
+
+Source: COMCAST
+
+License: BSD-2-Clause
+
+Upstream-Status: Pending
+
+Signed-off-by: Gurdal Oruklu <Gurdal_Oruklu@comcast.com>
+---
+
+ Source/WebCore/Modules/mediasource/MediaSource.cpp |   3 +-
+ .../WebCore/Modules/mediasource/SourceBuffer.cpp   |   8 +-
+ Source/WebCore/Modules/mediasource/SourceBuffer.h  |   2 +-
+ .../gstreamer/MediaPlayerPrivateGStreamer.cpp      |  13 ++-
+ .../gstreamer/MediaPlayerPrivateGStreamer.h        |   6 +-
+ .../mse/MediaPlayerPrivateGStreamerMSE.cpp         | 116 +++++++++++++++------
+ .../gstreamer/mse/MediaPlayerPrivateGStreamerMSE.h |   4 +-
+ 7 files changed, 115 insertions(+), 37 deletions(-)
+
+diff --git a/Source/WebCore/Modules/mediasource/MediaSource.cpp b/Source/WebCore/Modules/mediasource/MediaSource.cpp
+index 46ce126b0e5..f839075ce4e 100644
+--- a/Source/WebCore/Modules/mediasource/MediaSource.cpp
++++ b/Source/WebCore/Modules/mediasource/MediaSource.cpp
+@@ -421,8 +421,9 @@ void MediaSource::monitorSourceBuffers()
+     // ↳ If HTMLMediaElement.buffered contains a TimeRange that includes the current
+     //  playback position and enough data to ensure uninterrupted playback:
+     auto ranges = buffered();
++    double playbackRate = m_mediaElement ? m_mediaElement->playbackRate() : 1;
+     if (std::all_of(m_activeSourceBuffers->begin(), m_activeSourceBuffers->end(), [&](auto& sourceBuffer) {
+-        return sourceBuffer->canPlayThroughRange(*ranges);
++        return sourceBuffer->canPlayThroughRange(*ranges, playbackRate);
+     })) {
+         // 1. Set the HTMLMediaElement.readyState attribute to HAVE_ENOUGH_DATA.
+         // 2. Queue a task to fire a simple event named canplaythrough at the media element.
+diff --git a/Source/WebCore/Modules/mediasource/SourceBuffer.cpp b/Source/WebCore/Modules/mediasource/SourceBuffer.cpp
+index 392c9784334..7659d215f13 100644
+--- a/Source/WebCore/Modules/mediasource/SourceBuffer.cpp
++++ b/Source/WebCore/Modules/mediasource/SourceBuffer.cpp
+@@ -2173,16 +2173,18 @@ void SourceBuffer::updateBufferedFromTrackBuffers()
+     setBufferedDirty(true);
+ }
+ 
+-bool SourceBuffer::canPlayThroughRange(PlatformTimeRanges& ranges)
++bool SourceBuffer::canPlayThroughRange(PlatformTimeRanges& ranges, double playbackRate)
+ {
+     if (isRemoved())
+         return false;
+ 
+     monitorBufferingRate();
+ 
++    double bufferRate = (playbackRate > 0) ? m_averageBufferRate / playbackRate : m_averageBufferRate;
++
+     // Assuming no fluctuations in the buffering rate, loading 1 second per second or greater
+     // means indefinite playback. This could be improved by taking jitter into account.
+-    if (m_averageBufferRate > 1)
++    if (bufferRate > 1)
+         return true;
+ 
+     // Add up all the time yet to be buffered.
+@@ -2197,7 +2199,7 @@ bool SourceBuffer::canPlayThroughRange(PlatformTimeRanges& ranges)
+         return true;
+ 
+     MediaTime timeRemaining = duration - currentTime;
+-    return unbufferedTime.toDouble() / m_averageBufferRate < timeRemaining.toDouble();
++    return unbufferedTime.toDouble() / bufferRate < timeRemaining.toDouble();
+ }
+ 
+ size_t SourceBuffer::extraMemoryCost() const
+diff --git a/Source/WebCore/Modules/mediasource/SourceBuffer.h b/Source/WebCore/Modules/mediasource/SourceBuffer.h
+index b8c98964d66..09475fa43e5 100644
+--- a/Source/WebCore/Modules/mediasource/SourceBuffer.h
++++ b/Source/WebCore/Modules/mediasource/SourceBuffer.h
+@@ -87,7 +87,7 @@ public:
+     void removedFromMediaSource();
+     void seekToTime(const MediaTime&);
+ 
+-    bool canPlayThroughRange(PlatformTimeRanges&);
++    bool canPlayThroughRange(PlatformTimeRanges&,double);
+ 
+     bool hasVideo() const;
+ 
+diff --git a/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp b/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp
+index 41deee4956d..880cd05e405 100644
+--- a/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp
++++ b/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp
+@@ -160,6 +160,7 @@ MediaPlayerPrivateGStreamer::MediaPlayerPrivateGStreamer(MediaPlayer* player)
+     , m_durationAtEOS(MediaTime::invalidTime())
+     , m_paused(true)
+     , m_playbackRate(1)
++    , m_lastPlaybackRate(1)
+     , m_requestedState(GST_STATE_VOID_PENDING)
+     , m_resetPipeline(false)
+     , m_seeking(false)
+@@ -172,7 +173,6 @@ MediaPlayerPrivateGStreamer::MediaPlayerPrivateGStreamer(MediaPlayer* player)
+     , m_mediaLocationCurrentIndex(0)
+     , m_playbackRatePause(false)
+     , m_timeOfOverlappingSeek(MediaTime::invalidTime())
+-    , m_lastPlaybackRate(1)
+     , m_fillTimer(*this, &MediaPlayerPrivateGStreamer::fillTimerFired)
+     , m_maxTimeLoaded(MediaTime::zeroTime())
+     , m_preload(player->preload())
+@@ -445,6 +445,13 @@ MediaTime MediaPlayerPrivateGStreamer::playbackPosition() const
+         playbackPosition = m_seekTime;
+ #endif
+ 
++    if (!m_paused && m_cachedPosition.isValid() && abs(playbackPosition - m_cachedPosition) < MediaTime(1, 1000000)) {
++        GstState currentState;
++        gst_element_get_state(m_pipeline.get(), &currentState, 0, 0);
++        m_positionStalled = (currentState == GST_STATE_PLAYING);
++    } else
++        m_positionStalled = false;
++
+     m_cachedPosition = playbackPosition;
+     return playbackPosition;
+ }
+@@ -709,8 +716,12 @@ void MediaPlayerPrivateGStreamer::updatePlaybackRate()
+ 
+     GST_INFO("Set Rate to %f", m_playbackRate);
+ 
++#if PLATFORM(BROADCOM)
++    bool mute = (m_playbackRate != 1);
++#else
+     // Mute the sound if the playback rate is negative or too extreme and audio pitch is not adjusted.
+     bool mute = m_playbackRate <= 0 || (!m_preservesPitch && (m_playbackRate < 0.8 || m_playbackRate > 2));
++#endif
+ 
+     GST_INFO(mute ? "Need to mute audio" : "Do not need to mute audio");
+ 
+diff --git a/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.h b/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.h
+index 2f67733c906..e6b55884745 100644
+--- a/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.h
++++ b/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.h
+@@ -164,7 +164,6 @@ private:
+     void processTableOfContentsEntry(GstTocEntry*);
+ #endif
+     virtual bool doSeek(const MediaTime& position, float rate, GstSeekFlags seekType);
+-    virtual void updatePlaybackRate();
+ 
+     String engineDescription() const override { return "GStreamer"; }
+     bool didPassCORSAccessCheck() const override;
+@@ -188,6 +187,7 @@ protected:
+     mutable MediaTime m_durationAtEOS;
+     bool m_paused;
+     float m_playbackRate;
++    float m_lastPlaybackRate;
+     GstState m_requestedState;
+     bool m_resetPipeline;
+     bool m_seeking;
+@@ -200,6 +200,9 @@ protected:
+ #if PLATFORM(BROADCOM)
+     GRefPtr<GstElement> m_webkitAudioSink;
+ #endif
++    mutable bool m_positionStalled { false };
++
++    virtual void updatePlaybackRate();
+     static GstSeekFlags hardwareDependantSeekFlags();
+     void readyTimerFired();
+ 
+@@ -238,7 +241,6 @@ private:
+     int m_mediaLocationCurrentIndex;
+     bool m_playbackRatePause;
+     MediaTime m_timeOfOverlappingSeek;
+-    float m_lastPlaybackRate;
+     Timer m_fillTimer;
+     MediaTime m_maxTimeLoaded;
+     MediaPlayer::Preload m_preload;
+diff --git a/Source/WebCore/platform/graphics/gstreamer/mse/MediaPlayerPrivateGStreamerMSE.cpp b/Source/WebCore/platform/graphics/gstreamer/mse/MediaPlayerPrivateGStreamerMSE.cpp
+index 6300fb1fc59..5f0f513533c 100644
+--- a/Source/WebCore/platform/graphics/gstreamer/mse/MediaPlayerPrivateGStreamerMSE.cpp
++++ b/Source/WebCore/platform/graphics/gstreamer/mse/MediaPlayerPrivateGStreamerMSE.cpp
+@@ -65,6 +65,8 @@
+ #include "CDMClearKey.h"
+ #endif
+ 
++#include "GCController.h"
++
+ static const char* dumpReadyState(WebCore::MediaPlayer::ReadyState readyState)
+ {
+     switch (readyState) {
+@@ -77,6 +79,8 @@ static const char* dumpReadyState(WebCore::MediaPlayer::ReadyState readyState)
+     }
+ }
+ 
++static int gActivePlayerNum= 0;
++
+ GST_DEBUG_CATEGORY(webkit_mse_debug);
+ #define GST_CAT_DEFAULT webkit_mse_debug
+ 
+@@ -121,11 +125,16 @@ bool MediaPlayerPrivateGStreamerMSE::isAvailable()
+ MediaPlayerPrivateGStreamerMSE::MediaPlayerPrivateGStreamerMSE(MediaPlayer* player)
+     : MediaPlayerPrivateGStreamer(player)
+ {
++    // This is a workaround for the case when web app doesn't release player explicitly
++    ++gActivePlayerNum;
++    if (gActivePlayerNum > 1)
++        GCController::singleton().garbageCollectOnNextRunLoop();
+     GST_TRACE("creating the player (%p)", this);
+ }
+ 
+ MediaPlayerPrivateGStreamerMSE::~MediaPlayerPrivateGStreamerMSE()
+ {
++    --gActivePlayerNum;
+     GST_TRACE("destroying the player (%p)", this);
+ 
+     for (auto iterator : m_appendPipelinesMap)
+@@ -259,15 +268,31 @@ void MediaPlayerPrivateGStreamerMSE::notifySeekNeedsDataForTime(const MediaTime&
+ 
+ bool MediaPlayerPrivateGStreamerMSE::doSeek(const MediaTime&, float, GstSeekFlags)
+ {
+-    // Use doSeek() instead. If anybody is calling this version of doSeek(), something is wrong.
+-    ASSERT_NOT_REACHED();
+-    return false;
++    ASSERT(m_changingRate);
++
++#if PLATFORM(BROADCOM)
++    // FIXME(XRE-12282): Sometimes rate change from higher levels to normal
++    // playback (rate=1) fails on Broadcom, visually it looks like higher
++    // rate is still applied. Pausing the pipeline before doing the rate
++    // change helps.
++    if (m_lastPlaybackRate > 4 && m_lastPlaybackRate > m_playbackRate)
++        m_pauseBeforeNextSeek = true;
++#endif
++
++    // Use currentMediaTime() here to take into account a workaround for
++    // possible position stalling
++    m_seekTime = currentMediaTime();
++
++    if (m_seeking && m_seekIsPending)
++        return true;
++
++    return doSeek();
+ }
+ 
+ bool MediaPlayerPrivateGStreamerMSE::doSeek()
+ {
+     MediaTime seekTime = m_seekTime;
+-    double rate = m_player->rate();
++    double rate = m_playbackRate;
+     GstSeekFlags seekType = static_cast<GstSeekFlags>(GST_SEEK_FLAG_FLUSH | hardwareDependantSeekFlags());
+ 
+     // Always move to seeking state to report correct 'currentTime' while pending for actual seek to complete.
+@@ -283,12 +308,15 @@ bool MediaPlayerPrivateGStreamerMSE::doSeek()
+         return false;
+     }
+     if ((getStateResult == GST_STATE_CHANGE_ASYNC
+-        && !(state == GST_STATE_PLAYING && newState == GST_STATE_PAUSED))
++        && !(state == GST_STATE_PLAYING && newState == GST_STATE_PAUSED)
++        && !(state == GST_STATE_PAUSED && newState == GST_STATE_PAUSED))
+         || state < GST_STATE_PAUSED
+         || m_isEndReached
+         || !m_gstSeekCompleted) {
+         CString reason = "Unknown reason";
+-        if (getStateResult == GST_STATE_CHANGE_ASYNC) {
++        if (!m_gstSeekCompleted)
++            reason = "Previous seek is not finished yet";
++        else if (getStateResult == GST_STATE_CHANGE_ASYNC) {
+             reason = String::format("In async change %s --> %s",
+                 gst_element_state_get_name(state),
+                 gst_element_state_get_name(newState)).utf8();
+@@ -296,8 +324,6 @@ bool MediaPlayerPrivateGStreamerMSE::doSeek()
+             reason = "State less than PAUSED";
+         else if (m_isEndReached)
+             reason = "End reached";
+-        else if (!m_gstSeekCompleted)
+-            reason = "Previous seek is not finished yet";
+ 
+         GST_DEBUG("[Seek] Delaying the seek: %s", reason.data());
+ 
+@@ -380,15 +406,32 @@ bool MediaPlayerPrivateGStreamerMSE::doSeek()
+     // This will call notifySeekNeedsData() after some time to tell that the pipeline is ready for sample enqueuing.
+     webKitMediaSrcPrepareSeek(WEBKIT_MEDIA_SRC(m_source.get()), seekTime);
+ 
++#if PLATFORM(BROADCOM)
++    // FIXME(XRE-12283): In some cases initial seek fails on Broadcom, probably
++    // because "async_done" is posted/handled too early, while pipeline is not
++    // ready. Following workarounds the issue. However, we should
++    // find/fix the root cause.
++    if (m_isFirstSeek) {
++        g_usleep(10*1000);
++    }
++#endif
++    m_isFirstSeek = false;
++
++    if (m_pauseBeforeNextSeek) {
++        MediaPlayerPrivateGStreamer::changePipelineState(GST_STATE_PAUSED);
++        m_pauseBeforeNextSeek = false;
++    }
++
+     m_gstSeekCompleted = false;
+     if (!gst_element_seek(m_pipeline.get(), rate, GST_FORMAT_TIME, seekType, GST_SEEK_TYPE_SET, toGstClockTime(startTime), GST_SEEK_TYPE_SET, toGstClockTime(endTime))) {
+         webKitMediaSrcSetReadyForSamples(WEBKIT_MEDIA_SRC(m_source.get()), true);
+         m_seeking = false;
+         m_gstSeekCompleted = true;
+-        GST_DEBUG("doSeek(): gst_element_seek() failed, returning false");
++        GST_WARNING("doSeek(): gst_element_seek() failed, returning false");
+         return false;
+     }
+ 
++    m_seekIsPending = false;
+     // The samples will be enqueued in notifySeekNeedsData().
+     GST_DEBUG("doSeek(): gst_element_seek() succeeded, returning true");
+     return true;
+@@ -399,15 +442,6 @@ void MediaPlayerPrivateGStreamerMSE::maybeFinishSeek()
+     if (!m_seeking || !m_mseSeekCompleted || !m_gstSeekCompleted)
+         return;
+ 
+-    GstState state, newState;
+-    GstStateChangeReturn getStateResult = gst_element_get_state(m_pipeline.get(), &state, &newState, 0);
+-
+-    if (getStateResult == GST_STATE_CHANGE_ASYNC
+-        && !(state == GST_STATE_PLAYING && newState == GST_STATE_PAUSED)) {
+-        GST_DEBUG("[Seek] Delaying seek finish");
+-        return;
+-    }
+-
+     if (m_seekIsPending) {
+         GST_DEBUG("[Seek] Committing pending seek to %s", toString(m_seekTime).utf8().data());
+         m_seekIsPending = false;
+@@ -418,6 +452,15 @@ void MediaPlayerPrivateGStreamerMSE::maybeFinishSeek()
+         return;
+     }
+ 
++    GstState state, newState;
++    GstStateChangeReturn getStateResult = gst_element_get_state(m_pipeline.get(), &state, &newState, 0);
++
++    if (getStateResult == GST_STATE_CHANGE_ASYNC
++        && !(state == GST_STATE_PLAYING && newState == GST_STATE_PAUSED)) {
++        GST_DEBUG("[Seek] Delaying seek finish");
++        return;
++    }
++
+     GST_DEBUG("[Seek] Seeked to %s", toString(m_seekTime).utf8().data());
+ 
+     webKitMediaSrcSetReadyForSamples(WEBKIT_MEDIA_SRC(m_source.get()), true);
+@@ -428,10 +428,8 @@ void MediaPlayerPrivateGStreamerMSE::maybeFinishSeek()
+     m_canFallBackToLastFinishedSeekPosition = true;
+     timeChanged();
+     m_player->readyStateChanged();
+-}
+-
+-void MediaPlayerPrivateGStreamerMSE::updatePlaybackRate()
+-{
++    if (!m_paused && m_playbackRate > 0)
++        changePipelineState(GST_STATE_PLAYING);
+ }
+ 
+ bool MediaPlayerPrivateGStreamerMSE::seeking() const
+@@ -507,6 +548,12 @@ void MediaPlayerPrivateGStreamerMSE::seekCompleted()
+ 
+ void MediaPlayerPrivateGStreamerMSE::setRate(float rate)
+ {
++    if (rate < 0)                              
++        return;                                
++                                               
++    //MediaPlayerPrivateGStreamer::setRate has decent implementation
++    return MediaPlayerPrivateGStreamer::setRate(rate);
++
+     if (m_playbackRate == rate) {
+         return;
+     }
+@@ -605,8 +652,6 @@ void MediaPlayerPrivateGStreamerMSE::updateStates()
+             } else {
+                 if (m_mediaSource)
+                     m_mediaSource->monitorSourceBuffers();
+-
+-                m_readyState = MediaPlayer::HaveFutureData;
+                 GST_DEBUG("m_readyState=%s", dumpReadyState(m_readyState));
+                 m_networkState = MediaPlayer::Loading;
+             }
+@@ -610,7 +651,7 @@ void MediaPlayerPrivateGStreamerMSE::updateStates()
+         }
+ #if PLATFORM(BROADCOM)
+         // this code path needs a proper review in case it can be generalized to all platforms.
+-        bool buffering = !isTimeBuffered(currentMediaTime()) && !playbackPipelineHasFutureData();
++        bool buffering = m_readyState <= MediaPlayer::HaveMetadata && !playbackPipelineHasFutureData();
+ #else
+         bool buffering = m_buffering;
+ #endif
+@@ -999,15 +1040,30 @@ void MediaPlayerPrivateGStreamerMSE::unmarkEndOfStream()
+ {
+     GST_DEBUG("Unmarking end of stream");
+     m_eosPending = false;
++    m_eosMarked = false;
+ }
+ 
+ MediaTime MediaPlayerPrivateGStreamerMSE::currentMediaTime() const
+ {
+-    MediaTime cachedPosition = m_cachedPosition;
+     MediaTime position = MediaPlayerPrivateGStreamer::currentMediaTime();
+-    MediaTime playbackProgress = abs(position - cachedPosition);
+ 
+-    if (m_eosPending && abs(position - durationMediaTime()) < MediaTime(GST_SECOND, GST_SECOND) && !playbackProgress) {
++    double nowMS = WTF::monotonicallyIncreasingTimeMS();
++    if (!m_positionStalled) {
++        m_lastProgressTime = nowMS;
++    } else if (m_playbackRate > 1 && m_mediaSource) {
++        // FIXME: The playback position progress may stall during I-frame trickplay,
++        // following tries to recover from this state by returning fake progress.
++        auto buffered = m_mediaSource->buffered();
++        auto idx = buffered ? buffered->find(buffered->nearest(position)) : notFound;
++        if (idx != notFound) {
++            double fakeProgressInSeconds = std::ceil((nowMS - m_lastProgressTime) / 250.0) * 0.25 * m_playbackRate;
++            MediaTime positionFakeProgress = position + MediaTime::createWithDouble(fakeProgressInSeconds, GST_SECOND);
++            MediaTime currentEnd = buffered->end(idx);
++            position = std::min(positionFakeProgress, currentEnd);
++        }
++    }
++
++    if (m_eosPending && abs(position - durationMediaTime()) < MediaTime(GST_SECOND, GST_SECOND) && m_positionStalled) {
+         if (m_networkState != MediaPlayer::Loaded) {
+             m_networkState = MediaPlayer::Loaded;
+             m_player->networkStateChanged();
+diff --git a/Source/WebCore/platform/graphics/gstreamer/mse/MediaPlayerPrivateGStreamerMSE.h b/Source/WebCore/platform/graphics/gstreamer/mse/MediaPlayerPrivateGStreamerMSE.h
+index cf15d37ade1..5a82ca42718 100644
+--- a/Source/WebCore/platform/graphics/gstreamer/mse/MediaPlayerPrivateGStreamerMSE.h
++++ b/Source/WebCore/platform/graphics/gstreamer/mse/MediaPlayerPrivateGStreamerMSE.h
+@@ -108,7 +108,6 @@ private:
+     bool doSeek(const MediaTime&, float, GstSeekFlags) override;
+     bool doSeek();
+     void maybeFinishSeek();
+-    void updatePlaybackRate() override;
+     void asyncStateChangeDone() override;
+ 
+     std::optional<PlatformVideoPlaybackQualityMetrics> videoPlaybackQualityMetrics() override;
+@@ -129,6 +128,9 @@ private:
+     MediaTime m_mediaTimeDuration;
+     bool m_mseSeekCompleted = true;
+     RefPtr<PlaybackPipeline> m_playbackPipeline;
++    mutable double m_lastProgressTime { 0 };
++    bool m_isFirstSeek { true };
++    bool m_pauseBeforeNextSeek { false };
+ };
+ 
+ } // namespace WebCore
+-- 
+2.16.2
+

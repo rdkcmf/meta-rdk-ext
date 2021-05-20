@@ -1,0 +1,85 @@
+From 30432bf51438f4cffc7475697efce02d57f6d5ab Mon Sep 17 00:00:00 2001
+From: Gurdal Oruklu <gurdal_oruklu@comcast.com>
+Date: Thu, 2 May 2019 22:23:38 +0000
+Subject: [PATCH] Fix crash on attempt to decrypt with null m_openCdm
+
+---
+ .../gstreamer/MediaPlayerPrivateGStreamerBase.cpp  | 24 +++++++++++++++++++---
+ .../gstreamer/MediaPlayerPrivateGStreamerBase.h    |  2 +-
+ .../WebKitCommonEncryptionDecryptorGStreamer.cpp   |  8 ++++++++
+ 3 files changed, 30 insertions(+), 4 deletions(-)
+
+diff --git a/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamerBase.cpp b/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamerBase.cpp
+index 80fdc31c7ca..ea95157de92 100644
+--- a/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamerBase.cpp
++++ b/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamerBase.cpp
+@@ -1408,9 +1408,27 @@ void MediaPlayerPrivateGStreamerBase::initializationDataEncountered(const InitDa
+     GST_TRACE("init data encountered of type: %s and size %" G_GSIZE_FORMAT " with MD5 %s", initDataType, initData.sizeInBytes(), GStreamerEMEUtilities::initDataMD5(initData).utf8().data());
+     GST_MEMDUMP("init data", initData.characters8(), initData.sizeInBytes());
+ 
+-    if (m_lastInitData.sizeInBytes() >= initData.sizeInBytes() && memmem(m_lastInitData.characters8(), m_lastInitData.sizeInBytes(), initData.characters8(), initData.sizeInBytes()))
+-        return;
+-    m_lastInitData = initData;
++    for (const auto& reportedData :  m_reportedInitData) {
++        if (reportedData.sizeInBytes() >= initData.sizeInBytes() &&
++            memmem(reportedData.characters8(), reportedData.sizeInBytes(), initData.characters8(), initData.sizeInBytes())) {
++            GST_DEBUG("Skip already reported init data of size % " G_GSIZE_FORMAT " with MD5 %s", initData.sizeInBytes(), GStreamerEMEUtilities::initDataMD5(initData).utf8().data());
++            return;
++        }
++    }
++
++    #if USE(OPENCDM)
++    if (m_cdmInstance) {
++        auto& cdmInstanceOpenCDM = downcast<WebCore::CDMInstanceOpenCDM>(*m_cdmInstance);
++        String sessId = cdmInstanceOpenCDM.sessionIdByInitData(initData);
++        if (!sessId.isEmpty()) {
++            GST_WARNING("Skip initData event for existing session, init data of size % " G_GSIZE_FORMAT " with MD5 %s", initData.sizeInBytes(), GStreamerEMEUtilities::initDataMD5(initData).utf8().data());
++            return;
++        }
++    }
++    #endif
++
++    m_reportedInitData.append(initData);
++
+     m_player->initializationDataEncountered(String(initDataType), ArrayBuffer::create(reinterpret_cast<const uint8_t*>(initData.characters8()), initData.sizeInBytes()));
+ }
+ 
+diff --git a/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamerBase.h b/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamerBase.h
+index b0815f79b9b..01bd9a700e2 100644
+--- a/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamerBase.h
++++ b/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamerBase.h
+@@ -280,7 +280,7 @@ protected:
+ 
+ #if ENABLE(ENCRYPTED_MEDIA)
+     RefPtr<const CDMInstance> m_cdmInstance;
+-    String m_lastInitData;
++    Vector<String> m_reportedInitData;
+ #endif
+ };
+ 
+diff --git a/Source/WebCore/platform/graphics/gstreamer/eme/WebKitCommonEncryptionDecryptorGStreamer.cpp b/Source/WebCore/platform/graphics/gstreamer/eme/WebKitCommonEncryptionDecryptorGStreamer.cpp
+index c191940a3f0..e3d5e15abc0 100644
+--- a/Source/WebCore/platform/graphics/gstreamer/eme/WebKitCommonEncryptionDecryptorGStreamer.cpp
++++ b/Source/WebCore/platform/graphics/gstreamer/eme/WebKitCommonEncryptionDecryptorGStreamer.cpp
+@@ -257,10 +257,18 @@ static GstFlowReturn webkitMediaCommonEncryptionDecryptTransformInPlace(GstBaseT
+                 return GST_FLOW_NOT_SUPPORTED;
+             }
+         }
++        if (priv->m_isFlushing) {
++            GST_DEBUG_OBJECT(self, "flushing");
++            return GST_FLOW_FLUSHING;
++        }
+         if (priv->m_shouldStop) {
+             GST_DEBUG_OBJECT(self, "stopping");
+             return GST_FLOW_OK;
+         }
++        if (!priv->m_keyReceived) {
++            GST_ERROR_OBJECT(self, "key not available");
++            return GST_FLOW_NOT_SUPPORTED;
++        }
+         GST_DEBUG_OBJECT(self, "key received, continuing");
+     }
+ 
+-- 
+2.16.2
+

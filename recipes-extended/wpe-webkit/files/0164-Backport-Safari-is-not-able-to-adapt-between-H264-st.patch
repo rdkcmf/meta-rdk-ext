@@ -1,0 +1,189 @@
+From d53130b38e8c519d215171d4825a7a2ee26fc349 Mon Sep 17 00:00:00 2001
+From: Ievgen Mutavchi <Ievgen_Mutavchi@comcast.com>
+Date: Fri, 25 Oct 2019 11:08:25 -0400
+Subject: [PATCH] Backport Safari is not able to adapt between H264 streams
+ with  EditList and without EditList
+ https://bugs.webkit.org/show_bug.cgi?id=190638
+
+Test: media/media-source/media-source-append-overlapping-dts.html
+
+The MSE frame replacement algorithm does not take decode timestamps into account; this can
+lead to situations where the replacement algorithm may leave in place frames where the
+presentationTimestamp is less than the replacement frame, but whose decodeTimestamp is
+after the replacement frame. When re-enqueuing these frames, they may cause a decode error
+if they break the group-of-pictures sequence of the replaced range.
+---
+ ...edia-source-append-overlapping-dts-expected.txt | 23 ++++++++
+ .../media-source-append-overlapping-dts.html       | 63 ++++++++++++++++++++++
+ Source/WebCore/Modules/mediasource/SampleMap.cpp   | 14 +++++
+ Source/WebCore/Modules/mediasource/SampleMap.h     |  2 +
+ .../WebCore/Modules/mediasource/SourceBuffer.cpp   |  8 +++
+ 5 files changed, 110 insertions(+)
+ create mode 100644 LayoutTests/media/media-source/media-source-append-overlapping-dts-expected.txt
+ create mode 100644 LayoutTests/media/media-source/media-source-append-overlapping-dts.html
+
+diff --git a/LayoutTests/media/media-source/media-source-append-overlapping-dts-expected.txt b/LayoutTests/media/media-source/media-source-append-overlapping-dts-expected.txt
+new file mode 100644
+index 0000000..2773154
+--- /dev/null
++++ b/LayoutTests/media/media-source/media-source-append-overlapping-dts-expected.txt
+@@ -0,0 +1,23 @@
++This tests that an overlapping append of samples with reordered presentation timestamps will correctly remove previously appended non-reordered samples.
++
++RUN(video.src = URL.createObjectURL(source))
++EVENT(sourceopen)
++RUN(sourceBuffer = source.addSourceBuffer("video/mock; codecs=mock"))
++RUN(sourceBuffer.appendBuffer(initSegment))
++EVENT(updateend)
++RUN(sourceBuffer.appendBuffer(samples))
++EVENT(updateend)
++RUN(sourceBuffer.appendBuffer(samples))
++EVENT(updateend)
++EXPECTED (bufferedSamples.length == '9') OK
++{PTS({0/1000 = 0.000000}), DTS({0/1000 = 0.000000}), duration({1000/1000 = 1.000000}), flags(1), generation(0)}
++{PTS({1000/1000 = 1.000000}), DTS({1000/1000 = 1.000000}), duration({1000/1000 = 1.000000}), flags(0), generation(0)}
++{PTS({2000/1000 = 2.000000}), DTS({2000/1000 = 2.000000}), duration({1000/1000 = 1.000000}), flags(0), generation(0)}
++{PTS({3000/1000 = 3.000000}), DTS({3000/1000 = 3.000000}), duration({1000/1000 = 1.000000}), flags(0), generation(0)}
++{PTS({4000/1000 = 4.000000}), DTS({4000/1000 = 4.000000}), duration({1000/1000 = 1.000000}), flags(1), generation(0)}
++{PTS({6000/1000 = 6.000000}), DTS({4000/1000 = 4.000000}), duration({1000/1000 = 1.000000}), flags(1), generation(1)}
++{PTS({7000/1000 = 7.000000}), DTS({5000/1000 = 5.000000}), duration({1000/1000 = 1.000000}), flags(0), generation(1)}
++{PTS({4000/1000 = 4.000000}), DTS({6000/1000 = 6.000000}), duration({1000/1000 = 1.000000}), flags(0), generation(1)}
++{PTS({5000/1000 = 5.000000}), DTS({7000/1000 = 7.000000}), duration({1000/1000 = 1.000000}), flags(0), generation(1)}
++END OF TEST
++
+diff --git a/LayoutTests/media/media-source/media-source-append-overlapping-dts.html b/LayoutTests/media/media-source/media-source-append-overlapping-dts.html
+new file mode 100644
+index 0000000..3be2bbe
+--- /dev/null
++++ b/LayoutTests/media/media-source/media-source-append-overlapping-dts.html
+@@ -0,0 +1,63 @@
++<!DOCTYPE html>
++<html>
++<head>
++    <title>media-source-append-overlapping-dts</title>
++    <script src="mock-media-source.js"></script>
++    <script src="../video-test.js"></script>
++    <script>
++    var source;
++    var sourceBuffer;
++    var initSegment;
++
++    if (window.internals)
++        internals.initializeMockMediaSource();
++
++    window.addEventListener('load', async event => {
++
++        findMediaElement();
++
++        source = new MediaSource();
++        run('video.src = URL.createObjectURL(source)');
++        await waitFor(source, 'sourceopen');
++
++        run('sourceBuffer = source.addSourceBuffer("video/mock; codecs=mock")');
++        initSegment = makeAInit(8, [makeATrack(1, 'mock', TRACK_KIND.VIDEO)]);
++        run('sourceBuffer.appendBuffer(initSegment)');
++
++        await waitFor(sourceBuffer, 'updateend');
++
++        samples = concatenateSamples([
++            makeASample(0, 0, 1, 1, SAMPLE_FLAG.SYNC, 0),
++            makeASample(1, 1, 1, 1, SAMPLE_FLAG.NONE, 0),
++            makeASample(2, 2, 1, 1, SAMPLE_FLAG.NONE, 0),
++            makeASample(3, 3, 1, 1, SAMPLE_FLAG.NONE, 0),
++            makeASample(4, 4, 1, 1, SAMPLE_FLAG.SYNC, 0),
++            makeASample(5, 5, 1, 1, SAMPLE_FLAG.NONE, 0),
++            makeASample(6, 6, 1, 1, SAMPLE_FLAG.NONE, 0),
++            makeASample(7, 7, 1, 1, SAMPLE_FLAG.NONE, 0),
++        ]);
++        run('sourceBuffer.appendBuffer(samples)');
++        await waitFor(sourceBuffer, 'updateend');
++
++        samples = concatenateSamples([
++            makeASample(6, 4, 1, 1, SAMPLE_FLAG.SYNC, 1),
++            makeASample(7, 5, 1, 1, SAMPLE_FLAG.NONE, 1),
++            makeASample(4, 6, 1, 1, SAMPLE_FLAG.NONE, 1),
++            makeASample(5, 7, 1, 1, SAMPLE_FLAG.NONE, 1),
++        ]);
++        run('sourceBuffer.appendBuffer(samples)');
++        await waitFor(sourceBuffer, 'updateend');
++
++        bufferedSamples = internals.bufferedSamplesForTrackID(sourceBuffer, 1);
++        testExpected("bufferedSamples.length", 9);
++        bufferedSamples.forEach(consoleWrite);
++        endTest();
++
++    }, {once: true});
++    </script>
++</head>
++<body>
++    <div>This tests that an overlapping append of samples with reordered presentation timestamps will correctly remove previously appended non-reordered samples.</div>
++    <video></video>
++</body>
++</html>
+diff --git a/Source/WebCore/Modules/mediasource/SampleMap.cpp b/Source/WebCore/Modules/mediasource/SampleMap.cpp
+index 4ac179e..cdfc3dd 100644
+--- a/Source/WebCore/Modules/mediasource/SampleMap.cpp
++++ b/Source/WebCore/Modules/mediasource/SampleMap.cpp
+@@ -309,6 +309,20 @@ DecodeOrderSampleMap::reverse_iterator_range DecodeOrderSampleMap::findDependent
+     return reverse_iterator_range(currentDecodeIter, nextSyncSample);
+ }
+ 
++DecodeOrderSampleMap::iterator_range DecodeOrderSampleMap::findSamplesBetweenDecodeKeys(const KeyType& beginKey, const KeyType& endKey)
++{
++    if (beginKey > endKey)
++        return { end(), end() };
++
++    // beginKey is inclusive, so use lower_bound to include samples wich start exactly at beginKey.
++    // endKey is not inclusive, so use lower_bound to exclude samples which start exactly at endKey.
++    auto lower_bound = m_samples.lower_bound(beginKey);
++    auto upper_bound = m_samples.lower_bound(endKey);
++    if (lower_bound == upper_bound)
++        return { end(), end() };
++    return { lower_bound, upper_bound };
++}
++
+ }
+ 
+ #endif
+diff --git a/Source/WebCore/Modules/mediasource/SampleMap.h b/Source/WebCore/Modules/mediasource/SampleMap.h
+index 39319fc..5c1a568 100644
+--- a/Source/WebCore/Modules/mediasource/SampleMap.h
++++ b/Source/WebCore/Modules/mediasource/SampleMap.h
+@@ -78,6 +78,7 @@ public:
+     typedef MapType::const_iterator const_iterator;
+     typedef MapType::reverse_iterator reverse_iterator;
+     typedef MapType::const_reverse_iterator const_reverse_iterator;
++    typedef std::pair<iterator, iterator> iterator_range;
+     typedef std::pair<reverse_iterator, reverse_iterator> reverse_iterator_range;
+ 
+     iterator begin() { return m_samples.begin(); }
+@@ -96,6 +97,7 @@ public:
+     WEBCORE_EXPORT iterator findSyncSampleAfterPresentationTime(const MediaTime&, const MediaTime& threshold = MediaTime::positiveInfiniteTime());
+     WEBCORE_EXPORT iterator findSyncSampleAfterDecodeIterator(iterator);
+     WEBCORE_EXPORT reverse_iterator_range findDependentSamples(MediaSample*);
++    WEBCORE_EXPORT iterator_range findSamplesBetweenDecodeKeys(const KeyType&, const KeyType&);
+ 
+ private:
+     MapType m_samples;
+diff --git a/Source/WebCore/Modules/mediasource/SourceBuffer.cpp b/Source/WebCore/Modules/mediasource/SourceBuffer.cpp
+index 4db9381..a91e02d 100644
+--- a/Source/WebCore/Modules/mediasource/SourceBuffer.cpp
++++ b/Source/WebCore/Modules/mediasource/SourceBuffer.cpp
+@@ -1835,6 +1835,14 @@ void SourceBuffer::sourceBufferPrivateDidReceiveSample(MediaSample& sample)
+             auto nextSyncIter = trackBuffer.samples.decodeOrder().findSyncSampleAfterDecodeIterator(lastDecodeIter);
+             dependentSamples.insert(firstDecodeIter, nextSyncIter);
+ 
++            // NOTE: in the case of b-frames, the previous step may leave in place samples whose presentation
++            // timestamp < presentationTime, but whose decode timestamp >= decodeTime. These will eventually cause
++            // a decode error if left in place, so remove these samples as well.
++            DecodeOrderSampleMap::KeyType decodeKey(sample.decodeTime(), sample.presentationTime());
++            auto samplesWithHigherDecodeTimes = trackBuffer.samples.decodeOrder().findSamplesBetweenDecodeKeys(decodeKey, erasedSamples.decodeOrder().begin()->first);
++            if (samplesWithHigherDecodeTimes.first != samplesWithHigherDecodeTimes.second)
++                dependentSamples.insert(samplesWithHigherDecodeTimes.first, samplesWithHigherDecodeTimes.second);
++
+             PlatformTimeRanges erasedRanges = removeSamplesFromTrackBuffer(dependentSamples, trackBuffer, this, "sourceBufferPrivateDidReceiveSample", false);
+ 
+             // Only force the TrackBuffer to re-enqueue if the removed ranges overlap with enqueued and possibly
+-- 
+2.7.4
+

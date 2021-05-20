@@ -1,0 +1,95 @@
+
+Date: Dec 13, 2019 4:05 PM
+From: Change-Id: I56605d17f33c04ea06658184e0d5cf1f00280188
+Subject: RDKB-22373: Upgrade lighttpd to 1.4.53
+Porting the patches added to lighttpd-1.4.45 version to latest 1.4.53 version as well.
+Older patches are slightly modified to make it compatible with latest version.
+Source: COMCAST
+License: BSD-3-Clause
+Upstream-Status: None
+Signed-off-by: Rakhil P E <Rakhil_PuthiyaveettilEdachena@comcast.com>
+
+Index: lighttpd-1.4.53/src/network.c
+===================================================================
+--- lighttpd-1.4.53.orig/src/network.c
++++ lighttpd-1.4.53/src/network.c
+@@ -118,7 +118,12 @@ static int network_host_parse_addr(serve
+     }
+     chost = *h ? h : family == AF_INET ? "0.0.0.0" : "::";
+     if (1 != sock_addr_from_str_hints(srv,addr,addr_len,chost,family,port)) {
++#ifdef SO_BINDTODEVICE
++        addr->ipv6.sin6_port = htons(port);
++        return 0;
++#else
+         return -1;
++#endif
+     }
+     return 0;
+ }
+@@ -189,21 +194,22 @@ static int network_server_init(server *s
+ 		}
+ 	}
+       #endif
+-
++#ifndef SO_BINDTODEVICE
+ 	network_host_normalize_addr_str(host_token, &addr);
++#endif
+ 	host = host_token->ptr;
+ 
+ 	if (srv->srvconf.preflight_check) {
+ 		return 0;
+ 	}
+-
++#ifndef SO_BINDTODEVICE
+ 	/* check if we already know this socket (after potential DNS resolution), and if yes, don't init it */
+ 	for (size_t i = 0; i < srv->srv_sockets.used; ++i) {
+ 		if (0 == memcmp(&srv->srv_sockets.ptr[i]->addr, &addr, sizeof(addr))) {
+ 			return 0;
+ 		}
+ 	}
+-
++#endif
+ 	srv_socket = calloc(1, sizeof(*srv_socket));
+ 	force_assert(NULL != srv_socket);
+ 	memcpy(&srv_socket->addr, &addr, addr_len);
+@@ -281,17 +287,40 @@ static int network_server_init(server *s
+ 
+ #ifdef HAVE_IPV6
+ 		if (set_v6only && -1 == stdin_fd) {
++#ifndef SO_BINDTODEVICE
+ 				int val = 1;
+ 				if (-1 == setsockopt(srv_socket->fd, IPPROTO_IPV6, IPV6_V6ONLY, &val, sizeof(val))) {
+ 					log_error_write(srv, __FILE__, __LINE__, "ss", "setsockopt(IPV6_V6ONLY) failed:", strerror(errno));
+ 					return -1;
+ 				}
++#endif
+ 		}
+ #endif
+ 
+ 	/* */
+ 	srv->cur_fds = srv_socket->fd;
+ 
++#ifdef SO_BINDTODEVICE
++        char device[strlen(host)];
++        char * cdevice = NULL ;
++        strncpy(device, host, strlen(host));
++        cdevice = strtok(device, ":");
++
++        /* host might be an interface name, so try to bind to it. setsockopt(SO_BINDTODEVICE) is not called for ipv4 or ivp6 address */
++        if((cdevice[0] == '[') || isdigit(cdevice[0]))
++            cdevice = NULL ;
++
++        if (cdevice && (family == AF_INET
++#ifdef HAVE_IPV6
++                     || family == AF_INET6)) {
++#else
++                   )) {
++#endif
++                 if (!setsockopt(srv_socket->fd, SOL_SOCKET, SO_BINDTODEVICE, cdevice, strlen(cdevice)))
++                        cdevice = NULL;
++       }
++#endif
++
+ 	if (fdevent_set_so_reuseaddr(srv_socket->fd, 1) < 0) {
+ 		log_error_write(srv, __FILE__, __LINE__, "ss", "setsockopt(SO_REUSEADDR) failed:", strerror(errno));
+ 		return -1;

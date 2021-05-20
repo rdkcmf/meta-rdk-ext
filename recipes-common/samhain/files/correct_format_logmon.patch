@@ -1,0 +1,93 @@
+Copyright (C) 1989, 1991 Free Software Foundation, Inc.
+
+This program is free software; you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation; either version 2 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program; if not, write to the Free Software
+Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+
+Date: Jun 16, 2017 6:01 PM
+
+From: be8b3d877420cb932819a9dab69888416eb30162 Dec 9, 2017 12:12 AM
+
+Subject: [PATCH] RDKB-3293, RDKB-14901 : Poring samhain on RDK Broadband
+
+	Removed time and host entry from samhain logging.
+
+Source: COMCAST
+
+Upstream-Status: Pending
+
+Signed-off-by: gkrishnansubramanian <Gopi_KrishnanSubramanian@comcast.com>
+---
+
+diff --git a/src/sh_cat.c b/src/sh_cat.c
+index 0d4afe5..8e7c552 100644
+--- a/src/sh_cat.c
++++ b/src/sh_cat.c
+@@ -164,8 +164,8 @@ cat_entry msg_cat[] = {
+   { MSG_LOGMON_MISS, SH_ERR_ERR,     RUN,   N_("msg=\"Missing logfile %s\"") },
+   { MSG_LOGMON_EOPEN,SH_ERR_ERR,     RUN,   N_("msg=\"Cannot open logfile %s\"") },
+   { MSG_LOGMON_EREAD,SH_ERR_ERR,     RUN,   N_("msg=\"Error while reading logfile %s\"") },
+-  { MSG_LOGMON_REP,  SH_ERR_SEVERE,  EVENT, N_("msg=\"POLICY [Logfile] %s\" time=\"%s\" host=\"%s\" path=\"%s\"") },
+-  { MSG_LOGMON_SUM,  SH_ERR_SEVERE,  EVENT, N_("msg=\"POLICY [Logfile] %s\" host=\"%s\" path=\"%s\"") },
++  { MSG_LOGMON_REP,  SH_ERR_SEVERE,  EVENT, N_("msg=\"POLICY [Logfile] %s\" path=\"%s\"") },
++  { MSG_LOGMON_SUM,  SH_ERR_SEVERE,  EVENT, N_("msg=\"POLICY [Logfile] %s\" path=\"%s\"") },
+   { MSG_LOGMON_COR,  SH_ERR_SEVERE,  EVENT, N_("msg=\"POLICY [Logfile] Correlation event %s occured %d time(s)\"") },
+   { MSG_LOGMON_MARK, SH_ERR_SEVERE,  EVENT, N_("msg=\"POLICY [Logfile] Event %s missing for %lu seconds\"") },
+   { MSG_LOGMON_BURST, SH_ERR_SEVERE, EVENT, N_("msg=\"POLICY [Logfile] Repeated %d times: %s\" host=\"%s\"") },
+@@ -510,8 +510,8 @@ cat_entry msg_cat[] = {
+   { MSG_LOGMON_MISS, SH_ERR_ERR,     RUN,   N_("msg=<Missing logfile %s>") },
+   { MSG_LOGMON_EOPEN,SH_ERR_ERR,     RUN,   N_("msg=<Cannot open logfile %s>") },
+   { MSG_LOGMON_EREAD,SH_ERR_ERR,     RUN,   N_("msg=<Error while reading logfile %s>") },
+-  { MSG_LOGMON_REP,  SH_ERR_SEVERE,  EVENT, N_("msg=<POLICY [Logfile] %s> time=<%s>, host=<%s>, path=<%s>") },
+-  { MSG_LOGMON_SUM,  SH_ERR_SEVERE,  EVENT, N_("msg=<POLICY [Logfile] %s> host=<%s> path=<%s>") },
++  { MSG_LOGMON_REP,  SH_ERR_SEVERE,  EVENT, N_("msg=<POLICY [Logfile] %s>, path=<%s>") },
++  { MSG_LOGMON_SUM,  SH_ERR_SEVERE,  EVENT, N_("msg=<POLICY [Logfile] %s> path=<%s>") },
+   { MSG_LOGMON_COR,  SH_ERR_SEVERE,  EVENT, N_("msg=<POLICY [Logfile] Correlation event %s occured %d time(s)>") },
+   { MSG_LOGMON_MARK, SH_ERR_SEVERE,  EVENT, N_("msg=<POLICY [Logfile] Event %s missing for %lu seconds>") },
+   { MSG_LOGMON_BURST, SH_ERR_SEVERE, EVENT, N_("msg=<POLICY [Logfile] Repeated %d times: %s>, host=<%s> ") },
+diff --git a/src/sh_log_evalrule.c b/src/sh_log_evalrule.c
+index bfaf336..c1689d6 100644
+--- a/src/sh_log_evalrule.c
++++ b/src/sh_log_evalrule.c
+@@ -1064,16 +1064,12 @@ static void msg_report(int severity, const sh_string * alias,
+   ttt = sh_util_safe_name_keepspace (sh_string_str(record->timestr));
+   sh_error_handle (severity, FIL__, __LINE__, 0, MSG_LOGMON_REP,
+ 		   msg,
+-		   ttt,
+-		   sh_string_str(record->host),
+ 		   tmp);
+   if (alias)
+     {
+       sh_error_mail (sh_string_str(alias),
+ 		     severity, FIL__, __LINE__, 0, MSG_LOGMON_REP,
+ 		     msg,
+-		     ttt,
+-		     sh_string_str(record->host),
+ 		     tmp);
+     }
+   SH_FREE(ttt);
+@@ -1095,14 +1091,12 @@ static void sum_report(int severity, const sh_string * alias,
+   msg = sh_util_safe_name_keepspace (sh_string_str(message));
+   sh_error_handle (severity, FIL__, __LINE__, 0, MSG_LOGMON_SUM,
+ 		   msg,
+-		   sh_string_str(host), 
+ 		   tmp);
+   if (alias)
+     {
+       sh_error_mail (sh_string_str(alias),
+ 		     severity, FIL__, __LINE__, 0, MSG_LOGMON_SUM,
+ 		     msg,
+-		     sh_string_str(host),
+ 		     tmp);
+     }
+   SH_FREE(msg);

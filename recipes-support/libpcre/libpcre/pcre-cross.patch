@@ -1,0 +1,99 @@
+Copyright (c) 1997-2014 University of Cambridge
+Copyright (c) 2007-2012, Google Inc.
+Copyright (c) 2009-2014 Zoltan Herczeg
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
+
+    * Redistributions of source code must retain the above copyright notice,
+      this list of conditions and the following disclaimer.
+
+    * Redistributions in binary form must reproduce the above copyright
+      notice, this list of conditions and the following disclaimer in the
+      documentation and/or other materials provided with the distribution.
+
+    * Neither the name of the University of Cambridge nor the name of Google
+      Inc. nor the names of their contributors may be used to endorse or
+      promote products derived from this software without specific prior
+      written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE
+LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+POSSIBILITY OF SUCH DAMAGE.
+
+Date: Apr 21 10:49:44 2017
+
+From: aa010cd852e536884909037b484a3d5aabebb1cf May 26 11:36:26 2017
+
+Subject: [PATCH] RDK-17468, RDKB-8940: Open Source Updates
+
+	Upgrade libpcre from 8.34 to 8.39 as PREFERRED_VERSION
+        to address known high risk security vulnerabilities.
+
+	libpcre: Cleanup FILESPATH
+
+	Setting of the FILESPATH is not needed anymore, so clean it up.
+	Move files to libprce patch directory
+
+Source: OPENEMBEDDED
+
+Upstream-Status: Submitted [ http://cgit.openembedded.org/openembedded-core/commit/meta/recipes-support/libpcre/libpcre/pcre-cross.patch?h=pyro&id=32b2e20e7f6484830bac0510414b1950abbc1a96 ]
+
+Signed-off-by: Saul Wold <sgw@linux.intel.com>
+---
+
+
+--- pcre-8.32.orig/Makefile.am
++++ pcre-8.32/Makefile.am
+@@ -197,8 +197,18 @@ bin_SCRIPTS = pcre-config
+ 
++CC_FOR_BUILD = @CC_FOR_BUILD@
++CFLAGS_FOR_BUILD = @CFLAGS_FOR_BUILD@
++CCLD_FOR_BUILD = @CCLD_FOR_BUILD@
++LDFLAGS_FOR_BUILD = @LDFLAGS_FOR_BUILD@
++
+ if WITH_REBUILD_CHARTABLES
+ 
+ noinst_PROGRAMS += dftables
+ dftables_SOURCES = dftables.c
++dftables_LINK = $(CCLD_FOR_BUILD) -o $@
++dftables_LDFLAGS = $(LDFLAGS_FOR_BUILD)
++
++dftables.o: $(srcdir)/dftables.c
++	$(CC_FOR_BUILD) -c $(CFLAGS_FOR_BUILD) -o $@ $(srcdir)/dftables.c
+ 
+ pcre_chartables.c: dftables$(EXEEXT)
+ 	./dftables$(EXEEXT) $@
+--- pcre-8.32.orig/configure.ac
++++ pcre-8.32/configure.ac
+@@ -72,6 +72,22 @@ then
+   fi
+ fi
+ 
++if test x"$cross_compiling" = xyes; then
++    CC_FOR_BUILD="${CC_FOR_BUILD-gcc}"
++    CCLD_FOR_BUILD="${CCLD_FOR_BUILD-gcc}"
++    CFLAGS_FOR_BUILD="${CFLAGS_FOR_BUILD}"
++    LDFLAGS_FOR_BUILD="${LDFLAGS_FOR_BUILD}"
++else
++    CC_FOR_BUILD="${CC_FOR_BUILD-\$(CC)}"
++    CCLD_FOR_BUILD="${CCLD_FOR_BUILD-\$(CCLD)}"
++    CFLAGS_FOR_BUILD="${CFLAGS_FOR_BUILD-\$(CFLAGS)}"
++    LDFLAGS_FOR_BUILD="${LDFLAGS_FOR_BUILD-\$(LDFLAGS)}"
++fi
++AC_ARG_VAR(CC_FOR_BUILD, [build system C compiler])
++AC_ARG_VAR(CCLD_FOR_BUILD, [build system C linker frontend])
++AC_ARG_VAR(CFLAGS_FOR_BUILD, [build system C compiler arguments])
++AC_ARG_VAR(LDFLAGS_FOR_BUILD, [build system C linker frontend arguments])
++
+ # AC_PROG_CXX will return "g++" even if no c++ compiler is installed.
+ # Check for that case, and just disable c++ code if g++ doesn't run.
+ AC_LANG_PUSH(C++)

@@ -1,0 +1,48 @@
+From 3a9e7cbf2fe9ce562debd1373c1cd641741f5c77 Mon Sep 17 00:00:00 2001
+From: Moorthy Baskar <moorthy.baskaravenkatraman-sambamoorthy@linaro.org>
+Date: Mon, 9 Mar 2020 08:30:50 +0100
+Subject: [PATCH] [dom]: fix: build issue from gcc 9.2
+Source: COMCAST
+License: LGPL 2.0
+Upstream-Status: None
+
+ error: expected ';' before 'if'
+
+Above error caused building from gcc 9.2, is fixed
+
+Signed-off-by: Moorthy Baskar <moorthy.baskaravenkatraman-sambamoorthy@linaro.org>
+---
+ Source/WebCore/dom/Document.cpp | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/Source/WebCore/dom/Document.cpp b/Source/WebCore/dom/Document.cpp
+index 21ce38f..5875538 100644
+--- a/Source/WebCore/dom/Document.cpp
++++ b/Source/WebCore/dom/Document.cpp
+@@ -4711,12 +4711,12 @@ static bool isValidNameNonASCII(const UChar* characters, unsigned length)
+     unsigned i = 0;
+
+     UChar32 c;
+-    U16_NEXT(characters, i, length, c)
++    U16_NEXT(characters, i, length, c);
+     if (!isValidNameStart(c))
+         return false;
+
+     while (i < length) {
+-        U16_NEXT(characters, i, length, c)
++        U16_NEXT(characters, i, length, c);
+         if (!isValidNamePart(c))
+             return false;
+     }
+@@ -4776,7 +4776,7 @@ ExceptionOr<std::pair<AtomicString, AtomicString>> Document::parseQualifiedName(
+
+     for (unsigned i = 0; i < length; ) {
+         UChar32 c;
+-        U16_NEXT(qualifiedName, i, length, c)
++        U16_NEXT(qualifiedName, i, length, c);
+         if (c == ':') {
+             if (sawColon)
+                 return Exception { InvalidCharacterError };
+-- 
+2.7.4
+

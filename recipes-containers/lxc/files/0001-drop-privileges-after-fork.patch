@@ -1,0 +1,34 @@
+From 62cee676c1183c70b000c49e3491bfdd9db61670 Mon Sep 17 00:00:00 2001
+From: adam-bienkunski-red <adam.bienkunski@redembedded.com>
+Date: Thu, 15 Dec 2016 13:35:12 +0100
+Subject: [PATCH] ONEM-6346 Drop root by lxc.init if process starts as root
+
+
+diff --git a/src/lxc/tools/lxc_init.c b/src/lxc/tools/lxc_init.c
+index 2ced394..cc84a51 100644
+--- a/src/lxc/tools/lxc_init.c
++++ b/src/lxc/tools/lxc_init.c
+@@ -287,6 +287,21@@ int main(int argc, char *argv[])
+ 		ERROR("failed to exec: '%s' : %m", aargv[0]);
+ 		exit(err);
+ 	}
++	else
++	{
++		if (uid == 0 && gid == 0 )
++		{
++			struct passwd* pw = getpwnam("lxc");
++			if (pw == NULL)
++			{
++				SYSERROR("Failed to find lxc user in passwd entry \n");
++				exit(EXIT_FAILURE);
++			}
++
++			/* Drop lxc.init to lxc user*/
++			drop_root_privileges(pw->pw_gid, pw->pw_uid);
++		}
++	}
+ 
+ 	/* let's process the signals now */
+ 	if (sigdelset(&omask, SIGALRM) ||
+-- 
+2.7.4

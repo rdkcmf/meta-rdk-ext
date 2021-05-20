@@ -1,0 +1,98 @@
+Index: dnsmasq-2.83/src/dhcp-protocol.h
+===================================================================
+--- dnsmasq-2.83.orig/src/dhcp-protocol.h
++++ dnsmasq-2.83/src/dhcp-protocol.h
+@@ -91,6 +91,7 @@
+ 
+ #define DHCP_CHADDR_MAX 16
+ 
++#define DHCP_STR_MAC_MAX 17
+ struct dhcp_packet {
+   u8 op, htype, hlen, hops;
+   u32 xid;
+Index: dnsmasq-2.83/src/dnsmasq.h
+===================================================================
+--- dnsmasq-2.83.orig/src/dnsmasq.h
++++ dnsmasq-2.83/src/dnsmasq.h
+@@ -1066,6 +1066,7 @@ extern struct daemon {
+   struct server *servers;
+   struct server *dns_override_server; /* for XDNS */
+   struct server *dns_override_server2; /* for Secondary XDNS */
++  int XDNS_MultiProfile_Flag; /*Flag determines Multi-profiling Enabled(1)/Disabled(0) for XDNS*/
+   int protected_browsing_enable;
+   int use_xdns_refactor_code;
+   struct server_lists *xdns_server_lists; /*level of XDNS services list*/
+Index: dnsmasq-2.83/src/edns0.c
+===================================================================
+--- dnsmasq-2.83.orig/src/edns0.c
++++ dnsmasq-2.83/src/edns0.c
+@@ -313,6 +313,28 @@ static size_t add_cpe_tag(struct dns_hea
+ }
+ //</XDNS>
+ 
++static size_t add_multiprofile_option(struct dns_header *header, size_t plen, unsigned char *limit, union mysockaddr *l3, time_t now)
++{
++   unsigned char mac[DHCP_CHADDR_MAX] = {0};
++   unsigned char strmac[DHCP_STR_MAC_MAX] = {0};
++   int strsize=0;
++   int maclen = 0;
++   if ((maclen = find_mac(l3, mac, 1, now)) != 0)
++   {
++        print_mac(strmac, mac, maclen);
++        my_syslog(LOG_WARNING, _("#### XDNS add_multiprofile_option() strmac:%s"),strmac);
++        plen = add_pseudoheader(header, plen, limit, PACKETSZ, EDNS0_OPTION_NOMDEVICEID, strmac,DHCP_STR_MAC_MAX, 0, 0);
++
++   }
++   else
++   {
++        my_syslog(LOG_WARNING, _("#### XDNS add_multiprofile_option() Could not find MAC from l3 sockaddr !!!"));
++        reset_option_dnsoverride();
++   }
++
++   return plen;
++}
++
+ static size_t add_dns_client(struct dns_header *header, size_t plen, unsigned char *limit,
+ 			     union mysockaddr *l3, time_t now, int *cacheablep)
+ {
+@@ -708,6 +730,10 @@ size_t add_edns0_config(struct dns_heade
+   if (option_bool(OPT_MAC_B64) || option_bool(OPT_MAC_HEX))
+     plen = add_dns_client(header, plen, limit, source, now, cacheable);
+ 
++  /* <XDNS Multiprofile> */
++  if(daemon->XDNS_MultiProfile_Flag)
++    plen=add_multiprofile_option(header, plen, limit, source, now);
++
+   /* <XDNS> */
+   plen = add_xdns_server(header, plen, limit, source, now);
+   
+Index: dnsmasq-2.83/src/network.c
+===================================================================
+--- dnsmasq-2.83.orig/src/network.c
++++ dnsmasq-2.83/src/network.c
+@@ -2163,10 +2163,25 @@ int reload_servers(char *fname)
+     {
+       union mysockaddr addr, source_addr;
+       char *token = strtok(line, " \t\n\r");
++      char *ProfileEnable;
+       //my_syslog(LOG_ERR, _("### XDNS ### token : \"%s\""), token);
+       
+       if (!token)
+ 	continue;
++
++      if(!strcmp(token, "XDNS_Multi_Profile"))
++      {
++        ProfileEnable = strtok(NULL, " \t\n\r");
++        if(!strcmp(ProfileEnable, "Enabled"))
++        {
++          daemon->XDNS_MultiProfile_Flag=1;
++        }
++        else
++        {
++          daemon->XDNS_MultiProfile_Flag=0;
++        }
++      }
++
+       if (strcmp(token, "nameserver") != 0 && strcmp(token, "server") != 0 && strcmp(token, "dnsoverride") != 0)
+ 	continue;
+       /***************** <XDNS> case dnsoverride **********************/

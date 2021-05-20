@@ -1,0 +1,30 @@
+Date: Dec 11, 2018 5:04 PM
+From: 683a0789d615413a1c2754321fef35690a39566b Mar 12, 2019 5:53 AM
+Subject: [PATCH] RDKB-20255: CSRF changes for session destroy
+     Apply CSRF changes over the files pulled from OSS repo.
+Source: COMCAST
+License: RDK Management
+Upstream-Status: Pending
+Signed-off-by: gpsahu <GaneshPrasad_Sahu@comcast.com>
+---
+
+diff --git a/libs/csrf/csrfprotector.php b/libs/csrf/csrfprotector.php
+index 01ad9ed..0c08952 100644
+--- a/libs/csrf/csrfprotector.php
++++ b/libs/csrf/csrfprotector.php
+@@ -356,6 +356,7 @@ if (!defined('__CSRF_PROTECTOR__')) {
+ 		 */
+ 		private static function failedValidationAction()
+ 		{
++			session_destroy();
+ 			if (!file_exists(__DIR__ ."/../" .self::$config['logDirectory']))
+ 				throw new logDirectoryNotFoundException("OWASP CSRFProtector: Log Directory Not Found!");
+ 		
+@@ -437,6 +438,7 @@ if (!defined('__CSRF_PROTECTOR__')) {
+ 				self::$cookieConfig->path,
+ 				self::$cookieConfig->domain,
+ 				(bool) self::$cookieConfig->secure);
++			$_SESSION['Csrf_token']=$token;
+ 		}
+ 
+ 		/*

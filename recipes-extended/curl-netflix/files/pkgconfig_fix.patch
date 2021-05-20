@@ -1,0 +1,70 @@
+Copyright (c) 1996 - 2019, Daniel Stenberg, daniel@haxx.se, 
+and many contributors, see the THANKS file.
+
+All rights reserved.
+
+Permission to use, copy, modify, and distribute this software 
+for any purpose with or without fee is hereby granted, provided 
+that the above copyright notice and this permission notice 
+appear in all copies.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, 
+EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES 
+OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND 
+NONINFRINGEMENT OF THIRD PARTY RIGHTS. IN NO EVENT SHALL THE 
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR 
+OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR 
+OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE 
+OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+Except as contained in this notice, the name of a copyright holder 
+shall not be used in advertising or otherwise to promote the sale, 
+use or other dealings in this Software without prior written 
+authorization of the copyright holder.
+
+Date: Jul 19 10:52:57 2016
+
+From: 910848f3594f1bc94eb6acfbe978787c72339a36 Jul 19 19:10:53 2016
+
+Subject: [PATCH] XRE-9074 : Add netflix specific curl recipe
+
+	Netflix requires a specific version of curl with specific configure parameters.
+	This receipe installs and configure this version outside of normal libcurl.
+
+Source: COMCAST
+
+Upstream-Status: Pending
+
+Signed-off-by: mzuber <Mark_Zuber@cable.comcast.com>
+---
+
+diff -Nurd curl-7.29.0/configure.ac curl-7.29.0/configure.ac
+--- curl-7.29.0/configure.ac	2013-02-06 11:47:19.000000000 +0200
++++ curl-7.29.0/configure.ac	2013-02-16 12:32:22.132327764 +0200
+@@ -1883,6 +1883,7 @@
+        AC_SUBST(USE_GNUTLS, [1])
+        GNUTLS_ENABLED=1
+        USE_GNUTLS="yes"
++       GNUTLS_REQUIRED="gnutls"
+        curl_ssl_msg="enabled (GnuTLS)"
+        ],
+        [
+@@ -1953,6 +1954,8 @@
+    ])
+ fi
+ 
++AC_SUBST(GNUTLS_REQUIRED)
++
+ dnl ----------------------------------------------------
+ dnl check for PolarSSL
+ dnl ----------------------------------------------------
+diff -Nurd curl-7.29.0/libcurl.pc.in curl-7.29.0/libcurl.pc.in
+--- curl-7.29.0/libcurl.pc.in	2012-12-12 00:32:22.000000000 +0200
++++ curl-7.29.0/libcurl.pc.in	2013-02-16 12:33:27.063844337 +0200
+@@ -35,5 +35,5 @@
+ Description: Library to transfer files with ftp, http, etc.
+ Version: @CURLVERSION@
+ Libs: -L${libdir} -lcurl
+-Libs.private: @LIBCURL_LIBS@
++Libs.private: -ldl -lz
+ Cflags: -I${includedir} @CPPFLAG_CURL_STATICLIB@ = "${WORKDIR}/../curl-7.59.0/"

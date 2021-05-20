@@ -1,0 +1,99 @@
+From 551eab5bf76e5131184c92677057fe751ea93f55 Mon Sep 17 00:00:00 2001
+From: Gurdal Oruklu <Gurdal_Oruklu@comcast.com>
+Date: Tue, 6 Feb 2018 10:51:30 -0800
+Subject: [PATCH] comcast Gap addjustment based on first pts
+
+Signed-off-by: Gurdal Oruklu <Gurdal_Oruklu@comcast.com>
+---
+ .../graphics/gstreamer/mse/AppendPipeline.cpp      | 23 +++++++++++++++++-----
+ .../graphics/gstreamer/mse/AppendPipeline.h        |  2 ++
+ .../mse/MediaPlayerPrivateGStreamerMSE.cpp         |  6 +++++-
+ 3 files changed, 25 insertions(+), 6 deletions(-)
+
+diff --git a/Source/WebCore/platform/graphics/gstreamer/mse/AppendPipeline.cpp b/Source/WebCore/platform/graphics/gstreamer/mse/AppendPipeline.cpp
+index 2ac12ce61f8..6d835e3be34 100644
+--- a/Source/WebCore/platform/graphics/gstreamer/mse/AppendPipeline.cpp
++++ b/Source/WebCore/platform/graphics/gstreamer/mse/AppendPipeline.cpp
+@@ -189,6 +189,7 @@ AppendPipeline::AppendPipeline(Ref<MediaSourceClientGStreamerMSE> mediaSourceCli
+     , m_appendState(AppendState::NotStarted)
+     , m_abortPending(false)
+     , m_streamType(Unknown)
++    , m_allowedGap(MediaTime(1,10))
+ {
+     ASSERT(WTF::isMainThread());
+ 
+@@ -856,17 +857,29 @@ void AppendPipeline::appsinkNewSample(GstSample* sample)
+ 
+     // Add a gap sample if a gap is detected before the first sample.
+     if (mediaSample->decodeTime() == MediaTime::zeroTime()
+-        && mediaSample->presentationTime() > MediaTime::zeroTime()
+-        && mediaSample->presentationTime() <= MediaTime(1, 10)) {
+-        GST_DEBUG("Adding gap offset");
+-        mediaSample->applyPtsOffset(MediaTime::zeroTime());
++        && mediaSample->presentationTime() > MediaTime::zeroTime()) {
++        if( mediaSample->presentationTime() <= MediaTime(1, 10)) {
++            GST_DEBUG("Adding gap offset 0.1");
++            mediaSample->applyPtsOffset(MediaTime::zeroTime());
++            m_allowedGap = MediaTime(1,10);
++        } else if (mediaSample->presentationTime() <= MediaTime(2, 10)) {
++            GST_WARNING("Adding gap offset 0.2");
++            mediaSample->applyPtsOffset(MediaTime::zeroTime());
++            m_allowedGap = MediaTime(2,10);
++        } else {
++            GST_ERROR("Sample Gap greater then 0.2 sec");
++        }
+     }
+-
+     m_sourceBufferPrivate->didReceiveSample(*mediaSample);
+     setAppendState(AppendState::Sampling);
+     gst_sample_unref(sample);
+ }
+ 
++MediaTime& AppendPipeline::allowedGap()
++{
++    return m_allowedGap;
++}
++
+ void AppendPipeline::appsinkEOS()
+ {
+     ASSERT(WTF::isMainThread());
+diff --git a/Source/WebCore/platform/graphics/gstreamer/mse/AppendPipeline.h b/Source/WebCore/platform/graphics/gstreamer/mse/AppendPipeline.h
+index c293cab98b8..4f170464437 100644
+--- a/Source/WebCore/platform/graphics/gstreamer/mse/AppendPipeline.h
++++ b/Source/WebCore/platform/graphics/gstreamer/mse/AppendPipeline.h
+@@ -94,6 +94,7 @@ public:
+ 
+     void reportAppsrcAtLeastABufferLeft();
+     void reportAppsrcNeedDataReceived();
++    MediaTime& allowedGap();
+ 
+ private:
+     void resetPipeline();
+@@ -116,6 +117,7 @@ private:
+     gint m_id;
+ 
+     MediaTime m_initialDuration;
++    MediaTime m_allowedGap;
+ 
+     GRefPtr<GstElement> m_pipeline;
+     GRefPtr<GstBus> m_bus;
+diff --git a/Source/WebCore/platform/graphics/gstreamer/mse/MediaPlayerPrivateGStreamerMSE.cpp b/Source/WebCore/platform/graphics/gstreamer/mse/MediaPlayerPrivateGStreamerMSE.cpp
+index 02cdbdf3cf3..8d61bbd63f4 100644
+--- a/Source/WebCore/platform/graphics/gstreamer/mse/MediaPlayerPrivateGStreamerMSE.cpp
++++ b/Source/WebCore/platform/graphics/gstreamer/mse/MediaPlayerPrivateGStreamerMSE.cpp
+@@ -338,7 +338,11 @@ bool MediaPlayerPrivateGStreamerMSE::doSeek()
+     if (!isTimeBuffered(seekTime)) {
+         // Look if a near future time (<0.1 sec.) is buffered and change the seek target time.
+         if (m_mediaSource) {
+-            const MediaTime miniGap = MediaTime(1, 10);
++            MediaTime miniGap = MediaTime(1,10);
++            for (auto it : m_appendPipelinesMap) {
++                if (it.value->allowedGap() > miniGap)
++                    miniGap = it.value->allowedGap();
++            }
+             MediaTime nearest = m_mediaSource->buffered()->nearest(seekTime);
+             if (nearest.isValid() && nearest > seekTime && (nearest - seekTime) <= miniGap && isTimeBuffered(nearest + miniGap)) {
+                 GST_DEBUG("[Seek] Changed the seek target time from %s to %s, a near point in the future", toString(seekTime).utf8().data(), toString(nearest).utf8().data());
+-- 
+2.15.1
+

@@ -1,0 +1,139 @@
+Date: Nov 28, 2017 13:10
+From: Jef Oliver <jef.oliver at intel.com>
+Subject: Change rtnl_link_af_ops.ao_override_rtm behavior
+Source: Intel
+License: LGPLV2.1
+Upstream-Status: accepted
+
+rtnl_link_af_ops.ao_override_rtm allows for a link module to
+override the change request type being sent to the kernel. More
+specifically, the default change request type is RTM_NEWLINK.
+Some link change requests require the reqeust type to be set to
+RTM_SETLINK. This is the case for IFLA_PROTINFO specific
+attributes for a link that is slave to a bridge.
+
+Currently, ao_override_rtm is static to the address family type.
+So, all changes submitted to AF_BRIDGE override the link change
+request type. The override only needs to happen if IFLA_PROTINFO
+attributes are appended to the link change request.
+
+This patch changes ao_override_rtm from a const integer to a
+function pointer that allows for a link module to determine if
+the override needs to actually happen.
+
+Currently, only the bridge module uses this functionality. If
+bridge flags are applied to a link (bdpu blocking, learning,
+fast leave, etc...), these flags are nested in IFLA_PROTINFO. If
+the flags are present, the link change request type will be
+overridden as RTM_SETLINK.
+
+This fixes the ability to set a bridge link up or down by using
+the correct RTM_NEWLINK link change request type.
+
+$ sudo src/nl-link-set -n br2 --state=down
+Changed bridge br2 ether a6:e6:94:8c:61:ec
+    <broadcast,multicast,up,running,lowerup> group 0
+
+$ ip link show
+br2: <BROADCAST,MULTICAST> mtu 1500 qdisc noqueue
+    state DOWN mode DEFAULT group default qlen 1000
+
+$ sudo src/nl-link-set -n br2 --state=up
+Changed bridge br2 ether a6:e6:94:8c:61:ec
+    <broadcast,multicast> group 0
+
+$ ip link show
+br2: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc noqueue
+    state UNKNOWN mode DEFAULT group default qlen 1000
+
+Signed-off-by: Jef Oliver <jef.oliver at intel.com>
+---
+ include/netlink-private/route/link/api.h |  6 +++---
+ lib/route/link.c                         |  6 +++---
+ lib/route/link/bridge.c                  | 16 +++++++++++++++-
+ 3 files changed, 21 insertions(+), 7 deletions(-)
+
+diff --git a/include/netlink-private/route/link/api.h b/include/netlink-private/route/link/api.h
+index 47fed6f..6d30bf7 100644
+--- a/include/netlink-private/route/link/api.h
++++ b/include/netlink-private/route/link/api.h
+@@ -149,11 +149,11 @@ struct rtnl_link_af_ops
+ 
+ 	/* RTM_NEWLINK override
+ 	 *
+-	 * Called if a change link request is set to the kernel. If this is set
+-	 * to anything other than zero, RTM_NEWLINK will be overriden with
++	 * Called if a change link request is set to the kernel. If this returns
++	 * anything other than zero, RTM_NEWLINK will be overriden with
+ 	 * RTM_SETLINK when rtnl_link_build_change_request() is called.
+ 	 */
+-	const int ao_override_rtm;
++	int		      (*ao_override_rtm)(struct rtnl_link *);
+ 
+ 	/** Called if a link message is sent to the kernel. Must append the
+ 	 * link protocol specific attributes to the message. (IFLA_PROTINFO) */
+diff --git a/lib/route/link.c b/lib/route/link.c
+index 4384ea1..de3c393 100644
+--- a/lib/route/link.c
++++ b/lib/route/link.c
+@@ -116,12 +116,12 @@ static int af_free(struct rtnl_link *link, struct rtnl_link_af_ops *ops,
+ 	return 0;
+ }
+ 
+-static int af_request_type(int af_type)
++static int af_request_type(int af_type, struct rtnl_link *changes)
+ {
+ 	struct rtnl_link_af_ops *ops;
+ 
+ 	ops = rtnl_link_af_ops_lookup(af_type);
+-	if (ops && ops->ao_override_rtm)
++	if (ops && ops->ao_override_rtm(changes))
+ 		return RTM_SETLINK;
+ 
+ 	return RTM_NEWLINK;
+@@ -1732,7 +1732,7 @@ int rtnl_link_build_change_request(struct rtnl_link *orig,
+ 	    !strcmp(orig->l_name, changes->l_name))
+ 		changes->ce_mask &= ~LINK_ATTR_IFNAME;
+ 
+-	rt = af_request_type(orig->l_family);
++	rt = af_request_type(orig->l_family, changes);
+ 
+ 	if ((err = build_link_msg(rt, &ifi, changes, flags, result)) < 0)
+ 		goto errout;
+diff --git a/lib/route/link/bridge.c b/lib/route/link/bridge.c
+index b9d05bc..2d95faf 100644
+--- a/lib/route/link/bridge.c
++++ b/lib/route/link/bridge.c
+@@ -307,6 +307,20 @@ nla_put_failure:
+ 	return -NLE_MSGSIZE;
+ }
+ 
++static int bridge_override_rtm(struct rtnl_link *link) {
++        struct bridge_data *bd;
++
++        if (!rtnl_link_is_bridge(link))
++                return 0;
++
++        bd = bridge_data(link);
++
++        if (bd->ce_mask & BRIDGE_ATTR_FLAGS)
++                return 1;
++
++        return 0;
++}
++
+ static int bridge_get_af(struct nl_msg *msg, uint32_t *ext_filter_mask)
+ {
+ 	*ext_filter_mask |= RTEXT_FILTER_BRVLAN;
+@@ -961,7 +975,7 @@ static struct rtnl_link_af_ops bridge_ops = {
+ 	.ao_fill_af			= &bridge_fill_af,
+ 	.ao_fill_pi			= &bridge_fill_pi,
+ 	.ao_fill_pi_flags	= NLA_F_NESTED,
+-	.ao_override_rtm	= 1,
++	.ao_override_rtm		= &bridge_override_rtm,
+ 	.ao_fill_af_no_nest	= 1,
+ };
+ 
+-- 
+2.15.0
+

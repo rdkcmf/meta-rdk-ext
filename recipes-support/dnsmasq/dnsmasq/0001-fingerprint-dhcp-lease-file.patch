@@ -1,0 +1,227 @@
+From a966138329037971263c1e0566dfac9113288d5d Mon Sep 17 00:00:00 2001
+From: Goutam Damodaran <Goutam_Damodaran@Comcast.com>
+Date: Fri, 6 Mar 2020 07:32:10 +0000
+Subject: [PATCH] fingerprint dhcp lease file
+Source: COMCAST
+License: GPLV2
+Upstream-Status: Pending
+Signed-off-by: Goutam Damodaran <Goutam_Damodaran@Comcast.com>
+---
+ src/dnsmasq.h |  2 ++
+ src/lease.c   | 95 +++++++++++++++++++++++++++++++++++++++++++++++----
+ src/rfc2131.c |  9 +++++
+ 3 files changed, 100 insertions(+), 6 deletions(-)
+
+diff --git a/src/dnsmasq.h b/src/dnsmasq.h
+index d9225ea..fe1e2d5 100644
+--- a/src/dnsmasq.h
++++ b/src/dnsmasq.h
+@@ -711,6 +711,7 @@ struct dhcp_lease {
+   unsigned char *clid;   /* clientid */
+   char *hostname, *fqdn; /* name from client-hostname option or config */
+   char *old_hostname;    /* hostname before it moved to another lease */
++  char *fingerprint;     /* DHCP fingerprint */
+   int flags;
+   time_t expires;        /* lease expiry */
+ #ifdef HAVE_BROKEN_RTC
+@@ -1418,6 +1419,7 @@ void lease_find_interfaces(time_t now);
+ void lease_add_extradata(struct dhcp_lease *lease, unsigned char *data, 
+ 			 unsigned int len, int delim);
+ #endif
++void lease_add_fingerprint(struct dhcp_lease *lease, unsigned char *req_options);
+ #endif
+ 
+ /* rfc2131.c */
+diff --git a/src/lease.c b/src/lease.c
+index 6012183..edb39e4 100644
+--- a/src/lease.c
++++ b/src/lease.c
+@@ -29,6 +29,7 @@ static int read_leases(time_t now, FILE *leasestream)
+   int clid_len, hw_len, hw_type;
+   int items;
+   char *domain = NULL;
++  char *dhcp_fingerprint = NULL;
+ 
+   *daemon->dhcp_buff3 = *daemon->dhcp_buff2 = '\0';
+ 
+@@ -41,6 +42,14 @@ static int read_leases(time_t now, FILE *leasestream)
+ # error Buffer size breakage in leasefile parsing.
+ #endif
+ 
++    dhcp_fingerprint = safe_malloc(DHCP_BUFF_SZ);
++    if (NULL == dhcp_fingerprint)
++    {
++        my_syslog (LOG_ERR, _("######## Failed to allocate the memory: %s : ##########"),dhcp_fingerprint);
++        return 0;
++    }
++    *dhcp_fingerprint = '\0';
++  
+     while ((items=fscanf(leasestream, "%255s %255s", daemon->dhcp_buff3, daemon->dhcp_buff2)) == 2)
+       {
+ 	*daemon->namebuff = *daemon->dhcp_buff = *daemon->packet = '\0';
+@@ -51,16 +60,24 @@ static int read_leases(time_t now, FILE *leasestream)
+ 	  {
+ 	    daemon->duid_len = parse_hex(daemon->dhcp_buff2, (unsigned char *)daemon->dhcp_buff2, 130, NULL, NULL);
+ 	    if (daemon->duid_len < 0)
++            {
++              if (NULL != dhcp_fingerprint)
++                  free(dhcp_fingerprint);
+ 	      return 0;
++            }	      
+ 	    daemon->duid = safe_malloc(daemon->duid_len);
+ 	    memcpy(daemon->duid, daemon->dhcp_buff2, daemon->duid_len);
+ 	    continue;
+ 	  }
+ #endif
+ 	
+-	if (fscanf(leasestream, " %64s %255s %764s",
+-		   daemon->namebuff, daemon->dhcp_buff, daemon->packet) != 3)
++       if (fscanf(leasestream, " %64s %255s %255s %764s",
++                  daemon->namebuff, daemon->dhcp_buff, dhcp_fingerprint, daemon->packet) != 4)
++        {
++            if (NULL != dhcp_fingerprint)
++                free(dhcp_fingerprint);
+ 	  return 0;
++	}	  
+ 	
+ 	if (inet_pton(AF_INET, daemon->namebuff, &addr.addr.addr4))
+ 	  {
+@@ -92,7 +109,11 @@ static int read_leases(time_t now, FILE *leasestream)
+ 	  }
+ #endif
+ 	else
++        {
++            if (NULL != dhcp_fingerprint)
++                free(dhcp_fingerprint);		
+ 	  return 0;
++	}	  
+ 
+ 	if (!lease)
+ 	  die (_("too many stored leases"), NULL, EC_MISC);
+@@ -106,6 +127,9 @@ static int read_leases(time_t now, FILE *leasestream)
+ 	if (strcmp(daemon->dhcp_buff, "*") !=  0)
+ 	  lease_set_hostname(lease, daemon->dhcp_buff, 0, domain, NULL);
+ 
++        if (strcmp(dhcp_fingerprint, "*") != 0)
++          lease->fingerprint = strdup(dhcp_fingerprint);
++
+ 	ei = atol(daemon->dhcp_buff3);
+ 
+ #ifdef HAVE_BROKEN_RTC
+@@ -124,9 +148,11 @@ static int read_leases(time_t now, FILE *leasestream)
+ 	   the startup synthesised SIGHUP. */
+ 	lease->flags &= ~(LEASE_NEW | LEASE_CHANGED);
+ 	
+-	*daemon->dhcp_buff3 = *daemon->dhcp_buff2 = '\0';
++       *daemon->dhcp_buff3 = *daemon->dhcp_buff2 = *dhcp_fingerprint = '\0';	
+       }
+-    
++
++    if (NULL != dhcp_fingerprint)
++        free(dhcp_fingerprint);
+     return (items == 0 || items == EOF);
+ }
+ 
+@@ -280,6 +306,7 @@ void lease_update_file(time_t now)
+ 
+ 	  ourprintf(&err, " %s ", daemon->addrbuff);
+ 	  ourprintf(&err, "%s ", lease->hostname ? lease->hostname : "*");
++          ourprintf(&err, "%s ", lease->fingerprint ? lease->fingerprint : "*");
+ 	  	  
+ 	  if (lease->clid && lease->clid_len != 0)
+ 	    {
+@@ -556,6 +583,12 @@ void lease_prune(struct dhcp_lease *target, time_t now)
+ 	  if (lease->hostname)
+ 	    dns_dirty = 1;
+ 
++          if (lease->fingerprint)
++            {
++             free(lease->fingerprint);
++              lease->fingerprint = NULL;
++            }
++	  
+ 	  daemon->metrics[lease->addr.s_addr ? METRIC_LEASES_PRUNED_4 : METRIC_LEASES_PRUNED_6]++;
+ 
+  	  *up = lease->next; /* unlink */
+@@ -1188,9 +1221,59 @@ void lease_add_extradata(struct dhcp_lease *lease, unsigned char *data, unsigned
+   lease->extradata_len += len + 1; 
+ }
+ #endif
++#define SZ_FINGERPRINT  (256)
++void lease_add_fingerprint(struct dhcp_lease *lease, unsigned char *req_options)
++{
++  unsigned int i, len, left;
+ 
+-#endif
+-	  
++  if (req_options == NULL || req_options[0] == OPTION_END)
++  {
++    /*
++     * We were given empty options -- we are not allowed to generate an empty fingerprint string, in such case
++     * it should be set to NULL instead of ""
++     */
++    if (lease->fingerprint != NULL)
++      free(lease->fingerprint);
++
++
++    lease->fingerprint = NULL;
++    return;
++  }
++
++  if (lease->fingerprint != NULL)
++       free(lease->fingerprint);
++
++    lease->fingerprint = whine_malloc(SZ_FINGERPRINT);
++    if (lease->fingerprint == NULL)
++      return;
++
++  char *q = lease->fingerprint;
++  for (i = 0; req_options[i] != OPTION_END; i++)
++  {
++    left = (SZ_FINGERPRINT - (q - lease->fingerprint));
++    len  = snprintf(q,
++                    left,
++                    "%d%s",
++                    req_options[i],
++                    req_options[i+1] == OPTION_END ? "" : ",");
++    /*
++     * snprintf returns len that would have been written, not
++     * how much was actually written. This means return value
++     * can be higher then max length provided
++     */
++    if (len > left) {
++      /*
++       * Not enough room to append the entire otpion,
++       * so truncate after last option
++       */
++      *(q-1) = '\0';
++      break;
++    }
++    q += len;
++  }
++}
++
++#endif  
+ 
+       
+ 
+diff --git a/src/rfc2131.c b/src/rfc2131.c
+index 56dc3d1..97d5e77 100644
+--- a/src/rfc2131.c
++++ b/src/rfc2131.c
+@@ -1298,6 +1298,15 @@ size_t dhcp_reply(struct dhcp_context *context, char *iface_name, int int_index,
+ 		}
+ 	    }
+ 	}
++      /* get options information                */
++      if (lease)
++        {
++          lease_add_fingerprint(lease, req_options);
++        }
++      else
++        {
++          my_syslog(LOG_INFO, "fingerprint: lease is null ");
++        }
+ 
+       if (message)
+ 	{

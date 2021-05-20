@@ -1,0 +1,169 @@
+From 0e40c838023fff1c116c8af1bb62e93a87b4271c Mon Sep 17 00:00:00 2001
+From: Donia Abraham <Donia_Abraham@comcast.com>
+Date: Tue, 27 Feb 2018 11:08:44 +0000
+Subject: [PATCH 3/3] 0053-comcast-youtube-progress-logs_4
+
+---
+ .../gstreamer/MediaPlayerPrivateGStreamer.cpp      | 13 +++++++--
+ .../gstreamer/MediaPlayerPrivateGStreamer.h        |  4 +++
+ .../mse/MediaPlayerPrivateGStreamerMSE.cpp         | 32 +++++++++++++++++++++-
+ .../gstreamer/mse/MediaPlayerPrivateGStreamerMSE.h |  1 +
+ 4 files changed, 47 insertions(+), 3 deletions(-)
+
+diff --git a/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp b/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp
+index 5eb18b04226..8369a3d47eb 100644
+--- a/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp
++++ b/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp
+@@ -1095,19 +1095,26 @@ void MediaPlayerPrivateGStreamer::handleMessage(GstMessage* message)
+             || g_error_matches(err.get(), GST_STREAM_ERROR, GST_STREAM_ERROR_WRONG_TYPE)
+             || g_error_matches(err.get(), GST_STREAM_ERROR, GST_STREAM_ERROR_FAILED)
+             || g_error_matches(err.get(), GST_CORE_ERROR, GST_CORE_ERROR_MISSING_PLUGIN)
+-            || g_error_matches(err.get(), GST_RESOURCE_ERROR, GST_RESOURCE_ERROR_NOT_FOUND))
++            || g_error_matches(err.get(), GST_RESOURCE_ERROR, GST_RESOURCE_ERROR_NOT_FOUND)) {
++
++            fprintf(stderr, "HTML5 video: Playback failed: Format error [%s]\n",m_url.string().utf8().data());
++
+             error = MediaPlayer::FormatError;
++        }
+         else if (g_error_matches(err.get(), GST_STREAM_ERROR, GST_STREAM_ERROR_TYPE_NOT_FOUND)) {
+             // Let the mediaPlayerClient handle the stream error, in
+             // this case the HTMLMediaElement will emit a stalled
+             // event.
++            fprintf(stderr, "HTML5 video: Playback failed: Decode error [%s]\n",m_url.string().utf8().data());
+             GST_ERROR("Decode error, let the Media element emit a stalled event.");
+             break;
+         } else if (err->domain == GST_STREAM_ERROR) {
+             error = MediaPlayer::DecodeError;
+             attemptNextLocation = true;
+-        } else if (err->domain == GST_RESOURCE_ERROR)
++        } else if (err->domain == GST_RESOURCE_ERROR) {
++            fprintf(stderr, "HTML5 video: Playback failed: Network error [%s]\n",m_url.string().utf8().data());
+             error = MediaPlayer::NetworkError;
++        }
+ 
+         if (attemptNextLocation)
+             issueError = !loadNextLocation();
+@@ -1116,6 +1123,8 @@ void MediaPlayerPrivateGStreamer::handleMessage(GstMessage* message)
+         break;
+     case GST_MESSAGE_EOS:
+         didEnd();
++        fprintf(stderr, "HTML5 video: End of Stream [%s]\n",m_url.string().utf8().data());
++        m_reportedPlaybackEOS = true;
+         break;
+     case GST_MESSAGE_ASYNC_DONE:
+         if (!messageSourceIsPlaybin || m_delayingLoad)
+diff --git a/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.h b/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.h
+index 4cc0243bfc8..aa27ec59379 100644
+--- a/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.h
++++ b/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.h
+@@ -133,6 +133,10 @@ public:
+     bool isLiveStream() const override { return m_isStreaming; }
+ 
+     bool handleSyncMessage(GstMessage*) override;
++    bool m_reportedPlaybackStarted;
++    bool m_reportedPlaybackFailed;
++    bool m_reportedPlaybackEOS;
++
+ 
+ private:
+     static void getSupportedTypes(HashSet<String, ASCIICaseInsensitiveHash>&);
+diff --git a/Source/WebCore/platform/graphics/gstreamer/mse/MediaPlayerPrivateGStreamerMSE.cpp b/Source/WebCore/platform/graphics/gstreamer/mse/MediaPlayerPrivateGStreamerMSE.cpp
+index dc50dbe5cae..838c3b8b785 100644
+--- a/Source/WebCore/platform/graphics/gstreamer/mse/MediaPlayerPrivateGStreamerMSE.cpp
++++ b/Source/WebCore/platform/graphics/gstreamer/mse/MediaPlayerPrivateGStreamerMSE.cpp
+@@ -123,6 +123,7 @@ MediaPlayerPrivateGStreamerMSE::MediaPlayerPrivateGStreamerMSE(MediaPlayer* play
+     ++gActivePlayerNum;
+     if (gActivePlayerNum > 1)
+         GCController::singleton().garbageCollectOnNextRunLoop();
++    fprintf(stderr, "HTML5 video: Player constructed [%p]\n",this);
+     GST_TRACE("creating the player (%p)", this);
+ }
+ 
+@@ -130,7 +131,8 @@ MediaPlayerPrivateGStreamerMSE::~MediaPlayerPrivateGStreamerMSE()
+ {
+     --gActivePlayerNum;
+     GST_TRACE("destroying the player (%p)", this);
+-
++    if (m_reportedPlaybackStarted && !(m_reportedPlaybackEOS || m_reportedPlaybackFailed))
++        fprintf(stderr, "HTML5 video: Playback terminated [%s]\n",m_url.string().utf8().data());
+     for (auto iterator : m_appendPipelinesMap)
+         iterator.value->clearPlayerPrivate();
+ 
+@@ -141,6 +143,7 @@ MediaPlayerPrivateGStreamerMSE::~MediaPlayerPrivateGStreamerMSE()
+ 
+     if (m_playbackPipeline)
+         m_playbackPipeline->setWebKitMediaSrc(nullptr);
++    fprintf(stderr, "HTML5 video: Player Destroyed [%p]\n",this);
+ }
+ 
+ void MediaPlayerPrivateGStreamerMSE::load(const String& urlString)
+@@ -157,6 +160,13 @@ void MediaPlayerPrivateGStreamerMSE::load(const String& urlString)
+ 
+     if (!m_playbackPipeline)
+         m_playbackPipeline = PlaybackPipeline::create();
++    fprintf(stderr, "HTML5 video: Loading [%s]\n", urlString.utf8().data());
++    m_reportedPlaybackStarted = false; // Clean up the flags
++    m_reportedPlaybackFailed = false;
++    m_reportedPlaybackEOS = false;
++    URL url(URL(), urlString);
++    m_url = url;
++
+ 
+     MediaPlayerPrivateGStreamer::load(urlString);
+ }
+@@ -205,6 +215,9 @@ void MediaPlayerPrivateGStreamerMSE::seek(const MediaTime& time)
+     }
+ 
+     GST_DEBUG("Seeking from %s to %s seconds", toString(current).utf8().data(), toString(time).utf8().data());
++    fprintf(stderr,"HTML5 video: Seeking from %s to %s seconds [%s]\n",
++                              toString(current).utf8().data(), toString(time).utf8().data(),
++                              m_url.string().utf8().data());
+ 
+     MediaTime previousSeekTime = m_seekTime;
+     m_seekTime = time;
+@@ -238,6 +251,22 @@ bool MediaPlayerPrivateGStreamerMSE::changePipelineState(GstState newState)
+             gst_element_state_get_name(newState));
+         return true;
+     }
++   if(newState == GST_STATE_PLAYING)
++    {
++        fprintf(stderr,"HTML5 video: Play [%s]\n",
++                m_url.string().utf8().data());
++    }
++    else if(newState == GST_STATE_PAUSED)
++    {
++        fprintf(stderr,"HTML5 video: Pause [%s]\n",
++                m_url.string().utf8().data());
++    }
++
++    if (GST_STATE_PLAYING == newState && !m_reportedPlaybackStarted)
++    {
++        fprintf(stderr, "HTML5 video: Playback started [%s]\n",m_url.string().utf8().data());
++        m_reportedPlaybackStarted = true;
++    }
+ 
+     return MediaPlayerPrivateGStreamer::changePipelineState(newState);
+ }
+@@ -411,6 +440,7 @@ bool MediaPlayerPrivateGStreamerMSE::doSeek()
+     m_isFirstSeek = false;
+ 
+     if (m_pauseBeforeNextSeek) {
++        fprintf(stderr,"HTML5 video: Pause [%s]\n", m_url.string().utf8().data());
+         MediaPlayerPrivateGStreamer::changePipelineState(GST_STATE_PAUSED);
+         m_pauseBeforeNextSeek = false;
+     }
+diff --git a/Source/WebCore/platform/graphics/gstreamer/mse/MediaPlayerPrivateGStreamerMSE.h b/Source/WebCore/platform/graphics/gstreamer/mse/MediaPlayerPrivateGStreamerMSE.h
+index 988952e60c2..74ed6041243 100644
+--- a/Source/WebCore/platform/graphics/gstreamer/mse/MediaPlayerPrivateGStreamerMSE.h
++++ b/Source/WebCore/platform/graphics/gstreamer/mse/MediaPlayerPrivateGStreamerMSE.h
+@@ -129,6 +129,7 @@ private:
+     mutable double m_lastProgressTime { 0 };
+     bool m_isFirstSeek { true };
+     bool m_pauseBeforeNextSeek { false };
++    URL m_url;
+ };
+ 
+ } // namespace WebCore
+-- 
+2.14.2
+

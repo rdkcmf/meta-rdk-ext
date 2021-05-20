@@ -1,0 +1,32 @@
+From d375a28a37ce4da449b3bcc4b6cb5e306f90f28b Mon Sep 17 00:00:00 2001
+From: Philippe Normand <philn@igalia.com>
+Date: Sat, 12 Aug 2017 15:46:28 +0100
+Subject: [PATCH] appsrc: handle duration query only if the property was set
+
+https://bugzilla.gnome.org/show_bug.cgi?id=786200
+---
+ gst-libs/gst/app/gstappsrc.c | 8 ++++++--
+ 1 file changed, 6 insertions(+), 2 deletions(-)
+
+diff --git a/gst-libs/gst/app/gstappsrc.c b/gst-libs/gst/app/gstappsrc.c
+index 2fde8a2..1d53797 100644
+--- a/gst-libs/gst/app/gstappsrc.c
++++ b/gst-libs/gst/app/gstappsrc.c
+@@ -938,8 +938,12 @@ gst_app_src_query (GstBaseSrc * src, GstQuery * query)
+         gst_query_set_duration (query, format, priv->size);
+         res = TRUE;
+       } else if (format == GST_FORMAT_TIME) {
+-        gst_query_set_duration (query, format, priv->duration);
+-        res = TRUE;
++        if (priv->duration != GST_CLOCK_TIME_NONE) {
++          gst_query_set_duration (query, format, priv->duration);
++          res = TRUE;
++        } else {
++          res = FALSE;
++        }
+       } else {
+         res = FALSE;
+       }
+-- 
+2.7.4
+

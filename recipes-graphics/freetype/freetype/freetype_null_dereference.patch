@@ -1,0 +1,49 @@
+Date: 2018-01-27 14:43:43
+
+From: 29c759284e305ec428703c9a5831d0b1fc3497ef 2018-01-27 14:43:43
+
+Subject: [PATCH] RDKALL-1273: Patch for freetype OSS package
+
+	src/truetype/ttinterp.c (Ins_GETVARIATION): Avoid NULL reference.
+	Reported as:
+	https://bugs.chromium.org/p/oss-fuzz/issues/detail?id=5736
+
+Source: CGIT
+
+License: LGPL-2.0-or-later
+
+Upstream-Status: Submitted [ https://git.savannah.gnu.org/cgit/freetype/freetype2.git/commit/?id=29c759284e305ec428703c9a5831d0b1fc3497ef ]
+
+Signed-off-by: Werner Lemberg <wl@gnu.org>
+---
+
+Index: freetype-2.8.1/src/truetype/ttinterp.c
+===================================================================
+--- freetype-2.8.1.orig/src/truetype/ttinterp.c
++++ freetype-2.8.1/src/truetype/ttinterp.c
++      *src/truetype/ttinterp.c (Ins_GETVARIATION): Avoid NULL reference.
++
++	Reported as
++
++       https://bugs.chromium.org/p/oss-fuzz/issues/detail?id=5736
++
++2018-01-27  Werner Lemberg  <wl@gnu.org>
+@@ -7524,8 +7524,16 @@
+       return;
+     }
+ 
+-    for ( i = 0; i < num_axes; i++ )
+-      args[i] = coords[i] >> 2; /* convert 16.16 to 2.14 format */
++    if ( coords )
++    {
++     for ( i = 0; i < num_axes; i++ )
++       args[i] = coords[i] >> 2; /* convert 16.16 to 2.14 format */
++    }
++    else
++    {
++     for ( i = 0; i < num_axes; i++ )
++       args[i] = 0;
++    }
+   }
+ 
+ 

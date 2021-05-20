@@ -1,0 +1,11 @@
+[Unit]
+Description=Samhain IDS
+Wants=network-online.target
+After=network-online.target rfc-config.service
+ConditionPathExists=/tmp/samhain-enabled
+
+[Service]
+Type=forking
+ExecStart=/bin/nice -n 30 /usr/sbin/samhain -D -t check
+ExecReload=/bin/kill -HUP $MAINPID
+Restart=always

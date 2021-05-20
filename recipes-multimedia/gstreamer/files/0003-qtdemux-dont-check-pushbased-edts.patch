@@ -1,0 +1,30 @@
+Date: Jul 22 00:20:28 2017
+
+From: 5447135c6e7b7e1ba10f0d04558bb47c76c7861a Aug 03 17:14:23 2017
+
+Subject: [PATCH] XRE-11686 : gstreamer error seen with super8 encrypted streams
+
+	added senc parser in qtdemux
+	fixed OpenCDMdecryptor in WPE to not call decrypt() when totalEncryptedBytes=0
+
+Source: COMCAST
+
+License: LGPL-2.1-or-later
+
+Upstream-Status: Pending
+
+Signed-off-by: Gurdal Oruklu <gurdal_oruklu@comcast.com>
+
+---
+
+--- a/gst/isomp4/qtdemux.c
++++ b/gst/isomp4/qtdemux.c
+@@ -8975,7 +8975,7 @@
+ 
+   /* push based does not handle segments, so act accordingly here,
+    * and warn if applicable */
+-  if (!qtdemux->pullbased && !allow_pushbased_edts) {
++  if (!qtdemux->pullbased /* && !allow_pushbased_edts */) {
+     GST_WARNING_OBJECT (qtdemux, "streaming; discarding edit list segments");
+     /* remove and use default one below, we stream like it anyway */
+     g_free (stream->segments);

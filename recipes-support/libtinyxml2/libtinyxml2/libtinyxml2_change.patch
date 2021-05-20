@@ -1,0 +1,232 @@
+zlib License
+
+Original code (2.0 and earlier )
+Copyright (c) 2000-2006 Lee Thomason (www.grinninglizard.com)
+
+  This software is provided `as-is`, without any express or implied
+  warranty.  In no event will the authors be held liable for any damages
+  arising from the use of this software.
+
+  Permission is granted to anyone to use this software for any purpose,
+  including commercial applications, and to alter it and redistribute it
+  freely, subject to the following restrictions:
+
+  1. The origin of this software must not be misrepresented; you must not
+     claim that you wrote the original software. If you use this software
+     in a product, an acknowledgment in the product documentation would be
+     appreciated but is not required.
+  2. Altered source versions must be plainly marked as such, and must not be
+     misrepresented as being the original software.
+  3. This notice may not be removed or altered from any source distribution.
+
+Date: Mon, 21 Mar 2016 16:59:46
+
+From: c3db2d05b19323c98ccc546aadb5886f2177f245 Mon Sep 17 00:00:00 2001
+
+Subject: [PATCH] RDK-25078:Resolve tinyxml2 bugs
+
+	To resolve heap buffer overflow and null pointer dereference defects
+
+	https://github.com/leethomason/tinyxml2/issues/675
+        https://github.com/leethomason/tinyxml2/issues/654
+        https://github.com/leethomason/tinyxml2/issues/448
+
+Source: GITHUB
+
+Upstream-Status: Submitted [ https://github.com/leethomason/tinyxml2/commit/0bb8767e37cb15deacc9a4c15eae00744214a796 ]
+
+Signed-off-by: leethomason <Lee Thomason>
+
+---
+
+diff --git a/tinyxml2.cpp b/tinyxml2.cpp
+index 6d8573b..d4a1f2a 100755
+--- a/tinyxml2.cpp
++++ b/tinyxml2.cpp
+@@ -795,12 +795,12 @@ XMLNode* XMLNode::InsertAfterChild( XMLNode* afterThis, XMLNode* addThis )
+ 
+ const XMLElement* XMLNode::FirstChildElement( const char* value ) const
+ {
+-    for( XMLNode* node=_firstChild; node; node=node->_next ) {
++    for( XMLNode* node=_firstChild; node; node=node->_next ) 
++    {
+         XMLElement* element = node->ToElement();
+-        if ( element ) {
+-            if ( !value || XMLUtil::StringEqual( element->Name(), value ) ) {
+-                return element;
+-            }
++        if (element && (!value || element->Name() && XMLUtil::StringEqual( element->Name(), value ))) 
++	{
++            return element;            
+         }
+     }
+     return 0;
+@@ -809,13 +809,13 @@ const XMLElement* XMLNode::FirstChildElement( const char* value ) const
+ 
+ const XMLElement* XMLNode::LastChildElement( const char* value ) const
+ {
+-    for( XMLNode* node=_lastChild; node; node=node->_prev ) {
++    for( XMLNode* node=_lastChild; node; node=node->_prev ) 
++    {
+         XMLElement* element = node->ToElement();
+-        if ( element ) {
+-            if ( !value || XMLUtil::StringEqual( element->Name(), value ) ) {
+-                return element;
+-            }
+-        }
++        if (element && (!value || element->Name() && XMLUtil::StringEqual( element->Name(), value )))
++        {
++            return element;
++        }        
+     }
+     return 0;
+ }
+@@ -823,12 +823,13 @@ const XMLElement* XMLNode::LastChildElement( const char* value ) const
+ 
+ const XMLElement* XMLNode::NextSiblingElement( const char* value ) const
+ {
+-    for( XMLNode* node=this->_next; node; node = node->_next ) {
++    for( XMLNode* node=this->_next; node; node = node->_next ) 
++    {
+         const XMLElement* element = node->ToElement();
+-        if ( element
+-                && (!value || XMLUtil::StringEqual( value, node->Value() ))) {
++        if (element && (!value || element->Name() && XMLUtil::StringEqual( element->Name(), value )))
++        {
+             return element;
+-        }
++        }    
+     }
+     return 0;
+ }
+@@ -836,10 +837,11 @@ const XMLElement* XMLNode::NextSiblingElement( const char* value ) const
+ 
+ const XMLElement* XMLNode::PreviousSiblingElement( const char* value ) const
+ {
+-    for( XMLNode* node=_prev; node; node = node->_prev ) {
++    for( XMLNode* node=_prev; node; node = node->_prev ) 
++    {
+         const XMLElement* element = node->ToElement();
+-        if ( element
+-                && (!value || XMLUtil::StringEqual( value, node->Value() ))) {
++        if (element && (!value || element->Name() && XMLUtil::StringEqual( element->Name(), value )))
++        {
+             return element;
+         }
+     }
+@@ -1813,10 +1815,18 @@ void XMLDocument::DeleteNode( XMLNode* node )	{
+ 
+ XMLError XMLDocument::LoadFile( const char* filename )
+ {
++    if ( !filename ) 
++    {
++        TIXMLASSERT( false );
++        SetError( XML_ERROR_FILE_COULD_NOT_BE_OPENED, 0, "filename=<null>" );
++        return _errorID;
++    }
++
+     Clear();
+     FILE* fp = callfopen( filename, "rb" );
+-    if ( !fp ) {
+-        SetError( XML_ERROR_FILE_NOT_FOUND, filename, 0 );
++    if ( !fp ) 
++	{
++		SetError( XML_ERROR_FILE_NOT_FOUND, 0, filename );
+         return _errorID;
+     }
+     LoadFile( fp );
+@@ -1865,9 +1875,14 @@ XMLError XMLDocument::LoadFile( FILE* fp )
+ 
+ XMLError XMLDocument::SaveFile( const char* filename, bool compact )
+ {
++    if ( !filename ) {
++        TIXMLASSERT( false );
++        SetError( XML_ERROR_FILE_COULD_NOT_BE_OPENED, 0, "filename=<null>" );
++        return _errorID;
++    }
+     FILE* fp = callfopen( filename, "w" );
+     if ( !fp ) {
+-        SetError( XML_ERROR_FILE_COULD_NOT_BE_OPENED, filename, 0 );
++		SetError( XML_ERROR_FILE_COULD_NOT_BE_OPENED, 0, filename );
+         return _errorID;
+     }
+     SaveFile(fp, compact);
+@@ -1883,19 +1898,39 @@ XMLError XMLDocument::SaveFile( FILE* fp, bool compact )
+     return _errorID;
+ }
+ 
++XMLError XMLDocument::Parse( const char* p)
++{
++    // We read at most 128K bytes of data to mitigate for a possible
++    // erroneous content of 'p' that wouldn't end with a \0 character.
++    return Parse( p, strnlen( p, 128 * 1024 ) );
++}
+ 
+ XMLError XMLDocument::Parse( const char* p, size_t len )
+ {
+     Clear();
++    if( len > (128 * 1024) )
++    {
++        SetError( XML_ERROR_PARSING, 0, 0 );
++        return _errorID;
++    }
+ 
+     if ( len == 0 || !p || !*p ) {
+         SetError( XML_ERROR_EMPTY_DOCUMENT, 0, 0 );
+         return _errorID;
+     }
+-    if ( len == (size_t)(-1) ) {
+-        len = strlen( p );
++
++    try
++    {
++        _charBuffer = new char[ len+1 ];
+     }
+-    _charBuffer = new char[ len+1 ];
++    catch (std::bad_alloc& ba)
++    {
++        printf("new operation failed: memory limit exceeded");
++        printf("bad_alloc caught: %s \n",ba.what());
++        SetError( XML_ERROR_PARSING, 0, 0 );
++        return _errorID;
++    }
++
+     memcpy( _charBuffer, p, len );
+     _charBuffer[len] = 0;
+ 
+diff --git a/tinyxml2.h b/tinyxml2.h
+index a6da2ec..4ef2ca0 100755
+--- a/tinyxml2.h
++++ b/tinyxml2.h
+@@ -1572,7 +1572,17 @@ public:
+     	specified, TinyXML-2 will assume 'xml' points to a
+     	null terminated string.
+     */
+-    XMLError Parse( const char* xml, size_t nBytes=(size_t)(-1) );
++    XMLError Parse( const char* xml, size_t nBytes);
++    /**
++    	Parse an XML file from a character string.
++    	Returns XML_SUCCESS (0) on success, or
++    	an errorID.
++	TinyXML-2 assumes 'xml' points to a null terminated string
++    	which size is at most 4K bytes.  If you want to parse a
++    	document greater than 4K size, use the overload of Parse which
++    	requires you to specify the size of 'xml'.
++    */
++    XMLError Parse( const char* xml);
+ 
+     /**
+     	Load an XML file from disk.
+diff --git a/xmltest.cpp b/xmltest.cpp
+index 243628c..3dffd5f 100644
+--- a/xmltest.cpp
++++ b/xmltest.cpp
+@@ -1451,7 +1451,7 @@ int main( int argc, const char ** argv )
+ 		static const int COUNT = 10;
+ 		for( int i=0; i<COUNT; ++i ) {
+ 			XMLDocument doc;
+-			doc.Parse( mem );
++			doc.Parse(mem, size);
+ 		}
+ #if defined( _MSC_VER )
+ 		QueryPerformanceCounter( (LARGE_INTEGER*) &end );

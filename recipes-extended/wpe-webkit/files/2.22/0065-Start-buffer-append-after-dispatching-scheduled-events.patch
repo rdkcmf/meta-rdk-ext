@@ -1,0 +1,26 @@
+From be674f16c1c9a3343c451ea3e2dfbd1347be3813 Mon Sep 17 00:00:00 2001
+From: Siva Sankar Raja <sivasankar_raja@comcast.com>
+Source: COMCAST
+License: LICENSE-LGPL-2.1
+Upstream-Status: Pending
+Signed-off-by: Siva Sankar Raja <sivasankar_raja@comcast.com>
+Date: Mon, 8 Jul 2019 15:17:47 +0000
+Subject: [PATCH] Start buffer append after dispatching scheduled events
+
+---
+ Source/WebCore/Modules/mediasource/SourceBuffer.cpp | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+Index: git/Source/WebCore/Modules/mediasource/SourceBuffer.cpp
+===================================================================
+--- git.orig/Source/WebCore/Modules/mediasource/SourceBuffer.cpp
++++ git/Source/WebCore/Modules/mediasource/SourceBuffer.cpp
+@@ -583,7 +583,7 @@ ExceptionOr<void> SourceBuffer::appendBu
+ 
+     // Add microtask to start append right after leaving current script context. Keep the timer active to check if append was aborted.
+     auto microtask = std::make_unique<ActiveDOMCallbackMicrotask>(MicrotaskQueue::mainThreadQueue(), *scriptExecutionContext(), [protectedThis = makeRef(*this)]() mutable {
+-        if (protectedThis->m_appendBufferTimer.isActive()) {
++        if (!protectedThis->m_asyncEventQueue.hasPendingEvents() && protectedThis->m_appendBufferTimer.isActive()) {
+             protectedThis->m_appendBufferTimer.stop();
+             protectedThis->appendBufferTimerFired();
+         }

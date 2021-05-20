@@ -1,0 +1,61 @@
+From 7ea4fb13491d46fca58953ac6a1b6bf360a4e594 Mon Sep 17 00:00:00 2001
+From: Siva Sankar Raja <sivasankar_raja@comcast.com>
+Source: COMCAST
+License: LICENSE-LGPL-2.1
+Upstream-Status: Pending
+Signed-off-by: Siva Sankar Raja <sivasankar_raja@comcast.com>
+Date: Mon, 8 Jul 2019 13:29:41 +0000
+Subject: [PATCH] Fix-dispatching-of-progress-events-in-paused-state
+
+---
+ Source/WebCore/Modules/mediasource/SourceBuffer.cpp              | 3 +++
+ .../graphics/gstreamer/mse/MediaPlayerPrivateGStreamerMSE.cpp    | 9 +++++++++
+ .../graphics/gstreamer/mse/MediaPlayerPrivateGStreamerMSE.h      | 3 ++-
+ 3 files changed, 14 insertions(+), 1 deletion(-)
+
+Index: git/Source/WebCore/Modules/mediasource/SourceBuffer.cpp
+===================================================================
+--- git.orig/Source/WebCore/Modules/mediasource/SourceBuffer.cpp
++++ git/Source/WebCore/Modules/mediasource/SourceBuffer.cpp
+@@ -1156,6 +1156,9 @@ size_t SourceBuffer::maximumBufferSize()
+     if (!maxBufferSizeVideo)
+         maximumBufferSizeDefaults(maxBufferSizeVideo, maxBufferSizeAudio, maxBufferSizeText);
+ 
++    if (m_source && m_source->sourceBuffers() && m_source->sourceBuffers()->length() == 1)
++        return maxBufferSizeVideo;
++
+     if (m_videoTracks && m_videoTracks->length() > 0)
+         return maxBufferSizeVideo;
+     if (m_audioTracks && m_audioTracks->length() > 0)
+Index: git/Source/WebCore/platform/graphics/gstreamer/mse/MediaPlayerPrivateGStreamerMSE.cpp
+===================================================================
+--- git.orig/Source/WebCore/platform/graphics/gstreamer/mse/MediaPlayerPrivateGStreamerMSE.cpp
++++ git/Source/WebCore/platform/graphics/gstreamer/mse/MediaPlayerPrivateGStreamerMSE.cpp
+@@ -1213,6 +1213,15 @@ MediaTime MediaPlayerPrivateGStreamerMSE
+     return result;
+ }
+ 
++MediaTime MediaPlayerPrivateGStreamerMSE::maxTimeLoaded() const
++{
++    if (m_errorOccured)
++        return MediaTime::zeroTime();
++
++    MediaTime maxBufferedTime = buffered()->maximumBufferedTime();
++    return maxBufferedTime.isValid() ? maxBufferedTime : MediaTime::zeroTime();
++}
++
+ #if ENABLE(ENCRYPTED_MEDIA)
+ void MediaPlayerPrivateGStreamerMSE::dispatchDecryptionStructure(GUniquePtr<GstStructure>&& structure)
+ {
+Index: git/Source/WebCore/platform/graphics/gstreamer/mse/MediaPlayerPrivateGStreamerMSE.h
+===================================================================
+--- git.orig/Source/WebCore/platform/graphics/gstreamer/mse/MediaPlayerPrivateGStreamerMSE.h
++++ git/Source/WebCore/platform/graphics/gstreamer/mse/MediaPlayerPrivateGStreamerMSE.h
+@@ -93,6 +93,7 @@ public:
+     void dispatchDecryptionStructure(GUniquePtr<GstStructure>&&) final;
+ #endif
+ 
++   MediaTime maxTimeLoaded() const override;
+ private:
+     static void getSupportedTypes(HashSet<String, ASCIICaseInsensitiveHash>&);
+     static MediaPlayer::SupportsType supportsType(const MediaEngineSupportParameters&);

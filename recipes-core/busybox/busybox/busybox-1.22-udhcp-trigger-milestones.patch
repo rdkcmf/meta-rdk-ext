@@ -1,0 +1,37 @@
+Date: Jul 16 13:16:13 2019
+
+From: d94199c86120479ea3684dbc97b515f80f3eaf86 Jul 30 10:33:44 2019
+
+Subject: [PATCH] DELIA-36871: udhcpc patch for busybox-1.22
+
+	udhcpc patch for busybox-1.22
+
+Source: COMCAST
+
+License: GPL-2-or-later
+
+Upstream-Status: Pending
+
+Signed-off-by: ganesh <Ganesh_Kumar@comcast.com>
+---
+
+Index: busybox-1.22.1/networking/udhcp/dhcpc.c
+===================================================================
+--- busybox-1.22.1.orig/networking/udhcp/dhcpc.c
++++ busybox-1.22.1/networking/udhcp/dhcpc.c
+@@ -1495,6 +1495,7 @@ int udhcpc_main(int argc UNUSED_PARAM, c
+ 			case REQUESTING:
+ 				if (!discover_retries || packet_num < discover_retries) {
+ 					/* send broadcast select packet */
++					udhcp_run_script(NULL, "request");
+ 					send_select(xid, server_addr, requested_ip);
+ 					timeout = discover_timeout;
+ 					packet_num++;
+@@ -1701,6 +1702,7 @@ int udhcpc_main(int argc UNUSED_PARAM, c
+ 				uint32_t lease_seconds;
+ 				struct in_addr temp_addr;
+ 
++				udhcp_run_script(NULL, "reply");
+ 				temp = udhcp_get_option(&packet, DHCP_LEASE_TIME);
+ 				if (!temp) {
+ 					bb_error_msg("no lease time with ACK, using 1 hour lease");

@@ -1,0 +1,28 @@
+Date: Oct 6, 2020 6:07 PM
+From: 419c19e2c0331b360eae33524f8037da089b0a59 Oct 6, 2020 6:07 PM
+Subject: [PATCH] Morty builds not able to resolve xconf.xcal.tv
+
+The DNS AAAA response is truncated due to
+which client sends TCP query but doesn't get a response from server
+even after multiple retries. So patched glibc in morty to ignore
+truncated bit similar to what has been done in eglibc in daisy.
+
+Source: COMCAST
+License: GPLv2 & LGPLv2.1
+Upstream-Status: Pending
+Signed-off-by: Deva <Deva_Thiyagarajan2@comcast.com>
+---
+
+Index: git/resolv/resolv.h
+===================================================================
+--- git.orig/resolv/resolv.h
++++ git/resolv/resolv.h
+@@ -222,7 +222,7 @@ struct res_sym {
+ #define RES_NOTLDQUERY	0x01000000	/* Do not look up unqualified name
+ 					   as a TLD.  */
+ 
+-#define RES_DEFAULT	(RES_RECURSE|RES_DEFNAMES|RES_DNSRCH|RES_NOIP6DOTINT)
++#define RES_DEFAULT	(RES_IGNTC|RES_RECURSE|RES_DEFNAMES|RES_DNSRCH|RES_NOIP6DOTINT)
+ 
+ /*
+  * Resolver "pfcode" values.  Used by dig.

@@ -1,0 +1,71 @@
+Date: Mon Oct 01 10:52:00 2018
+
+From: 5d1c7cf57ac3b2b3eab5f2d7f1894e61658aed09 Wed Dec 26 23:14:45 2018
+
+Subject: [PATCH] XRE-13615 : Update to latest metro revision in 2017 branch
+
+	Move to latest revision on wpe-20170728 metro branch. As prompted, WPEBackends also moved to latest.
+
+Source: COMCAST
+
+License: LGPL-2.1-or-later
+
+Upstream-Status: Pending
+
+Signed-off-by: mgopalakirshnan <Manigandan.Gopalakrishnan@lnttechservices.com>
+---
+
+Index: gst-plugins-good-1.10.4/gst/matroska/matroska-demux.c
+===================================================================
+--- gst-plugins-good-1.10.4.orig/gst/matroska/matroska-demux.c
++++ gst-plugins-good-1.10.4/gst/matroska/matroska-demux.c
+@@ -1331,14 +1331,15 @@ gst_matroska_demux_add_stream (GstMatros
+         if (!gst_structure_has_name (s, "application/x-webm-enc")) {
+           gst_structure_set (s, "original-media-type", G_TYPE_STRING,
+               gst_structure_get_name (s), NULL);
+-          gst_structure_set (s, "encryption-algorithm", G_TYPE_STRING,
++/* FIXME  gst_structure_set (s, "encryption-algorithm", G_TYPE_STRING,
+               gst_matroska_track_encryption_algorithm_name (enc->enc_algo),
+               NULL);
+           gst_structure_set (s, "encoding-scope", G_TYPE_STRING,
+               gst_matroska_track_encoding_scope_name (enc->scope), NULL);
+           gst_structure_set (s, "cipher-mode", G_TYPE_STRING,
+               gst_matroska_track_encryption_cipher_mode_name
+-              (enc->enc_cipher_mode), NULL);
++              (enc->enc_cipher_mode), NULL);*/
++          gst_structure_set (s, "protection-system", G_TYPE_STRING, GST_MATROSKA_WIDEVINE_DRM, NULL);
+           gst_structure_set_name (s, "application/x-webm-enc");
+         }
+       }
+Index: gst-plugins-good-1.10.4/gst/matroska/matroska-ids.h
+===================================================================
+--- gst-plugins-good-1.10.4.orig/gst/matroska/matroska-ids.h
++++ gst-plugins-good-1.10.4/gst/matroska/matroska-ids.h
+@@ -441,6 +441,7 @@
+ #define GST_MATROSKA_TAG_ID_RECORDING_LOCATION "RECORDING_LOCATION"
+ #define GST_MATROSKA_TAG_ID_PRODUCTION_COPYRIGHT "PRODUCTION_COPYRIGHT"
+ #define GST_MATROSKA_TAG_ID_LICENSE "LICENSE"
++#define GST_MATROSKA_WIDEVINE_DRM "edef8ba9-79d6-4ace-a3c8-27dcd51d21ed"
+ 
+ /*
+  * TODO: add this tag & mappings
+Index: gst-plugins-good-1.10.4/gst/matroska/matroska-read-common.c
+===================================================================
+--- gst-plugins-good-1.10.4.orig/gst/matroska/matroska-read-common.c
++++ gst-plugins-good-1.10.4/gst/matroska/matroska-read-common.c
+@@ -3083,12 +3083,12 @@ gst_matroska_read_common_read_track_enco
+               /* Push an event containing the Key ID into the queues of all streams. */
+               /* system_id field is set to "UNDEFINED" because it isn't specified neither in WebM nor in Matroska spec. */
+               event =
+-                  gst_event_new_protection ("UNDEFINED", keyId_buf,
+-                  "matroskademux");
++                  gst_event_new_protection (GST_MATROSKA_WIDEVINE_DRM, keyId_buf,
++                  "matroskademux"); //Setting default DRM as Widevine. 
+               GST_TRACE_OBJECT (common->sinkpad,
+                   "adding protection event for stream %d", context->index);
+               g_queue_push_tail (&context->protection_event_queue, event);
+-
++              // FIXME check if need to change protection_info name and IV size dynamic
+               context->protection_info =
+                   gst_structure_new ("application/x-cenc", "iv_size",
+                   G_TYPE_UINT, 8, "encrypted", G_TYPE_BOOLEAN, TRUE, "kid",

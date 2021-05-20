@@ -1,0 +1,53 @@
+Copyright (C) 1991, 1999 Free Software Foundation, Inc.
+
+This library is free software; you can redistribute it and/or
+modify it under the terms of the GNU Lesser General Public
+License as published by the Free Software Foundation; either
+version 2.1 of the License, or (at your option) any later version.
+
+This library is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+Lesser General Public License for more details.
+
+You should have received a copy of the GNU Lesser General Public
+License along with this library; if not, write to the Free Software
+Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
+
+Date: Nov 12 11:31:23 2018
+
+From: 8e3571ed61e1f9b6a1a5390722e929c4d9153605 Nov 15 19:37:36 2018
+
+Subject: [PATCH] XRE-13662: fix dispatching of gpollfd sources
+
+	GLib incorrectly skips pollfd sources when there is at least 1 timer
+	source ready with priority higher than default one. This is regression
+	after https://bugzilla.gnome.org/show_bug.cgi?id=11059 which changed
+	sorting order of poll records.
+	
+	The change fixes this by traversing through poll records untill ready
+	fd is found.
+
+Source: COMCAST
+
+Upstream-Status: Pending
+
+Signed-off-by: Eugene Mutavchi <Ievgen_Mutavchi@comcast.com>
+
+---
+
+Index: glib-2.48.1/glib/gmain.c
+===================================================================
+--- glib-2.48.1.orig/glib/gmain.c
++++ glib-2.48.1/glib/gmain.c
+@@ -3644,6 +3644,10 @@ g_main_context_check (GMainContext *cont
+   i = 0;
+   while (pollrec && i < n_fds)
+     {
++      while (pollrec && pollrec->fd->fd != fds[i].fd)
++        {
++          pollrec = pollrec->next;
++        }
+       while (pollrec && pollrec->fd->fd == fds[i].fd)
+         {
+           if (pollrec->priority <= max_priority)

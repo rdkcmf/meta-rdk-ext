@@ -1,0 +1,34 @@
+Date: Oct 30 13:55:08 2017
+
+From: 9f40f1bf57c5e1ddc36199bd54dea63d16f83f67 Nov 01 12:15:16 2017
+
+Subject: [PATCH] XRE-12263: initial support for playback at different rates
+
+	MSE player should support playback at different speeds
+
+Source: COMCAST
+
+License: LGPL-2.1-or-later
+
+Upstream-Status: Pending
+
+Signed-off-by: Eugene Mutavchi <Ievgen_Mutavchi@comcast.com>
+
+---
+
+Index: gst-plugins-good-1.10.4/gst/isomp4/qtdemux.c
+===================================================================
+--- gst-plugins-good-1.10.4.orig/gst/isomp4/qtdemux.c
++++ gst-plugins-good-1.10.4/gst/isomp4/qtdemux.c
+@@ -7880,7 +7880,10 @@ gst_qtdemux_configure_stream (GstQTDemux
+ 
+         /* Calculate a framerate, ignoring the first sample which is sometimes truncated */
+         /* stream->duration is guint64, timescale, n_samples are guint32 */
+-        avg_duration =
++        if (n_samples == 1)
++          avg_duration = gst_util_uint64_scale_round (duration, GST_SECOND, stream->timescale);
++        else
++          avg_duration =
+             gst_util_uint64_scale_round (duration -
+             stream->first_duration, GST_SECOND,
+             (guint64) (stream->timescale) * (n_samples - 1));

@@ -1,0 +1,93 @@
+From a42903d6d254ed9ad49ac0db58a79d898f26eb92 Mon Sep 17 00:00:00 2001
+From: Siva Sankar Raja <sivasankar_raja@comcast.com>
+Source: COMCAST
+License: LICENSE-LGPL-2.1
+Upstream-Status: Pending
+Signed-off-by: Siva Sankar Raja <sivasankar_raja@comcast.com>
+Date: Wed, 3 Jul 2019 17:02:33 +0000
+Subject: [PATCH] comcast Prioritize ping web process messages
+
+---
+ Source/WebKit/Platform/IPC/Connection.cpp | 36 ++++++++++++++++++++++++++++++-
+ Source/WebKit/UIProcess/WebPageProxy.cpp  |  2 ++
+ 2 files changed, 37 insertions(+), 1 deletion(-)
+
+Index: git/Source/WebKit/Platform/IPC/Connection.cpp
+===================================================================
+--- git.orig/Source/WebKit/Platform/IPC/Connection.cpp
++++ git/Source/WebKit/Platform/IPC/Connection.cpp
+@@ -49,6 +49,13 @@ namespace IPC {
+ const size_t maxPendingIncomingMessagesKillingThreshold { 50000 };
+ #endif
+ 
++#if PLATFORM(WPE)
++template <typename T> static inline bool isPingMessage(T &message) {
++    return message.messageName() == "MainThreadPing" ||
++        message.messageName() == "DidReceiveMainThreadPing";
++}
++#endif
++
+ struct Connection::ReplyHandler {
+     RefPtr<FunctionDispatcher> dispatcher;
+     Function<void (std::unique_ptr<Decoder>)> handler;
+@@ -413,6 +420,14 @@ bool Connection::sendMessage(std::unique
+             || m_inDispatchMessageMarkedDispatchWhenWaitingForSyncReplyCount))
+         encoder->setShouldDispatchMessageWhenWaitingForSyncReply(true);
+ 
++#if PLATFORM(WPE)
++    if (isPingMessage(*encoder))
++    {
++        std::lock_guard<Lock> lock(m_outgoingMessagesMutex);
++        m_outgoingMessages.prepend(WTFMove(encoder));
++    }
++    else
++#endif
+     {
+         std::lock_guard<Lock> lock(m_outgoingMessagesMutex);
+         m_outgoingMessages.append(WTFMove(encoder));
+@@ -921,6 +936,14 @@ void Connection::didFailToSendSyncMessag
+ 
+ void Connection::enqueueIncomingMessage(std::unique_ptr<Decoder> incomingMessage)
+ {
++#if PLATFORM(WPE)
++    if (isPingMessage(*incomingMessage))
++    {
++        std::lock_guard<Lock> lock(m_incomingMessagesMutex);
++        m_incomingMessages.prepend(WTFMove(incomingMessage));
++    }
++    else
++#endif
+     {
+         std::lock_guard<Lock> lock(m_incomingMessagesMutex);
+ 
+@@ -948,6 +971,17 @@ void Connection::enqueueIncomingMessage(
+             protectedThis->dispatchIncomingMessages();
+         else
+             protectedThis->dispatchOneIncomingMessage();
++
++#if PLATFORM(WPE)
++        {
++            std::lock_guard<Lock> lock(protectedThis->m_incomingMessagesMutex);
++            if (protectedThis->m_incomingMessages.isEmpty())
++                return;
++            if (!isPingMessage(*protectedThis->m_incomingMessages.first()))
++                return;
++        }
++        protectedThis->dispatchOneIncomingMessage();
++#endif
+     });
+ }
+ 
+Index: git/Source/WebKit/UIProcess/WebPageProxy.cpp
+===================================================================
+--- git.orig/Source/WebKit/UIProcess/WebPageProxy.cpp
++++ git/Source/WebKit/UIProcess/WebPageProxy.cpp
+@@ -7431,6 +7431,8 @@ void WebPageProxy::setFooterBannerHeight
+ 
+ void WebPageProxy::imageOrMediaDocumentSizeChanged(const WebCore::IntSize& newSize)
+ {
++    if (isValid())
++        m_process->responsivenessTimer().stop();
+     m_uiClient->imageOrMediaDocumentSizeChanged(newSize);
+ }
+ 

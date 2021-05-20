@@ -1,0 +1,21 @@
+License: GPLV1
+Date: Dec 30, 2018 1:41 AM
+From: I69604eac3a668b10784c6b6c27d9aa9759b5d85d Nov 15, 2018 12:00 AM
+Subject: Miniupnpd upgradation
+Source: COMCAST
+Upstream-Status: Pending
+Signed-off-by: kjothi774 <krishnaveni_jothimathavan@comcast.com>
+Index: miniupnpd-2.1.20191006/Makefile.linux
+===================================================================
+--- miniupnpd-2.1.20191006.orig/Makefile.linux
++++ miniupnpd-2.1.20191006/Makefile.linux
+@@ -26,7 +26,7 @@ CONFIG_OPTIONS += --firewall=iptables
+ CFLAGS ?= -Os
+ CFLAGS += -fno-strict-aliasing
+ CFLAGS += -fno-common
+-CFLAGS += -fstack-protector -fPIE
++CFLAGS += -fno-stack-protector -fPIE
+ CFLAGS += -D_FORTIFY_SOURCE=2
+ CPPFLAGS += -D_GNU_SOURCE
+ CFLAGS += -Wall
+

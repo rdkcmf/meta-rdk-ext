@@ -1,0 +1,31 @@
+Date: Jan 15, 2016 2:25 AM
+
+From: 74df33a08b6ccc08704fecc6c4874195d5888f06 Jan 15, 2016 2:32 AM
+
+Subject: [PATCH] ARRISXB3-4070 : Log files created is not becoming 0 bytes
+
+	Some log4c patches were missing in Yocto
+	
+Source: COMCAST
+
+License: LGPL-2.1-or-later
+
+Upstream-Status: Pending
+
+Signed-off-by: achelakkode <anoopnair_c@infosys.com>
+---
+
+diff --git a/src/log4c/appender_type_rollingfile.c b/src/log4c/appender_type_rollingfile.c
+index fe102a4..1b424e6 100644
+--- a/src/log4c/appender_type_rollingfile.c
++++ b/src/log4c/appender_type_rollingfile.c
+@@ -308,7 +308,8 @@ static int rollingfile_get_system_filesize(FILE *fp){
+ static int rollingfile_open_zero_file(char *filename, long *fsp, FILE **fpp ){
+ 
+   sd_debug("rollingfile_open_zero_file[");
+-  if ( (*fpp = fopen(filename, "w+")) == NULL){
++  //if ( (*fpp = fopen(filename, "w+")) == NULL){
++   if ( (*fpp = fopen(filename, "a+")) == NULL){
+    *fpp = stderr;
+   }
+   *fsp = 0;

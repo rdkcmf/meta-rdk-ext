@@ -1,0 +1,28 @@
+From 3c3b2908eab279f113884037d1b7ab401409e7a4 Mon Sep 17 00:00:00 2001
+From: Gurdal Oruklu <gurdal_oruklu@comcast.com>
+Date: Thu, 25 Oct 2018 15:56:58 +0000
+Subject: [PATCH] comcast Amazon macroblocking fix
+
+Signed-off-by: Gurdal Oruklu <gurdal_oruklu@comcast.com>
+---
+ Source/WebCore/Modules/mediasource/SourceBuffer.cpp | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/Source/WebCore/Modules/mediasource/SourceBuffer.cpp b/Source/WebCore/Modules/mediasource/SourceBuffer.cpp
+index 6f38cb9c513..a7b2d7971bd 100644
+--- a/Source/WebCore/Modules/mediasource/SourceBuffer.cpp
++++ b/Source/WebCore/Modules/mediasource/SourceBuffer.cpp
+@@ -1797,7 +1797,9 @@ void SourceBuffer::sourceBufferPrivateDidReceiveSample(MediaSample& sample)
+         // Add the coded frame with the presentation timestamp, decode timestamp, and frame duration to the track buffer.
+         trackBuffer.samples.addSample(sample);
+ 
+-        if (trackBuffer.lastEnqueuedDecodeEndTime.isInvalid() || decodeTimestamp >= trackBuffer.lastEnqueuedDecodeEndTime) {
++        // Add a microsecond to decodetimestamp in order to prevent some sample drops due to a rounding issue.
++        // TO-DO: fix the rounding issue and remove the microsecond from the comparison
++        if (trackBuffer.lastEnqueuedDecodeEndTime.isInvalid() || (decodeTimestamp + microsecond) > trackBuffer.lastEnqueuedDecodeEndTime) {
+             DecodeOrderSampleMap::KeyType decodeKey(sample.decodeTime(), sample.presentationTime());
+             trackBuffer.decodeQueue.insert(DecodeOrderSampleMap::MapType::value_type(decodeKey, &sample));
+         }
+-- 
+2.16.2
+

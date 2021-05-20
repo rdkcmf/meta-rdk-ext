@@ -1,0 +1,60 @@
+Copyright (C) 1989, 1991 Free Software Foundation, Inc.
+
+This program is free software; you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation; either version 2 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program; if not, write to the Free Software
+Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+
+Date: Dec 08 22:19:07 2015
+
+From: a1ca12693f194d454cdfb8a910bacb23ad5cdebe Dec 18 22:46:50 2015
+
+Subject: [PATCH] RDKSYSINTSW-2220 : Add samhain 3.1.5 and integrate client
+
+        Adding samhain src is from gerrit.
+
+Source: COMCAST
+
+Upstream-Status: Pending
+
+Signed-off-by: sstraarup <Soren_Straarup2@cable.comcast.com>
+---
+
+--- a/Makefile.in	2015-06-04 01:18:21.107793424 +0000
++++ b/Makefile.in	2015-06-04 01:19:18.553193504 +0000
+@@ -1150,7 +1150,7 @@ sstrip: $(srcsrc)/sstrip.c Makefile
+ 	$(BUILD_CC) -I.  -o sstrip $(srcsrc)/sstrip.c
+ 
+ encode: $(srcsrc)/encode.c Makefile
+-	gcc -I. -o encode $(srcsrc)/encode.c
++	$(BUILD_CC) -I. -o encode $(srcsrc)/encode.c
+ 
+ config_xor.h: config.h encode
+ 	@echo 'encode $(XOR_CODE) config.h'; \
+@@ -1301,7 +1301,7 @@ lkm: @sh_lkm@
+ # For kernel syscall monitoring
+ kern_head: Makefile $(top_srcdir)/include/kern_head.h $(srcsrc)/kern_head.c
+ 	@echo "$(BUILD_CC) -I. -I./include -DSYSTEMMAP=\"@systemmap@\" -o kern_head $(srcsrc)/kern_head.c $(LIBS_KVM)"; \
+-	gcc -I. -I./include -DSYSTEMMAP=\"@systemmap@\" -o kern_head $(srcsrc)/kern_head.c $(LIBS_KVM)
++	$(BUILD_CC) -I. -I./include -DSYSTEMMAP=\"@systemmap@\" -o kern_head $(srcsrc)/kern_head.c $(LIBS_KVM)
+ 
+ sh_ks.h: kern_head
+ 	@sleep 1; \
+@@ -1327,7 +1327,7 @@ bignum.o: internal.h
+ mkhdr: $(srcsrc)/mkhdr.c config.h 
+ 	@echo "$(BUILD_CC) -I. -o mkhdr $(srcsrc)/mkhdr.c"; \
+ 	sleep 1; \
+-	gcc -I. -o mkhdr $(srcsrc)/mkhdr.c
++	$(BUILD_CC) -I. -o mkhdr $(srcsrc)/mkhdr.c
+ 
+ #	$(COMPILE)  -DBIG_SHORT_NAMES -o mkhdr $(srcdir)/mkhdr.c
+ 

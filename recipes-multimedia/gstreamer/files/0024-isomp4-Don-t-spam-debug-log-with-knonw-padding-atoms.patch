@@ -1,0 +1,58 @@
+From f8693a3b6686498b9d2e96a83054848539da36e4 Mon Sep 17 00:00:00 2001
+From: Ievgen Mutavchi <Ievgen_Mutavchi@comcast.com>
+Date: Mon, 1 Jul 2019 13:18:55 -0400
+Subject: [PATCH] isomp4: Don't spam debug log with knonw/padding atoms
+
+---
+ gst/isomp4/fourcc.h  |  1 +
+ gst/isomp4/qtdemux.c | 22 ++++++++++++++++++----
+ 2 files changed, 19 insertions(+), 4 deletions(-)
+
+diff --git a/gst/isomp4/fourcc.h b/gst/isomp4/fourcc.h
+index 5f2ec3a..2515a10 100644
+--- a/gst/isomp4/fourcc.h
++++ b/gst/isomp4/fourcc.h
+@@ -213,6 +213,7 @@ G_BEGIN_DECLS
+ #define FOURCC_stss     GST_MAKE_FOURCC('s','t','s','s')
+ #define FOURCC_stsz     GST_MAKE_FOURCC('s','t','s','z')
+ #define FOURCC_stts     GST_MAKE_FOURCC('s','t','t','s')
++#define FOURCC_styp     GST_MAKE_FOURCC('s','t','y','p')
+ #define FOURCC_subp     GST_MAKE_FOURCC('s','u','b','p')
+ #define FOURCC_subt     GST_MAKE_FOURCC('s','u','b','t')
+ #define FOURCC_text     GST_MAKE_FOURCC('t','e','x','t')
+diff --git a/gst/isomp4/qtdemux.c b/gst/isomp4/qtdemux.c
+index 362831b..dc06493 100644
+--- a/gst/isomp4/qtdemux.c
++++ b/gst/isomp4/qtdemux.c
+@@ -6839,10 +6839,24 @@ gst_qtdemux_process_adapter (GstQTDemux * demux, gboolean force)
+               "Skipping fourcc while parsing header : %" GST_FOURCC_FORMAT,
+               GST_FOURCC_ARGS (fourcc));
+         } else {
+-          GST_WARNING_OBJECT (demux,
+-              "Unknown fourcc while parsing header : %" GST_FOURCC_FORMAT,
+-              GST_FOURCC_ARGS (fourcc));
+-          /* Let's jump that one and go back to initial state */
++          switch (fourcc) {
++            case FOURCC_styp:
++              /* [styp] is like a [ftyp], but in fragment header. We ignore it for now
++               * FALLTHROUGH */
++            case FOURCC_skip:
++            case FOURCC_free:
++              /* [free] and [skip] are padding atoms */
++              GST_DEBUG_OBJECT (demux,
++                  "Skipping fourcc while parsing header : %" GST_FOURCC_FORMAT,
++                  GST_FOURCC_ARGS (fourcc));
++              break;
++            default:
++              GST_WARNING_OBJECT (demux,
++                  "Unknown fourcc while parsing header : %" GST_FOURCC_FORMAT,
++                  GST_FOURCC_ARGS (fourcc));
++              /* Let's jump that one and go back to initial state */
++              break;
++          }
+         }
+         gst_adapter_unmap (demux->adapter);
+         data = NULL;
+-- 
+2.7.4
+

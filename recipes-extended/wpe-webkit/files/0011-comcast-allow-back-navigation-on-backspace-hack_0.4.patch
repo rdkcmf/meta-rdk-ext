@@ -1,0 +1,25 @@
+From c8493199bb624ee0f55d145f100e4a6c2a1e1018 Mon Sep 17 00:00:00 2001
+From: mgopalakirshnan <manigandan.gopalakrishnan@lnttechservices.com>
+Date: Fri, 5 Jan 2018 11:14:22 +0000
+Subject: [PATCH] 0011-comcast-allow-back-navigation-on-backspace-hack
+
+---
+ Source/WebCore/editing/EditingBehavior.h | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/Source/WebCore/editing/EditingBehavior.h b/Source/WebCore/editing/EditingBehavior.h
+index 27fb1f0769d..8a364d8b946 100644
+--- a/Source/WebCore/editing/EditingBehavior.h
++++ b/Source/WebCore/editing/EditingBehavior.h
+@@ -71,7 +71,7 @@ public:
+     // On Mac and Windows, pressing backspace (when it isn't handled otherwise) should navigate back.
+     bool shouldNavigateBackOnBackspace() const
+     {
+-        return m_type != EditingUnixBehavior;
++        return true;
+     }
+ 
+     // On Mac, selecting backwards by word/line from the middle of a word/line, and then going
+-- 
+2.14.2
+

@@ -1,0 +1,216 @@
+Copyright (C) 1989, 1991 Free Software Foundation, Inc.
+
+This program is free software; you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation; either version 2 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program; if not, write to the Free Software
+Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+
+Date: Jun 16, 2017 6:01 PM
+
+From: be8b3d877420cb932819a9dab69888416eb30162 Dec 9, 2017 12:12 AM
+
+Subject: [PATCH] RDKB-3293, RDKB-14901 : Poring samhain on RDK Broadband
+
+	Enabling loose check for build time generated baseline file
+
+Source: COMCAST
+
+Upstream-Status: Pending
+
+Signed-off-by: gkrishnansubramanian <Gopi_KrishnanSubramanian@comcast.com>
+---
+
+diff --git a/src/sh_hash.c b/src/sh_hash.c
+index fabe70e..3a6644c 100644
+--- a/src/sh_hash.c
++++ b/src/sh_hash.c
+@@ -1322,7 +1322,7 @@ void sh_hash_init ()
+ 
+   volatile int  retval  = 0;
+   volatile int  exitval = EXIT_SUCCESS;
+-
++   
+   SL_ENTER(_("sh_hash_init"));
+ 
+   if ( sh.flag.checkSum == SH_CHECK_INIT )
+@@ -1330,6 +1330,7 @@ void sh_hash_init ()
+       dlog(1, FIL__, __LINE__, 
+ 	   _("Attempt to load the baseline database during initialisation. This is an internal error, please report it to the developer.\n"));
+       SH_ABORT;
++
+       aud_exit (FIL__, __LINE__, EXIT_FAILURE);
+     }
+ 
+@@ -1383,6 +1384,7 @@ void sh_hash_init ()
+ 	    dlog(1, FIL__, __LINE__, 
+ 		 _("Could not open the local file signature database for reading because\nof the following error: %s (errnum = %ld)\nIf this is a permission problem, you need to change file permissions\nto make the file readable for the effective UID: %d\n"), 
+ 		 sl_get_errmsg(), fd, (int) sl_ret_euid());
++            printf("Could not open the local file signature database for reading because\nof the following error: %s (errnum = %ld)\nIf this is a permission problem, you need to change file permissions\nto make the file readable for the effective UID: %d\n", sl_get_errmsg(), fd, (int) sl_ret_euid());
+ 	    sh_error_handle ((-1), FIL__, __LINE__, fd, MSG_EXIT_ABORT1, 
+ 			     sh.prg_name);
+ 	    retval = 1; exitval = EXIT_FAILURE;
+@@ -1392,6 +1394,8 @@ void sh_hash_init ()
+ 	TPT(( 0, FIL__, __LINE__, _("msg=<Opened database: %s>\n"), 
+ 	      file_path('D', 'R')));
+ 
++	printf("CPE Debug msg=<Opened database: %s>\n", file_path('D', 'R'));
++
+ 	if (0 != sl_strncmp(sh.data.hash, 
+ 			    sh_tiger_hash (file_path('D', 'R'), fd, TIGER_NOLIM, 
+ 					   hashbuf, sizeof(hashbuf)),
+@@ -1406,6 +1410,7 @@ void sh_hash_init ()
+ 			     ( (NULL == file_path('D', 'R')) ? _("(null)") :
+ 			       file_path('D', 'R') )
+ 			     );
++            printf("Debug - database has been changed since startup. EXIT FAILURE !!!!\n");
+ 	    retval = 1; exitval = EXIT_FAILURE;
+ 	    goto unlock_and_return;
+ 	  }
+@@ -3188,13 +3193,16 @@ int sh_hash_compdata (int class, file_type * theFile, char * fileHash,
+       
+   /* cast to UINT32 in case ino_t is not 32bit
+    */
++  /*
++  Ignore inode check as build time generated inode would never mactch inode on a different file system
+   if ( (UINT32) theFile->ino != (UINT32) p->theFile.ino  &&
+        (theFile->check_mask & MODI_INO) != 0)
+     {
+       modi_mask |= MODI_INO;
+       change_code[3] = 'I';
+       TPT ((0, FIL__, __LINE__, _("mod=<inode>")));
+-    } 
++    }
++  */ 
+     
+   if ( theFile->hardlinks != (nlink_t) p->theFile.hardlinks &&
+        (theFile->check_mask & MODI_HLN) != 0)
+@@ -3274,13 +3282,15 @@ int sh_hash_compdata (int class, file_type * theFile, char * fileHash,
+   /* Resetting the access time will set a new ctime. Thus, either we ignore
+    * the access time or the ctime for NOIGNORE
+    */
++  /* Ignore the ctime as this has false errors with build-time generated baseline file
+   if ( theFile->ctime != (time_t) p->theFile.ctime &&
+        (theFile->check_mask & MODI_CTM) != 0)
+     {
+       modi_mask |= MODI_CTM;
+       change_code[8] = 'T';
+       TPT ((0, FIL__, __LINE__, _("mod=<ctime>")));
+-    } 
++    }
++   */ 
+ 
+   if ( theFile->size != (off_t) p->theFile.size &&
+        (theFile->check_mask & MODI_SIZ) != 0)
+@@ -3296,6 +3306,7 @@ int sh_hash_compdata (int class, file_type * theFile, char * fileHash,
+   change_code[10] = '\0';
+ 
+   /* --- Directories special case ---
++   * Enabling loose checks for directories 
+    */
+   if (p->theFile.c_mode[0] == 'd'                               &&
+       0 == (modi_mask & ~(MODI_SIZ|MODI_ATM|MODI_CTM|MODI_MTM)) && 
+@@ -3304,6 +3315,13 @@ int sh_hash_compdata (int class, file_type * theFile, char * fileHash,
+       modi_mask = 0;
+     }
+ 
++   /* --- Directories special case ---
++    * Enabling loose check for build time generated baseline file
++    */
++   if(p->theFile.c_mode[0] == 'd') {
++      modi_mask = 0;
++   }
++
+   /* --- Report full details. ---
+    */
+   if (modi_mask != 0 && sh.flag.fulldetail == S_TRUE)
+diff --git a/src/sh_unix.c b/src/sh_unix.c
+index 8066e96..fde1ad8 100644
+--- a/src/sh_unix.c
++++ b/src/sh_unix.c
+@@ -987,6 +987,8 @@ int sh_unix_self_check ()
+        _("The checksum of the executable: %s has changed since startup (%s -> %s).\n"),
+        sh.exec.path, sh.exec.hash, newhash);
+ 
++  printf("The checksum of the executable: %s has changed since startup (%s -> %s).\n", sh.exec.path, sh.exec.hash, newhash);
++
+   sl_snprintf(message, 512, 
+ 	      _("The checksum of %s has changed since startup (%s -> %s)"),
+ 	      sh.exec.path, sh.exec.hash, newhash);
+@@ -2026,6 +2028,7 @@ int sh_unix_init(int goDaemon)
+   /* fork twice, exit the parent process
+    */
+   if (goDaemon == 1) {
++
+     
+     switch (aud_fork(FIL__, __LINE__)) {
+     case 0:  break;                             /* child process continues */
+@@ -2045,7 +2048,8 @@ int sh_unix_init(int goDaemon)
+ 
+     switch (aud_fork(FIL__, __LINE__)) {
+     case 0:  break;                             /* child process continues */
+-    case -1: SL_RETURN((-1),_("sh_unix_init")); /* error                   */
++    case -1: 
++    SL_RETURN((-1),_("sh_unix_init")); /* error                   */
+     default:                                    /* parent process exits    */
+       sh_kill_sub(); 
+       aud__exit(FIL__, __LINE__, 0);
+@@ -2102,8 +2106,12 @@ int sh_unix_init(int goDaemon)
+ 
+   if (goDaemon == 1)
+     {
++      /*
++       * Disabling Closing of file descriptors for getting debug prints in daemon mode
++       */
+       /* Close first tree file descriptors 
+        */ 
++      #if 0
+       sl_close_fd (FIL__, __LINE__, 0);  /* if running as daemon */
+       sl_close_fd (FIL__, __LINE__, 1);  /* if running as daemon */
+       sl_close_fd (FIL__, __LINE__, 2);  /* if running as daemon */
+@@ -2134,6 +2142,7 @@ int sh_unix_init(int goDaemon)
+ 			  sh_error_message(status, errbuf, sizeof(errbuf)), _("dup"));
+ 	  aud_exit(FIL__, __LINE__, EXIT_FAILURE);
+ 	}
++    #endif
+ 
+       sh_error_enable_unsafe (S_TRUE);
+ #if defined(HAVE_LIBPRELUDE)
+@@ -2157,6 +2166,7 @@ int sh_unix_init(int goDaemon)
+       status = sh_unix_write_pid_file();
+       if (status < 0)
+ 	{
++          printf("Debug - Unable to set PID file \n");
+ 	  sl_get_euid(&uid);
+ 	  sh_error_handle ((-1), FIL__, __LINE__, status, MSG_PIDFILE,
+ 			   (long) uid, sh.srvlog.alt);
+@@ -2182,6 +2192,7 @@ int sh_unix_init(int goDaemon)
+   status = sh_unix_chroot();
+   if (status < 0)
+     {
++      printf("Debug - unable to Chroot . Exit handler !!!!\n");
+       status = errno;
+       sh_error_handle((-1), FIL__, __LINE__, status, MSG_E_SUBGEN, 
+ 			  sh_error_message(status, errbuf, sizeof(errbuf)), _("chroot"));
+diff --git a/src/sh_utils.c b/src/sh_utils.c
+index 95d4b0f..0a185cb 100644
+--- a/src/sh_utils.c
++++ b/src/sh_utils.c
+@@ -1834,6 +1834,9 @@ int sh_util_obscurename (ShErrLevel level, const char * name_orig, int flag)
+   size_t len = 0;
+ 
+   SL_ENTER(_("sh_util_obscurename"));
++  /* Ignore obscure file name check due to performance issues */
++  SL_RETURN((0),_("sh_util_obscurename"));
++
+ 
+   ASSERT_RET((name != NULL), _("name != NULL"), (0))
+ 

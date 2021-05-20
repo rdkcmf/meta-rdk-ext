@@ -1,0 +1,62 @@
+From b71b8ed6ee707018bcef73235bbe34b7991bb140 Mon Sep 17 00:00:00 2001
+From: Siva Sankar Raja <sivasankar_raja@comcast.com>
+Source: COMCAST
+License: LICENSE-LGPL-2.1
+Upstream-Status: Pending
+Signed-off-by: Siva Sankar Raja <sivasankar_raja@comcast.com>
+Date: Tue, 9 Jul 2019 15:55:18 +0000
+Subject: [PATCH] Implement hasPendingActivity for MediaKeySession
+
+---
+ Source/WebCore/Modules/encryptedmedia/MediaKeySession.cpp | 3 +--
+ Source/WebCore/Modules/encryptedmedia/MediaKeySession.h   | 3 ++-
+ Source/WebCore/Modules/encryptedmedia/MediaKeySession.idl | 1 +
+ 3 files changed, 4 insertions(+), 3 deletions(-)
+
+Index: git/Source/WebCore/Modules/encryptedmedia/MediaKeySession.cpp
+===================================================================
+--- git.orig/Source/WebCore/Modules/encryptedmedia/MediaKeySession.cpp
++++ git/Source/WebCore/Modules/encryptedmedia/MediaKeySession.cpp
+@@ -753,8 +753,7 @@ String MediaKeySession::mediaKeysStorage
+ 
+ bool MediaKeySession::hasPendingActivity() const
+ {
+-    notImplemented();
+-    return false;
++    return m_eventQueue.hasPendingEvents() || m_taskQueue.hasPendingTasks();
+ }
+ 
+ const char* MediaKeySession::activeDOMObjectName() const
+Index: git/Source/WebCore/Modules/encryptedmedia/MediaKeySession.h
+===================================================================
+--- git.orig/Source/WebCore/Modules/encryptedmedia/MediaKeySession.h
++++ git/Source/WebCore/Modules/encryptedmedia/MediaKeySession.h
+@@ -77,6 +77,8 @@ public:
+ 
+     const Vector<std::pair<Ref<SharedBuffer>, MediaKeyStatus>>& statuses() const { return m_statuses; }
+ 
++    bool hasPendingActivity() const final;
++
+ private:
+     MediaKeySession(ScriptExecutionContext&, WeakPtr<MediaKeys>&&, MediaKeySessionType, bool useDistinctiveIdentifier, Ref<CDM>&&, Ref<CDMInstance>&&);
+     void enqueueMessage(MediaKeyMessageType, const SharedBuffer&);
+@@ -95,7 +97,6 @@ private:
+     void derefEventTarget() override { deref(); }
+ 
+     // ActiveDOMObject
+-    bool hasPendingActivity() const override;
+     const char* activeDOMObjectName() const override;
+     bool canSuspendForDocumentSuspension() const override;
+     void stop() override;
+Index: git/Source/WebCore/Modules/encryptedmedia/MediaKeySession.idl
+===================================================================
+--- git.orig/Source/WebCore/Modules/encryptedmedia/MediaKeySession.idl
++++ git/Source/WebCore/Modules/encryptedmedia/MediaKeySession.idl
+@@ -27,6 +27,7 @@
+  */
+ 
+ [
++    ActiveDOMObject,
+     Conditional=ENCRYPTED_MEDIA,
+     EnabledAtRuntime=EncryptedMediaAPI
+ ] interface MediaKeySession : EventTarget {
