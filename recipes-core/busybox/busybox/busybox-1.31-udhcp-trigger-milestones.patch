@@ -1,0 +1,21 @@
+Index: busybox-1.31.1/networking/udhcp/dhcpc.c
+===================================================================
+--- busybox-1.31.1.orig/networking/udhcp/dhcpc.c
++++ busybox-1.31.1/networking/udhcp/dhcpc.c
+@@ -1515,6 +1515,7 @@ int udhcpc_main(int argc UNUSED_PARAM, c
+ 			case REQUESTING:
+ 				if (packet_num < 3) {
+ 					/* send broadcast select packet */
++					udhcp_run_script(NULL, "request");
+ 					send_select(xid, server_addr, requested_ip);
+ 					timeout = discover_timeout;
+ 					packet_num++;
+@@ -1734,7 +1735,7 @@ int udhcpc_main(int argc UNUSED_PARAM, c
+ 				uint32_t lease_seconds;
+ 				struct in_addr temp_addr;
+ 				uint8_t *temp;
+-
++                                udhcp_run_script(NULL, "reply");
+ 				temp = udhcp_get_option32(&packet, DHCP_LEASE_TIME);
+ 				if (!temp) {
+ 					bb_info_msg("no lease time with ACK, using 1 hour lease");
