@@ -46,7 +46,7 @@ Index: dnsmasq-2.83/src/lease.c
      while ((items=fscanf(leasestream, "%255s %255s", daemon->dhcp_buff3, daemon->dhcp_buff2)) == 2)
        {
  	*daemon->namebuff = *daemon->dhcp_buff = *daemon->packet = '\0';
-@@ -50,8 +60,12 @@ static int read_leases(time_t now, FILE
+@@ -50,16 +60,20 @@ static int read_leases(time_t now, FILE
  	if (strcmp(daemon->dhcp_buff3, "duid") == 0)
  	  {
  	    daemon->duid_len = parse_hex(daemon->dhcp_buff2, (unsigned char *)daemon->dhcp_buff2, 130, NULL, NULL);
@@ -60,6 +60,16 @@ Index: dnsmasq-2.83/src/lease.c
  	    daemon->duid = safe_malloc(daemon->duid_len);
  	    memcpy(daemon->duid, daemon->dhcp_buff2, daemon->duid_len);
  	    continue;
+ 	  }
+ #endif
+ 	
+-	if (fscanf(leasestream, " %64s %255s %764s",
+-		   daemon->namebuff, daemon->dhcp_buff, daemon->packet) != 3)
++	if (fscanf(leasestream, " %64s %255s %255s %764s",
++		   daemon->namebuff, daemon->dhcp_buff, dhcp_fingerprint, daemon->packet) != 4)
+ 	  {
+ 	    my_syslog(MS_DHCP | LOG_WARNING, _("ignoring invalid line in lease database: %s %s %s %s ..."),
+ 		      daemon->dhcp_buff3, daemon->dhcp_buff2,
 @@ -116,6 +130,9 @@ static int read_leases(time_t now, FILE
  	if (strcmp(daemon->dhcp_buff, "*") !=  0)
  	  lease_set_hostname(lease, daemon->dhcp_buff, 0, domain, NULL);
