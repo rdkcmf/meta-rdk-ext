@@ -61,23 +61,54 @@ fi
 ACTION=$1
 DEVBASE=$2
 DEVICE="/dev/${DEVBASE}"
-EVENT_MOUNT_POINT="/run/media/${DEVBASE}"
+SEARCH_STR="\/dev\/${DEVBASE} "
+EVENT_FILE="/tmp/.iarmevents"
 
 if [[ ${DEVBASE} == "" ]]; then
     log_msg "No Device specified"
     exit
 fi
 
-if [ -f $IARM_EVENT_BINARY_LOCATION/IARM_event_sender ]; then
-    if [ "$ACTION" = "add" ]; then
-        MOUNT=1
-    else
-        MOUNT=0
-    fi
-    $IARM_EVENT_BINARY_LOCATION/IARM_event_sender "USBMountChangedEvent" $MOUNT $DEVICE $EVENT_MOUNT_POINT
-else
-    log_msg "Missing the binary $IARM_EVENT_BINARY_LOCATION/IARM_event_sender"
+# create file if it doesn't exist
+if [ ! -f "$EVENT_FILE" ]; then
+    touch $EVENT_FILE
 fi
+
+# See if this drive is already mounted, and if so where
+CUR_MOUNT_POINT=""
+CUR_MOUNT_POINT=$(/bin/mount | /bin/grep "${SEARCH_STR}" | /usr/bin/awk '{ print $3 }')
+
+sendMountChangedEvent ()
+{
+    # let's try again to find a mount point if it's still unknown
+    if [ -z "$CUR_MOUNT_POINT" ]; then
+        if [ "$ACTION" = "add" ]; then
+            CUR_MOUNT_POINT=$(/bin/mount | /bin/grep "${SEARCH_STR}" | /usr/bin/awk '{ print $3 }')
+        else
+            CUR_MOUNT_POINT=$(/bin/grep "${SEARCH_STR}" "${EVENT_FILE}" | /usr/bin/awk '{ print $2 }')
+        fi
+    fi
+    
+    if [ -f $IARM_EVENT_BINARY_LOCATION/IARM_event_sender ]; then
+        if [ ! -z "$CUR_MOUNT_POINT" ]; then
+            if [ "$ACTION" = "add" ]; then
+                MOUNT=1
+                echo "${DEVICE} ${CUR_MOUNT_POINT}" >> $EVENT_FILE
+            else
+                MOUNT=0
+                log_msg "Removing all $SEARCH_STR entries from $EVENT_FILE"
+                # delete the device mount point line from $EVENT_FILE if it's there
+                /bin/sed -i "/$SEARCH_STR/d" "$EVENT_FILE"
+            fi
+            log_msg "Sending IARM event: \"USBMountChangedEvent\" $ACTION $MOUNT $DEVICE $CUR_MOUNT_POINT"
+            $IARM_EVENT_BINARY_LOCATION/IARM_event_sender "USBMountChangedEvent" $MOUNT $DEVICE $CUR_MOUNT_POINT
+        else
+            log_msg "NO IARM event for $DEVICE, Mount point is NULL"
+        fi
+    else
+        log_msg "Missing the binary $IARM_EVENT_BINARY_LOCATION/IARM_event_sender"
+    fi
+}
 
 if [ "$BOX_TYPE" != "pi" ];then
 
@@ -86,6 +117,7 @@ if [ "$BOX_TYPE" != "pi" ];then
         USBMOUNT_RFC_ENABLE=`/usr/bin/tr181Set -g Device.DeviceInfo.X_RDKCENTRAL-COM_RFC.Feature.USB_AutoMount.Enable 2>&1 > /dev/null`
 
         if [ "x$USBMOUNT_RFC_ENABLE" != "xtrue" ]; then
+            sendMountChangedEvent
             log_msg "Exiting from USB mounting: RFC Support disabled for USBMOUNT_RFC_ENABLE"
             exit 0
         fi
@@ -93,14 +125,13 @@ else
         log_msg "USB Automount feature is enabled in Raspberry pi devices."
 fi
 
-# See if this drive is already mounted, and if so where
-CUR_MOUNT_POINT=$(/bin/mount | /bin/grep ${DEVICE} | /usr/bin/awk '{ print $3 }')
 
 if [ "$RDK_APP_USB_MOUNT_POINT" ];then
       log_msg "Device is configured with mount point: $RDK_APP_USB_MOUNT_POINT"
 else
      RDK_APP_USB_MOUNT_POINT=/usb
-     if [ ! -d /usb ];then
+     log_msg "RDK_APP_USB_MOUNT_POINT=$RDK_APP_USB_MOUNT_POINT"
+     if [ ! -d $RDK_APP_USB_MOUNT_POINT ];then
            log_msg "Not Found the configured mount point in the system"
            log_msg "Mount point is /tmp/ with Device Label"
            RDK_APP_USB_MOUNT_POINT=/tmp/usb
@@ -150,13 +181,14 @@ do_mount()
             exit 1
         fi
     else
-        if ! /bin/mount  ${DEVICE} $MOUNT_POINT; then      
+        if ! /bin/mount  ${DEVICE} $MOUNT_POINT; then
             log_msg "Error mounting ${DEVICE} (status = $?)"
-            exit 1                  
+            exit 1
         fi
     fi
 
-
+    CUR_MOUNT_POINT=$MOUNT_POINT
+    sendMountChangedEvent
     log_msg "Successfully Mounted the Device"
     log_msg "**** Mounted ${DEVICE} at ${MOUNT_POINT} ****"
     # Calling RDM Script for signature validation & update App
@@ -168,7 +200,7 @@ do_mount()
     fi
     if [ $? -ne 0 ]; then
          log_msg "Validation/extraction for package resides ${MOUNT_POINT} Failed"
-    fi 
+    fi
 }
 
 do_unmount()
@@ -179,6 +211,7 @@ do_unmount()
         /bin/umount -l ${DEVICE}
         #/bin/rm -rf ${CUR_MOUNT_POINT}
         log_msg "**** Unmounted ${DEVICE}"
+        sendMountChangedEvent
     fi
 
 }
@@ -194,3 +227,4 @@ case "${ACTION}" in
         usage
         ;;
 esac
+
