@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/busybox sh
 
 #Check if dnsmasq is already running. If yes, exit the script without restart
 #NOTE: Process is not killed here if found running since it must be cleaned up by systemd during service restart
