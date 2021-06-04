@@ -1,0 +1,25 @@
+From 39c7238ebc768ca9d19021859836a35bf027b10f Mon Sep 17 00:00:00 2001
+From: Eugene Mutavchi <Ievgen_Mutavchi@comcast.com>
+Date: Fri, 4 Jun 2021 19:17:46 +0000
+Subject: [PATCH] Remove screen saver disabler
+
+---
+ Source/WebCore/html/HTMLMediaElement.cpp | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/Source/WebCore/html/HTMLMediaElement.cpp b/Source/WebCore/html/HTMLMediaElement.cpp
+index 6e9aea297b68..75ddb0a2e92f 100644
+--- a/Source/WebCore/html/HTMLMediaElement.cpp
++++ b/Source/WebCore/html/HTMLMediaElement.cpp
+@@ -6818,7 +6818,7 @@ static inline bool isRemoteMediaStreamVideoTrack(RefPtr<MediaStreamTrack>& item)
+ 
+ HTMLMediaElement::SleepType HTMLMediaElement::shouldDisableSleep() const
+ {
+-#if !PLATFORM(COCOA) && !PLATFORM(GTK) && !PLATFORM(WPE)
++#if !PLATFORM(COCOA) && !PLATFORM(GTK)
+     return SleepType::None;
+ #endif
+     if (!m_player || m_player->paused() || loop())
+-- 
+2.25.1
+
