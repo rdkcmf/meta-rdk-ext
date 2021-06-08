@@ -9,7 +9,7 @@ DEPENDS += " mbedtls"
 SRCREV = "978b733462e41efd5db72bc9974cb3b0d1d5f6fa"
 PV = "1.5+git${SRCPV}"
 
-FILESEXTRAPATHS_prepend := "${THISDIR}/iksemel"
+FILESEXTRAPATHS_prepend := "${THISDIR}/iksemel:"
 
 SRC_URI = "git://github.com/meduketto/iksemel.git;protocol=https"
 
