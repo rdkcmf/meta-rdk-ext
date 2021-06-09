@@ -6,8 +6,8 @@ LIC_FILES_CHKSUM = "file://LICENSE;md5=e3fc50a88d0a364313df4b21ef20c29e"
 
 DEPENDS = "cjson trower-base64 msgpack-c cimplog wdmp-c curl nanomsg wrp-c libparodus"
 
-SRCREV = "120b5ad8759d3d708bdcf94d5dcee91df0dc1cb5"
-SRC_URI = "git://github.com/xmidt-org/webcfg.git"
+SRCREV = "03807db342516aafde8b759102a026f1c4713dfe"
+SRC_URI = "git://github.com/xmidt-org/webcfg.git;branch=webcfg_stable2"
 
 RDEPENDS_${PN} += "util-linux-uuidgen"
 
