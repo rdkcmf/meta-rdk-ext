@@ -327,6 +327,7 @@ diff -Naur dibbler-1.0.1_org/scripts/notify-scripts/client-notify-bsd.sh dibbler
 +     done
 +
 +   if [ "$RESOLV_CONF_override_needed" -eq 1 ]; then
++     sed -i '/nameserver 127.0.0.1/d' "$RESOLV_CONF_TMP"
 +     dns=`sysevent get wan6_ns`
 +     if [ "$dns" != "" ]; then
 +        echo "Removing old DNS IPV6 SERVER configuration from resolv.conf " >> $CONSOLEFILE
@@ -347,7 +348,6 @@ diff -Naur dibbler-1.0.1_org/scripts/notify-scripts/client-notify-bsd.sh dibbler
 +        N="${N}$line
 +"
 +        done < $RESOLV_CONF_TMP
-+
 +        echo -n "$N" > "$RESOLV_CONF"
 +
 +        if [ -f /tmp/ipv6_renew_dnsserver_restart ]; then
