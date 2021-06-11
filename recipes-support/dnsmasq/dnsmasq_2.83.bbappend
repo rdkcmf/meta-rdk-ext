@@ -17,6 +17,8 @@ SRC_URI_append_broadband = "  file://RDKCENTRAL_XDNS_core.patch \
 
 SRC_URI_append_broadband += " ${@bb.utils.contains('DISTRO_FEATURES', 'bci', 'file://RDKCENTRAL_MultiProfile_XDNS.patch', '', d)}"
 
+SRC_URI_append_broadband += " ${@bb.utils.contains('DISTRO_FEATURES', 'device_gateway_association', 'file://ManageableDevice.patch', '', d)}"
+
 SRC_URI += " file://130-fingerprint-dhcp-lease-file-V2.83.patch \
              file://client_notify.patch"
 
