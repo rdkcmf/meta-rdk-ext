@@ -30,8 +30,6 @@ do_install_append_hybrid() {
         install -m 0644 ${WORKDIR}/client_back_hybrid.conf ${D}${sysconfdir}/dibbler/client_back.conf
 }
 
-CLIENT_NOTIFY_BSD = "${@bb.utils.contains('DISTRO_FEATURES', 'dunfell', 'git', 'dibbler-1.0.1', d)}"
-
 do_install_append_client() {
         install -d ${D}${sysconfdir}/dibbler
         install -m 0644 ${WORKDIR}/client_back_client.conf ${D}${sysconfdir}/dibbler/client_back.conf
@@ -40,7 +38,7 @@ do_install_append_client() {
 do_install_append_broadband() {
     install -d ${D}${base_libdir}/rdk
 
-    install -m 755 ${WORKDIR}/${CLIENT_NOTIFY_BSD}/scripts/notify-scripts/client-notify-bsd.sh ${D}${base_libdir}/rdk/client-notify.sh
+    install -m 755 ${S}/scripts/notify-scripts/client-notify-bsd.sh ${D}${base_libdir}/rdk/client-notify.sh
     install -m 755 ${WORKDIR}/dibbler-init.sh ${D}${base_libdir}/rdk/dibbler-init.sh
     install -m 755 ${WORKDIR}/prepare_dhcpv6_config.sh ${D}${base_libdir}/rdk/prepare_dhcpv6_config.sh
     install -m 755 ${WORKDIR}/udhcpc.vendor_specific ${D}${sysconfdir}/udhcpc.vendor_specific
