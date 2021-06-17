@@ -31,6 +31,7 @@ SRC_URI_remove_broadband += " \
    file://blkid.cfg \
    "
 SRC_URI_append_daisy = " file://devmem.cfg "
+SRC_URI_append_dunfell = " file://devmem.cfg "
 SRC_URI_append_morty = " file://enable_ps_wide.cfg "
 SRC_URI_append_broadband = " ${@bb.utils.contains('DISTRO_FEATURES', 'dunfell', ' file://enable_ps_wide.cfg ','',d)}"
 SRC_URI_append_dunfell = " file://enable_ar.cfg"
