@@ -26,3 +26,4 @@ EXTRA_OECONF += "${@bb.utils.contains('DISTRO_FEATURES', 'largefile', 'ac_cv_siz
 
 PACKAGECONFIG_append = " ipv6 "
 PACKAGECONFIG[ipv6] = "--enable-ipv6,--disable-ipv6,"
+PACKAGECONFIG[brotli] = "--with-brotli,--without-brotli,brotli"
