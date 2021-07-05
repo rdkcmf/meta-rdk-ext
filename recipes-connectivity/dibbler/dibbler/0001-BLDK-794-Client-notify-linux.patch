@@ -1,0 +1,55 @@
+From 1c7fb97621b8b2b42ab112de73867a89012d7795 Mon Sep 17 00:00:00 2001
+From: Vinothkumar <vinothkumar_baskaran@comcast.com>
+Date: Mon, 5 Jul 2021 18:17:43 +0000
+Subject: [PATCH] BLDK-794 Client notify linux
+
+Reason for change: Reuse dibbler client notify scripts
+Test Procedure: Build and verify DHCPv6 functionality in client devices
+Risks: Medium
+
+Signed-off-by: Vinothkumar <vinothkumar_baskaran@comcast.com>
+
+---
+ scripts/notify-scripts/client-notify-linux.sh | 27 ++++++++++++++++---
+ 1 file changed, 23 insertions(+), 4 deletions(-)
+
+diff --git a/scripts/notify-scripts/client-notify-linux.sh b/scripts/notify-scripts/client-notify-linux.sh
+index 917dcf5a..b782958d 100755
+--- a/scripts/notify-scripts/client-notify-linux.sh
++++ b/scripts/notify-scripts/client-notify-linux.sh
+@@ -1,12 +1,31 @@
+-#!/bin/bash
++#!/bin/sh
+ 
+-LOGFILE=/var/lib/dibbler/client.sh-log
++if [ -f /etc/device.properties ];then
++     . /etc/device.properties
++fi
++
++RESOLV_CONF='/etc/resolv.dnsmasq'
++TEMP_RESOLV_CONF='/tmp/resolv.dnsmasq.bkp'
+ 
+-# uncomment this to get full list of available variables
+-#set >> $LOGFILE
++DHCP_SERVER_UPDATE_TYPE=$1
++LOG_FILE="/opt/logs/dibbler.log"
+ 
+ echo "-----------" >> $LOGFILE
+ 
++echo "`/bin/timestamp` DHCP Server response type is : $DHCP_SERVER_UPDATE_TYPE" >> $LOG_FILE
++echo "`/bin/timestamp` Response obtained from REMOTE_ADDR : $REMOTE_ADDR,  CLNT_MESSAGE : $CLNT_MESSAGE" >> $LOG_FILE
++
++# Update DNS entries with values obatined from DHCP server
++if [ -n "$SRV_OPTION23" ]; then
++    R=""
++    for i in $SRV_OPTION23; do
++	R="${R}nameserver $i
++"
++    done
++    echo -n "$R" > "$TEMP_RESOLV_CONF"
++    echo -n "`/bin/timestamp` DNS Hosts: $R" >>  $LOG_FILE
++fi
++
+ if [ "$OPTION_NEXT_HOP" != "" ]; then
+ 
+     ip -6 route del default > /dev/null 2>&1

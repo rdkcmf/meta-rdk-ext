@@ -8,7 +8,9 @@ RDEPENDS_${PN}-client_append_broadband = " ${@bb.utils.contains('DISTRO_FEATURES
 
 SRC_URI_append_hybrid = " file://client_back_hybrid.conf"
 
-SRC_URI_append_client = " file://client_back_client.conf "
+SRC_URI_append_client = " file://client_back_client.conf \
+                          file://0001-BLDK-794-Client-notify-linux.patch \
+                        "
 
 SRC_URI_append_broadband = " file://client-notify.patch \
                              file://dibbler-init.sh \
@@ -32,7 +34,9 @@ do_install_append_hybrid() {
 
 do_install_append_client() {
         install -d ${D}${sysconfdir}/dibbler
+        install -d ${D}${base_libdir}/rdk
         install -m 0644 ${WORKDIR}/client_back_client.conf ${D}${sysconfdir}/dibbler/client_back.conf
+        install -m 755 ${S}/scripts/notify-scripts/client-notify-linux.sh ${D}${base_libdir}/rdk/client-notify.sh
 }
 
 do_install_append_broadband() {
@@ -49,6 +53,8 @@ do_install_append_broadband() {
     fi
 }
 
-FILES_${PN}-client += "${sysconfdir}/dibbler/*"
+FILES_${PN}-client += "${sysconfdir}/dibbler/* \
+                       ${base_libdir}/rdk/*    \
+                      "
 FILES_${PN}_append_broadband += " ${sysconfdir}/*"
 FILES_${PN}-client_append_broadband += " ${base_libdir}/rdk/*"
