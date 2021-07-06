@@ -1,0 +1,210 @@
+From aded766140201e7f016c16e7ae2c9140adda4fe8 Mon Sep 17 00:00:00 2001
+From: Eugene Mutavchi <Ievgen_Mutavchi@comcast.com>
+Date: Tue, 6 Jul 2021 16:44:03 +0000
+Subject: [PATCH] Delete corrupted localstorage db
+
+Give app a chance to recover after localstorage db corruption
+---
+ .../WebStorage/LocalStorageDatabase.cpp       | 67 ++++++++++++++++---
+ .../WebStorage/LocalStorageDatabase.h         |  5 ++
+ .../UIProcess/WebStorage/StorageManager.cpp   | 11 ++-
+ 3 files changed, 71 insertions(+), 12 deletions(-)
+
+diff --git a/Source/WebKit/UIProcess/WebStorage/LocalStorageDatabase.cpp b/Source/WebKit/UIProcess/WebStorage/LocalStorageDatabase.cpp
+index 826158fb14c8..09f2dbfc191f 100644
+--- a/Source/WebKit/UIProcess/WebStorage/LocalStorageDatabase.cpp
++++ b/Source/WebKit/UIProcess/WebStorage/LocalStorageDatabase.cpp
+@@ -172,14 +172,18 @@ void LocalStorageDatabase::importItems(StorageMap& storageMap)
+         return;
+ 
+     SQLiteStatement query(m_database, "SELECT key, value FROM ItemTable");
+-    if (query.prepare() != SQLITE_OK) {
+-        LOG_ERROR("Unable to select items from ItemTable for local storage");
++    int result = query.prepare();
++    if (result != SQLITE_OK) {
++        LOG_ERROR("Unable to select items from ItemTable for local storage, result %i", result);
++        if (result == SQLITE_CORRUPT || result == SQLITE_NOTADB) {
++            deleteCorruptDB();
++        }
+         return;
+     }
+ 
+     HashMap<String, String> items;
+ 
+-    int result = query.step();
++    result = query.step();
+     while (result == SQLITE_ROW) {
+         String key = query.getColumnText(0);
+         String value = query.getColumnBlobAsString(1);
+@@ -189,7 +193,10 @@ void LocalStorageDatabase::importItems(StorageMap& storageMap)
+     }
+ 
+     if (result != SQLITE_DONE) {
+-        LOG_ERROR("Error reading items from ItemTable for local storage");
++        LOG_ERROR("Error reading items from ItemTable for local storage, result %i", result);
++        if (result == SQLITE_CORRUPT || result == SQLITE_NOTADB) {
++            deleteCorruptDB();
++        }
+         return;
+     }
+ 
+@@ -210,6 +217,7 @@ void LocalStorageDatabase::clear()
+ {
+     m_changedItems.clear();
+     m_shouldClearItems = true;
++    m_restoreHandler = nullptr;
+ 
+     scheduleDatabaseUpdate();
+ }
+@@ -218,6 +226,7 @@ void LocalStorageDatabase::close()
+ {
+     ASSERT(!m_isClosed);
+     m_isClosed = true;
++    m_restoreHandler = nullptr;
+ 
+     if (m_didScheduleDatabaseUpdate) {
+         updateDatabaseWithChangedItems(m_changedItems);
+@@ -291,31 +300,44 @@ void LocalStorageDatabase::updateDatabaseWithChangedItems(const HashMap<String,
+     if (!m_database.isOpen())
+         return;
+ 
++    int result;
+     if (m_shouldClearItems) {
+         m_shouldClearItems = false;
+ 
+         SQLiteStatement clearStatement(m_database, "DELETE FROM ItemTable");
+-        if (clearStatement.prepare() != SQLITE_OK) {
+-            LOG_ERROR("Failed to prepare clear statement - cannot write to local storage database");
++        if ((result = clearStatement.prepare()) != SQLITE_OK) {
++            LOG_ERROR("Failed to prepare clear statement - cannot write to local storage database - %i", result);
++            if (result == SQLITE_CORRUPT) {
++                deleteCorruptDB();
++            }
+             return;
+         }
+ 
+-        int result = clearStatement.step();
++        result = clearStatement.step();
+         if (result != SQLITE_DONE) {
+             LOG_ERROR("Failed to clear all items in the local storage database - %i", result);
++            if (result == SQLITE_CORRUPT) {
++                deleteCorruptDB();
++            }
+             return;
+         }
+     }
+ 
+     SQLiteStatement insertStatement(m_database, "INSERT INTO ItemTable VALUES (?, ?)");
+-    if (insertStatement.prepare() != SQLITE_OK) {
+-        LOG_ERROR("Failed to prepare insert statement - cannot write to local storage database");
++    if ((result = insertStatement.prepare()) != SQLITE_OK) {
++        LOG_ERROR("Failed to prepare insert statement - cannot write to local storage database, result %i", result);
++        if (result == SQLITE_CORRUPT) {
++            deleteCorruptDB();
++        }
+         return;
+     }
+ 
+     SQLiteStatement deleteStatement(m_database, "DELETE FROM ItemTable WHERE key=?");
+-    if (deleteStatement.prepare() != SQLITE_OK) {
+-        LOG_ERROR("Failed to prepare delete statement - cannot write to local storage database");
++    if ((result = deleteStatement.prepare()) != SQLITE_OK) {
++        LOG_ERROR("Failed to prepare delete statement - cannot write to local storage database, result %i", result);
++        if (result == SQLITE_CORRUPT) {
++            deleteCorruptDB();
++        }
+         return;
+     }
+ 
+@@ -335,6 +357,12 @@ void LocalStorageDatabase::updateDatabaseWithChangedItems(const HashMap<String,
+         int result = statement.step();
+         if (result != SQLITE_DONE) {
+             LOG_ERROR("Failed to update item in the local storage database - %i", result);
++            if (result == SQLITE_CORRUPT) {
++                statement.finalize();
++                transaction.stop();
++                deleteCorruptDB();
++                return;
++            }
+             break;
+         }
+ 
+@@ -364,4 +392,21 @@ bool LocalStorageDatabase::databaseIsEmpty()
+     return !query.getColumnInt(0);
+ }
+ 
++void LocalStorageDatabase::setRestoreHandler(Function<void()>&& restoreHandler)
++{
++    m_restoreHandler = WTFMove(restoreHandler);
++}
++
++void LocalStorageDatabase::deleteCorruptDB()
++{
++    if (m_database.isOpen())
++        m_database.close();
++    m_changedItems.clear();
++    m_tracker->deleteDatabaseWithOrigin(m_securityOrigin);
++    LOG_ERROR("Deleted corrupted local storage database - '%s'", m_databasePath.utf8().data());
++    auto restoreHandler = WTFMove(m_restoreHandler);
++    if (restoreHandler)
++        restoreHandler();
++}
++
+ } // namespace WebKit
+diff --git a/Source/WebKit/UIProcess/WebStorage/LocalStorageDatabase.h b/Source/WebKit/UIProcess/WebStorage/LocalStorageDatabase.h
+index 9992031f448f..e4020d15abae 100644
+--- a/Source/WebKit/UIProcess/WebStorage/LocalStorageDatabase.h
++++ b/Source/WebKit/UIProcess/WebStorage/LocalStorageDatabase.h
+@@ -58,6 +58,8 @@ public:
+     // Will block until all pending changes have been written to disk.
+     void close();
+ 
++    void setRestoreHandler(Function<void()>&&);
++
+ private:
+     LocalStorageDatabase(Ref<WorkQueue>&&, Ref<LocalStorageDatabaseTracker>&&, const WebCore::SecurityOriginData&);
+ 
+@@ -77,6 +79,7 @@ private:
+     void updateDatabaseWithChangedItems(const HashMap<String, String>&);
+ 
+     bool databaseIsEmpty();
++    void deleteCorruptDB();
+ 
+     Ref<WorkQueue> m_queue;
+     Ref<LocalStorageDatabaseTracker> m_tracker;
+@@ -93,6 +96,8 @@ private:
+     HashMap<String, String> m_changedItems;
+ 
+     std::unique_ptr<WebCore::SuddenTerminationDisabler> m_disableSuddenTerminationWhileWritingToLocalStorage;
++
++    Function<void()> m_restoreHandler;
+ };
+ 
+ 
+diff --git a/Source/WebKit/UIProcess/WebStorage/StorageManager.cpp b/Source/WebKit/UIProcess/WebStorage/StorageManager.cpp
+index 1c590a2441e3..bd7468b36900 100644
+--- a/Source/WebKit/UIProcess/WebStorage/StorageManager.cpp
++++ b/Source/WebKit/UIProcess/WebStorage/StorageManager.cpp
+@@ -295,9 +295,18 @@ void StorageManager::StorageArea::openDatabaseAndImportItemsIfNeeded() const
+         return;
+ 
+     // We open the database here even if we've already imported our items to ensure that the database is open if we need to write to it.
+-    if (!m_localStorageDatabase)
++    if (!m_localStorageDatabase) {
+         m_localStorageDatabase = LocalStorageDatabase::create(m_localStorageNamespace->storageManager()->m_queue.copyRef(), m_localStorageNamespace->storageManager()->m_localStorageDatabaseTracker.copyRef(), m_securityOrigin);
+ 
++        m_localStorageDatabase->setRestoreHandler([this] () {
++            if (m_storageMap && m_localStorageDatabase) {
++                for (const auto& entry : m_storageMap->items()) {
++                    m_localStorageDatabase->setItem(entry.key, entry.value);
++                }
++            }
++        });
++    }
++
+     if (m_didImportItemsFromDatabase)
+         return;
+ 
+-- 
+2.25.1
+
