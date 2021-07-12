@@ -1,0 +1,43 @@
+Date: July 20 5:00:00 2021
+
+From: 117c9d1a253febbe234c703da1da6dfb41602b7d July 20 5:00:00 2021
+
+Subject: [PATCH] RDKB-36692 : MAPT Dibbler Changes
+
+        created patch for client-notify-bsd.sh for MAPT Dibbler Changes
+
+Source: COMCAST
+
+License: GPL-2.0-or-later
+
+Upstream-Status: Pending
+
+Signed-off-by: BudimeVigneshwar_Prasad@comcast.com
+Index: git/scripts/notify-scripts/client-notify-bsd.sh
+===================================================================
+--- git.orig/scripts/notify-scripts/client-notify-bsd.sh
++++ git/scripts/notify-scripts/client-notify-bsd.sh
+@@ -339,6 +339,14 @@ else
+     echo "DHCP DS-Lite Option 64 not received" >> $LOGFILE
+ fi
+ 
++if [ "$SRV_OPTION95" != "" ]; then
++    OP95HEXDUMP=$SRV_OPTION95
++    echo "DHCP MAPT Option 95 received value: $SRV_OPTION95" >> $LOGFILE
++else
++    OP95HEXDUMP=""
++    echo "DHCP MAPT Option 95 not received" >> $LOGFILE
++fi
++
+ if [ "$PREFIX1" != "" ]; then
+     echo "Prefix ${PREFIX1} (operation $1) to client $REMOTE_ADDR on inteface $IFACE/$IFINDEX" >> $LOGFILE
+ 
+@@ -379,7 +387,7 @@ fi
+ 
+ # Send notification to CCSP PAM
+ # RDK-B has not defined HAL for Ipv6 yet so this is a means to notify
+-echo ""dibbler-client" "add" "${ADDR1}" '1' '\0' '\0' '${ADDR1PREF}' '${ADDR1VALID}' "${PREFIX1}" "${PREFIX1LEN}" '1' '\0' '\0' '${PREFIX1PREF}' '${PREFIX1VALID}' " >> /tmp/ccsp_common_fifo
++echo ""dibbler-client" "add" "${ADDR1}" '1' '\0' '\0' '${ADDR1PREF}' '${ADDR1VALID}' "${PREFIX1}" "${PREFIX1LEN}" '1' '\0' '\0' '${PREFIX1PREF}' '${PREFIX1VALID}' '${OP95HEXDUMP}'" >> /tmp/ccsp_common_fifo
+ 
+ # sample return code. Dibbler will just print it out.
+ exit 3
