@@ -1,20 +1,32 @@
 #!/bin/busybox sh
 
+if [ -f /etc/utopia/service.d/log_env_var.sh ];then
+     . /etc/utopia/service.d/log_env_var.sh
+
+else
+   CONSOLEFILE="/dev/stdout"
+fi
+
+echo_t()
+{
+        echo "`date +"%y%m%d-%T.%6N"` $1"
+}
+
 #Check if dnsmasq is already running. If yes, exit the script without restart
 #NOTE: Process is not killed here if found running since it must be cleaned up by systemd during service restart
 for DNS_PID in $(pidof dnsmasq)
 do
-    echo "dnsmasq already running"
+    echo_t "dnsmasq already running" >> $CONSOLEFILE
     #If the running instance is in uninterruptible sleep (D), print lsof & mount o/p for future debugging
     DNS_STATE=`cat /proc/$DNS_PID/status | grep State | awk '{print $2}'`
     if [ "$DNS_STATE" = "D" ];then
-        echo "dnsmasq is in uninterruptible sleep (D state)"
-        echo "List of files opened by dnsmasq:"
+        echo_t "dnsmasq is in uninterruptible sleep (D state)" >> $CONSOLEFILE
+        echo_t "List of files opened by dnsmasq:" >> $CONSOLEFILE
         lsof -p $DNS_PID
-        echo "Mount entries:"
+        echo_t "Mount entries:" >> $CONSOLEFILE
         mount
     fi
-    echo "Exiting without restart"
+    echo_t "Exiting without restart" >> $CONSOLEFILE
     exit 1
 done
 
@@ -68,22 +80,22 @@ fi
 if [ "x$DNSSTRICT_ORDER_ENABLE" == "xtrue" ]; then
       DNS_ADDITIONAL_OPTION=" -o "
 else
-      echo "RFC DNSTRICT ORDER is not defined or Enabled $DNSSTRICT_ORDER_ENABLE"
+      echo_t "RFC DNSTRICT ORDER is not defined or Enabled $DNSSTRICT_ORDER_ENABLE" >> $CONSOLEFILE
 fi
 
 # Log the new options
 if [ "$DNS_OPTION" ];then
-      echo "Starting dnsmasq with option: $DNS_OPTION"
+      echo_t "Starting dnsmasq with option: $DNS_OPTION" >> $CONSOLEFILE
 fi
 
 # Starting the DNSMASQ based on the available DNS OPTION
 if [ "$DNS_ADDITIONAL_OPTION" ];then
-      echo "Starting dnsmasq with additional dns strict order option: $DNS_ADDITIONAL_OPTION"
+      echo_t "Starting dnsmasq with additional dns strict order option: $DNS_ADDITIONAL_OPTION" >> $CONSOLEFILE
 fi
 
 if [ -f "$DNS_BIN" ];then
       "$DNS_BIN" $DNS_OPTIONS $DNS_ADDITIONAL_OPTION
 else
-      echo "dnsmasq Binary Not Found in the System path /usr/bin"
+      echo_t "dnsmasq Binary Not Found in the System path /usr/bin" >> $CONSOLEFILE
       dnsmasq $DNS_OPTIONS $DNS_ADDITIONAL_OPTION
 fi
