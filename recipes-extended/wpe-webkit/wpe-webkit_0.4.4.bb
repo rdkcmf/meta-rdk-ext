@@ -166,6 +166,7 @@ SRC_URI += "file://0191-Update-CDMInstance-on-attempt-to-decrypt.patch"
 SRC_URI += "file://0192-405564d67c5bcbb187be2447eea84df24cc44a94.patch"
 SRC_URI += "file://0193-Port-TTS-plugin-changes-to-wpe-0.4.4.patch"
 SRC_URI += "file://add-securedump-location.patch"
+SRC_URI += "file://0192-RWI-works-for-one-app-session-then-fail.patch"
 
 # device specific configs
 PACKAGECONFIG[intelce] = "-DUSE_WPEWEBKIT_BACKEND_INTEL_CE=ON -DUSE_WPEWEBKIT_PLATFORM_INTEL_CE=ON -DUSE_HOLE_PUNCH_GSTREAMER=ON -DUSE_KEY_INPUT_HANDLING_LINUX_INPUT=ON,,intelce-display"

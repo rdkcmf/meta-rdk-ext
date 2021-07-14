@@ -136,6 +136,7 @@ SRC_URI += "file://2.22/0272-Increase-fudge-factor-to-3-frames.patch"
 SRC_URI += "file://2.22.2/0275-Fix-use-after-free-in-GstMappedBuffer-destructor.patch"
 SRC_URI += "file://2.22.2/0276-Remove-screen-saver-disabler.patch"
 SRC_URI += "file://2.22.2/0277-Delete-corrupted-localstorage-db.patch"
+SRC_URI += "file://2.22/0278-RWI-works-for-one-app-session-then-fail.patch"
 
 # device specific configs
 PACKAGECONFIG[westeros] = "-DUSE_WPEWEBKIT_BACKEND_WESTEROS=ON -DUSE_WPEWEBKIT_PLATFORM_WESTEROS=ON -DUSE_KEY_INPUT_HANDLING_LINUX_INPUT=OFF -DUSE_GSTREAMER_HOLEPUNCH=ON -DUSE_EXTERNAL_HOLEPUNCH=ON -DUSE_WESTEROS_SINK=ON,,westeros"
