@@ -1,0 +1,46 @@
+From 2d7bffbc809f59f1b75be5a69f3c9c005bebfaac Mon Sep 17 00:00:00 2001
+From: Eugene Mutavchi <Ievgen_Mutavchi@comcast.com>
+Date: Thu, 15 Jul 2021 17:05:47 +0000
+Subject: [PATCH] Add option to enable dolby vision in codec set
+
+---
+ .../gstreamer/mse/MediaPlayerPrivateGStreamerMSE.cpp       | 7 +++++++
+ Source/cmake/OptionsWPE.cmake                              | 4 ++++
+ 2 files changed, 11 insertions(+)
+
+diff --git a/Source/WebCore/platform/graphics/gstreamer/mse/MediaPlayerPrivateGStreamerMSE.cpp b/Source/WebCore/platform/graphics/gstreamer/mse/MediaPlayerPrivateGStreamerMSE.cpp
+index 58f1aee027bc..8b7db9216880 100644
+--- a/Source/WebCore/platform/graphics/gstreamer/mse/MediaPlayerPrivateGStreamerMSE.cpp
++++ b/Source/WebCore/platform/graphics/gstreamer/mse/MediaPlayerPrivateGStreamerMSE.cpp
+@@ -1055,6 +1055,13 @@ const static HashSet<AtomicString>& codecSet()
+             set.add(AtomicString("dvav*"));
+         if (gstRegistryHasElementForMediaType(videoDecoderFactories,"video/x-dvhe"))
+             set.add(AtomicString("dvhe*"));
++#endif
++#if ENABLE(DV) && ENABLE(HEVC)
++        if (gstRegistryHasElementForMediaType(videoDecoderFactories,"video/x-h265")) {
++            set.add(AtomicString("dvav*"));
++            set.add(AtomicString("dvhe*"));
++            set.add(AtomicString("dvh1*"));
++        }
+ #endif
+         gst_plugin_feature_list_free(audioDecoderFactories);
+         gst_plugin_feature_list_free(videoDecoderFactories);
+diff --git a/Source/cmake/OptionsWPE.cmake b/Source/cmake/OptionsWPE.cmake
+index 3a8e05a1bb18..42c0e09d37f1 100644
+--- a/Source/cmake/OptionsWPE.cmake
++++ b/Source/cmake/OptionsWPE.cmake
+@@ -180,6 +180,10 @@ if (ENABLE_VP9_HDR)
+   add_definitions(-DENABLE_VP9_HDR=1)
+ endif()
+ 
++if (ENABLE_DV)
++  add_definitions(-DENABLE_DV=1)
++endif()
++
+ add_definitions(-DBUILDING_WPE__=1)
+ add_definitions(-DGETTEXT_PACKAGE="WPE")
+ add_definitions(-DJSC_GLIB_API_ENABLED)
+-- 
+2.25.1
+

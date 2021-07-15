@@ -138,6 +138,7 @@ SRC_URI += "file://2.22.2/0275-Fix-use-after-free-in-GstMappedBuffer-destructor.
 SRC_URI += "file://2.22.2/0276-Remove-screen-saver-disabler.patch"
 SRC_URI += "file://2.22.2/0277-Delete-corrupted-localstorage-db.patch"
 SRC_URI += "file://2.22/0278-RWI-works-for-one-app-session-then-fail.patch"
+SRC_URI += "file://2.22.2/0278-Add-option-to-enable-dolby-vision-in-codec-set.patch"
 SRC_URI += "file://2.22/0279-Second-ESPN-App-launch-after-Live-playback-fails.patch"
 SRC_URI += "file://2.22.2/0274-added-SVP-transform-for-clear-and-encrypted-samples.patch"
 
@@ -158,6 +159,7 @@ PACKAGECONFIG[gstreamergl] = "-DUSE_GSTREAMER_GL=ON,-DUSE_GSTREAMER_GL=OFF,"
 PACKAGECONFIG[mediastream] = "-DENABLE_MEDIA_STREAM=ON -DENABLE_WEB_RTC=ON,-DENABLE_MEDIA_STREAM=OFF -DENABLE_WEB_RTC=OFF,libevent,libevent"
 PACKAGECONFIG[asan] = "-DENABLE_ADDRESS_SANITIZER=ON,-DENABLE_ADDRESS_SANITIZER=OFF,gcc-sanitizers"
 PACKAGECONFIG[hevc] = "-DENABLE_HEVC=ON,-DENABLE_HEVC=OFF,,"
+PACKAGECONFIG[dolbyvision] = "-DENABLE_DV=ON,-DENABLE_DV=OFF,,"
 
 PACKAGECONFIG_append = " intl"
 
