@@ -620,7 +620,7 @@ new file mode 100644
 index 000000000000..cc59aeefa35b
 --- /dev/null
 +++ b/Source/WebCore/platform/ttsclient/PlatformSpeechSynthesizerTTSClient.cpp
-@@ -0,0 +1,431 @@
+@@ -0,0 +1,436 @@
 +/* Copyright (C) 2019 RDK Management.  All rights reserved.
 +*
 +* Redistribution and use in source and binary forms, with or without
@@ -642,7 +642,7 @@ index 000000000000..cc59aeefa35b
 +* PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY
 +* OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 +* (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
-+* OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE. 
++* OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 +*/
 +
 +#include "config.h"
@@ -689,6 +689,7 @@ index 000000000000..cc59aeefa35b
 +// PlatformSpeechSynthesizerTTSClient
 +double PlatformSpeechSynthesizerTTSClient::m_TTSVolume = 0.0;
 +double PlatformSpeechSynthesizerTTSClient::m_TTSRate = 0.0;
++static bool bSpeechSynthOverrideSysTTSConfig = getenv("SPEECH_SYNTHESIS_OVERRIDE_SYSTEM_TTS_CONFIG");
 +
 +PlatformSpeechSynthesizerTTSClient::PlatformSpeechSynthesizerTTSClient(PlatformSpeechSynthesizerClient* client)
 +    : PlatformSpeechSynthesizer(client), m_shouldCacheUtterance(true), m_ttsSessionId(0), m_ttsEnabled(false), m_ttsConnected(false)
@@ -785,18 +786,22 @@ index 000000000000..cc59aeefa35b
 +        return;
 +    }
 +
-+    TTS::Configuration config;
-+    config.volume = utterance->volume() * 100;
-+    config.rate = (utterance->rate() <= 1.0 ? 50.0 : (utterance->rate() <= 5.0 ? 75.0 : 100.0));
++    if(bSpeechSynthOverrideSysTTSConfig)
++    {
++        TTS::Configuration config;
++        config.volume = utterance->volume() * 100;
++        config.rate = (utterance->rate() <= 1.0 ? 50.0 : (utterance->rate() <= 5.0 ? 75.0 : 100.0));
 +
-+    if((int)m_TTSVolume != (int)config.volume || (int)m_TTSRate != (int)config.rate) {
-+        if(m_ttsClient->setTTSConfiguration(config) != TTS::TTS_OK) {
-+            notifyClient(utterance, SpeechErrorSynthesisFailed);
-+            return;
++        if((int)m_TTSVolume != (int)config.volume || (int)m_TTSRate != (int)config.rate) {
++            if(m_ttsClient->setTTSConfiguration(config) != TTS::TTS_OK) {
++                notifyClient(utterance, SpeechErrorSynthesisFailed);
++                return;
++            }
++            m_TTSVolume = config.volume;
++            m_TTSRate = config.rate;
 +        }
-+        m_TTSVolume = config.volume;
-+        m_TTSRate = config.rate;
 +    }
++
 +
 +    TTS::SpeechData sdata;
 +    sdata.text = utterance->text().utf8().data();
@@ -1079,7 +1084,7 @@ index 000000000000..7f1864ecb40e
 +* PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY
 +* OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 +* (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
-+* OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE. 
++* OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 +*/
 +
 +#ifndef PlatformSpeechSynthesizerTTSClient_h
