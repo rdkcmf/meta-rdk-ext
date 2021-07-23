@@ -209,11 +209,16 @@ index 98bdc54..800c851 100644
  
  	NSS_NoDB_Init(NULL);
  	err = PK11_HashBuf(algo, (unsigned char *)dst, (unsigned char *)src,
-@@ -85,6 +98,19 @@ int do_hash(char *src, int src_size, char *dst, int algo)
+@@ -85,6 +98,24 @@ int do_hash(char *src, int src_size, char *dst, int algo)
  		err = -EINVAL;
  		goto out;
  	}
 +#else
++       if (!gcry_check_version (GCRYPT_VERSION)){
++                syslog(LOG_ERR, "libgcrypt is too old (need %s, have %s)\n",
++                               GCRYPT_VERSION, gcry_check_version (NULL));
++               goto out;
++       }
 +       err = gcry_md_open(&hd, algo, 0);
 +       mdlen = gcry_md_get_algo_dlen(algo);
 +       if (err) {
@@ -229,7 +234,7 @@ index 98bdc54..800c851 100644
  out:
  	return (int)err;
  }
-@@ -217,7 +243,12 @@ generate_passphrase_sig(char *passphrase_sig, char *fekek,
+@@ -217,7 +248,12 @@ generate_passphrase_sig(char *passphrase_sig, char *fekek,
  	char salt_and_passphrase[ECRYPTFS_MAX_PASSPHRASE_BYTES
  				 + ECRYPTFS_SALT_SIZE];
  	int passphrase_size;
