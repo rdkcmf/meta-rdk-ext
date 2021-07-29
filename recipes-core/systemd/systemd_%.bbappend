@@ -20,6 +20,7 @@ SRC_URI += " \
 	    file://50-netfilter.conf \
            file://50-portreserv.conf \
            file://traffic-filter.conf \
+           file://protected_regular.conf \
            "
 SRC_URI_append = " \
             file://usb-mount@.service \
@@ -55,6 +56,7 @@ do_install_append() {
 	install -m 644 ${WORKDIR}/50-panic.conf ${D}${sysconfdir}/sysctl.d
 	install -m 644 ${WORKDIR}/50-netfilter.conf ${D}${sysconfdir}/sysctl.d
 	install -m 644 ${WORKDIR}/traffic-filter.conf ${D}${sysconfdir}/sysctl.d
+        install -m 644 ${WORKDIR}/protected_regular.conf ${D}${sysconfdir}/sysctl.d
         mkdir -pv ${D}/usb
         mkdir -pv ${D}/usb0
         mkdir -pv ${D}/usb1
