@@ -142,6 +142,7 @@ SRC_URI += "file://2.22.2/0278-Add-option-to-enable-dolby-vision-in-codec-set.pa
 SRC_URI += "file://2.22.2/0278-Support-for-external-sink-for-x-dvb.patch"
 SRC_URI += "file://2.22/0279-Second-ESPN-App-launch-after-Live-playback-fails.patch"
 SRC_URI += "file://2.22.2/0274-added-SVP-transform-for-clear-and-encrypted-samples.patch"
+SRC_URI += "file://2.22/0281-update-the-sample-durtion-based-on-the-delta-of-last.patch"
 
 # device specific configs
 PACKAGECONFIG[westeros] = "-DUSE_WPEWEBKIT_BACKEND_WESTEROS=ON -DUSE_WPEWEBKIT_PLATFORM_WESTEROS=ON -DUSE_KEY_INPUT_HANDLING_LINUX_INPUT=OFF -DUSE_GSTREAMER_HOLEPUNCH=ON -DUSE_EXTERNAL_HOLEPUNCH=ON -DUSE_WESTEROS_SINK=ON,,westeros"

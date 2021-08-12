@@ -1,0 +1,26 @@
+From 27788ae2cecdbd6dd7a033ea5270189217e56c0f Mon Sep 17 00:00:00 2001
+From: kkanag314 <krishnapriya_kanagaraj@comcast.com>
+Date: Thu, 12 Aug 2021 09:53:44 +0000
+Subject: [PATCH] update the durtion based on the delta of last and current pts
+
+---
+ .../platform/graphics/gstreamer/mse/AppendPipeline.cpp        | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/Source/WebCore/platform/graphics/gstreamer/mse/AppendPipeline.cpp b/Source/WebCore/platform/graphics/gstreamer/mse/AppendPipeline.cpp
+index 3c1852956a25..36a6e2c20827 100644
+--- a/Source/WebCore/platform/graphics/gstreamer/mse/AppendPipeline.cpp
++++ b/Source/WebCore/platform/graphics/gstreamer/mse/AppendPipeline.cpp
+@@ -155,6 +155,10 @@ public:
+             if (!GST_BUFFER_DURATION_IS_VALID(buffer)) {
+                 if (m_sampleDuration.isValid()) {
+                     // Some containers like webm and audio/x-opus don't supply a duration. Let's use the one supplied by the caps.
++                    auto ptsDelta = abs(MediaTime(GST_BUFFER_PTS(buffer), GST_SECOND) - m_lastPts);
++                    if(ptsDelta < MediaTime(1, 24) && m_sampleDuration != ptsDelta) {
++                       m_sampleDuration = ptsDelta;
++                    }
+                     GST_BUFFER_DURATION(buffer) = toGstClockTime(m_sampleDuration);
+                 } else if (m_lastPts.isValid()) {
+                     m_sampleDuration = MediaTime(GST_BUFFER_PTS(buffer), GST_SECOND) - m_lastPts;
+-- 
+2.17.1
