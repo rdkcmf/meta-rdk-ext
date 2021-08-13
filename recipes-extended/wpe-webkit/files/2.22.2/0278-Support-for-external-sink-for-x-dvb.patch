@@ -1,0 +1,50 @@
+From 233e02762e8f2d48cbe922e3164c69c54c92b6ee Mon Sep 17 00:00:00 2001
+From: Eugene Mutavchi <Ievgen_Mutavchi@comcast.com>
+Date: Wed, 14 Jul 2021 20:37:49 +0000
+Subject: [PATCH] Support for external sink for x-dvb
+
+---
+ .../gstreamer/MediaPlayerPrivateGStreamer.cpp       | 13 +++++++++++--
+ 1 file changed, 11 insertions(+), 2 deletions(-)
+
+diff --git a/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp b/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp
+index f697fb63bc5c..30a419264ac8 100644
+--- a/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp
++++ b/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp
+@@ -2131,7 +2131,7 @@ void MediaPlayerPrivateGStreamer::updateStates()
+         if (m_currentState == GST_STATE_READY)
+             m_readyState = MediaPlayer::HaveNothing;
+         else if (m_currentState == GST_STATE_PAUSED) {
+-            m_readyState = MediaPlayer::HaveCurrentData;
++            m_readyState = m_streamPrivate ? MediaPlayer::HaveCurrentData : MediaPlayer::HaveEnoughData;
+             m_paused = true;
+         } else if (m_currentState == GST_STATE_PLAYING)
+             m_paused = false;
+@@ -2390,6 +2390,7 @@ static HashSet<String, ASCIICaseInsensitiveHash>& mimeTypeSet()
+             {VideoDecoder, "video/mpeg, mpegversion=(int){1,2}, systemstream=(boolean)false", {"video/mpeg"}},
+             {VideoDecoder, "video/x-dirac", { }},
+             {VideoDecoder, "video/x-flash-video", {"video/flv", "video/x-flv"}},
++            {VideoDecoder, "video/x-ext-dvb", { "video/x-dvb" }},
+             {Demuxer, "video/quicktime", { }},
+             {Demuxer, "video/quicktime, variant=(string)3gpp", {"video/3gpp"}},
+             {Demuxer, "video/mpegts", {"video/mp2t"}},
+@@ -2775,7 +2776,15 @@ void MediaPlayerPrivateGStreamer::createGSTPlayBin(const gchar* playbinName, con
+     g_object_set(m_pipeline.get(), "text-sink", m_textAppSink.get(), nullptr);
+ #endif
+ 
+-    g_object_set(m_pipeline.get(), "video-sink", createVideoSink(), nullptr);
++    bool shouldSetVideoSink = (m_player->contentMIMEType() != "video/x-dvb");
++    if (shouldSetVideoSink) {
++        g_object_set(m_pipeline.get(), "video-sink", createVideoSink(), nullptr);
++    } else {
++#if USE(GSTREAMER_HOLEPUNCH)
++        acceleratedRenderingStateChanged();
++        pushNextHolePunchBuffer();
++#endif
++    }
+ #if !USE(GSTREAMER_HOLEPUNCH)
+     GRefPtr<GstPad> videoSinkPad = adoptGRef(gst_element_get_static_pad(m_videoSink.get(), "sink"));
+     if (videoSinkPad)
+-- 
+2.25.1
+

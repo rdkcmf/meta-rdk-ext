@@ -139,6 +139,7 @@ SRC_URI += "file://2.22.2/0276-Remove-screen-saver-disabler.patch"
 SRC_URI += "file://2.22.2/0277-Delete-corrupted-localstorage-db.patch"
 SRC_URI += "file://2.22/0278-RWI-works-for-one-app-session-then-fail.patch"
 SRC_URI += "file://2.22.2/0278-Add-option-to-enable-dolby-vision-in-codec-set.patch"
+SRC_URI += "file://2.22.2/0278-Support-for-external-sink-for-x-dvb.patch"
 SRC_URI += "file://2.22/0279-Second-ESPN-App-launch-after-Live-playback-fails.patch"
 SRC_URI += "file://2.22.2/0274-added-SVP-transform-for-clear-and-encrypted-samples.patch"
 
