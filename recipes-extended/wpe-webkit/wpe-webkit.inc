@@ -23,7 +23,7 @@ EXTRANATIVEPATH += " chrpath-native"
 
 S = "${WORKDIR}/git"
 
-inherit cmake pkgconfig perlnative pythonnative
+inherit cmake pkgconfig perlnative ${@bb.utils.contains('DISTRO_FEATURES', 'dunfell', 'python3native', 'pythonnative', d)} 
 
 WPE_BACKEND ?= "${@bb.utils.contains('DISTRO_FEATURES', 'wayland', 'westeros', '', d)}"
 

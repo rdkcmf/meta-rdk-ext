@@ -13,7 +13,7 @@ SRC_URI = "git://github.com/gt3389b/python-cson.git"
 S = "${WORKDIR}/git"
 
 RDEPENDS_${PN}_class-native = ""
-DEPENDS_append_class-native = " python-native "
+DEPENDS_append_class-native = " ${@bb.utils.contains('DISTRO_FEATURES', 'dunfell', 'python3native', 'pythonnative', d)} "
 
 inherit setuptools
 

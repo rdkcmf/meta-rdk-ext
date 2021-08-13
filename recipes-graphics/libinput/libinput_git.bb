@@ -17,7 +17,7 @@ COMPATIBLE_MACHINE_mipsel = "(.*)"
 FULL_OPTIMIZATION_remove = "-Os"
 FULL_OPTIMIZATION_append = " -O3"
 
-inherit cmake perlnative pythonnative
+inherit cmake perlnative ${@bb.utils.contains('DISTRO_FEATURES', 'dunfell', 'python3native', 'pythonnative', d)}
 
 SRC_URI = "\
   git://anongit.freedesktop.org/git/wayland/libinput;branch=master \
