@@ -8,12 +8,11 @@ DEPENDS += "wpe-backend"
 
 PV = "0.3+git${SRCPV}"
 
-# Revision date: Mar 12 2021
-SRCREV = "1cbbe13d347381cb5ff5aa717905fb55d76bd5e8"
+# Revision date: May 18 2021
+SRCREV = "6953f31ccda364095260ec5d07a0faf85d3f8fb4"
 BASE_URI ?= "git://github.com/WebPlatformForEmbedded/WPEBackend-rdk.git;protocol=http;branch=master"
 SRC_URI = "${BASE_URI}"
 
-SRC_URI += "file://0006-Downgrade-to-wpe-0.2.patch"
 
 S = "${WORKDIR}/git"
 
