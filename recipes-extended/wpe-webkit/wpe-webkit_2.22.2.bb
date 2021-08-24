@@ -143,6 +143,7 @@ SRC_URI += "file://2.22.2/0278-Support-for-external-sink-for-x-dvb.patch"
 SRC_URI += "file://2.22/0279-Second-ESPN-App-launch-after-Live-playback-fails.patch"
 SRC_URI += "file://2.22.2/0274-added-SVP-transform-for-clear-and-encrypted-samples.patch"
 SRC_URI += "file://2.22/0281-update-the-sample-durtion-based-on-the-delta-of-last.patch"
+SRC_URI += "file://2.22/0283-Adjust-buffering-rate-monitor-to-react-faster.patch"
 
 SRC_URI += "file://2.22/0001-Backport-Fix-missing-exception-checks-and-handling-i.patch"
 SRC_URI += "file://2.22/0001-Fix-offset-inconsistency-logs.patch"
