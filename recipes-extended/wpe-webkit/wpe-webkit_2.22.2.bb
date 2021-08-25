@@ -152,6 +152,7 @@ SRC_URI += "file://2.22/0001-propertyNameEnumerator-must-check-it-can-still-take
 SRC_URI += "file://2.22/0002-JSC-Clean-up-DFGPreciseLocalClobberize-to-avoid-dupl.patch"
 SRC_URI += "file://2.22/0003-Add-register-r30-s8-to-Conservative-roots.patch"
 SRC_URI += "file://2.22.2/0279-During-layout-ensure-that-elements-that-are-in-diffe.patch"
+SRC_URI += "file://2.22.2/0280-Add-support-for-dolby-digital-plus-in-supportsType.patch"
 
 # device specific configs
 PACKAGECONFIG[westeros] = "-DUSE_WPEWEBKIT_BACKEND_WESTEROS=ON -DUSE_WPEWEBKIT_PLATFORM_WESTEROS=ON -DUSE_KEY_INPUT_HANDLING_LINUX_INPUT=OFF -DUSE_GSTREAMER_HOLEPUNCH=ON -DUSE_EXTERNAL_HOLEPUNCH=ON -DUSE_WESTEROS_SINK=ON,,westeros"
