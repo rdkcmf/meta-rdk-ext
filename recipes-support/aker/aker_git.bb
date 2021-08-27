@@ -16,6 +16,7 @@ S = "${WORKDIR}/git"
 ASNEEDED = ""
 
 DEPENDS = "libparodus wrp-c trower-base64 msgpack-c rdk-logger log4c util-linux"
+DEPENDS_append = " ${@bb.utils.contains('DISTRO_FEATURES', 'telemetry2_0', 'telemetry', '', d)}"
 
 CFLAGS_append = " \
     -I${STAGING_INCDIR} \
@@ -25,6 +26,8 @@ CFLAGS_append = " \
     -I${STAGING_INCDIR}/cimplog \
     -I${STAGING_INCDIR}/trower-base64 \
     "
+CFLAGS_append = " ${@bb.utils.contains('DISTRO_FEATURES', 'telemetry2_0', '-DENABLE_FEATURE_TELEMETRY2_0', '', d)}"
+LDFLAGS_append = " ${@bb.utils.contains('DISTRO_FEATURES', 'telemetry2_0', ' -ltelemetry_msgsender ', '', d)}"
 
 inherit pkgconfig coverity cmake
 EXTRA_OECMAKE = "-DBUILD_TESTING=OFF -DBUILD_YOCTO=true"
