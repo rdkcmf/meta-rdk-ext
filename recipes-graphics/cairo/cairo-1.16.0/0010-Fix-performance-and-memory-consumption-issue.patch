@@ -1,0 +1,163 @@
+From 8b39936eb1e832ac815b02f2ca2b3535bf4a7e63 Mon Sep 17 00:00:00 2001
+From: Oscar Lin <yu_hong@realtek.com>
+Date: Fri, 27 Aug 2021 11:19:54 +0800
+Subject: [PATCH 1/1] Fix performance and memory consumption issue
+Source: Realtek
+License: LGPL-2.1-or-later
+Upstream-Status: Pending
+
+Signed-off-by: Oscar Lin <yu_hong@realtek.com>
+---
+ src/cairo-gl-device.c       | 27 ++++++++++++++++++++++++++-
+ src/cairo-gl-private.h      |  2 ++
+ src/cairo-gl-surface.c      | 14 ++++++++++++++
+ src/cairo-surface-private.h |  2 ++
+ src/cairo-surface.c         |  5 +++++
+ 5 files changed, 49 insertions(+), 1 deletion(-)
+
+diff --git a/src/cairo-gl-device.c b/src/cairo-gl-device.c
+index 31da144..581dc90 100644
+--- a/src/cairo-gl-device.c
++++ b/src/cairo-gl-device.c
+@@ -158,6 +158,13 @@ static const cairo_device_backend_t _cairo_gl_device_backend = {
+ };
+ 
+ static cairo_bool_t
++_cairo_gl_blit_rtt_render_enabled (void)
++{
++    const char *env = getenv ("CAIRO_GL_USE_BLIT_RTT");
++    return env && strcmp(env, "1") == 0;
++}
++
++static cairo_bool_t
+ _cairo_gl_msaa_compositor_enabled (void)
+ {
+     const char *env = getenv ("CAIRO_GL_COMPOSITOR");
+@@ -255,6 +262,8 @@ _cairo_gl_context_init (cairo_gl_context_t *ctx)
+ 
+     ctx->can_read_bgra = test_can_read_bgra (gl_flavor);
+ 
++    ctx->fast_render_path = !_cairo_gl_blit_rtt_render_enabled();
++
+     ctx->has_mesa_pack_invert =
+ 	_cairo_gl_has_extension ("GL_MESA_pack_invert");
+ 
+@@ -603,7 +612,7 @@ _cairo_gl_ensure_stencil (cairo_gl_context_t *ctx,
+     if (! _cairo_gl_surface_is_texture (surface))
+ 	return TRUE; /* best guess for now, will check later */
+ 
+-    if (surface->msaa_active) {
++    if (!ctx->fast_render_path && surface->msaa_active) {
+         if (ctx->has_packed_depth_stencil)
+             return _cairo_gl_ensure_msaa_depth_stencil_buffer (ctx, surface);
+         else
+@@ -665,6 +674,22 @@ bind_multisample_framebuffer (cairo_gl_context_t *ctx,
+ 	ctx->gl_flavor == CAIRO_GL_FLAVOR_ES3);
+ 
+     _cairo_gl_ensure_framebuffer (ctx, surface);
++
++    /* In GLESv3 surface, we found there has performance and memory consumption
++       issues in webkit. The reason is that it use additional blit operations
++       and additional offscreen framebuffers for multisampling.
++
++       Thus, if |fast_render_path| is set, we'll avoid the multisampling path.
++       Instead, we bind to original framebuffer which created in
++       _cairo_gl_ensure_framebuffer.
++    */
++    if(ctx->fast_render_path){
++        ctx->dispatch.BindFramebuffer (GL_FRAMEBUFFER, surface->fb);
++        if (ctx->gl_flavor == CAIRO_GL_FLAVOR_ES3)
++            surface->content_in_texture = FALSE;
++        return;
++    }
++
+     _cairo_gl_ensure_multisampling (ctx, surface);
+ 
+     if (surface->msaa_active) {
+diff --git a/src/cairo-gl-private.h b/src/cairo-gl-private.h
+index 1a43a11..4431ccf 100644
+--- a/src/cairo-gl-private.h
++++ b/src/cairo-gl-private.h
+@@ -390,6 +390,8 @@ struct _cairo_gl_context {
+ 
+     cairo_bool_t thread_aware;
+ 
++    cairo_bool_t fast_render_path;
++
+     void (*acquire) (void *ctx);
+     void (*release) (void *ctx);
+ 
+diff --git a/src/cairo-gl-surface.c b/src/cairo-gl-surface.c
+index 12ea3dd..9e2a556 100644
+--- a/src/cairo-gl-surface.c
++++ b/src/cairo-gl-surface.c
+@@ -59,6 +59,11 @@ static cairo_bool_t _cairo_surface_is_gl (cairo_surface_t *surface)
+     return surface->backend == &_cairo_gl_surface_backend;
+ }
+ 
++static cairo_bool_t is_require_flush(cairo_gl_surface_t* surface)
++{
++    return ((cairo_surface_t*)surface)->require_flush;
++}
++
+ static cairo_bool_t
+ _cairo_gl_get_image_format_and_type_gles2 (pixman_format_code_t pixman_format,
+ 					   GLenum *internal_format, GLenum *format,
+@@ -1371,6 +1376,15 @@ _cairo_gl_surface_flush (void *abstract_surface, unsigned flags)
+     if (unlikely (status))
+ 	return status;
+ 
++    /* In GLESv3 surface, if we set |fast_render_path| and |cairo_surface_flush|
++       is called in application, we flush the GL commands immediately.
++    */
++    if (ctx->fast_render_path && is_require_flush(surface)) {
++	glFlush();
++	glFinish();
++	return _cairo_gl_context_release (ctx, status);
++    }
++
+     if ((ctx->operands[CAIRO_GL_TEX_SOURCE].type == CAIRO_GL_OPERAND_TEXTURE &&
+ 	 ctx->operands[CAIRO_GL_TEX_SOURCE].texture.surface == surface) ||
+ 	(ctx->operands[CAIRO_GL_TEX_MASK].type == CAIRO_GL_OPERAND_TEXTURE &&
+diff --git a/src/cairo-surface-private.h b/src/cairo-surface-private.h
+index e4ad5f3..d839573 100644
+--- a/src/cairo-surface-private.h
++++ b/src/cairo-surface-private.h
+@@ -104,6 +104,8 @@ struct _cairo_surface {
+      * cairo_surface_create_similar().
+      */
+     cairo_font_options_t font_options;
++
++    cairo_bool_t require_flush;
+ };
+ 
+ cairo_private cairo_surface_t *
+diff --git a/src/cairo-surface.c b/src/cairo-surface.c
+index 596ca25..5e319e2 100644
+--- a/src/cairo-surface.c
++++ b/src/cairo-surface.c
+@@ -421,6 +421,7 @@ _cairo_surface_init (cairo_surface_t			*surface,
+     surface->serial = 0;
+     surface->damage = NULL;
+     surface->owns_device = (device != NULL);
++    surface->require_flush = FALSE;
+ 
+     _cairo_user_data_array_init (&surface->user_data);
+     _cairo_user_data_array_init (&surface->mime_data);
+@@ -1655,9 +1656,13 @@ cairo_surface_flush (cairo_surface_t *surface)
+     if (surface->finished)
+ 	return;
+ 
++    surface->require_flush = TRUE;
++
+     status = _cairo_surface_flush (surface, 0);
+     if (unlikely (status))
+ 	_cairo_surface_set_error (surface, status);
++
++    surface->require_flush = FALSE;
+ }
+ slim_hidden_def (cairo_surface_flush);
+ 
+-- 
+2.7.4
+
