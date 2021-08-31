@@ -9,7 +9,7 @@ DEPENDS_append = "${@bb.utils.contains("DISTRO_FEATURES", "seshat", " libseshat 
 LICENSE = "Apache-2.0"
 LIC_FILES_CHKSUM = "file://LICENSE;md5=e3fc50a88d0a364313df4b21ef20c29e"
 
-SRCREV = "aeea6fbb03bf41c43027a9a67e865f523e9aa695"
+SRCREV = "9f40b7efe5d955a51b975bba616140fa51a9facc"
 SRC_URI = "git://github.com/xmidt-org/parodus.git"
 
 RDEPENDS_${PN} += "util-linux-uuidgen"
