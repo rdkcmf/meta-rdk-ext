@@ -724,6 +724,37 @@ index 4da6f76b6b70..bd4c0809288c 100644
      case AccessibilityRole::WebApplication:
          return ATK_ROLE_EMBEDDED;
  #if ATK_CHECK_VERSION(2, 11, 3)
+diff --git a/Source/WebCore/accessibility/AccessibilityNodeObject.cpp b/Source/WebCore/accessibility/AccessibilityNodeObject.cpp
+index c6b3e3bf504c..2ec2916ff814 100644
+--- a/Source/WebCore/accessibility/AccessibilityNodeObject.cpp
++++ b/Source/WebCore/accessibility/AccessibilityNodeObject.cpp
+@@ -2070,9 +2070,23 @@ String AccessibilityNodeObject::ariaDescribedByAttribute() const
+ 
+ void AccessibilityNodeObject::ariaLabeledByElements(Vector<Element*>& elements) const
+ {
+-    elementsFromAttribute(elements, aria_labelledbyAttr);
+-    if (!elements.size())
+-        elementsFromAttribute(elements, aria_labeledbyAttr);
++    Vector<Element*> lelements;
++    elementsFromAttribute(lelements, aria_labelledbyAttr);
++    if (!lelements.size())
++        elementsFromAttribute(lelements, aria_labeledbyAttr);
++
++    for (unsigned i = 0; i < lelements.size(); ++i) {
++        if(elements.contains(lelements[i]))
++            continue;
++
++        elements.append(lelements[i]);
++        AXObjectCache* cache = axObjectCache();
++        if (AccessibilityObject* axObject = (cache ? cache->getOrCreate(lelements[i]) : nullptr))
++            downcast<AccessibilityNodeObject>(*axObject).ariaLabeledByElements(elements);
++
++        if(!lelements.isEmpty() && node())
++            elements.removeAll(&downcast<Element>(*node()));
++    }
+ }
+ 
+ 
 -- 
 2.24.0
 
