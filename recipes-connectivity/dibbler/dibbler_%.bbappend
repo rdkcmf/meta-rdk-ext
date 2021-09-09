@@ -58,3 +58,5 @@ FILES_${PN}-client += "${sysconfdir}/dibbler/* \
                       "
 FILES_${PN}_append_broadband += " ${sysconfdir}/*"
 FILES_${PN}-client_append_broadband += " ${base_libdir}/rdk/*"
+
+ALLOW_EMPTY_${PN} = "1"
