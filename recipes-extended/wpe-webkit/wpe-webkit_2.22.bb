@@ -187,6 +187,8 @@ SRC_URI += "file://2.22/0003-Add-register-r30-s8-to-Conservative-roots.patch"
 SRC_URI += "file://2.22/0004-Fix-use-after-free-in-GstMappedBuffer-destructor.patch"
 SRC_URI += "file://2.22/0005-Remove-screen-saver-disabler.patch"
 
+SRC_URI += "file://2.22/0285-Media-Make-currentTime-compliant-with-the-spec-when-.patch"
+
 # device specific configs
 PACKAGECONFIG[westeros] = "-DUSE_WPEWEBKIT_BACKEND_WESTEROS=ON -DUSE_WPEWEBKIT_PLATFORM_WESTEROS=ON -DUSE_KEY_INPUT_HANDLING_LINUX_INPUT=OFF -DUSE_GSTREAMER_HOLEPUNCH=ON -DUSE_EXTERNAL_HOLEPUNCH=ON -DUSE_WESTEROS_SINK=ON,,westeros"
 PACKAGECONFIG[encryptedmedia] = "-DENABLE_ENCRYPTED_MEDIA=ON,-DENABLE_ENCRYPTED_MEDIA=OFF,"
