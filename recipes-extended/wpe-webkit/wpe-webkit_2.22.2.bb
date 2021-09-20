@@ -157,6 +157,7 @@ SRC_URI += "file://2.22.2/0280-Add-support-for-dolby-digital-plus-in-supportsTyp
 SRC_URI += "file://2.22/0285-Media-Make-currentTime-compliant-with-the-spec-when-.patch"
 
 SRC_URI += "file://2.22.2/0289-GST-return-cached-position-when-sink-returns-invalid.patch"
+SRC_URI += "file://2.22.2/0287-Fix-EOS-detection.patch"
 
 # device specific configs
 PACKAGECONFIG[westeros] = "-DUSE_WPEWEBKIT_BACKEND_WESTEROS=ON -DUSE_WPEWEBKIT_PLATFORM_WESTEROS=ON -DUSE_KEY_INPUT_HANDLING_LINUX_INPUT=OFF -DUSE_GSTREAMER_HOLEPUNCH=ON -DUSE_EXTERNAL_HOLEPUNCH=ON -DUSE_WESTEROS_SINK=ON,,westeros"

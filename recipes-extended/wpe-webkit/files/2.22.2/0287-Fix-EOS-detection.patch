@@ -1,0 +1,25 @@
+From e4d31ea826c8f1a8e0448868971e8aeb5e18dfe4 Mon Sep 17 00:00:00 2001
+From: Eugene Mutavchi <Ievgen_Mutavchi@comcast.com>
+Date: Mon, 20 Sep 2021 15:41:12 +0000
+Subject: [PATCH] Fix EOS detection
+
+---
+ .../graphics/gstreamer/mse/MediaPlayerPrivateGStreamerMSE.cpp   | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/Source/WebCore/platform/graphics/gstreamer/mse/MediaPlayerPrivateGStreamerMSE.cpp b/Source/WebCore/platform/graphics/gstreamer/mse/MediaPlayerPrivateGStreamerMSE.cpp
+index 14814f51b8fc..3b469ea67bcf 100644
+--- a/Source/WebCore/platform/graphics/gstreamer/mse/MediaPlayerPrivateGStreamerMSE.cpp
++++ b/Source/WebCore/platform/graphics/gstreamer/mse/MediaPlayerPrivateGStreamerMSE.cpp
+@@ -1031,7 +1031,7 @@ MediaTime MediaPlayerPrivateGStreamerMSE::currentMediaTime() const
+ {
+     MediaTime position = MediaPlayerPrivateGStreamer::currentMediaTime();
+ 
+-    if (m_eosPending && abs(position - durationMediaTime()) < MediaTime(GST_SECOND, GST_SECOND) && (!m_playbackProgress || position > durationMediaTime())) {
++    if (m_eosPending && abs(position - durationMediaTime()) < MediaTime(GST_SECOND, GST_SECOND) && (!m_playbackProgress || position >= durationMediaTime())) {
+         if (m_networkState != MediaPlayer::Loaded) {
+             m_networkState = MediaPlayer::Loaded;
+             m_player->networkStateChanged();
+-- 
+2.25.1
+
