@@ -33,7 +33,7 @@ index f697fb63bc5c..30a419264ac8 100644
  #endif
  
 -    g_object_set(m_pipeline.get(), "video-sink", createVideoSink(), nullptr);
-+    bool shouldSetVideoSink = (m_player->contentMIMEType() != "video/x-dvb");
++    bool shouldSetVideoSink = (m_player->contentMIMEType() != "video/x-dvb" && m_player->url().protocol() != "rec");
 +    if (shouldSetVideoSink) {
 +        g_object_set(m_pipeline.get(), "video-sink", createVideoSink(), nullptr);
 +    } else {
@@ -45,6 +45,19 @@ index f697fb63bc5c..30a419264ac8 100644
  #if !USE(GSTREAMER_HOLEPUNCH)
      GRefPtr<GstPad> videoSinkPad = adoptGRef(gst_element_get_static_pad(m_videoSink.get(), "sink"));
      if (videoSinkPad)
+diff --git a/Source/WebCore/platform/graphics/MediaPlayer.h b/Source/WebCore/platform/graphics/MediaPlayer.h
+index 225ce7b99ebf..080452b33e42 100644
+--- a/Source/WebCore/platform/graphics/MediaPlayer.h
++++ b/Source/WebCore/platform/graphics/MediaPlayer.h
+@@ -578,5 +578,7 @@ public:
+
+     String errorMessage() const;
+
++    URL url() const { return m_url; }
++
+ private:
+     MediaPlayer(MediaPlayerClient&);
+
 -- 
 2.25.1
 
