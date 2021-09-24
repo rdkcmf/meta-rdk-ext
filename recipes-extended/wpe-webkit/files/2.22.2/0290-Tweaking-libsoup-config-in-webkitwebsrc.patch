@@ -1,0 +1,44 @@
+From 9e6624c6def21228cf419ee0392fa6ae7dd7bc03 Mon Sep 17 00:00:00 2001
+From: Pawel Lampe <pawel.lampe@sky.uk>
+Date: Fri, 1 Oct 2021 09:54:30 +0000
+Subject: [PATCH] Tweaking libsoup config in webkitwebsrc
+
+---
+ .../platform/graphics/gstreamer/WebKitWebSourceGStreamer.cpp | 12 +++++++++---
+ 1 file changed, 9 insertions(+), 3 deletions(-)
+
+diff --git a/Source/WebCore/platform/graphics/gstreamer/WebKitWebSourceGStreamer.cpp b/Source/WebCore/platform/graphics/gstreamer/WebKitWebSourceGStreamer.cpp
+index 45ff337..cafb9ba 100644
+--- a/Source/WebCore/platform/graphics/gstreamer/WebKitWebSourceGStreamer.cpp
++++ b/Source/WebCore/platform/graphics/gstreamer/WebKitWebSourceGStreamer.cpp
+@@ -269,11 +269,17 @@ static void webkit_web_src_init(WebKitWebSrc* src)
+     gst_app_src_set_emit_signals(priv->appsrc, FALSE);
+     gst_app_src_set_stream_type(priv->appsrc, GST_APP_STREAM_TYPE_SEEKABLE);
+ 
++    String env(getenv("WPE_WEBSRC_MAX_BYTES"));
++    bool envConversionSucceeded = false;
++    uint64_t envValue = env.toUInt64(&envConversionSucceeded);
+     // 512k is a abitrary number but we should choose a value
+     // here to not pause/unpause the SoupMessage too often and
+     // to make sure there's always some data available for
+     // GStreamer to handle.
+-    gst_app_src_set_max_bytes(priv->appsrc, 4 * 1024 * 1024);
++    constexpr guint64 maxBytesDefault = 512 * 1024;
++    guint64 maxBytes = envConversionSucceeded ? envValue : maxBytesDefault;
++    GST_DEBUG_OBJECT(src, "Setting max_bytes to %" G_GUINT64_FORMAT, maxBytes);
++    gst_app_src_set_max_bytes(priv->appsrc, maxBytes);
+ 
+     // Emit the need-data signal if the queue contains less
+     // than 20% of data. Without this the need-data signal
+@@ -286,7 +292,7 @@ static void webkit_web_src_init(WebKitWebSrc* src)
+     // likely that libsoup already provides new data before
+     // the queue is really empty.
+     // This might need tweaking for ports not using libsoup.
+-    g_object_set(priv->appsrc, "min-percent", 2, nullptr);
++    g_object_set(priv->appsrc, "min-percent", 100, nullptr);
+ 
+     gst_base_src_set_automatic_eos(GST_BASE_SRC(priv->appsrc), FALSE);
+ 
+-- 
+1.9.1
+
