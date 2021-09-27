@@ -3,7 +3,6 @@ include ${@bb.utils.contains('DISTRO_FEATURES', 'systemd-profile', 'profiles/rdk
 FILESEXTRAPATHS_prepend := "${THISDIR}/files:${THISDIR}/backports:"
 
 PACKAGECONFIG_remove = "vconsole ldconfig"
-PACKAGECONFIG_remove_dunfell = "networkd"
 PACKAGECONFIG_remove_dunfell = "resolved"
 PACKAGECONFIG_remove_dunfell = "nss-resolve"
 
