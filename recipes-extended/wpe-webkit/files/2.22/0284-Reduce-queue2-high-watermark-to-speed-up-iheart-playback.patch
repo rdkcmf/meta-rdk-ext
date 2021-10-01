@@ -1,0 +1,27 @@
+From 1167f2704427dcfd608a7cdc4b6e4f9d0ce0bb99 Mon Sep 17 00:00:00 2001
+From: "Vivek.A" <Vivek_Arumugam@comcast.com>
+Date: Thu, 26 Aug 2021 11:01:57 +0000
+Subject: [PATCH] Reduce queue2's high-watermark to speed up buffered playback
+
+Change-Id: I0db61b0f0e6cd815c8be7d09231445ddf230439f
+---
+ .../graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp         | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp b/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp
+index 165cd5318618..1d5a9f325dd5 100644
+--- a/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp
++++ b/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp
+@@ -3018,6 +3018,9 @@ void MediaPlayerPrivateGStreamer::elementSetupCallback(MediaPlayerPrivateGStream
+     }
+ #endif
+ 
++    if (g_strcmp0(G_OBJECT_TYPE_NAME(G_OBJECT(element)), "GstQueue2") == 0)
++        g_object_set(G_OBJECT(element), "high-watermark", 0.10, nullptr);
++
+ #if USE(WESTEROS_SINK)
+     static GstCaps *westerosSinkCaps = nullptr;
+     static GType westerosSinkType = G_TYPE_INVALID;
+-- 
+2.17.1
+

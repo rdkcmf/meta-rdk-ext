@@ -1,0 +1,25 @@
+From 4b9cac6a678e9307a21b5d5e9be77c2e1aabed36 Mon Sep 17 00:00:00 2001
+From: Eugene Mutavchi <Ievgen_Mutavchi@comcast.com>
+Date: Tue, 21 Sep 2021 15:57:19 +0000
+Subject: [PATCH] Temporary disable cookies in gst context
+
+---
+ .../platform/graphics/gstreamer/WebKitWebSourceGStreamer.cpp    | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/Source/WebCore/platform/graphics/gstreamer/WebKitWebSourceGStreamer.cpp b/Source/WebCore/platform/graphics/gstreamer/WebKitWebSourceGStreamer.cpp
+index 67cba82ea8db..03e8694ccd8f 100644
+--- a/Source/WebCore/platform/graphics/gstreamer/WebKitWebSourceGStreamer.cpp
++++ b/Source/WebCore/platform/graphics/gstreamer/WebKitWebSourceGStreamer.cpp
+@@ -530,7 +530,7 @@ static void webKitWebSrcStart(WebKitWebSrc* src)
+             priv->loader = priv->player->createResourceLoader();
+ 
+         {
+-            String cookies = WebCore::cookies(*priv->player->cachedResourceLoader()->document(), request.url());
++            String cookies; // = WebCore::cookies(*priv->player->cachedResourceLoader()->document(), request.url());
+             priv->cookies = GUniquePtr<gchar>(g_strdup(cookies.utf8().data()));
+         }
+ 
+-- 
+2.25.1
+

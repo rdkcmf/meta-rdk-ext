@@ -7,20 +7,24 @@ Subject: [PATCH] Support for external sink for x-dvb
  .../gstreamer/MediaPlayerPrivateGStreamer.cpp       | 13 +++++++++++--
  1 file changed, 11 insertions(+), 2 deletions(-)
 
-diff --git a/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp b/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp
-index f697fb63bc5c..30a419264ac8 100644
---- a/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp
-+++ b/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp
-@@ -2131,7 +2131,7 @@ void MediaPlayerPrivateGStreamer::updateStates()
+Index: git/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp
+===================================================================
+--- git.orig/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp
++++ git/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp
+@@ -2192,7 +2192,11 @@ void MediaPlayerPrivateGStreamer::update
          if (m_currentState == GST_STATE_READY)
              m_readyState = MediaPlayer::HaveNothing;
          else if (m_currentState == GST_STATE_PAUSED) {
 -            m_readyState = MediaPlayer::HaveCurrentData;
++            #if ENABLE(MEDIA_STREAM)
 +            m_readyState = m_streamPrivate ? MediaPlayer::HaveCurrentData : MediaPlayer::HaveEnoughData;
++            #else
++            m_readyState = MediaPlayer::HaveEnoughData;
++            #endif
              m_paused = true;
          } else if (m_currentState == GST_STATE_PLAYING)
              m_paused = false;
-@@ -2390,6 +2390,7 @@ static HashSet<String, ASCIICaseInsensitiveHash>& mimeTypeSet()
+@@ -2486,6 +2490,7 @@ static HashSet<String, ASCIICaseInsensit
              {VideoDecoder, "video/mpeg, mpegversion=(int){1,2}, systemstream=(boolean)false", {"video/mpeg"}},
              {VideoDecoder, "video/x-dirac", { }},
              {VideoDecoder, "video/x-flash-video", {"video/flv", "video/x-flv"}},
@@ -28,7 +32,7 @@ index f697fb63bc5c..30a419264ac8 100644
              {Demuxer, "video/quicktime", { }},
              {Demuxer, "video/quicktime, variant=(string)3gpp", {"video/3gpp"}},
              {Demuxer, "video/mpegts", {"video/mp2t"}},
-@@ -2775,7 +2776,15 @@ void MediaPlayerPrivateGStreamer::createGSTPlayBin(const gchar* playbinName, con
+@@ -2889,7 +2894,15 @@ void MediaPlayerPrivateGStreamer::create
      g_object_set(m_pipeline.get(), "text-sink", m_textAppSink.get(), nullptr);
  #endif
  
@@ -45,19 +49,16 @@ index f697fb63bc5c..30a419264ac8 100644
  #if !USE(GSTREAMER_HOLEPUNCH)
      GRefPtr<GstPad> videoSinkPad = adoptGRef(gst_element_get_static_pad(m_videoSink.get(), "sink"));
      if (videoSinkPad)
-diff --git a/Source/WebCore/platform/graphics/MediaPlayer.h b/Source/WebCore/platform/graphics/MediaPlayer.h
-index 225ce7b99ebf..080452b33e42 100644
---- a/Source/WebCore/platform/graphics/MediaPlayer.h
-+++ b/Source/WebCore/platform/graphics/MediaPlayer.h
-@@ -578,5 +578,7 @@ public:
-
+Index: git/Source/WebCore/platform/graphics/MediaPlayer.h
+===================================================================
+--- git.orig/Source/WebCore/platform/graphics/MediaPlayer.h
++++ git/Source/WebCore/platform/graphics/MediaPlayer.h
+@@ -587,6 +587,8 @@ public:
+ 
      String errorMessage() const;
-
+ 
 +    URL url() const { return m_url; }
 +
  private:
      MediaPlayer(MediaPlayerClient&);
-
--- 
-2.25.1
-
+ 
