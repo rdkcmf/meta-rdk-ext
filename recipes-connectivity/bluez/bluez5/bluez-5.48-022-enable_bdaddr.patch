@@ -1,0 +1,36 @@
+###################################################################################################
+Date: Mon, 17 Dec 2018 15:32:17 +0000
+From c9d32b8621052347799c873f8031d11b1ec1030c Mon Sep 17 00:00:00 2001
+From: Ben Gray <ben.gray@sky.uk>
+Subject: [PATCH] This patch enables the building and installing of the bdaddr tool. 
+The tool was previously in the no install section.
+
+Source: SKY
+License: GPLv2+ & LGPLv2.1+
+Upstream-Status: Pending
+Signed-off-by: Tijo Thomas John <tijo.thomas@sky.uk>
+###################################################################################################
+
+---
+ Makefile.tools | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/Makefile.tools b/Makefile.tools
+index 87ee293..9ffcb57 100644
+--- a/Makefile.tools
++++ b/Makefile.tools
+@@ -176,9 +176,9 @@ endif
+ if TOOLS
+ bin_PROGRAMS += tools/rctest tools/l2test tools/l2ping tools/bccmd \
+ 			tools/bluemoon tools/hex2hcd tools/mpris-proxy \
+-			tools/btattach
++			tools/btattach tools/bdaddr
+ 
+-noinst_PROGRAMS += tools/bdaddr tools/avinfo tools/avtest \
++noinst_PROGRAMS += tools/avinfo tools/avtest \
+ 			tools/scotest tools/amptest tools/hwdb \
+ 			tools/hcieventmask tools/hcisecfilter \
+ 			tools/btinfo tools/btconfig \
+-- 
+2.18.0
+

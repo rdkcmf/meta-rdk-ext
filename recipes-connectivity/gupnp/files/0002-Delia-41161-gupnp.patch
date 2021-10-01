@@ -1,0 +1,100 @@
+Date: Feb  28 12:55:57 2022
+
+Source: COMCAST
+
+Subject: [PATCH] DELIA-41161 - Increase in xcal-device crash due to signal 11
+
+License: LGPL-2.0-or-later
+
+Upstream-Status: Pending
+
+Signed-off-by: Mallikarjun Manjari <Mallikarjun_Manjari@comcast.com>
+Index: gupnp-0.20.10/libgupnp/gupnp-service.c
+===================================================================
+--- gupnp-0.20.10.orig/libgupnp/gupnp-service.c
++++ gupnp-0.20.10/libgupnp/gupnp-service.c
+@@ -1962,10 +1962,28 @@ notify_subscriber (G_GNUC_UNUSED gpointe
+ 
+         data = value;
+         property_set = user_data;
++	if(value == NULL)
++	{
++		g_warning("\n XI-RECOVERY-notify_subscriber : Invalid Value");
++		return;
++	}
++	if(user_data == NULL)
++	{
++		g_warning("\n X-RECOVERY-notify_subscriber : Invalid user data");
++		return;
++	
++	}
+ 
+         /* Subscriber called unsubscribe */
+         if (subscription_data_can_delete (data))
+                 return;
++
++	if(data->callbacks == NULL)
++	{
++		g_warning("\n XI-RECOVERY : Invalid callback");
++		return;
++	}
++
+         if((access(IPV6_PATH, F_OK ) != -1 ) && (access(STOP_XI_RECOVERY, F_OK ) == -1 ) && (data->callbacks->data))
+         {
+             g_message("\n XI-RECOVERY : Inside Recovery Mechanism \n");
+@@ -1981,6 +1999,11 @@ notify_subscriber (G_GNUC_UNUSED gpointe
+                  srcTimeout = NULL;
+         	}
+                 srcTimeout = g_timeout_source_new_seconds (TRIGGER_WAIT_SECONDS);
++		if(srcTimeout == NULL)
++		{
++			g_warning("\n XI-RECOVERY : Invalid Source Timeout");
++			return;
++		}
+                 g_source_set_callback (srcTimeout,writeIpAddressToFile_cb,user_data,NULL);
+                 g_source_attach (srcTimeout, g_main_context_get_thread_default ());
+             }
+@@ -2011,6 +2034,12 @@ notify_subscriber (G_GNUC_UNUSED gpointe
+                                      data->sid);
+ 
+         tmp = g_strdup_printf ("%d", data->seq);
++	if(tmp == NULL)
++	{
++		g_warning("XI-RECOVERY : soup message header is not ready to append");
++		return;
++	
++	}
+         soup_message_headers_append (msg->request_headers,
+                                      "SEQ",
+                                      tmp);
+@@ -2080,6 +2109,17 @@ static void
+ flush_notifications (GUPnPService *service)
+ {
+         char *mem;
++	if(service == NULL)
++	{
++		g_warning("\n flush_notifications: Invalid GUPnP service");
++		return;
++	}
++
++	if(service->priv == NULL)
++	{
++		g_warning("\n flush_notifications: Invalid prvious service");
++		return;
++	}
+ 
+         /* Create property set */
+         mem = create_property_set (service->priv->notify_queue);
+@@ -2264,7 +2304,11 @@ connect_names_to_signal_handlers (GUPnPS
+                 g_free (callback_name);
+ 
+                 if (callback == NULL)
+-                        continue;
++		{
++			g_warning("\n connect_names_to_signal_handlers : Invalid Callback");
++			return;
++		
++		}
+ 
+                 signal_detail = g_strjoin ("::",
+                                            signal_name,

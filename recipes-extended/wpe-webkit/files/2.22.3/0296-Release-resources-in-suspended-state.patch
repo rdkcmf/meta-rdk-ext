@@ -1,0 +1,30 @@
+From 319ac6d0bda98dee7d1fb66102e82664e3d421ea Mon Sep 17 00:00:00 2001
+From: Eugene Mutavchi <Ievgen_Mutavchi@comcast.com>
+Date: Fri, 14 Jan 2022 14:20:30 +0000
+Subject: [PATCH] Release resources in suspended state
+
+Signed-off-by: Eugene Mutavchi <Ievgen_Mutavchi@comcast.com>
+---
+ .../threadedcompositor/ThreadedCompositor.cpp     | 15 ++++++++++++++-
+ 1 file changed, 14 insertions(+), 1 deletion(-)
+
+Index: git/Source/WebKit/Shared/CoordinatedGraphics/threadedcompositor/ThreadedCompositor.cpp
+===================================================================
+--- git.orig/Source/WebKit/Shared/CoordinatedGraphics/threadedcompositor/ThreadedCompositor.cpp
++++ git/Source/WebKit/Shared/CoordinatedGraphics/threadedcompositor/ThreadedCompositor.cpp
+@@ -364,7 +364,14 @@ void ThreadedCompositor::updateSceneStat
+ {
+     LockHolder locker(m_attributes.lock);
+     m_attributes.states.append(state);
+-    m_compositingRunLoop->scheduleUpdate();
++    if (m_suspendedCount) {
++        // use renderNonCompositedWebGL to update scene state to release resources
++        m_compositingRunLoop->performTask([this, protectedThis = makeRef(*this)] {
++            renderNonCompositedWebGL();
++        });
++    }
++    else
++        m_compositingRunLoop->scheduleUpdate();
+ }
+ 
+ #if USE(REQUEST_ANIMATION_FRAME_DISPLAY_MONITOR)

@@ -1,0 +1,73 @@
+#############################################################################
+Date: Fri, 7 Dec 2018 14:11:08 +0000
+From 6157555209bd6be464ceb83036c26f1f7c2d2c4c Mon Sep 17 00:00:00 2001
+From: Ben Gray <ben.gray@sky.uk>
+Subject: [PATCH] Disable the network and HID profiles / plugins by default.
+	On the Sky IP100 platform we don't use and don't want these plugins enabled
+	(the bluetooth RCUs use the HOG profile, not HID).
+Source: SKY
+License: GPLv2+ & LGPLv2.1+
+Upstream-Status: Pending
+Signed-off-by: Tijo Thomas John <tijo.thomas@sky.uk>
+#############################################################################
+
+---
+ configure.ac | 22 +++++++++++-----------
+ 1 file changed, 11 insertions(+), 11 deletions(-)
+
+diff --git a/configure.ac b/configure.ac
+index a7d936c..3d9c4f9 100644
+--- a/configure.ac
++++ b/configure.ac
+@@ -156,13 +156,13 @@ AC_ARG_ENABLE(avrcp, AC_HELP_STRING([--disable-avrcp],
+ 		[disable AVRCP profile]), [enable_avrcp=${enableval}])
+ AM_CONDITIONAL(AVRCP, test "${enable_avrcp}" != "no")
+ 
+-AC_ARG_ENABLE(network, AC_HELP_STRING([--disable-network],
+-		[disable network profiles]), [enable_network=${enableval}])
+-AM_CONDITIONAL(NETWORK, test "${enable_network}" != "no")
++AC_ARG_ENABLE(network, AC_HELP_STRING([--enable-network],
++		[enable network profiles]), [enable_network=${enableval}])
++AM_CONDITIONAL(NETWORK, test "${enable_network}" = "yes")
+ 
+-AC_ARG_ENABLE(hid, AC_HELP_STRING([--disable-hid],
+-		[disable HID profile]), [enable_hid=${enableval}])
+-AM_CONDITIONAL(HID, test "${enable_hid}" != "no")
++AC_ARG_ENABLE(hid, AC_HELP_STRING([--enable-hid],
++		[enable HID profile]), [enable_hid=${enableval}])
++AM_CONDITIONAL(HID, test "${enable_hid}" = "yes")
+ 
+ AC_ARG_ENABLE(hog, AC_HELP_STRING([--disable-hog],
+ 		[disable HoG profile]), [enable_hog=${enableval}])
+@@ -208,7 +208,7 @@ AC_SUBST(UDEV_DIR, [${path_udevdir}])
+ AM_CONDITIONAL(HID2HCI, test "${enable_tools}" != "no" &&
+ 						test "${enable_udev}" != "no")
+ 
+-AC_ARG_ENABLE(cups, AC_HELP_STRING([--disable-cups],
++AC_ARG_ENABLE(cups, AC_HELP_STRING([--enable-cups],
+                 [disable CUPS printer support]), [enable_cups=${enableval}])
+ AM_CONDITIONAL(CUPS, test "${enable_cups}" != "no")
+ 
+@@ -234,15 +234,15 @@ if (test "${enable_midi}" = "yes"); then
+ 	AC_SUBST(ALSA_LIBS)
+ fi
+ 
+-AC_ARG_ENABLE(obex, AC_HELP_STRING([--disable-obex],
+-		[disable OBEX profile support]), [enable_obex=${enableval}])
+-if (test "${enable_obex}" != "no"); then
++AC_ARG_ENABLE(obex, AC_HELP_STRING([--enable-obex],
++		[enable OBEX profile support]), [enable_obex=${enableval}])
++if (test "${enable_obex}" = "yes"); then
+ 	PKG_CHECK_MODULES(ICAL, libical, dummy=yes,
+ 					AC_MSG_ERROR(libical is required))
+ 	AC_SUBST(ICAL_CFLAGS)
+ 	AC_SUBST(ICAL_LIBS)
+ fi
+-AM_CONDITIONAL(OBEX, test "${enable_obex}" != "no")
++AM_CONDITIONAL(OBEX, test "${enable_obex}" = "yes")
+ 
+ AC_ARG_ENABLE(btpclient, AC_HELP_STRING([--enable-btpclient],
+ 		[enable BTP client]), [enable_btpclient=${enableval}])
+-- 
+2.18.0
+

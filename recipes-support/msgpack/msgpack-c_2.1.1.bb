@@ -18,6 +18,8 @@ SRC_URI_append_dunfell = " file://0001-Fix-Werror-class-memaccess.patch \
                          "
 inherit cmake pkgconfig
 
+EXTRA_OECMAKE += " -DMSGPACK_BUILD_TESTS=OFF "
+
 S = "${WORKDIR}/git"
 
 FILES_${PN}-dev += "${libdir}/cmake/msgpack/*.cmake"

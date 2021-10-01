@@ -1,0 +1,35 @@
+From 5cdce4a2e2ff26b73c4c60c06b076751a6d6c7f1 Mon Sep 17 00:00:00 2001
+From: Siva Sankar Raja <sivasankar_raja@comcast.com>
+Source: COMCAST
+License: LICENSE-LGPL-2.1
+Upstream-Status: Pending
+Signed-off-by: Siva Sankar Raja <sivasankar_raja@comcast.com>
+Date: Fri, 5 Jul 2019 12:42:19 +0000
+Subject: [PATCH] add EAC3 OpenCDMDecryptorCaps
+
+---
+ .../graphics/gstreamer/eme/WebKitOpenCDMDecryptorGStreamer.cpp        | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+
+Index: git/Source/WebCore/platform/graphics/gstreamer/eme/WebKitOpenCDMDecryptorGStreamer.cpp
+===================================================================
+--- git.orig/Source/WebCore/platform/graphics/gstreamer/eme/WebKitOpenCDMDecryptorGStreamer.cpp
++++ git/Source/WebCore/platform/graphics/gstreamer/eme/WebKitOpenCDMDecryptorGStreamer.cpp
+@@ -48,7 +48,7 @@ static bool webKitMediaOpenCDMDecryptorDecrypt(WebKitMediaCommonEncryptionDecryp
+ static bool webKitMediaOpenCDMDecryptorHandleKeyId(WebKitMediaCommonEncryptionDecrypt* self, const WebCore::SharedBuffer&);
+ static bool webKitMediaOpenCDMDecryptorAttemptToDecryptWithLocalInstance(WebKitMediaCommonEncryptionDecrypt* self, const WebCore::SharedBuffer&);
+ 
+-static const char* cencEncryptionMediaTypes[] = { "video/mp4", "audio/mp4", "video/x-h264", "audio/mpeg", "video/x-h265",  "audio/x-flac", nullptr };
++static const char* cencEncryptionMediaTypes[] = { "video/mp4", "audio/mp4", "video/x-h264", "audio/mpeg", "audio/x-eac3", "audio/x-ac3", "video/x-h265",  "audio/x-flac", nullptr };
+ static const char* webmEncryptionMediaTypes[] = { "video/webm", "audio/webm", "video/x-vp9", nullptr };
+ 
+ static GstStaticPadTemplate srcTemplate = GST_STATIC_PAD_TEMPLATE("src",
+@@ -61,6 +61,8 @@ static GstStaticPadTemplate srcTemplate = GST_STATIC_PAD_TEMPLATE("src",
+         "audio/mp4; "
+         "audio/mpeg; "
+         "audio/x-flac; "
++        "audio/x-eac3; "
++        "audio/x-ac3; "
+         "video/x-h264; "
+         "video/x-h265; "
+         "video/x-vp9; "));

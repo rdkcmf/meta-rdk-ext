@@ -1,0 +1,578 @@
+From b6beb7cb8770089054d5473e1f1ab80dae4e0898 Mon Sep 17 00:00:00 2001
+From: Ievgen Mutavchi <Ievgen_Mutavchi@comcast.com>
+Date: Wed, 17 Jun 2020 21:18:42 -0400
+Subject: [PATCH] Gamepad for WPE
+Source: COMCAST
+License: LGPL-2.1-or-later
+Upstream-Status: None
+Signed-off-by: Eugene Mutavchi <Ievgen_Mutavchi@comcast.com>
+
+
+---
+ Source/WebCore/PlatformWPE.cmake              |  10 ++
+ .../platform/gamepad/wpe/WPEGamepad.cpp       |  77 ++++++++
+ .../WebCore/platform/gamepad/wpe/WPEGamepad.h |  32 ++++
+ .../gamepad/wpe/WPEGamepadProvider.cpp        | 169 ++++++++++++++++++
+ .../platform/gamepad/wpe/WPEGamepadProvider.h |  52 ++++++
+ Source/WebKit/SourcesWPE.txt                  |   1 +
+ Source/WebKit/UIProcess/API/wpe/WPEView.cpp   |  53 ++++++
+ Source/WebKit/UIProcess/API/wpe/WPEView.h     |   4 +
+ .../UIProcess/Gamepad/UIGamepadProvider.cpp   |   2 +-
+ .../Gamepad/wpe/UIGamepadProviderWPE.cpp      |  36 ++++
+ 10 files changed, 435 insertions(+), 1 deletion(-)
+ create mode 100644 Source/WebCore/platform/gamepad/wpe/WPEGamepad.cpp
+ create mode 100644 Source/WebCore/platform/gamepad/wpe/WPEGamepad.h
+ create mode 100644 Source/WebCore/platform/gamepad/wpe/WPEGamepadProvider.cpp
+ create mode 100644 Source/WebCore/platform/gamepad/wpe/WPEGamepadProvider.h
+ create mode 100644 Source/WebKit/UIProcess/Gamepad/wpe/UIGamepadProviderWPE.cpp
+
+diff --git a/Source/WebCore/PlatformWPE.cmake b/Source/WebCore/PlatformWPE.cmake
+index fc52baaa116..1a5653926b6 100644
+--- a/Source/WebCore/PlatformWPE.cmake
++++ b/Source/WebCore/PlatformWPE.cmake
+@@ -75,3 +75,13 @@ list(APPEND WebCore_SYSTEM_INCLUDE_DIRECTORIES
+     ${UPOWERGLIB_INCLUDE_DIRS}
+     ${WPE_INCLUDE_DIRS}
+ )
++
++if (ENABLE_GAMEPAD)
++    list(APPEND WebCore_INCLUDE_DIRECTORIES
++        "${WEBCORE_DIR}/platform/gamepad/wpe"
++    )
++    list(APPEND WebCore_SOURCES
++        platform/gamepad/wpe/WPEGamepad.cpp
++        platform/gamepad/wpe/WPEGamepadProvider.cpp
++    )
++endif ()
+diff --git a/Source/WebCore/platform/gamepad/wpe/WPEGamepad.cpp b/Source/WebCore/platform/gamepad/wpe/WPEGamepad.cpp
+new file mode 100644
+index 00000000000..923417c4541
+--- /dev/null
++++ b/Source/WebCore/platform/gamepad/wpe/WPEGamepad.cpp
+@@ -0,0 +1,77 @@
++#include "config.h"
++
++#if ENABLE(GAMEPAD)
++
++#include <wpe/wpe.h>
++
++#include "WPEGamepad.h"
++#include "WPEGamepadProvider.h"
++
++namespace WebCore {
++
++WPEGamepad::WPEGamepad(struct wpe_gamepad_provider* provider, uint32_t gamepad_id, unsigned index)
++    : PlatformGamepad(index)
++{
++    m_connectTime = m_lastUpdateTime = MonotonicTime::now();
++    m_gamepad = wpe_gamepad_create(provider, gamepad_id);
++
++    if (m_gamepad) {
++        static struct wpe_gamepad_client s_client = {
++            // button_values_changed
++            [](struct wpe_gamepad* gamepad, void *data) {
++                auto& self = *reinterpret_cast<WPEGamepad*>(data);
++                self.updateButtonValues(gamepad);
++            },
++            // axis_values_changed
++            [] (struct wpe_gamepad* gamepad, void *data) {
++                auto& self = *reinterpret_cast<WPEGamepad*>(data);
++                self.updateAxisValues(gamepad);
++            }
++        };
++        wpe_gamepad_set_client(m_gamepad, &s_client, this);
++
++        m_id = wpe_gamepad_get_device_name(m_gamepad);
++
++        m_buttonValues.resize(wpe_gamepad_get_button_count(m_gamepad));
++        m_buttonValues.fill(0);
++
++        m_axisValues.resize(wpe_gamepad_get_axis_count(m_gamepad));
++        m_axisValues.fill(0);
++    }
++}
++
++WPEGamepad::~WPEGamepad()
++{
++    if (m_gamepad) {
++        wpe_gamepad_set_client(m_gamepad, nullptr, nullptr);
++        wpe_gamepad_destroy(m_gamepad);
++        m_gamepad = nullptr;
++    }
++}
++
++void WPEGamepad::updateButtonValues(struct wpe_gamepad* gamepad)
++{
++    if (gamepad != m_gamepad)
++        return;
++
++    wpe_gamepad_copy_button_values(gamepad, m_buttonValues.data(), m_buttonValues.size());
++    m_lastUpdateTime = MonotonicTime::now();
++
++    WPEGamepadProvider::singleton().scheduleInputNotification(gamepad, true);
++}
++
++void WPEGamepad::updateAxisValues(struct wpe_gamepad* gamepad)
++{
++    if (gamepad != m_gamepad)
++        return;
++
++    wpe_gamepad_copy_axis_values(gamepad, m_axisValues.data(), m_axisValues.size());
++    m_lastUpdateTime = MonotonicTime::now();
++
++    WPEGamepadProvider::singleton().scheduleInputNotification(gamepad);
++}
++
++
++} // namespace WebCore
++
++#endif // ENABLE(GAMEPAD)
+diff --git a/Source/WebCore/platform/gamepad/wpe/WPEGamepad.h b/Source/WebCore/platform/gamepad/wpe/WPEGamepad.h
+new file mode 100644
+index 00000000000..0d04d8e0642
+--- /dev/null
++++ b/Source/WebCore/platform/gamepad/wpe/WPEGamepad.h
+@@ -0,0 +1,32 @@
++#pragma once
++
++#if ENABLE(GAMEPAD)
++
++#include "PlatformGamepad.h"
++
++struct wpe_gamepad;
++struct wpe_gamepad_provider;
++
++namespace WebCore {
++
++class WPEGamepad : public PlatformGamepad {
++public:
++    WPEGamepad(struct wpe_gamepad_provider* provider, uint32_t gamepad_id, unsigned index);
++    virtual ~WPEGamepad();
++
++    const Vector<double>& axisValues() const final { return m_axisValues; }
++    const Vector<double>& buttonValues() const final { return m_buttonValues; }
++
++private:
++    void updateButtonValues(struct wpe_gamepad*);
++    void updateAxisValues(struct wpe_gamepad*);
++
++    Vector<double> m_buttonValues;
++    Vector<double> m_axisValues;
++
++    struct wpe_gamepad* m_gamepad { nullptr };
++};
++
++} // namespace WebCore
++
++#endif // ENABLE(GAMEPAD)
+diff --git a/Source/WebCore/platform/gamepad/wpe/WPEGamepadProvider.cpp b/Source/WebCore/platform/gamepad/wpe/WPEGamepadProvider.cpp
+new file mode 100644
+index 00000000000..bc40cd6d093
+--- /dev/null
++++ b/Source/WebCore/platform/gamepad/wpe/WPEGamepadProvider.cpp
+@@ -0,0 +1,169 @@
++#include "config.h"
++
++#if ENABLE(GAMEPAD)
++
++#include <wtf/NeverDestroyed.h>
++
++#include "WPEGamepadProvider.h"
++#include "Logging.h"
++#include "GamepadProviderClient.h"
++
++#include <wpe/wpe.h>
++
++namespace WebCore {
++
++static const Seconds connectionDelayInterval { 50_ms };
++static const Seconds inputNotificationDelay { 8_ms };
++
++WPEGamepadProvider& WPEGamepadProvider::singleton()
++{
++    static NeverDestroyed<WPEGamepadProvider> sharedProvider;
++    return sharedProvider;
++}
++
++WPEGamepadProvider::WPEGamepadProvider()
++    : m_connectionDelayTimer(*this, &WPEGamepadProvider::connectionDelayTimerFired)
++    , m_inputNotificationTimer(*this, &WPEGamepadProvider::inputNotificationTimerFired)
++{
++}
++
++void WPEGamepadProvider::startMonitoringGamepads(GamepadProviderClient& client)
++{
++    bool isFirstClient = m_clients.isEmpty();
++
++    ASSERT(!m_clients.contains(&client));
++    m_clients.add(&client);
++
++    LOG(Gamepad, "WPEGamepadProvider::startMonitoringGamepads isFirstClient=%s", isFirstClient ? "yes" : "no");
++
++    if (isFirstClient && !m_provider)  {
++        m_shouldDispatchCallbacks = false;
++        m_provider = wpe_gamepad_provider_create();
++        if (m_provider) {
++            static struct wpe_gamepad_provider_client s_client = {
++                // gamepad_connected
++                [](void* data, uint32_t gamepad_id) {
++                    auto& provider = *reinterpret_cast<WPEGamepadProvider*>(data);
++                    provider.gamepadConnected(gamepad_id);
++                },
++                // gamepad_disconnected
++                [](void* data, uint32_t gamepad_id) {
++                    auto& provider = *reinterpret_cast<WPEGamepadProvider*>(data);
++                    provider.gamepadDiconnected(gamepad_id);
++                }
++            };
++            wpe_gamepad_provider_set_client(m_provider, &s_client, this);
++            wpe_gamepad_provider_start(m_provider);
++            m_connectionDelayTimer.startOneShot(connectionDelayInterval);
++        }
++    }
++}
++
++void WPEGamepadProvider::stopMonitoringGamepads(GamepadProviderClient& client)
++{
++    bool isLastClient = m_clients.remove(&client) && m_clients.isEmpty();
++    LOG(Gamepad, "WPEGamepadProvider::stopMonitoringGamepads isLastClient=%s", isLastClient ? "yes" : "no");
++
++    if (isLastClient) {
++        m_gamepadVector.clear();
++        m_gamepadMap.clear();
++        if (m_provider) {
++            wpe_gamepad_provider_set_client(m_provider, nullptr, nullptr);
++            wpe_gamepad_provider_stop(m_provider);
++            wpe_gamepad_provider_destroy(m_provider);
++            m_provider = nullptr;
++            m_lastActiveGamepad = nullptr;
++        }
++    }
++}
++
++void WPEGamepadProvider::gamepadConnected(uint32_t id)
++{
++    if (m_gamepadMap.contains(id))
++        return;
++
++    unsigned index = 0;
++    while (index < m_gamepadVector.size() && m_gamepadVector[index])
++        ++index;
++
++    if (m_gamepadVector.size() <= index)
++        m_gamepadVector.grow(index + 1);
++
++    auto gamepad = std::make_unique<WPEGamepad>(m_provider, id, index);
++    m_gamepadVector[index] = gamepad.get();
++    m_gamepadMap.set(id, WTFMove(gamepad));
++
++    if (!m_shouldDispatchCallbacks) {
++        m_connectionDelayTimer.startOneShot(0_s);
++        return;
++    }
++
++    for (auto& client : m_clients)
++        client->platformGamepadConnected(*m_gamepadVector[index]);
++}
++
++void WPEGamepadProvider::gamepadDiconnected(uint32_t id)
++{
++    if (!m_gamepadMap.contains(id))
++        return;
++
++    if (m_lastActiveGamepad && id == wpe_gamepad_get_id(m_lastActiveGamepad))
++        m_lastActiveGamepad = nullptr;
++
++    auto gamepad = m_gamepadMap.take(id);
++    auto index = m_gamepadVector.find(gamepad.get());
++    if (index != notFound)
++        m_gamepadVector[index] = nullptr;
++
++    m_shouldDispatchCallbacks = true;
++
++    for (auto& client : m_clients)
++        client->platformGamepadDisconnected(*gamepad);
++}
++
++void WPEGamepadProvider::connectionDelayTimerFired()
++{
++    m_shouldDispatchCallbacks = true;
++
++    for (auto* client : m_clients)
++        client->setInitialConnectedGamepads(m_gamepadVector);
++}
++
++void WPEGamepadProvider::inputNotificationTimerFired()
++{
++    if (!m_shouldDispatchCallbacks)
++        return;
++    dispatchPlatformGamepadInputActivity();
++}
++
++void WPEGamepadProvider::platformStopMonitoringInput()
++{
++    if (m_provider)
++        wpe_gamepad_provider_stop(m_provider);
++}
++
++void WPEGamepadProvider::platformStartMonitoringInput()
++{
++    if (m_provider)
++        wpe_gamepad_provider_start(m_provider);
++}
++
++void WPEGamepadProvider::scheduleInputNotification(struct wpe_gamepad* gamepad, bool shouldMakeGamepadsVisibile /* = false */)
++{
++    m_lastActiveGamepad = gamepad;
++    if (shouldMakeGamepadsVisibile)
++        setShouldMakeGamepadsVisibile();
++    if (!m_inputNotificationTimer.isActive())
++        m_inputNotificationTimer.startOneShot(inputNotificationDelay);
++}
++
++struct wpe_view_backend* WPEGamepadProvider::viewForGamepadInput()
++{
++    if (m_provider)
++        return wpe_gamepad_provider_get_view_for_gamepad_input(m_provider, m_lastActiveGamepad);
++    return nullptr;
++}
++
++} // namespace WebCore
++
++#endif // ENABLE(GAMEPAD)
+diff --git a/Source/WebCore/platform/gamepad/wpe/WPEGamepadProvider.h b/Source/WebCore/platform/gamepad/wpe/WPEGamepadProvider.h
+new file mode 100644
+index 00000000000..d0470618bc0
+--- /dev/null
++++ b/Source/WebCore/platform/gamepad/wpe/WPEGamepadProvider.h
+@@ -0,0 +1,52 @@
++#pragma once
++
++#if ENABLE(GAMEPAD)
++#include <wtf/Vector.h>
++#include <wtf/HashMap.h>
++
++#include "Timer.h"
++#include "GamepadProvider.h"
++#include "WPEGamepad.h"
++
++struct wpe_gamepad_provider;
++struct wpe_view_backend;
++
++namespace WebCore {
++
++class WPEGamepadProvider : public GamepadProvider {
++    WTF_MAKE_NONCOPYABLE(WPEGamepadProvider);
++    friend class NeverDestroyed<WPEGamepadProvider>;
++public:
++    WEBCORE_EXPORT static WPEGamepadProvider& singleton();
++
++    WEBCORE_EXPORT void startMonitoringGamepads(GamepadProviderClient&) final;
++    WEBCORE_EXPORT void stopMonitoringGamepads(GamepadProviderClient&) final;
++    const Vector<PlatformGamepad*>& platformGamepads() final { return m_gamepadVector; }
++
++    WEBCORE_EXPORT void platformStopMonitoringInput();
++    WEBCORE_EXPORT void platformStartMonitoringInput();
++    void scheduleInputNotification(struct wpe_gamepad* gamepad, bool shouldMakeGamepadsVisibile = false);
++
++    WEBCORE_EXPORT struct wpe_view_backend* viewForGamepadInput();
++private:
++    WPEGamepadProvider();
++
++    void gamepadConnected(uint32_t id);
++    void gamepadDiconnected(uint32_t id);
++    
++    void connectionDelayTimerFired();
++    void inputNotificationTimerFired();
++
++    Vector<PlatformGamepad*> m_gamepadVector;
++    HashMap<uint32_t, std::unique_ptr<WPEGamepad>> m_gamepadMap;
++    Timer m_connectionDelayTimer;
++    Timer m_inputNotificationTimer;
++    bool m_shouldDispatchCallbacks { false };
++
++    struct wpe_gamepad_provider* m_provider { nullptr };
++    struct wpe_gamepad* m_lastActiveGamepad { nullptr };
++};
++
++} // namespace WebCore
++
++#endif // ENABLE(GAMEPAD)
+diff --git a/Source/WebKit/SourcesWPE.txt b/Source/WebKit/SourcesWPE.txt
+index 1d8233d87f3..ad2275a9dbc 100644
+--- a/Source/WebKit/SourcesWPE.txt
++++ b/Source/WebKit/SourcesWPE.txt
+@@ -97,6 +97,7 @@ Shared/wpe/WebEventFactory.cpp
+ 
+ StorageProcess/glib/StorageProcessMainGLib.cpp
+ 
++UIProcess/Gamepad/wpe/UIGamepadProviderWPE.cpp
+ UIProcess/AcceleratedDrawingAreaProxy.cpp
+ UIProcess/BackingStore.cpp
+ UIProcess/DefaultUndoController.cpp
+diff --git a/Source/WebKit/UIProcess/API/wpe/WPEView.cpp b/Source/WebKit/UIProcess/API/wpe/WPEView.cpp
+index d6fc200d454..bc4418ad813 100644
+--- a/Source/WebKit/UIProcess/API/wpe/WPEView.cpp
++++ b/Source/WebKit/UIProcess/API/wpe/WPEView.cpp
+@@ -37,12 +37,22 @@
+ #include "NativeWebWheelEvent.h"
+ #include "WebPageGroup.h"
+ #include "WebProcessPool.h"
++#if ENABLE(GAMEPAD)
++#include <WebCore/WPEGamepadProvider.h>
++#endif
++#include <wtf/NeverDestroyed.h>
+ #include <wpe/wpe.h>
+ 
+ using namespace WebKit;
+ 
+ namespace WKWPE {
+ 
++static Vector<View*>& viewsVector()
++{
++    static NeverDestroyed<Vector<View*>> vector;
++    return vector;
++}
++
+ View::View(struct wpe_view_backend* backend, const API::PageConfiguration& baseConfiguration)
+     : m_client(std::make_unique<API::ViewClient>())
+     , m_pageClient(std::make_unique<PageClientImpl>(*this))
+@@ -147,10 +157,13 @@ View::View(struct wpe_view_backend* backend, const API::PageConfiguration& baseC
+     wpe_view_backend_initialize(m_backend);
+ 
+     m_pageProxy->initializeWebPage();
++
++    viewsVector().append(this);
+ }
+ 
+ View::~View()
+ {
++    viewsVector().removeAll(this);
+     m_compositingManagerProxy.finalize();
+ }
+ 
+@@ -188,6 +201,13 @@ void View::setViewState(OptionSet<WebCore::ActivityState::Flag> flags)
+ 
+     if (changedFlags)
+         m_pageProxy->activityStateDidChange(changedFlags);
++
++    if (viewState().contains(WebCore::ActivityState::IsVisible)) {
++        if (viewsVector().first() != this) {
++            viewsVector().removeAll(this);
++            viewsVector().insert(0, this);
++        }
++    }
+ }
+ 
+ void View::close()
+@@ -195,4 +215,37 @@ void View::close()
+     m_pageProxy->close();
+ }
+ 
++#if ENABLE(GAMEPAD)
++WebKit::WebPageProxy* View::platformWebPageProxyForGamepadInput()
++{
++    const auto &views = viewsVector();
++    if (views.isEmpty())
++        return nullptr;
++
++    struct wpe_view_backend* viewBackend = WebCore::WPEGamepadProvider::singleton().viewForGamepadInput();
++    size_t index = notFound;
++
++    if (viewBackend) {
++        index = views.findMatching([&](View* v) {
++            return
++                v->backend() == viewBackend &&
++                v->page().isValid() &&
++                v->viewState().contains(WebCore::ActivityState::IsVisible);
++        });
++    } else {
++        index = views.findMatching([](View* v) {
++            return
++                v->page().isValid() &&
++                v->viewState().contains(WebCore::ActivityState::IsVisible);
++        });
++    }
++
++    if (index != notFound)
++        return &(views[index]->page());
++
++    return nullptr;
++}
++#endif
++
++
+ } // namespace WKWPE
+diff --git a/Source/WebKit/UIProcess/API/wpe/WPEView.h b/Source/WebKit/UIProcess/API/wpe/WPEView.h
+index 2ab48530ea1..a1418cd3c7f 100644
+--- a/Source/WebKit/UIProcess/API/wpe/WPEView.h
++++ b/Source/WebKit/UIProcess/API/wpe/WPEView.h
+@@ -78,6 +78,10 @@ public:
+     void setFullScreen(bool fullScreenState) { m_fullScreenModeActive = fullScreenState; };
+ #endif
+ 
++#if ENABLE(GAMEPAD)
++    static WebKit::WebPageProxy* platformWebPageProxyForGamepadInput();
++#endif
++
+ private:
+     View(struct wpe_view_backend*, const API::PageConfiguration&);
+ 
+diff --git a/Source/WebKit/UIProcess/Gamepad/UIGamepadProvider.cpp b/Source/WebKit/UIProcess/Gamepad/UIGamepadProvider.cpp
+index ecaac301b4b..2b1d9e074ee 100644
+--- a/Source/WebKit/UIProcess/Gamepad/UIGamepadProvider.cpp
++++ b/Source/WebKit/UIProcess/Gamepad/UIGamepadProvider.cpp
+@@ -223,7 +223,7 @@ Vector<GamepadData> UIGamepadProvider::snapshotGamepads()
+     return gamepadDatas;
+ }
+ 
+-#if !PLATFORM(COCOA)
++#if !PLATFORM(COCOA) && !PLATFORM(WPE)
+ 
+ void UIGamepadProvider::platformSetDefaultGamepadProvider()
+ {
+diff --git a/Source/WebKit/UIProcess/Gamepad/wpe/UIGamepadProviderWPE.cpp b/Source/WebKit/UIProcess/Gamepad/wpe/UIGamepadProviderWPE.cpp
+new file mode 100644
+index 00000000000..14f06583716
+--- /dev/null
++++ b/Source/WebKit/UIProcess/Gamepad/wpe/UIGamepadProviderWPE.cpp
+@@ -0,0 +1,36 @@
++#include "config.h"
++
++#if ENABLE(GAMEPAD)
++
++#include "UIGamepadProvider.h"
++#include "WPEView.h"
++
++#include <WebCore/WPEGamepadProvider.h>
++
++using namespace WebCore;
++
++namespace WebKit {
++
++void UIGamepadProvider::platformSetDefaultGamepadProvider()
++{
++    GamepadProvider::setSharedProvider(WPEGamepadProvider::singleton());
++}
++
++WebPageProxy* UIGamepadProvider::platformWebPageProxyForGamepadInput()
++{
++    return WKWPE::View::platformWebPageProxyForGamepadInput();
++}
++
++void UIGamepadProvider::platformStopMonitoringInput()
++{
++    WPEGamepadProvider::singleton().platformStopMonitoringInput();
++}
++
++void UIGamepadProvider::platformStartMonitoringInput()
++{
++    WPEGamepadProvider::singleton().platformStartMonitoringInput();
++}
++
++}
++
++#endif // ENABLE(GAMEPAD)
+-- 
+2.20.1
+

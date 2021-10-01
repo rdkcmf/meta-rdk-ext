@@ -1,0 +1,46 @@
+###################################################################
+Date:   <Oct 14th 2021>
+Source: Deutsche Telekom AG
+Changes copyright 2020-2021 Deutsche Telekom AG
+###################################################################
+Index: dnsmasq-2.83/src/forward.c
+===================================================================
+--- dnsmasq-2.83.orig/src/forward.c
++++ dnsmasq-2.83/src/forward.c
+@@ -2350,6 +2350,21 @@ unsigned char *tcp_request(int confd, ti
+ 			log_query(F_SERVER | F_IPV6 | F_FORWARD, daemon->namebuff, 
+ 				  (union all_addr *)&last_server->addr.in6.sin6_addr, NULL);
+ 
++                      /* If the nameserver responds with SERVFAIL or REFUSED, the query is recreated from
++                         reply and send to next available nameserver in /etc/resolv.conf */
++                      if ((RCODE(header) == SERVFAIL) || (RCODE(header) == REFUSED))
++                      {
++                          close(last_server->tcpfd);
++                          header->hb3 &= ~(HB3_QR | HB3_AA | HB3_TC);
++                          header->hb4 &= ~(HB4_RA | HB4_RCODE | HB4_CD | HB4_AD);
++                          if (checking_disabled)
++                              header->hb4 |= HB4_CD;
++                          if (ad_reqd)
++                              header->hb4 |= HB4_AD;
++
++                          last_server->tcpfd = -1;
++                          continue;
++                      }
+ #ifdef HAVE_DNSSEC
+ 		      if (option_bool(OPT_DNSSEC_VALID) && !checking_disabled && (last_server->flags & SERV_DO_DNSSEC))
+ 			{
+@@ -2427,6 +2442,14 @@ unsigned char *tcp_request(int confd, ti
+       
+       *length = htons(m);
+            
++      /* If tcp connection to fallback nameserver fails then send SERVFAIL
++          response received from earlier nameserver to client. */
++      if (((header->hb3 & HB3_QR) >> 7) == 0)
++      {
++          header->hb3 = HB3_QR | HB3_RD;
++          header->hb4 = HB4_RA | SERVFAIL;
++      }
++
+       if (m == 0 || !read_write(confd, packet, m + sizeof(u16), 0))
+ 	return packet;
+     }

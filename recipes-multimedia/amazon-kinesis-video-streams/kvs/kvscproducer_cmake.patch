@@ -1,0 +1,38 @@
+Source: RDK Management
+License: Apache 2.0
+Upstream-Status: Pending
+Signed-off-by: e.savidha@ltts.com
+
+From: SAVIDHA E <e.savidha@ltts.com>
+Date: Tue, 23 Nov 2021
+Subject: [PATCH] common
+
+--- kvscproducer-src_origin/CMakeLists.txt	2021-11-20 10:19:35.277390689 +0000
++++ kvscproducer-src/CMakeLists.txt	2021-11-20 10:21:52.541870531 +0000
+@@ -21,7 +21,7 @@
+ option(MEMORY_SANITIZER "Build with MemorySanitizer." OFF)
+ option(THREAD_SANITIZER "Build with ThreadSanitizer." OFF)
+ option(UNDEFINED_BEHAVIOR_SANITIZER "Build with UndefinedBehaviorSanitizer." OFF)
+-option(ALIGNED_MEMORY_MODEL "Aligned memory model ONLY." OFF)
++option(ALIGNED_MEMORY_MODEL "Aligned memory model ONLY." ON)
+ option(SET_SSL_CALLBACKS "Set SSL thread and lock callbacks." OFF)
+ 
+ set(CMAKE_MACOSX_RPATH TRUE)
+@@ -63,7 +63,7 @@
+   if(USE_OPENSSL)
+     set(BUILD_ARGS -DBUILD_STATIC=${BUILD_STATIC}
+                    -DBUILD_OPENSSL_PLATFORM=${BUILD_OPENSSL_PLATFORM})
+-    build_dependency(openssl ${BUILD_ARGS})
++#    build_dependency(openssl ${BUILD_ARGS})
+   elseif(USE_MBEDTLS)
+     set(BUILD_ARGS -DBUILD_STATIC=${BUILD_STATIC})
+     build_dependency(mbedtls ${BUILD_ARGS})
+@@ -83,7 +83,7 @@
+     set(BUILD_ARGS  -DBUILD_STATIC=${BUILD_STATIC}
+                     -DUSE_OPENSSL=${USE_OPENSSL}
+                     -DUSE_MBEDTLS=${USE_MBEDTLS})
+-    build_dependency(curl ${BUILD_ARGS})
++#    build_dependency(curl ${BUILD_ARGS})
+   endif()
+ 
+   if(BUILD_TEST)

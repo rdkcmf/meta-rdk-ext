@@ -1,0 +1,63 @@
+###################################################################################################
+Date: Mon, 17 Dec 2018 15:46:34 +0000
+From 
+From: Ben Gray <ben.gray@sky.uk>
+Subject: [PATCH] Fixes two bugs:
+
+- A crash that may occur if the client disconnects before the discovery reply
+is received.
+
+- The second is a bug that causes discovery to never be started / stopped again
+if it fails for whatever reason once.  The problem is that the client->msg is
+not cleared after the error is sent, meaning that the daemon will always think
+a request is still in progress, when in fact it failed.
+
+Source: SKY
+License: GPLv2+ & LGPLv2.1+
+Upstream-Status: Pending
+Signed-off-by: Tijo Thomas John <tijo.thomas@sky.uk>
+###################################################################################################
+
+diff --git a/src/adapter.c b/src/adapter.c
+index d16446f..935a613 100755
+--- a/src/adapter.c
++++ b/src/adapter.c
+@@ -1433,7 +1433,7 @@ static void start_discovery_complete(uint8_t status, uint16_t length,
+ 					const void *param, void *user_data)
+ {
+ 	struct btd_adapter *adapter = user_data;
+-	struct watch_client *client = adapter->discovery_list->data;
++	struct watch_client *client;
+ 	const struct mgmt_cp_start_discovery *rp = param;
+ 	DBusMessage *reply;
+ 
+@@ -1442,7 +1442,7 @@ static void start_discovery_complete(uint8_t status, uint16_t length,
+ 	/* Is there are no clients the discovery must have been stopped while
+ 	 * discovery command was pending.
+ 	 */
+-	if (!client) {
++	if (!adapter->discovery_list) {
+ 		struct mgmt_cp_stop_discovery cp;
+ 
+ 		if (status != MGMT_STATUS_SUCCESS)
+@@ -1456,6 +1456,8 @@ static void start_discovery_complete(uint8_t status, uint16_t length,
+ 		return;
+ 	}
+ 
++	client = adapter->discovery_list->data;
++
+ 	if (length < sizeof(*rp)) {
+ 		btd_error(adapter->dev_id,
+ 			"Wrong size of start discovery return parameters");
+@@ -1496,6 +1498,11 @@ fail:
+ 		reply = btd_error_busy(client->msg);
+ 		g_dbus_send_message(dbus_conn, reply);
+ 		g_dbus_remove_watch(dbus_conn, client->watch);
++
++		btd_error(adapter->dev_id,
++			"Failed to start discovery (status 0x%02x)", status);
++		dbus_message_unref(client->msg);
++		client->msg = NULL;
+ 		return;
+ 	}
+ 

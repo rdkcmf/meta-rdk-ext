@@ -6,10 +6,8 @@ LIC_FILES_CHKSUM = "file://LICENSE;md5=e3fc50a88d0a364313df4b21ef20c29e"
 
 DEPENDS = "trower-base64 msgpack-c cimplog"
 
-SRCREV = "adb7f0c152b930899caa08684d266d314a49b512"
-SRC_URI = "git://github.com/Comcast/wrp-c.git \
-           file://0001-no-stringop-truncation.patch \
-           "
+SRCREV = "38d26e8c83aae27b2b83130b68e15b919e4b5e37"
+SRC_URI = "git://github.com/Comcast/wrp-c.git"
 PV = "git+${SRCPV}"
 
 S = "${WORKDIR}/git"

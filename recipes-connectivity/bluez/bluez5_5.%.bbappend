@@ -1,4 +1,8 @@
-inherit systemd
+inherit systemd syslog-ng-config-gen
+SYSLOG-NG_FILTER_client += "bluetooth"
+SYSLOG-NG_SERVICE_bluetooth_client += "bluetooth.service"
+SYSLOG-NG_DESTINATION_bluetooth_client = "bluez.log"
+SYSLOG-NG_LOGRATE_bluetooth_client = "medium"
 
 # Remapping default localstatedir which has a value /var to /opt (persistent memory) across boxes
 # to store bluetooth device and runtime operations data across STB power cycles

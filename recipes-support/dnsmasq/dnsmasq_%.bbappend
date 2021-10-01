@@ -11,6 +11,12 @@ CFLAGS += " -DNO_INOTIFY"
 SRC_URI += "file://dnsmasqLauncher.sh"
 SRC_URI_append_broadband += "file://dnsmasq_syslog_quiet.patch"
 
+inherit syslog-ng-config-gen
+SYSLOG-NG_FILTER = "dnsmasq"
+SYSLOG-NG_SERVICE_dnsmasq = "dnsmasq.service"
+SYSLOG-NG_DESTINATION_dnsmasq = "dnsmasq.log"
+SYSLOG-NG_LOGRATE_dnsmasq = "low"
+
 do_install_append() {
      install -d ${D}${base_libdir}/rdk
      install -m 0644 ${WORKDIR}/dnsmasq.service ${D}${systemd_unitdir}/system

@@ -1,0 +1,26 @@
+From c7286eb01b302d6df7c13c418b9640cc6576b99d Mon Sep 17 00:00:00 2001
+From: kkanag314 <krishnapriya_kanagaraj@comcast.com>
+Date: Mon, 22 Nov 2021 07:23:00 +0000
+Subject: [PATCH] enable inspector server based on remote inspector
+ configuration
+
+---
+ Source/cmake/OptionsWPE.cmake | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/Source/cmake/OptionsWPE.cmake b/Source/cmake/OptionsWPE.cmake
+index 828a57e51093..552a11d04322 100644
+--- a/Source/cmake/OptionsWPE.cmake
++++ b/Source/cmake/OptionsWPE.cmake
+@@ -76,7 +76,7 @@ if (DEVELOPER_MODE)
+ endif ()
+ 
+ # Enable the legacy inspector server.
+-SET_AND_EXPOSE_TO_BUILD(ENABLE_INSPECTOR_SERVER TRUE)
++SET_AND_EXPOSE_TO_BUILD(ENABLE_INSPECTOR_SERVER ${ENABLE_REMOTE_INSPECTOR})
+ WEBKIT_OPTION_DEPEND(USE_GSTREAMER_HOLEPUNCH ENABLE_VIDEO)
+ WEBKIT_OPTION_DEPEND(USE_EXTERNAL_HOLEPUNCH ENABLE_VIDEO)
+ 
+-- 
+2.17.1
+

@@ -1,0 +1,37 @@
+--- gstreamer/libs/gst/check/gstcheck.c	2021-11-24 06:18:51.441245149 +0000
++++ gstreamer_modified/libs/gst/check/gstcheck.c	2021-11-24 06:21:45.198266804 +0000
+@@ -126,6 +126,7 @@
+ 
+   gst_init (argc, argv);
+ 
++  GLogLevelFlags _gst_log_level = G_LOG_LEVEL_CRITICAL | G_LOG_LEVEL_WARNING;
+   GST_DEBUG_CATEGORY_INIT (check_debug, "check", 0, "check regression tests");
+ 
+   if (atexit (gst_deinit) != 0) {
+@@ -135,18 +136,16 @@
+   if (g_getenv ("GST_TEST_DEBUG"))
+     _gst_check_debug = TRUE;
+ 
++  if (g_getenv ("GST_LOG_LEVEL"))
++    _gst_log_level = atoi(g_getenv ("GST_LOG_LEVEL"));
++
+   g_log_set_handler (NULL, G_LOG_LEVEL_MESSAGE, gst_check_log_message_func,
+       NULL);
+-  g_log_set_handler (NULL, G_LOG_LEVEL_CRITICAL | G_LOG_LEVEL_WARNING,
+-      gst_check_log_critical_func, NULL);
+-  g_log_set_handler ("GStreamer", G_LOG_LEVEL_CRITICAL | G_LOG_LEVEL_WARNING,
+-      gst_check_log_critical_func, NULL);
+-  g_log_set_handler ("GLib-GObject", G_LOG_LEVEL_CRITICAL | G_LOG_LEVEL_WARNING,
+-      gst_check_log_critical_func, NULL);
+-  g_log_set_handler ("GLib-GIO", G_LOG_LEVEL_CRITICAL | G_LOG_LEVEL_WARNING,
+-      gst_check_log_critical_func, NULL);
+-  g_log_set_handler ("GLib", G_LOG_LEVEL_CRITICAL | G_LOG_LEVEL_WARNING,
+-      gst_check_log_critical_func, NULL);
++  g_log_set_handler (NULL, _gst_log_level, gst_check_log_critical_func, NULL);
++  g_log_set_handler ("GStreamer", _gst_log_level, gst_check_log_critical_func, NULL);
++  g_log_set_handler ("GLib-GObject", _gst_log_level, gst_check_log_critical_func, NULL);
++  g_log_set_handler ("GLib-GIO", _gst_log_level, gst_check_log_critical_func, NULL);
++  g_log_set_handler ("GLib", _gst_log_level, gst_check_log_critical_func, NULL);
+ 
+   print_plugins ();
+ 

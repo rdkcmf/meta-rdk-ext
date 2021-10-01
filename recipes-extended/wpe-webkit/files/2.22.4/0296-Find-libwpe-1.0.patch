@@ -1,0 +1,22 @@
+From dee850cb87c75823dc50a6ad6550473c9d1970ce Mon Sep 17 00:00:00 2001
+From: Eugene Mutavchi <Ievgen_Mutavchi@comcast.com>
+Date: Tue, 21 Dec 2021 13:36:22 +0000
+Subject: [PATCH] Find libwpe 1.0
+
+---
+ Source/cmake/FindWPE.cmake | 11 +++++++++--
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+Index: git/Source/cmake/FindWPE.cmake
+===================================================================
+--- git.orig/Source/cmake/FindWPE.cmake
++++ git/Source/cmake/FindWPE.cmake
+@@ -37,7 +37,7 @@ find_path(WPE_INCLUDE_DIRS
+ )
+ 
+ find_library(WPE_LIBRARIES
+-    NAMES wpe-0.2
++    NAMES ${PC_WPE_LIBRARIES}
+     HINTS ${PC_WPE_LIBDIR} ${PC_WPE_LIBRARY_DIRS}
+ )
+ 

@@ -1,0 +1,79 @@
+From 632862cbcd3cb7731a36c555006b7ae12ef07c38 Mon Sep 17 00:00:00 2001
+From: Filipe Norte <filipe.norte@sky.uk>
+Date: Thu, 10 Feb 2022 14:23:21 +0000
+Subject: [PATCH] LLAMA-5505: Fix loss of ReadyForMoreSamples notifications
+
+When delegating the notification of "ReadyForMoreSamples" to another
+thread via
+the "MainThreadNotifier" class, if a prior notification request is still
+pending, the new request is dropped. As notification requests can occur
+concurrently when multiple streams are present (e.g. audio and video), a
+notification may get lost, because the notify only tracks pending
+notifications per notification type, and does not have knowledge of
+streams.
+I.e. if the notifier has a pending "ReadyForMoreSamples" notification
+for stream 1 and we are requesting a notification for stream 2, then the
+notification for stream 2 is ignored/dropped.
+
+While this kind of notification may be triggered again, there are corner
+cases when such re-trigger is not happening if it was already requested
+(e.g. empty queue). To ensure notifications are triggered for each
+stream, we use stream type specific notifications.
+
+An observed effect of this issue is video freezing with audio continuing
+
+Signed-off-by: Filipe Norte <filipe.norte@sky.uk>
+---
+ .../gstreamer/mse/WebKitMediaSourceGStreamer.cpp | 16 ++++++++++++++--
+ .../mse/WebKitMediaSourceGStreamerPrivate.h      |  6 ++++--
+ 2 files changed, 18 insertions(+), 4 deletions(-)
+
+diff --git a/Source/WebCore/platform/graphics/gstreamer/mse/WebKitMediaSourceGStreamer.cpp b/Source/WebCore/platform/graphics/gstreamer/mse/WebKitMediaSourceGStreamer.cpp
+index d9739ec79bac..719fbf308619 100644
+--- a/Source/WebCore/platform/graphics/gstreamer/mse/WebKitMediaSourceGStreamer.cpp
++++ b/Source/WebCore/platform/graphics/gstreamer/mse/WebKitMediaSourceGStreamer.cpp
+@@ -134,10 +134,22 @@ static void enabledAppsrcNeedData(GstAppSrc* appsrc, guint, gpointer userData)
+         // Search again for the Stream, just in case it was removed between the previous lock and this one.
+         appsrcStream = getStreamByAppsrc(webKitMediaSrc, GST_ELEMENT(appsrc));
+ 
+-        if (appsrcStream && appsrcStream->type != WebCore::Invalid)
+-            webKitMediaSrc->priv->notifier->notify(WebKitMediaSrcMainThreadNotification::ReadyForMoreSamples, [webKitMediaSrc, appsrcStream] {
++        if (appsrcStream && appsrcStream->type != WebCore::Invalid) {
++            auto notificationType = [](WebCore::MediaSourceStreamTypeGStreamer type) {
++                switch(type) {
++                    case WebCore::Video: return WebKitMediaSrcMainThreadNotification::VideoReadyForMoreSamples;
++                    case WebCore::Audio: return WebKitMediaSrcMainThreadNotification::AudioReadyForMoreSamples;
++                    case WebCore::Text:  return WebKitMediaSrcMainThreadNotification::TextReadyForMoreSamples;
++                    default: break;
++                }
++                RELEASE_ASSERT_NOT_REACHED();
++                return WebKitMediaSrcMainThreadNotification::VideoReadyForMoreSamples;
++            }(appsrcStream->type);
++
++            webKitMediaSrc->priv->notifier->notify(notificationType, [webKitMediaSrc, appsrcStream] {
+                 notifyReadyForMoreSamplesMainThread(webKitMediaSrc, appsrcStream);
+             });
++	}
+ 
+         GST_OBJECT_UNLOCK(webKitMediaSrc);
+     }
+diff --git a/Source/WebCore/platform/graphics/gstreamer/mse/WebKitMediaSourceGStreamerPrivate.h b/Source/WebCore/platform/graphics/gstreamer/mse/WebKitMediaSourceGStreamerPrivate.h
+index 81c1d68c84b9..3b75316908c3 100644
+--- a/Source/WebCore/platform/graphics/gstreamer/mse/WebKitMediaSourceGStreamerPrivate.h
++++ b/Source/WebCore/platform/graphics/gstreamer/mse/WebKitMediaSourceGStreamerPrivate.h
+@@ -102,8 +102,10 @@ enum OnSeekDataAction {
+ };
+ 
+ enum WebKitMediaSrcMainThreadNotification {
+-    ReadyForMoreSamples = 1 << 0,
+-    SeekNeedsData = 1 << 1
++    VideoReadyForMoreSamples = 1 << 0,
++    AudioReadyForMoreSamples = 1 << 1,
++    TextReadyForMoreSamples = 1 << 2,
++    SeekNeedsData = 1 << 3
+ };
+ 
+ struct _WebKitMediaSrcPrivate {
+-- 
+2.29.0
+

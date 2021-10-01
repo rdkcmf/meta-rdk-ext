@@ -1,0 +1,34 @@
+From 57012b3849006b413b85c019acefee8ed99cff93 Mon Sep 17 00:00:00 2001
+From: smathe135 <Simi_Mathew@comcast.com>
+Date: Mon, 14 Feb 2022 11:33:34 +0000
+Subject: [PATCH] AMLOGIC-3021, RDKTV-13651: audio/video freeze due to xrun
+ timer
+
+Reason for change: When the audio data reaches the amlhalasink later than
+0.7s a xrun timer is triggered and it is moved to the paused state also causing a
+video freeze. Disable the xrun timer
+Test Procedure: Basic sanity on webapps.
+Risks: NA
+
+Signed-off-by: Simi Mathew <simim@tataelxsi.co.in>
+---
+ .../graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp      | 6 ++++++
+ 1 file changed, 6 insertions(+)
+
+diff --git a/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp b/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp
+index 9ca98bb342d2..3a31b34835a3 100644
+--- a/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp
++++ b/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp
+@@ -3013,6 +3013,12 @@ bool MediaPlayerPrivateGStreamer::canSaveMediaData() const
+ void MediaPlayerPrivateGStreamer::elementSetupCallback(MediaPlayerPrivateGStreamer* player, GstElement* element, GstElement* /*pipeline*/)
+ {
+     GST_DEBUG("Element set-up for %s", GST_ELEMENT_NAME(element));
++
++    if(g_str_has_prefix(GST_ELEMENT_NAME(element), "amlhalasink"))
++    {
++        GST_INFO("Set property disable-xrun to TRUE");
++        g_object_set(element, "disable-xrun", TRUE, nullptr);
++    }
+ #if PLATFORM(BROADCOM)
+     if (g_str_has_prefix(GST_ELEMENT_NAME(element), "brcmaudiosink")) {
+         g_object_set(G_OBJECT(element), "async", TRUE, nullptr);

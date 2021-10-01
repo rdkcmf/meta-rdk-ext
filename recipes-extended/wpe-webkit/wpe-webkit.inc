@@ -36,6 +36,9 @@ PROVISIONING_x86 = ""
 PACKAGECONFIG ?= "2dcanvas cssshapes fetchapi full_logs mediasource encryptedmedia performance-timeline picturesize \
                   promise ${PROVISIONING} resourcetiming video ${WPE_BACKEND} mediastream native_audio sampling-profiler \
                   ${@bb.utils.contains('DISTRO_FEATURES', 'opencdm', 'wpeframework_opencdm', '', d)}"
+
+PACKAGECONFIG_append += "${@bb.utils.contains('DISTRO_FEATURES', 'gaming-support', 'indexeddb subtlecrypto webaudio gamepad', '', d)}"
+
 PACKAGECONFIG_remove_libc-musl = "sampling-profiler"
 
 # WPE features
@@ -63,7 +66,7 @@ PACKAGECONFIG[scriptedspeech] = "-DENABLE_SCRIPTED_SPEECH=ON,-DENABLE_SCRIPTED_S
 PACKAGECONFIG[suidsandboxlinux] = "-DENABLE_SUID_SANDBOX_LINUX=ON,-DENABLE_SUID_SANDBOX_LINUX=OFF,"
 PACKAGECONFIG[sampling-profiler] = "-DENABLE_SAMPLING_PROFILER=ON,-DENABLE_SAMPLING_PROFILER=OFF,"
 PACKAGECONFIG[shadowdom] = "-DENABLE_SHADOW_DOM=ON,-DENABLE_SHADOW_DOM=OFF,"
-PACKAGECONFIG[subtlecrypto] = "-DENABLE_SUBTLE_CRYPTO=ON,-DENABLE_SUBTLE_CRYPTO=OFF,"
+PACKAGECONFIG[subtlecrypto] = "-DENABLE_SUBTLE_CRYPTO=ON,-DENABLE_SUBTLE_CRYPTO=OFF,libtasn1"
 PACKAGECONFIG[video] = "-DENABLE_VIDEO=ON -DENABLE_VIDEO_TRACK=ON,-DENABLE_VIDEO=OFF -DENABLE_VIDEO_TRACK=OFF,gstreamer1.0 gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-plugins-bad,${RDEPS_VIDEO}"
 PACKAGECONFIG[webaudio] = "-DENABLE_WEB_AUDIO=ON,-DENABLE_WEB_AUDIO=OFF,gstreamer1.0 gstreamer1.0-plugins-base gstreamer1.0-plugins-good,${RDEPS_WEBAUDIO}"
 PACKAGECONFIG[native_audio] = "-DENABLE_NATIVE_AUDIO=ON, -DENABLE_NATIVE_AUDIO=OFF,"
