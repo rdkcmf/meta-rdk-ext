@@ -1,17 +1,10 @@
 FILESEXTRAPATHS_prepend := "${THISDIR}/files:"
 
 SRC_URI += "file://ocsp_request_to_CA_Directly_curl_7.69.1.patch \
+            file://CVE-2020-8231.patch \
+            file://CVE-2020-8285.patch \
+            file://CVE-2020-8286.patch \
 "
-SRC_URI_append_hybrid = " \
-                        file://CVE-2020-8231.patch \
-                        file://CVE-2020-8285.patch \
-                        file://CVE-2020-8286.patch \
-                        "
-SRC_URI_append_client = " \
-                        file://CVE-2020-8231.patch \
-                        file://CVE-2020-8285.patch \
-                        file://CVE-2020-8286.patch \
-                        "
 
 CURLGNUTLS = "--without-gnutls --with-ssl"
 DEPENDS += " openssl"
