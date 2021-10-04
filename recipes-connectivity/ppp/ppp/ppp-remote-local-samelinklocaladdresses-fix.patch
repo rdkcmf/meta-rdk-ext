@@ -1,0 +1,29 @@
+###################################################################
+Date: <Oct 5th 2021>
+Source: Deutsche Telekom AG
+Changes copyright 2020-2021 Deutsche Telekom AG
+###################################################################
+Index: ppp-2.4.8/pppd/ipv6cp.c
+===================================================================
+--- ppp-2.4.8.orig/pppd/ipv6cp.c
++++ ppp-2.4.8/pppd/ipv6cp.c
+@@ -1192,6 +1192,8 @@ ipv6cp_up(f)
+     ipv6cp_options *ho = &ipv6cp_hisoptions[f->unit];
+     ipv6cp_options *go = &ipv6cp_gotoptions[f->unit];
+     ipv6cp_options *wo = &ipv6cp_wantoptions[f->unit];
++    char localIntfId[64] = {0};
++    char remoteIntfId[64] = {0};
+ 
+     IPV6CPDEBUG(("ipv6cp: up"));
+ 
+@@ -1292,7 +1294,9 @@ ipv6cp_up(f)
+        ipv6_up_hook();
+ 
+ #ifdef FEATURE_RDKB_WAN_MANAGER
+-	sendPppIpv6cpPParams(PPP_IPV6CP_COMPLETED, llv6_ntoa(go->ourid), llv6_ntoa(ho->hisid), getpid());
++       snprintf(localIntfId,sizeof(localIntfId),"%s",llv6_ntoa(go->ourid));
++       snprintf(remoteIntfId,sizeof(remoteIntfId), "%s",llv6_ntoa(ho->hisid));
++       sendPppIpv6cpPParams(PPP_IPV6CP_COMPLETED, localIntfId, remoteIntfId, getpid());
+ #endif
+     /*
+      * Execute the ipv6-up script, like this:
