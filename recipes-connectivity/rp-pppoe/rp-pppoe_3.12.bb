@@ -16,7 +16,8 @@ SRC_URI = "https://dianne.skoll.ca/projects/rp-pppoe/download/OLD/rp-pppoe-${PV}
            file://pppoe-server.default \
            file://pppoe-server.init \
            file://configure.in-Error-fix.patch \
-           file://pppoe-server.service"
+           file://pppoe-server.service \
+           file://pppoe-stop_fix.patch"
 
 SRC_URI[md5sum] = "216eb52b69062b92a64ee37fd71f4b66"
 SRC_URI[sha256sum] = "00794e04031546b0e9b8cf286f2a6d1ccfc4a621b2a3abb2d7ef2a7ab7cc86c2"
