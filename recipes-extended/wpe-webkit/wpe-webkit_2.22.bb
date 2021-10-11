@@ -189,6 +189,8 @@ SRC_URI += "file://2.22/0005-Remove-screen-saver-disabler.patch"
 
 SRC_URI += "file://2.22/0285-Media-Make-currentTime-compliant-with-the-spec-when-.patch"
 SRC_URI += "file://2.22/0287-Add-support-for-ipv6-relay-candidate-in-libwebrtc.patch"
+SRC_URI += "file://2.22/0288-Fix-for-syntax-error-invalid-character.patch"
+
 
 # device specific configs
 PACKAGECONFIG[westeros] = "-DUSE_WPEWEBKIT_BACKEND_WESTEROS=ON -DUSE_WPEWEBKIT_PLATFORM_WESTEROS=ON -DUSE_KEY_INPUT_HANDLING_LINUX_INPUT=OFF -DUSE_GSTREAMER_HOLEPUNCH=ON -DUSE_EXTERNAL_HOLEPUNCH=ON -DUSE_WESTEROS_SINK=ON,,westeros"
