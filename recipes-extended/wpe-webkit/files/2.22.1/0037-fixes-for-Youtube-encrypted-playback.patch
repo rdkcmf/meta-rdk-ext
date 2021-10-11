@@ -9,11 +9,11 @@ Subject: [PATCH] fixes for Youtube encrypted playback
 Signed-off-by: Gurdal Oruklu <gurdal_oruklu@comcast.com>
 
 ---
- .../gstreamer/MediaPlayerPrivateGStreamerBase.cpp  |  4 ++-
- .../gstreamer/MediaPlayerPrivateGStreamerBase.h    |  1 +
- .../graphics/gstreamer/eme/GStreamerEMEUtilities.h |  2 +-
- .../WebKitCommonEncryptionDecryptorGStreamer.cpp   | 42 ++++++++++++++++------
- 4 files changed, 36 insertions(+), 13 deletions(-)
+ .../MediaPlayerPrivateGStreamerBase.cpp       |  4 +-
+ .../MediaPlayerPrivateGStreamerBase.h         |  1 +
+ .../gstreamer/eme/GStreamerEMEUtilities.h     |  3 +-
+ ...bKitCommonEncryptionDecryptorGStreamer.cpp | 54 +++++++++++++------
+ 4 files changed, 45 insertions(+), 17 deletions(-)
 
 diff --git a/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamerBase.cpp b/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamerBase.cpp
 index 64e27c722445..774e024de2d1 100644
@@ -43,20 +43,21 @@ index 81c7a7479662..f675a9a2280f 100644
  };
  
 diff --git a/Source/WebCore/platform/graphics/gstreamer/eme/GStreamerEMEUtilities.h b/Source/WebCore/platform/graphics/gstreamer/eme/GStreamerEMEUtilities.h
-index 56e3f1a7f617..2070bd70804f 100644
+index 56e3f1a7f617..c460dcb75a64 100644
 --- a/Source/WebCore/platform/graphics/gstreamer/eme/GStreamerEMEUtilities.h
 +++ b/Source/WebCore/platform/graphics/gstreamer/eme/GStreamerEMEUtilities.h
-@@ -37,7 +37,7 @@
+@@ -37,7 +37,8 @@
  #endif
  
  // NOTE: YouTube 2018 EME conformance tests expect this to be >=5s.
 -const WTF::Seconds WEBCORE_GSTREAMER_EME_LICENSE_KEY_RESPONSE_TIMEOUT = WTF::Seconds(6);
-+const WTF::Seconds WEBCORE_GSTREAMER_EME_LICENSE_KEY_RESPONSE_TIMEOUT = WTF::Seconds(60);
++// WPE Hang detector  kills the process after 30 seconds, so license timeout needs to be < 30s
++const WTF::Seconds WEBCORE_GSTREAMER_EME_LICENSE_KEY_RESPONSE_TIMEOUT = WTF::Seconds(25);
  
  namespace WebCore {
  
 diff --git a/Source/WebCore/platform/graphics/gstreamer/eme/WebKitCommonEncryptionDecryptorGStreamer.cpp b/Source/WebCore/platform/graphics/gstreamer/eme/WebKitCommonEncryptionDecryptorGStreamer.cpp
-index 852a9884f7d3..362259ee1bf0 100644
+index 0512aa03910b..99ec96469e73 100644
 --- a/Source/WebCore/platform/graphics/gstreamer/eme/WebKitCommonEncryptionDecryptorGStreamer.cpp
 +++ b/Source/WebCore/platform/graphics/gstreamer/eme/WebKitCommonEncryptionDecryptorGStreamer.cpp
 @@ -41,6 +41,7 @@ using WebCore::GstMappedBuffer;
@@ -121,7 +122,7 @@ index 852a9884f7d3..362259ee1bf0 100644
                  attemptToDecryptWithLocalInstance(self, keyID);
              if (priv->m_currentKeyID.has_value())
 @@ -289,7 +302,10 @@ static GstFlowReturn webkitMediaCommonEncryptionDecryptTransformInPlace(GstBaseT
-             GST_ERROR_OBJECT(self, "key not available");
+             GST_ELEMENT_ERROR (self, STREAM, DECRYPT_NOKEY, ("Key not available"), (NULL));
              return GST_FLOW_NOT_SUPPORTED;
          }
 -
@@ -166,13 +167,26 @@ index 852a9884f7d3..362259ee1bf0 100644
      }
  }
  
-@@ -575,6 +594,7 @@ static GstStateChangeReturn webKitMediaCommonEncryptionDecryptorChangeState(GstE
-     case GST_STATE_CHANGE_PAUSED_TO_READY:
-         GST_DEBUG_OBJECT(self, "PAUSED->READY");
-         priv->m_isFlushing = false;
-+        priv->m_shouldStop = true;
-         priv->m_condition.notifyOne();
+@@ -572,11 +591,16 @@ static GstStateChangeReturn webKitMediaCommonEncryptionDecryptorChangeState(GstE
+     WebKitMediaCommonEncryptionDecryptPrivate* priv = WEBKIT_MEDIA_CENC_DECRYPT_GET_PRIVATE(self);
+ 
+     switch (transition) {
+-    case GST_STATE_CHANGE_PAUSED_TO_READY:
+-        GST_DEBUG_OBJECT(self, "PAUSED->READY");
+-        priv->m_isFlushing = false;
+-        priv->m_condition.notifyOne();
++    case GST_STATE_CHANGE_PAUSED_TO_READY: {
++        {
++            GST_DEBUG_OBJECT(self, "PAUSED->READY");
++            LockHolder locker(priv->m_mutex);
++            priv->m_isFlushing = false;
++            priv->m_shouldStop = true;
++            priv->m_condition.notifyOne();
++        }
          break;
++    }
      default:
+         break;
+     }
 -- 
-2.14.2
+2.29.0
