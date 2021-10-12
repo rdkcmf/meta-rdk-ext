@@ -32,6 +32,7 @@ SRC_URI = "https://download.samba.org/pub/${BPN}/${BP}.tar.gz \
            file://0001-pppd-Fix-bounds-check-in-EAP-code.patch \
            file://ipc-event.patch \
            file://ppp-remote-local-samelinklocaladdresses-fix.patch \
+           file://ppp-sessionBW-authProtocol-ACName-LastConnErr-DM-Impl.patch \
     "
 
 SRC_URI_append_libc-musl = "\

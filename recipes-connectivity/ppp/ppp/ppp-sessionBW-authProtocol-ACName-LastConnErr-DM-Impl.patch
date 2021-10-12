@@ -1,0 +1,230 @@
+###################################################################
+Date: <Oct 12th 2021>
+Source: Deutsche Telekom AG
+Changes copyright 2020-2021 Deutsche Telekom AG
+###################################################################
+Index: ppp-2.4.8/pppd/auth.c
+===================================================================
+--- ppp-2.4.8.orig/pppd/auth.c
++++ ppp-2.4.8/pppd/auth.c
+@@ -1073,6 +1073,11 @@ auth_withpeer_success(unit, protocol, pr
+     /* Save the authentication method for later. */
+     auth_done[unit] |= bit;
+ 
++#ifdef FEATURE_RDKB_WAN_MANAGER
++    script_setenv("LCP_AUTH_PROTO",prot,1);
++    sendPppLcpState(PPP_LCP_AUTH_COMPLETED, getpid());
++#endif
++
+     /*
+      * If there is no more authentication still being done,
+      * proceed to the network (or callback) phase.
+Index: ppp-2.4.8/pppd/chap-new.c
+===================================================================
+--- ppp-2.4.8.orig/pppd/chap-new.c
++++ ppp-2.4.8/pppd/chap-new.c
+@@ -509,9 +509,10 @@ chap_handle_status(struct chap_client_st
+ 			msg = "CHAP authentication failed";
+ 	}
+ 	if (msg) {
+-		if (len > 0)
++		if (len > 0) {
+ 			info("%s: %.*v", msg, len, pkt);
+-		else
++			script_setenv("VENDOR_MESSAGE", msg, 1);
++		} else
+ 			info("%s", msg);
+ 	}
+ 	if (code == CHAP_SUCCESS)
+@@ -519,6 +520,7 @@ chap_handle_status(struct chap_client_st
+ 	else {
+ 		cs->flags |= AUTH_FAILED;
+ 		error("CHAP authentication failed");
++		script_unsetenv("VENDOR_MESSAGE");
+ 		auth_withpeer_fail(0, PPP_CHAP);
+ 	}
+ }
+Index: ppp-2.4.8/pppd/main.c
+===================================================================
+--- ppp-2.4.8.orig/pppd/main.c
++++ ppp-2.4.8/pppd/main.c
+@@ -2032,6 +2032,38 @@ novm(msg)
+ }
+ 
+ /*
++ * script_getenv - get an environment variable
++ */
++void
++script_getenv(var,value)
++    char *var, *value;
++{
++    char *p, fmt[32];
++    if(var != NULL && (value != NULL))
++    {
++        size_t varl = strlen(var);
++        for(int i = 0; (p = script_env[i]) != 0; ++i)
++        {
++             if(strncmp(p, var, varl) == 0)
++             {
++                 strcpy(fmt,var);
++                 strcat(fmt,"=%s");
++                 sscanf(p,fmt,value);
++                 char *ptr = strchr(value, '\x01');
++                 if(ptr)
++                 {
++                     //if Start of heading (SOH) found replace with null character
++                     *ptr  = '\0';
++                 }
++             }
++         }
++     }
++     else {
++         *value='\0';
++     }
++}
++
++/*
+  * script_setenv - set an environment variable value to be used
+  * for scripts that we run (e.g. ip-up, auth-up, etc.)
+  */
+Index: ppp-2.4.8/pppd/ppp_ipc.c
+===================================================================
+--- ppp-2.4.8.orig/pppd/ppp_ipc.c
++++ ppp-2.4.8/pppd/ppp_ipc.c
+@@ -24,6 +24,7 @@
+ #endif
+ #include <errno.h>
+ #include "ppp_ipc.h"
++#include "pppd.h"
+ 
+ /* ---- extern declarations ---------------------------------------- */
+ extern int ipcSockFd;
+@@ -148,6 +149,24 @@ int sendPppLcpState(uint8_t PppState, pi
+ 
+     ipcMsg.pppEventMsg.pppState = PppState;
+ 
++    if(PPP_LCP_AUTH_COMPLETED == PppState)
++    {
++	memset(ipcMsg.pppEventMsg.event.pppLcpMsg.vendormsg , '\0' ,
++       sizeof(ipcMsg.pppEventMsg.event.pppLcpMsg.vendormsg));
++	script_getenv("VENDOR_MESSAGE",ipcMsg.pppEventMsg.event.pppLcpMsg.vendormsg);
++	script_getenv("LCP_AUTH_PROTO",ipcMsg.pppEventMsg.event.pppLcpMsg.authproto);
++    }
++
++    if(PPP_INTERFACE_CONNECTING == PppState)
++    {
++       script_getenv("AC_NAME",ipcMsg.pppEventMsg.event.pppLcpMsg.acname);
++    }
++
++    if(PPP_INTERFACE_DISCONNECTED == PppState)
++    {
++        ipcMsg.pppEventMsg.event.pppLcpMsg.exitStatus = status;
++    }
++
+     if(sendSocket(ipcSockFd, &ipcMsg, sizeof(ipc_msg_payload_t)))
+     {
+         syslog (LOG_INFO, "pppd: LCP state ID %d has been sent to ppp manager\n", PppState);
+Index: ppp-2.4.8/pppd/ppp_ipc.h
+===================================================================
+--- ppp-2.4.8.orig/pppd/ppp_ipc.h
++++ ppp-2.4.8/pppd/ppp_ipc.h
+@@ -71,6 +71,7 @@ typedef enum _PPP_STATES
+     PPP_IPCP_FAILED,
+     PPP_IPV6CP_COMPLETED,
+     PPP_IPV6CP_FAILED,
++    PPP_LCP_AUTH_COMPLETED,
+     PPP_MAX_STATE
+ }PPP_STATES;
+ 
+@@ -110,12 +111,21 @@ typedef struct _ppp_ipv6cp_msg
+ 
+ }ppp_ipv6cp_msg;
+ 
++typedef struct _ppp_lcp_msg
++{
++    int exitStatus;
++    char authproto[BUFLEN_32];
++    char vendormsg[BUFLEN_256];
++    char acname[BUFLEN_32];
++}ppp_lcp_msg;
++
+ typedef struct _ppp_event_msg
+ {
+     pid_t pid;
+     PPP_STATES pppState; //lcp state
+     union
+     {
++	 ppp_lcp_msg pppLcpMsg;
+         ppp_ipcp_msg pppIpcpMsg; //ncp state
+         ppp_ipv6cp_msg pppIpv6cpMsg; // ncp v6 state
+     }event;
+Index: ppp-2.4.8/pppd/pppd.h
+===================================================================
+--- ppp-2.4.8.orig/pppd/pppd.h
++++ ppp-2.4.8/pppd/pppd.h
+@@ -532,6 +532,7 @@ const char *protocol_name __P((int));
+ void remove_pidfiles __P((void));
+ void lock_db __P((void));
+ void unlock_db __P((void));
++void script_getenv __P((char *, char *));
+ 
+ /* Procedures exported from tty.c. */
+ void tty_init __P((void));
+Index: ppp-2.4.8/pppd/upap.c
+===================================================================
+--- ppp-2.4.8.orig/pppd/upap.c
++++ ppp-2.4.8/pppd/upap.c
+@@ -492,6 +492,7 @@ upap_rauthack(u, inp, id, len)
+ 	    }
+ 	    msg = (char *) inp;
+ 	    PRINTMSG(msg, msglen);
++	    script_setenv("VENDOR_MESSAGE", msg, 1);
+ 	}
+     }
+ 
+@@ -536,6 +537,7 @@ upap_rauthnak(u, inp, id, len)
+     }
+ 
+     u->us_clientstate = UPAPCS_BADAUTH;
++    script_unsetenv("VENDOR_MESSAGE");
+ 
+     error("PAP authentication failed");
+     auth_withpeer_fail(u->us_unit, PPP_PAP);
+Index: ppp-2.4.8/pppd/plugins/rp-pppoe/Makefile.linux
+===================================================================
+--- ppp-2.4.8.orig/pppd/plugins/rp-pppoe/Makefile.linux
++++ ppp-2.4.8/pppd/plugins/rp-pppoe/Makefile.linux
+@@ -27,6 +27,7 @@ RP_VERSION=3.8p
+ 
+ COPTS=-O2 -g
+ CFLAGS=$(COPTS) -I../../../include '-DRP_VERSION="$(RP_VERSION)"'
++CFLAGS += -DFEATURE_RDKB_WAN_MANAGER
+ all: rp-pppoe.so pppoe-discovery
+ 
+ pppoe-discovery: pppoe-discovery.o debug.o
+Index: ppp-2.4.8/pppd/plugins/rp-pppoe/discovery.c
+===================================================================
+--- ppp-2.4.8.orig/pppd/plugins/rp-pppoe/discovery.c
++++ ppp-2.4.8/pppd/plugins/rp-pppoe/discovery.c
+@@ -17,6 +17,10 @@ static char const RCSID[] =
+ #include "pppd/fsm.h"
+ #include "pppd/lcp.h"
+ 
++#ifdef FEATURE_RDKB_WAN_MANAGER
++#include "pppd/ppp_ipc.h"
++#endif
++
+ #include <string.h>
+ #include <stdlib.h>
+ #include <errno.h>
+@@ -138,6 +142,10 @@ parsePADOTags(UINT16_t type, UINT16_t le
+     switch(type) {
+     case TAG_AC_NAME:
+ 	pc->seenACName = 1;
++#ifdef FEATURE_RDKB_WAN_MANAGER
++        script_setenv("AC_NAME",data,1);
++        sendPppLcpState(PPP_INTERFACE_CONNECTING, getpid());
++#endif
+ 	if (conn->printACNames) {
+ 	    info("Access-Concentrator: %.*s", (int) len, data);
+ 	}
