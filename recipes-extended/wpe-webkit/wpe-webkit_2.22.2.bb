@@ -155,6 +155,7 @@ SRC_URI += "file://2.22/0004-Fixing-Elliptic-radial-gradients.patch"
 SRC_URI += "file://2.22.2/0279-During-layout-ensure-that-elements-that-are-in-diffe.patch"
 SRC_URI += "file://2.22.2/0280-Add-support-for-dolby-digital-plus-in-supportsType.patch"
 SRC_URI += "file://2.22/0285-Media-Make-currentTime-compliant-with-the-spec-when-.patch"
+SRC_URI += "file://2.22/0287-Add-support-for-ipv6-relay-candidate-in-libwebrtc.patch"
 
 SRC_URI += "file://2.22.2/0289-GST-return-cached-position-when-sink-returns-invalid.patch"
 SRC_URI += "file://2.22.2/0287-Fix-EOS-detection.patch"
