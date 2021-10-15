@@ -1,0 +1,83 @@
+From: lchand953 <lokesh_chandrasekar3@comcast.com>
+Date: Thu, 25 Oct 2021 22:52:20 +0000
+Subject: [PATCH] Print the crashed process name
+Source: COMCAST
+License: COMCAST
+Upstream-Status: Inappropriate [Comcast specific]
+Signed-off-by: lchand953 <lokesh_chandrasekar3@comcast.com
+Index: trunk/src/client/linux/handler/minidump_descriptor.cc
+===================================================================
+--- trunk.orig/src/client/linux/handler/minidump_descriptor.cc
++++ trunk/src/client/linux/handler/minidump_descriptor.cc
+@@ -33,6 +33,7 @@
+ #include "client/linux/handler/minidump_descriptor.h"
+ 
+ #include "common/linux/guid_creator.h"
++#include <unistd.h>
+ 
+ namespace google_breakpad {
+ 
+@@ -74,17 +75,29 @@ void MinidumpDescriptor::UpdatePath() {
+ 
+   GUID guid;
+   char guid_str[kGUIDStringLength + 1];
++  int pid;
++  char pname[64] = {0};
+   if (!CreateGUID(&guid) || !GUIDToString(&guid, guid_str, sizeof(guid_str))) {
+     assert(false);
+   }
+ 
++  pid = getpid();
++  get_process_name(pid, pname);
+   path_.clear();
+-  path_ = directory_ + "/" + guid_str + ".dmp";
++  if(pname) {
++	  path_ = directory_ + "/" + pname + "_" + guid_str + ".dmp";
++  } else {
++	  path_ = directory_ + "/" + guid_str + ".dmp";
++  }
+   c_path_ = path_.c_str();
+ 
+   char* guid_str_env = getenv("BREAKPAD_GUID");
+   if (guid_str_env) {
+-      path_ = directory_ + "/" + guid_str_env + ".dmp";
++	  if(pname) {
++		  path_ = directory_ + "/" + pname + "_" + guid_str_env + ".dmp";
++	  } else {
++		  path_ = directory_ + "/" + guid_str_env + ".dmp";
++	  }
+       c_path_ = path_.c_str();
+   }
+ 
+@@ -92,4 +105,19 @@ void MinidumpDescriptor::UpdatePath() {
+   
+ }
+ 
++void MinidumpDescriptor::get_process_name(int pid, char* name) {
++	char procfile[64];
++	sprintf(procfile, "/proc/%d/comm",pid);
++	FILE* f = fopen(procfile, "r");
++	if (f) {
++		size_t size;
++		size = fread(name, sizeof(char), sizeof(procfile), f);
++		if (size > 0) {
++			if ('\n' == name[size - 1])
++				name[size - 1] = '\0';
++		}
++		fclose(f);
++	}
++}
++
+ }  // namespace google_breakpad
+Index: trunk/src/client/linux/handler/minidump_descriptor.h
+===================================================================
+--- trunk.orig/src/client/linux/handler/minidump_descriptor.h
++++ trunk/src/client/linux/handler/minidump_descriptor.h
+@@ -95,6 +95,7 @@ class MinidumpDescriptor {
+   // Updates the path so it is unique.
+   // Should be called from a normal context: this methods uses the heap.
+   void UpdatePath();
++  void get_process_name(int pid, char* name);
+ 
+   off_t size_limit() const { return size_limit_; }
+   void set_size_limit(off_t limit) { size_limit_ = limit; }
