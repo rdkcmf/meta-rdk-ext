@@ -1,17 +1,13 @@
 From b8de74c38296741df9758a41246069ab4284eb69 Mon Sep 17 00:00:00 2001
 From: Ievgen Mutavchi <Ievgen_Mutavchi@comcast.com>
 Date: Sun, 26 Apr 2020 12:33:51 -0400
-Subject: [PATCH 87/93] Pause media and skip compositor scene rendering hide
- when web page is hidden
+Subject: [PATCH 87/93] skip compositor scene rendering of hidden web page
 Source: COMCAST
 License: GPLV2
 Upstream-Status: None
 Signed-off-by: Eugene Mutavchi <Ievgen_Mutavchi@comcast.com>
 
 ---
- Source/WebCore/html/HTMLMediaElement.cpp             |  2 +-
- .../gstreamer/MediaPlayerPrivateGStreamerBase.cpp    | 11 +++++++++++
- .../gstreamer/MediaPlayerPrivateGStreamerBase.h      |  4 +++-
  .../threadedcompositor/ThreadedCompositor.cpp        | 12 +++++++++++-
  .../threadedcompositor/ThreadedCompositor.h          |  3 +++
  .../WebProcess/WebPage/AcceleratedDrawingArea.cpp    |  4 ++++
@@ -19,66 +15,8 @@ Signed-off-by: Eugene Mutavchi <Ievgen_Mutavchi@comcast.com>
  .../ThreadedCoordinatedLayerTreeHost.h               |  2 ++
  Source/WebKit/WebProcess/WebPage/LayerTreeHost.cpp   |  6 ++++++
  Source/WebKit/WebProcess/WebPage/LayerTreeHost.h     |  1 +
- Source/WebKit/WebProcess/WebPage/WebPage.cpp         | 10 +++++++++-
- 11 files changed, 58 insertions(+), 4 deletions(-)
+ 7 files changed, 34 insertions(+), 1 deletions(-)
 
-Index: git/Source/WebCore/html/HTMLMediaElement.cpp
-===================================================================
---- git.orig/Source/WebCore/html/HTMLMediaElement.cpp
-+++ git/Source/WebCore/html/HTMLMediaElement.cpp
-@@ -5747,7 +5747,7 @@ void HTMLMediaElement::visibilityStateCh
-         m_player->setVisible(!m_elementIsHidden);
- 
-     bool isPlayingAudio = isPlaying() && hasAudio() && !muted() && volume();
--    if (!isPlayingAudio) {
-+    if (true || !isPlayingAudio) {
-         if (m_elementIsHidden) {
-             ALWAYS_LOG(LOGIDENTIFIER, "Suspending playback after going to the background");
-             m_mediaSession->beginInterruption(PlatformMediaSession::EnteringBackground);
-Index: git/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamerBase.cpp
-===================================================================
---- git.orig/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamerBase.cpp
-+++ git/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamerBase.cpp
-@@ -1602,6 +1602,17 @@ void MediaPlayerPrivateGStreamerBase::pl
- #endif
- }
- 
-+void MediaPlayerPrivateGStreamerBase::setVisible(bool visible)
-+{
-+    if (m_visible == visible)
-+        return;
-+    m_visible = visible;
-+
-+#if USE(HOLE_PUNCH_GSTREAMER)
-+    updateVideoRectangle(!m_visible);
-+#endif
-+}
-+
- }
- 
- #endif // USE(GSTREAMER)
-Index: git/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamerBase.h
-===================================================================
---- git.orig/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamerBase.h
-+++ git/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamerBase.h
-@@ -96,7 +96,7 @@ public:
- 
-     bool ended() const override { return m_isEndReached; }
- 
--    void setVisible(bool) override { }
-+    void setVisible(bool) override;
-     void setSize(const IntSize&) override;
-     void setPosition(const IntPoint&) override;
-     void sizeChanged();
-@@ -294,6 +294,8 @@ protected:
-     RefPtr<const CDMInstance> m_cdmInstance;
-     String m_lastInitData;
- #endif
-+
-+    bool m_visible { true };
- };
- 
- }
 Index: git/Source/WebKit/Shared/CoordinatedGraphics/threadedcompositor/ThreadedCompositor.cpp
 ===================================================================
 --- git.orig/Source/WebKit/Shared/CoordinatedGraphics/threadedcompositor/ThreadedCompositor.cpp
@@ -224,31 +162,3 @@ Index: git/Source/WebKit/WebProcess/WebPage/LayerTreeHost.h
  
      virtual WebCore::GraphicsLayerFactory* graphicsLayerFactory() { return nullptr; }
  
-Index: git/Source/WebKit/WebProcess/WebPage/WebPage.cpp
-===================================================================
---- git.orig/Source/WebKit/WebProcess/WebPage/WebPage.cpp
-+++ git/Source/WebKit/WebProcess/WebPage/WebPage.cpp
-@@ -2766,7 +2766,7 @@ void WebPage::updateIsInWindow(bool isIn
-         // Defer the call to Page::setCanStartMedia() since it ends up sending a synchronous message to the UI process
-         // in order to get plug-in connections, and the UI process will be waiting for the Web process to update the backing
-         // store after moving the view into a window, until it times out and paints white. See <rdar://problem/9242771>.
--        if (m_mayStartMediaWhenInWindow)
-+        if (m_mayStartMediaWhenInWindow && !m_setCanStartMediaTimer.isActive())
-             m_setCanStartMediaTimer.startOneShot(0_s);
- 
-         WebProcess::singleton().pageDidEnterWindow(m_pageID);
-@@ -2785,6 +2785,14 @@ void WebPage::visibilityDidChange()
-         if (auto* frame = m_mainFrame->coreFrame())
-             frame->loader().history().saveDocumentAndScrollState();
-     }
-+
-+    if (!isVisible) {
-+        m_setCanStartMediaTimer.stop();
-+        m_page->setCanStartMedia(false);
-+    } else if (m_activityState & WebCore::ActivityState::IsInWindow) {
-+        if (m_mayStartMediaWhenInWindow && !m_setCanStartMediaTimer.isActive())
-+            m_setCanStartMediaTimer.startOneShot(0_s);
-+    }
- }
- 
- void WebPage::setActivityState(OptionSet<ActivityState::Flag> activityState, ActivityStateChangeID activityStateChangeID, const Vector<CallbackID>& callbackIDs)
