@@ -8,8 +8,8 @@ DEPENDS_remove_daisy = " rsync-native"
 
 inherit gettext
 
-#Commits on Oct 13, 2021
-SRCREV = "3cebb77d6f6e3477770aa78819cd074f337f6977"
+#Commits on Oct 22, 2021
+SRCREV = "405e52d3e520fb00caa9f1950d3eeebcbda7c926"
 BASE_URI ?= "git://github.com/WebPlatformForEmbedded/WPEWebKit.git;protocol=http;branch=wpe-2.22"
 
 SRC_URI = "${BASE_URI}"
