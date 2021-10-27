@@ -32,6 +32,7 @@ SRC_URI_append = " file://0002-qtdemux-add-context-for-a-preferred-protection.pa
                    file://0035-qtdemux-check-ss_info.patch \
                    file://0036-qtdemux-b6e8c6323e01249bb3ac4f121c3adc3ea8d924bf.patch \
                    file://0037-qtdemux-aamp-avoid-unwanted-header-logging.patch \
+                   file://0038-Add-support-for-FLAC-encoded-audio.patch \
 "
 
 #FIXME causes macroblocking on Tubi (overlapping decoding timestamps), disabled for now
