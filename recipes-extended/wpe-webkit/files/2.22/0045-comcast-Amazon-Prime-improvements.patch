@@ -224,56 +224,6 @@ index a17f343f37ec..e31e374ddecb 100644
      }
  
      m_sourceBufferPrivate->didReceiveSample(*mediaSample);
-diff --git a/Source/WebCore/platform/graphics/gstreamer/mse/PlaybackPipeline.cpp b/Source/WebCore/platform/graphics/gstreamer/mse/PlaybackPipeline.cpp
-index 4651e939bd9b..619fa07c66d9 100644
---- a/Source/WebCore/platform/graphics/gstreamer/mse/PlaybackPipeline.cpp
-+++ b/Source/WebCore/platform/graphics/gstreamer/mse/PlaybackPipeline.cpp
-@@ -116,6 +116,7 @@ MediaSourcePrivate::AddStatus PlaybackPipeline::addSourceBuffer(RefPtr<SourceBuf
-     stream->parent = m_webKitMediaSrc.get();
-     stream->appsrc = gst_element_factory_make("appsrc", nullptr);
-     stream->appsrcNeedDataFlag = false;
-+    stream->busAlreadyNotifiedOfNeedDataFlag = false;
-     stream->sourceBuffer = sourceBufferPrivate.get();
- 
-     // No track has been attached yet.
-diff --git a/Source/WebCore/platform/graphics/gstreamer/mse/WebKitMediaSourceGStreamer.cpp b/Source/WebCore/platform/graphics/gstreamer/mse/WebKitMediaSourceGStreamer.cpp
-index de79ffb601cd..046acc3dc9ea 100644
---- a/Source/WebCore/platform/graphics/gstreamer/mse/WebKitMediaSourceGStreamer.cpp
-+++ b/Source/WebCore/platform/graphics/gstreamer/mse/WebKitMediaSourceGStreamer.cpp
-@@ -134,10 +134,12 @@ static void enabledAppsrcNeedData(GstAppSrc* appsrc, guint, gpointer userData)
-         // Search again for the Stream, just in case it was removed between the previous lock and this one.
-         appsrcStream = getStreamByAppsrc(webKitMediaSrc, GST_ELEMENT(appsrc));
- 
--        if (appsrcStream && appsrcStream->type != WebCore::Invalid)
-+        if (appsrcStream && appsrcStream->type != WebCore::Invalid && !appsrcStream->busAlreadyNotifiedOfNeedDataFlag) {
-+            appsrcStream->busAlreadyNotifiedOfNeedDataFlag = true;
-             webKitMediaSrc->priv->notifier->notify(WebKitMediaSrcMainThreadNotification::ReadyForMoreSamples, [webKitMediaSrc, appsrcStream] {
-                 notifyReadyForMoreSamplesMainThread(webKitMediaSrc, appsrcStream);
-             });
-+        }
- 
-         GST_OBJECT_UNLOCK(webKitMediaSrc);
-     }
-@@ -159,6 +161,7 @@ static void enabledAppsrcEnoughData(GstAppSrc *appsrc, gpointer userData)
-         return;
- 
-     stream->sourceBuffer->setReadyForMoreSamples(false);
-+    stream->busAlreadyNotifiedOfNeedDataFlag = false;
- }
- 
- static gboolean enabledAppsrcSeekData(GstAppSrc*, guint64, gpointer userData)
-diff --git a/Source/WebCore/platform/graphics/gstreamer/mse/WebKitMediaSourceGStreamerPrivate.h b/Source/WebCore/platform/graphics/gstreamer/mse/WebKitMediaSourceGStreamerPrivate.h
-index 6641940bf262..8a3c0451a711 100644
---- a/Source/WebCore/platform/graphics/gstreamer/mse/WebKitMediaSourceGStreamerPrivate.h
-+++ b/Source/WebCore/platform/graphics/gstreamer/mse/WebKitMediaSourceGStreamerPrivate.h
-@@ -75,6 +75,7 @@ struct _Stream {
-     // This helps WebKitMediaSrcPrivate.appsrcNeedDataCount, ensuring that needDatas are
-     // counted only once per each appsrc.
-     bool appsrcNeedDataFlag;
-+    bool busAlreadyNotifiedOfNeedDataFlag;
- 
-     // Used to enforce continuity in the appended data and avoid breaking the decoder.
-     // Only used from the main thread.
 diff --git a/Source/WebKit/WebProcess/Network/WebLoaderStrategy.cpp b/Source/WebKit/WebProcess/Network/WebLoaderStrategy.cpp
 index e7d2d0685d7a..5f50ced2577f 100644
 --- a/Source/WebKit/WebProcess/Network/WebLoaderStrategy.cpp
