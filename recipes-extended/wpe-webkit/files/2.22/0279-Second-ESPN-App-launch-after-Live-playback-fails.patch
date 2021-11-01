@@ -29,6 +29,15 @@ index 0359cf4a0159..94ef052ec208 100644
      }
  }
  
+@@ -81,7 +85,7 @@ GLContext* TextureMapperGC3DPlatformLayer::glContext()
+ 
+ bool TextureMapperGC3DPlatformLayer::makeContextCurrent()
+ {
+-    return glContext()->makeContextCurrent();
++    return glContext() && glContext()->makeContextCurrent();
+ }
+ 
+ PlatformGraphicsContext3D TextureMapperGC3DPlatformLayer::platformContext()
 -- 
 2.25.1
 
