@@ -10,7 +10,7 @@ LIC_FILES_CHKSUM = "file://COPYING;md5=e021dd6dda6ff1e6b1044002fc662b9b \
 FILESEXTRAPATHS_prepend := "${THISDIR}/files:"
 DEPENDS = "glib-2.0 cairo fontconfig freetype"
 
-SRC_URI = "http://www.freedesktop.org/software/harfbuzz/release/${PN}.tar.bz2"
+SRC_URI = "http://www.freedesktop.org/software/harfbuzz/release/${BPN}.tar.bz2"
 SRC_URI[md5sum] = "c7476d8b989869d8b95b37fa53add6bf"
 SRC_URI[sha256sum] = "b5d6ac8415f97f3540d73f3f91c41c5c10f8a4d76350f11a7184062aae88ac0b"
 
