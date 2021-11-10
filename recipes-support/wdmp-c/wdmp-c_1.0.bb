@@ -6,8 +6,8 @@ LIC_FILES_CHKSUM = "file://LICENSE;md5=e3fc50a88d0a364313df4b21ef20c29e"
 
 DEPENDS = "cjson cimplog"
 
-SRCREV = "796dddbcfa7686ec63536d950775e79b52ee5c3f"
-SRC_URI = "git://github.com/Comcast/wdmp-c.git"
+SRCREV = "e959418e373cceae663d8913cfb60a436d6b2140"
+SRC_URI = "git://github.com/xmidt-org/wdmp-c.git"
 PV = "git+${SRCPV}"
 
 S = "${WORKDIR}/git"
