@@ -1,19 +1,19 @@
-From c52a7bc84e1401204c406cda29bb37cb9fae9550 Mon Sep 17 00:00:00 2001
-From: Balaji Selvam <balaji_selvam@comcast.com>
-Source: COMCAST
-License: LICENSE-LGPL-2.1
-Upstream-Status: Pending
-Signed-off-by: Balaji Selvam <balaji_selvam@comcast.com>
-Date: Thu, 21 May 2020 15:21:21 +0000
-Subject: [PATCH] removed vpx and opus dependency on libwebrtc
+From 389546b5dbbd4b0ec05e875a72a41465453a65b8 Mon Sep 17 00:00:00 2001
+From: krishnapriya kanagaraj <krishnapriya_kanagaraj@comcast.com>
+Date: Fri, 11 Sep 2020 14:33:30 +0000
+Subject: [PATCH] RDK-29502: Opus Audio Decode Support in Webrtc-Implementation
 
+Reason for change: Integrate OPUS audio codec support for webrtc
+Test Procedure: None
+Risks: Low
+Signed-off-by: Krishna Priya Kanagaraj <krishnapriya_kanagaraj@comcast.com>
 ---
- Source/ThirdParty/libwebrtc/CMakeLists.txt    | 41 +++++++++----------
- .../libwebrtc/GStreamerVideoEncoder.cpp       |  6 +--
- 2 files changed, 23 insertions(+), 24 deletions(-)
+ Source/ThirdParty/libwebrtc/CMakeLists.txt         | 50 +++++++++++++++-------
+ .../libwebrtc/GStreamerVideoEncoder.cpp            |  6 +--
+ 2 files changed, 37 insertions(+), 19 deletions(-)
 
 diff --git a/Source/ThirdParty/libwebrtc/CMakeLists.txt b/Source/ThirdParty/libwebrtc/CMakeLists.txt
-index 3f07ba0b65a9..181c1d816032 100644
+index 3f07ba0b65a9..5c56e56ed087 100644
 --- a/Source/ThirdParty/libwebrtc/CMakeLists.txt
 +++ b/Source/ThirdParty/libwebrtc/CMakeLists.txt
 @@ -1,10 +1,10 @@
@@ -31,48 +31,40 @@ index 3f07ba0b65a9..181c1d816032 100644
  
  find_package(LibEvent)
  if (NOT LIBEVENT_FOUND)
-@@ -16,10 +16,10 @@ if (NOT ALSALIB_FOUND)
+@@ -16,10 +16,12 @@ if (NOT ALSALIB_FOUND)
      message(FATAL_ERROR "alsa-lib is needed for USE_LIBWEBRTC.")
  endif ()
  
--find_package(Opus 1.3)
--if (NOT LIBOPUS_FOUND)
--    message(FATAL_ERROR "libopus is needed for USE_LIBWEBRTC.")
--endif ()
-+#find_package(Opus 1.3)
-+#if (NOT LIBOPUS_FOUND)
-+#    message(FATAL_ERROR "libopus is needed for USE_LIBWEBRTC.")
-+#endif ()
++if (ENABLE_WEBRTC_USE_BUILTIN_OPUS)
+ find_package(Opus 1.3)
+ if (NOT LIBOPUS_FOUND)
+     message(FATAL_ERROR "libopus is needed for USE_LIBWEBRTC.")
+ endif ()
++endif ()
  
  set(webrtc_SOURCES
      Source/third_party/abseil-cpp/absl/base/dynamic_annotations.cc
-@@ -366,9 +366,9 @@ set(webrtc_SOURCES
+@@ -366,9 +368,6 @@ set(webrtc_SOURCES
      Source/webrtc/api/audio_codecs/isac/audio_decoder_isac_float.cc
      Source/webrtc/api/audio_codecs/isac/audio_encoder_isac_fix.cc
      Source/webrtc/api/audio_codecs/isac/audio_encoder_isac_float.cc
 -    Source/webrtc/api/audio_codecs/opus/audio_decoder_opus.cc
 -    Source/webrtc/api/audio_codecs/opus/audio_encoder_opus.cc
 -    Source/webrtc/api/audio_codecs/opus/audio_encoder_opus_config.cc
-+    # Source/webrtc/api/audio_codecs/opus/audio_decoder_opus.cc
-+    # Source/webrtc/api/audio_codecs/opus/audio_encoder_opus.cc
-+    # Source/webrtc/api/audio_codecs/opus/audio_encoder_opus_config.cc
      Source/webrtc/api/audio_options.cc
      Source/webrtc/api/call/transport.cc
      Source/webrtc/api/candidate.cc
-@@ -747,9 +747,9 @@ set(webrtc_SOURCES
+@@ -747,9 +746,6 @@ set(webrtc_SOURCES
      Source/webrtc/modules/audio_coding/codecs/isac/main/source/transform.c
      Source/webrtc/modules/audio_coding/codecs/legacy_encoded_audio_frame.cc
      Source/webrtc/modules/audio_coding/codecs/legacy_encoded_audio_frame.h
 -    Source/webrtc/modules/audio_coding/codecs/opus/audio_decoder_opus.cc
 -    Source/webrtc/modules/audio_coding/codecs/opus/audio_encoder_opus.cc
 -    Source/webrtc/modules/audio_coding/codecs/opus/opus_interface.c
-+    #    Source/webrtc/modules/audio_coding/codecs/opus/audio_decoder_opus.cc
-+    #    Source/webrtc/modules/audio_coding/codecs/opus/audio_encoder_opus.cc
-+    #    Source/webrtc/modules/audio_coding/codecs/opus/opus_interface.c
      Source/webrtc/modules/audio_coding/codecs/pcm16b/audio_decoder_pcm16b.cc
      Source/webrtc/modules/audio_coding/codecs/pcm16b/audio_encoder_pcm16b.cc
      Source/webrtc/modules/audio_coding/codecs/pcm16b/pcm16b.c
-@@ -799,11 +799,11 @@ set(webrtc_SOURCES
+@@ -799,11 +795,11 @@ set(webrtc_SOURCES
      Source/webrtc/modules/audio_device/fine_audio_buffer.cc
      Source/webrtc/modules/audio_device/linux/alsasymboltable_linux.cc
      Source/webrtc/modules/audio_device/linux/audio_device_alsa_linux.cc
@@ -80,14 +72,32 @@ index 3f07ba0b65a9..181c1d816032 100644
 +    # Source/webrtc/modules/audio_device/linux/audio_device_pulse_linux.cc
      Source/webrtc/modules/audio_device/linux/audio_mixer_manager_alsa_linux.cc
 -    Source/webrtc/modules/audio_device/linux/audio_mixer_manager_pulse_linux.cc
-+    #  Source/webrtc/modules/audio_device/linux/audio_mixer_manager_pulse_linux.cc
++    # Source/webrtc/modules/audio_device/linux/audio_mixer_manager_pulse_linux.cc
      Source/webrtc/modules/audio_device/linux/latebindingsymboltable_linux.cc
 -    Source/webrtc/modules/audio_device/linux/pulseaudiosymboltable_linux.cc
 +    # Source/webrtc/modules/audio_device/linux/pulseaudiosymboltable_linux.cc
      Source/webrtc/modules/audio_mixer/audio_frame_manipulator.cc
      Source/webrtc/modules/audio_mixer/audio_mixer_impl.cc
      Source/webrtc/modules/audio_mixer/default_output_rate_calculator.cc
-@@ -1372,7 +1372,6 @@ target_compile_definitions(webrtc PRIVATE
+@@ -1331,6 +1327,17 @@ set(webrtc_SOURCES
+     $<TARGET_OBJECTS:libsrtp>
+ )
+ 
++if (ENABLE_WEBRTC_USE_BUILTIN_OPUS)
++    list(APPEND webrtc_SOURCES
++        Source/webrtc/api/audio_codecs/opus/audio_decoder_opus.cc
++        Source/webrtc/api/audio_codecs/opus/audio_encoder_opus.cc
++        Source/webrtc/api/audio_codecs/opus/audio_encoder_opus_config.cc
++        Source/webrtc/modules/audio_coding/codecs/opus/audio_decoder_opus.cc
++        Source/webrtc/modules/audio_coding/codecs/opus/audio_encoder_opus.cc
++        Source/webrtc/modules/audio_coding/codecs/opus/opus_interface.c
++    )
++endif()
++
+ if (WTF_CPU_X86_64 OR WTF_CPU_X86)
+     list(APPEND webrtc_SOURCES
+         Source/webrtc/common_audio/fir_filter_sse.cc
+@@ -1372,7 +1379,6 @@ target_compile_definitions(webrtc PRIVATE
    WEBRTC_CODEC_G722
    WEBRTC_CODEC_ILBC
    WEBRTC_CODEC_ISAC
@@ -95,16 +105,33 @@ index 3f07ba0b65a9..181c1d816032 100644
    WEBRTC_CODEC_RED
    WEBRTC_INCLUDE_INTERNAL_AUDIO_DEVICE
    WEBRTC_INTELLIGIBILITY_ENHANCER=0
-@@ -1380,7 +1379,7 @@ target_compile_definitions(webrtc PRIVATE
+@@ -1380,7 +1386,6 @@ target_compile_definitions(webrtc PRIVATE
    WEBRTC_NS_FLOAT
    WEBRTC_OPUS_SUPPORT_120MS_PTIME=0
    WEBRTC_OPUS_VARIABLE_COMPLEXITY=0
 -  WEBRTC_USE_BUILTIN_OPUS=1
-+  WEBRTC_USE_BUILTIN_OPUS=0
    WEBRTC_POSIX
    WEBRTC_USE_BUILTIN_ISAC_FIX=1
    WEBRTC_USE_BUILTIN_ISAC_FLOAT=0
-@@ -1427,11 +1426,11 @@ target_include_directories(webrtc PRIVATE
+@@ -1392,6 +1397,17 @@ target_compile_definitions(webrtc PRIVATE
+   __Userspace_os_Linux
+ )
+ 
++if (ENABLE_WEBRTC_USE_BUILTIN_OPUS)
++    target_compile_definitions(webrtc PRIVATE
++        WEBRTC_CODEC_OPUS
++        WEBRTC_USE_BUILTIN_OPUS=1
++    )
++else ()
++    target_compile_definitions(webrtc PRIVATE
++        WEBRTC_USE_BUILTIN_OPUS=0
++    )
++endif()
++
+ if (WTF_CPU_ARM)
+     target_compile_definitions(webrtc PRIVATE
+         WEBRTC_ARCH_ARM=1
+@@ -1427,11 +1443,13 @@ target_include_directories(webrtc PRIVATE
      Source/webrtc/modules/audio_coding/codecs/isac/main/include
  )
  
@@ -113,13 +140,14 @@ index 3f07ba0b65a9..181c1d816032 100644
  
  target_link_libraries(webrtc ${EVENT_LIBRARY})
  
--target_link_libraries(webrtc ${OPUS_LIBRARY})
-+#target_link_libraries(webrtc ${OPUS_LIBRARY})
++if (ENABLE_WEBRTC_USE_BUILTIN_OPUS)
+ target_link_libraries(webrtc ${OPUS_LIBRARY})
++endif()
  
  # libsrtp package compilation
  set(libsrtp_SOURCES
 diff --git a/Source/WebCore/platform/mediastream/libwebrtc/GStreamerVideoEncoder.cpp b/Source/WebCore/platform/mediastream/libwebrtc/GStreamerVideoEncoder.cpp
-index d6093b9fdda3..4072453a66fa 100644
+index d6093b9fdda3..305b626d7611 100644
 --- a/Source/WebCore/platform/mediastream/libwebrtc/GStreamerVideoEncoder.cpp
 +++ b/Source/WebCore/platform/mediastream/libwebrtc/GStreamerVideoEncoder.cpp
 @@ -337,16 +337,16 @@ gst_webrtc_video_encoder_class_init (GstWebrtcVideoEncoderClass * klass)
@@ -143,5 +171,4 @@ index d6093b9fdda3..4072453a66fa 100644
  
  static void
 -- 
-2.24.0
-
+2.14.2

@@ -74,7 +74,7 @@ SRC_URI += "file://2.22/0074-Increase-clear-SB-limits-for-4K-devices.patch"
 SRC_URI += "file://2.22/0075-Time-encrypted-content-playback.patch"
 SRC_URI += "file://2.22/0076-Add-API-to-explicitly-request-memory-release.patch"
 SRC_URI += "file://2.22/0077-Disable-memory-pressure-relief-logging.patch"
-SRC_URI += "file://2.22/0079-removed-vpx-and-opus-dependency-on-libwebrtc.patch"
+SRC_URI += "file://2.22/0079-vpx-and-opus-dependency-in-webrtc.patch"
 SRC_URI += "file://2.22/0080-Report-RSS-as-web-page-memory.patch"
 SRC_URI += "file://2.22/0082-XRE-14693-Fixed-Relay-candidate-resolving-on-libwebr.patch"
 
@@ -194,6 +194,7 @@ PACKAGECONFIG[encryptedlocalstorage] = "-DENABLE_SQLITE_ENCRYPTION_EXTENSION=ON,
 PACKAGECONFIG[shared_jsc] = "-DENABLE_SHARED_JSC=ON,,"
 PACKAGECONFIG[gstreamergl] = "-DUSE_GSTREAMER_GL=ON,-DUSE_GSTREAMER_GL=OFF,"
 PACKAGECONFIG[mediastream] = "-DENABLE_MEDIA_STREAM=ON -DENABLE_WEB_RTC=ON,-DENABLE_MEDIA_STREAM=OFF -DENABLE_WEB_RTC=OFF,libevent,libevent"
+PACKAGECONFIG[webrtcusebuiltinopus] = "-DENABLE_WEBRTC_USE_BUILTIN_OPUS=ON,-DENABLE_WEBRTC_USE_BUILTIN_OPUS=OFF,libopus"
 PACKAGECONFIG[asan] = "-DENABLE_ADDRESS_SANITIZER=ON,-DENABLE_ADDRESS_SANITIZER=OFF,gcc-sanitizers"
 PACKAGECONFIG[hevc] = "-DENABLE_HEVC=ON,-DENABLE_HEVC=OFF,,"
 
