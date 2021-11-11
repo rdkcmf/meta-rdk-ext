@@ -1,0 +1,26 @@
+From 78af9f27dbb3b33f44357b242ffbe811c64dc221 Mon Sep 17 00:00:00 2001
+From: Eugene Mutavchi <Ievgen_Mutavchi@comcast.com>
+Date: Fri, 29 Oct 2021 15:52:00 +0000
+Subject: [PATCH] Enable 'wait-video' on aml audio sink
+
+---
+ .../graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp         | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp b/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp
+index 45ea86b..f2b2f40 100644
+--- a/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp
++++ b/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp
+@@ -3025,6 +3025,9 @@ void MediaPlayerPrivateGStreamer::elementSetupCallback(MediaPlayerPrivateGStream
+     if (g_strcmp0(G_OBJECT_TYPE_NAME(G_OBJECT(element)), "GstQueue2") == 0)
+         g_object_set(G_OBJECT(element), "high-watermark", 0.10, nullptr);
+ 
++    if (g_str_has_prefix(GST_ELEMENT_NAME(element), "amlhalasink") && player->hasVideo())
++        g_object_set(G_OBJECT(element), "wait-video", TRUE, nullptr);
++
+ #if USE(WESTEROS_SINK)
+     static GstCaps *westerosSinkCaps = nullptr;
+     static GType westerosSinkType = G_TYPE_INVALID;
+-- 
+2.29.0
+
