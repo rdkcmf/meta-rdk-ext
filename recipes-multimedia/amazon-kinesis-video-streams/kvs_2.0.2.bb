@@ -13,7 +13,8 @@ SRCREV = "116b9041e111705c05637920091b02da6b63256b"
 SRC_URI[md5sum] = "0e8b7ef0cea124e3e3e15f7925d25421"
 SRC_URI[sha256sum] = "321f756ca2aec6388a982fb1816ba504e2cdd8984715f688260be00bf9d21c52"
 
-DEPENDS = " gtest-camera log4cplus-camera jsmn gstreamer1.0 gstreamer1.0-plugins-base glib-2.0 curl cjson"
+#DEPENDS = " gtest-camera log4cplus-camera jsmn gstreamer1.0 gstreamer1.0-plugins-base glib-2.0 curl cjson"
+DEPENDS = " gtest-camera log4cplus-camera jsmn glib-2.0 curl cjson openssl"
 
 S = "${WORKDIR}/git"
 
