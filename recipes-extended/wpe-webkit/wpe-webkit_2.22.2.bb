@@ -166,6 +166,10 @@ SRC_URI += "file://2.22.2/0292-Increase-MSE-appsrc-buffering-min-percent.patch"
 SRC_URI += "file://2.22.2/0293-Enable-wait-video-on-aml-audio-sink.patch"
 SRC_URI += "file://2.22.2/0291-Temporary-disable-cookies-in-gst-context.patch"
 
+SRC_URI += "file://2.22/0001-Rework-decryptor-attachment.patch"
+SRC_URI += "file://2.22/0002-Use-isolatedCopy-for-strings-that-can-be-used-in-different-threads.patch"
+SRC_URI += "file://2.22/0003-Fix-use-after-free-in-CoordinatedGraphicsLayer-destruction.patch"
+
 # device specific configs
 PACKAGECONFIG[westeros] = "-DUSE_WPEWEBKIT_BACKEND_WESTEROS=ON -DUSE_WPEWEBKIT_PLATFORM_WESTEROS=ON -DUSE_KEY_INPUT_HANDLING_LINUX_INPUT=OFF -DUSE_GSTREAMER_HOLEPUNCH=ON -DUSE_EXTERNAL_HOLEPUNCH=ON -DUSE_WESTEROS_SINK=ON,,westeros"
 PACKAGECONFIG[encryptedmedia] = "-DENABLE_ENCRYPTED_MEDIA=ON,-DENABLE_ENCRYPTED_MEDIA=OFF,"

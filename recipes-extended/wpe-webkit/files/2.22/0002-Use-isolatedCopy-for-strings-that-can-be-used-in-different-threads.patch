@@ -1,0 +1,116 @@
+From b4002ace719b3f25f003284aececb47d0540fcd7 Mon Sep 17 00:00:00 2001
+From: Eugene Mutavchi <Ievgen_Mutavchi@comcast.com>
+Date: Thu, 11 Nov 2021 19:45:36 +0000
+Subject: [PATCH] Use isolatedCopy for strings that can be used in different threads.
+
+---
+ Source/WebCore/platform/graphics/gstreamer/eme/CDMOpenCDM.cpp | 2 +-
+ Source/WebCore/Modules/encryptedmedia/CDM.cpp                 |  2 +-
+ Source/WebCore/platform/animation/Animation.cpp               |  2 +-
+ .../graphics/gstreamer/eme/GStreamerEMEUtilities.h            | 10 +++++-----
+ .../eme/WebKitCommonEncryptionDecryptorGStreamer.cpp          |  2 +-
+ .../graphics/texmap/TextureMapperAnimation.cpp                |  2 +-
+ 6 files changed, 10 insertions(+), 10 deletions(-)
+
+diff --git a/Source/WebCore/Modules/encryptedmedia/CDM.cpp b/Source/WebCore/Modules/encryptedmedia/CDM.cpp
+index 98b66c5d849d..df7eccc7bc47 100644
+--- a/Source/WebCore/Modules/encryptedmedia/CDM.cpp
++++ b/Source/WebCore/Modules/encryptedmedia/CDM.cpp
+@@ -65,7 +65,7 @@ CDM::CDM(Document& document, const String& keySystem)
+     , m_keySystem(keySystem)
+ {
+     // append the origin domain to the keysystem string
+-    String keysystemDomain = keySystem + ";origin=" + document.securityOrigin().domain();
++    String keysystemDomain = makeString(keySystem, ";origin="_s, document.securityOrigin().domain());
+ 
+     for (auto* factory : CDMFactory::registeredFactories()) {
+         if (factory->supportsKeySystem(keySystem)) {
+diff --git a/Source/WebCore/platform/animation/Animation.cpp b/Source/WebCore/platform/animation/Animation.cpp
+index 661bf464b8e5..bedacc5b9fae 100644
+--- a/Source/WebCore/platform/animation/Animation.cpp
++++ b/Source/WebCore/platform/animation/Animation.cpp
+@@ -58,7 +58,7 @@ Animation::Animation()
+ Animation::Animation(const Animation& o)
+     : RefCounted<Animation>()
+     , m_property(o.m_property)
+-    , m_name(o.m_name)
++    , m_name(o.m_name.isolatedCopy())
+     , m_iterationCount(o.m_iterationCount)
+     , m_delay(o.m_delay)
+     , m_duration(o.m_duration)
+diff --git a/Source/WebCore/platform/graphics/gstreamer/eme/GStreamerEMEUtilities.h b/Source/WebCore/platform/graphics/gstreamer/eme/GStreamerEMEUtilities.h
+index b2376bfcc4bc..695dd93b4c5e 100644
+--- a/Source/WebCore/platform/graphics/gstreamer/eme/GStreamerEMEUtilities.h
++++ b/Source/WebCore/platform/graphics/gstreamer/eme/GStreamerEMEUtilities.h
+@@ -63,24 +63,24 @@ public:
+ 
+     static bool isClearKeyKeySystem(const String& keySystem)
+     {
+-        return keySystem.startsWithIgnoringASCIICase(s_ClearKeyKeySystem);
++        return keySystem.startsWithIgnoringASCIICase(ASCIILiteral::fromLiteralUnsafe(s_ClearKeyKeySystem));
+     }
+ 
+     static bool isUnspecifiedKeySystem(const String& keySystem)
+     {
+-        return keySystem.startsWithIgnoringASCIICase(s_UnspecifiedKeySystem);
++        return keySystem.startsWithIgnoringASCIICase(ASCIILiteral::fromLiteralUnsafe(s_UnspecifiedKeySystem));
+     }
+ 
+ #if USE(OPENCDM)
+     static bool isPlayReadyKeySystem(const String& keySystem)
+     {
+-        return keySystem.startsWithIgnoringASCIICase(s_PlayReadyKeySystems[0])
+-            || keySystem.startsWithIgnoringASCIICase(s_PlayReadyKeySystems[1]);
++        return keySystem.startsWithIgnoringASCIICase(ASCIILiteral::fromLiteralUnsafe(s_PlayReadyKeySystems[0]))
++            || keySystem.startsWithIgnoringASCIICase(ASCIILiteral::fromLiteralUnsafe(s_PlayReadyKeySystems[1]));
+     }
+ 
+     static bool isWidevineKeySystem(const String& keySystem)
+     {
+-        return keySystem.startsWithIgnoringASCIICase(s_WidevineKeySystem);
++        return keySystem.startsWithIgnoringASCIICase(ASCIILiteral::fromLiteralUnsafe(s_WidevineKeySystem));
+     }
+ #endif
+ 
+diff --git a/Source/WebCore/platform/graphics/gstreamer/eme/WebKitCommonEncryptionDecryptorGStreamer.cpp b/Source/WebCore/platform/graphics/gstreamer/eme/WebKitCommonEncryptionDecryptorGStreamer.cpp
+index 23590d9fea8e..70563dc737b0 100644
+--- a/Source/WebCore/platform/graphics/gstreamer/eme/WebKitCommonEncryptionDecryptorGStreamer.cpp
++++ b/Source/WebCore/platform/graphics/gstreamer/eme/WebKitCommonEncryptionDecryptorGStreamer.cpp
+@@ -496,7 +496,7 @@ static void webkitMediaCommonEncryptionDecryptProcessProtectionEvents(WebKitMedi
+             GST_TRACE_OBJECT(self, "init data MD5 %s", WebCore::GStreamerEMEUtilities::initDataMD5(initData).utf8().data());
+             GST_MEMDUMP_OBJECT(self, "init data", mappedBuffer.data(), mappedBuffer.size());
+             if (isCDMInstanceAvailable)
+-                priv->m_initDatas.set(priv->m_cdmInstance->keySystem(), initData);
++                priv->m_initDatas.set(priv->m_cdmInstance->keySystem().isolatedCopy(), initData);
+             else
+                 priv->m_initDatas.set(eventKeySystem, initData);
+             GST_MEMDUMP_OBJECT(self, "key ID", reinterpret_cast<const uint8_t*>(kid->data()), kid->size());
+diff --git a/Source/WebCore/platform/graphics/texmap/TextureMapperAnimation.cpp b/Source/WebCore/platform/graphics/texmap/TextureMapperAnimation.cpp
+index 667f23017235..6d449c0af2c8 100644
+--- a/Source/WebCore/platform/graphics/texmap/TextureMapperAnimation.cpp
++++ b/Source/WebCore/platform/graphics/texmap/TextureMapperAnimation.cpp
+@@ -179,7 +179,7 @@ TextureMapperAnimation::TextureMapperAnimation(const String& name, const Keyfram
+ }
+ 
+ TextureMapperAnimation::TextureMapperAnimation(const TextureMapperAnimation& other)
+-    : m_name(other.m_name.isSafeToSendToAnotherThread() ? other.m_name : other.m_name.isolatedCopy())
++    : m_name(other.m_name.isolatedCopy())
+     , m_keyframes(other.m_keyframes)
+     , m_boxSize(other.m_boxSize)
+     , m_animation(Animation::create(*other.m_animation))
+diff --git a/Source/WebCore/platform/graphics/gstreamer/eme/CDMOpenCDM.cpp b/Source/WebCore/platform/graphics/gstreamer/eme/CDMOpenCDM.cpp
+index 36b29d6da6c7..af163ac572ca 100644
+--- a/Source/WebCore/platform/graphics/gstreamer/eme/CDMOpenCDM.cpp
++++ b/Source/WebCore/platform/graphics/gstreamer/eme/CDMOpenCDM.cpp
+@@ -667,7 +667,7 @@ String CDMInstanceOpenCDM::sessionIdByKeyId(const SharedBuffer& keyId) const
+         const String& sessionId = pair.key;
+         const RefPtr<Session>& session = pair.value;
+         if (session->containsKeyId(keyId)) {
+-            result = sessionId;
++            result = sessionId.isolatedCopy();
+             break;
+         }
+     }
+-- 
+2.25.1
+

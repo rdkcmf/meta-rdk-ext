@@ -1,0 +1,28 @@
+From e38a44be8088b455b16b2ab2144d0fa32343a12f Mon Sep 17 00:00:00 2001
+From: Eugene Mutavchi <Ievgen_Mutavchi@comcast.com>
+Date: Mon, 15 Nov 2021 13:14:33 +0000
+Subject: [PATCH] Fix use-after-free in ~CoordinatedGraphicsLayer
+
+---
+ .../graphics/holepunch/MediaPlayerPrivateHolePunch.cpp       | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+diff --git a/Source/WebCore/platform/graphics/holepunch/MediaPlayerPrivateHolePunch.cpp b/Source/WebCore/platform/graphics/holepunch/MediaPlayerPrivateHolePunch.cpp
+index ff504889cb6c..5e3509b64b4f 100644
+--- a/Source/WebCore/platform/graphics/holepunch/MediaPlayerPrivateHolePunch.cpp
++++ b/Source/WebCore/platform/graphics/holepunch/MediaPlayerPrivateHolePunch.cpp
+@@ -52,6 +52,11 @@ MediaPlayerPrivateHolePunch::~MediaPlayerPrivateHolePunch()
+ #if USE(NICOSIA)
+     downcast<Nicosia::ContentLayerTextureMapperImpl>(m_nicosiaLayer->impl()).invalidateClient();
+ #endif
++#if USE(TEXTURE_MAPPER_GL)
++    if (client())
++        client()->platformLayerWillBeDestroyed();
++#endif
++
+ }
+ 
+ PlatformLayer* MediaPlayerPrivateHolePunch::platformLayer() const
+-- 
+2.25.1
+
