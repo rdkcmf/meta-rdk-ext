@@ -161,6 +161,7 @@ SRC_URI += "file://2.22.3/0291-increase-micro-version-version-to-match-recipe.pa
 SRC_URI += "file://2.22/0001-Rework-decryptor-attachment.patch"
 SRC_URI += "file://2.22/0002-Use-isolatedCopy-for-strings-that-can-be-used-in-different-threads.patch"
 SRC_URI += "file://2.22/0003-Fix-use-after-free-in-CoordinatedGraphicsLayer-destruction.patch"
+SRC_URI += "file://2.22.3/0295-enable-inspector-server-based-on-remote-inspector-co.patch"
 
 # device specific configs
 PACKAGECONFIG[westeros] = "-DUSE_WPEWEBKIT_BACKEND_WESTEROS=ON -DUSE_WPEWEBKIT_PLATFORM_WESTEROS=ON -DUSE_KEY_INPUT_HANDLING_LINUX_INPUT=OFF -DUSE_GSTREAMER_HOLEPUNCH=ON -DUSE_EXTERNAL_HOLEPUNCH=ON -DUSE_WESTEROS_SINK=ON,,westeros"
@@ -170,7 +171,7 @@ PACKAGECONFIG[mathml] = "-DENABLE_MATHML=ON,-DENABLE_MATHML=OFF,"
 PACKAGECONFIG[touchevents] = "-DENABLE_TOUCH_EVENTS=ON,-DENABLE_TOUCH_EVENTS=OFF,"
 PACKAGECONFIG[meterelement] = "-DENABLE_METER_ELEMENT=ON,-DENABLE_METER_ELEMENT=OFF,"
 PACKAGECONFIG[svgfonts] = "-DENABLE_SVG_FONTS=ON,-DENABLE_SVG_FONTS=OFF,"
-PACKAGECONFIG[remoteinspector] = "-DENABLE_REMOTE_INSPECTOR=OFF,-DENABLE_REMOTE_INSPECTOR=ON,"
+PACKAGECONFIG[remoteinspector] = "-DENABLE_REMOTE_INSPECTOR=ON,-DENABLE_REMOTE_INSPECTOR=OFF,"
 PACKAGECONFIG[vp9] = ",,,gstreamer1.0-plugins-good-matroska"
 PACKAGECONFIG[vp9_hdr] = "-DENABLE_VP9_HDR=ON,-DENABLE_VP9_HDR=OFF,,gstreamer1.0-plugins-good-matroska"
 PACKAGECONFIG[encryptedlocalstorage] = "-DENABLE_SQLITE_ENCRYPTION_EXTENSION=ON,-DENABLE_SQLITE_ENCRYPTION_EXTENSION=OFF,sqlite3see"
@@ -183,6 +184,7 @@ PACKAGECONFIG[hevc] = "-DENABLE_HEVC=ON,-DENABLE_HEVC=OFF,,"
 PACKAGECONFIG[dolbyvision] = "-DENABLE_DV=ON,-DENABLE_DV=OFF,,"
 
 PACKAGECONFIG_append = " intl"
+PACKAGECONFIG_append = " remoteinspector"
 #PACKAGECONFIG_append = " gamepad"
 
 LEAD_SONAME = "libWPEWebKit-0.1.so"
