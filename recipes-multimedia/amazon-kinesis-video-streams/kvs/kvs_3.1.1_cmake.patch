@@ -1,0 +1,78 @@
+Source: RDK Management
+License: Apache 2.0
+Upstream-Status: Pending
+Signed-off-by: e.savidha@ltts.com
+
+From: SAVIDHA E <e.savidha@ltts.com>
+Date: Tue, 23 Nov 2021
+Subject: [PATCH] common
+
+--- git_origin/CMakeLists.txt	2021-11-20 07:45:56.313130256 +0000
++++ git/CMakeLists.txt	2021-11-20 08:48:00.822150124 +0000
+@@ -73,7 +73,7 @@
+     build_dependency(autoconf)
+     build_dependency(automake)
+   endif()
+-  build_dependency(log4cplus)
++  build_dependency(log4cplus-camera)
+ 
+   message(STATUS "Finished building dependencies.")
+ endif()
+@@ -97,7 +97,8 @@
+ find_package(PkgConfig REQUIRED)
+ 
+ if (OPEN_SRC_INSTALL_PREFIX)
+-  find_package(CURL REQUIRED PATHS ${OPEN_SRC_INSTALL_PREFIX})
++	#  find_package(CURL REQUIRED PATHS ${OPEN_SRC_INSTALL_PREFIX})
++  find_package(CURL REQUIRED)
+ else()
+   find_package(CURL REQUIRED)
+ endif()
+@@ -210,3 +211,37 @@
+   set(ENV{KVS_GTEST_ROOT} ${KINESIS_VIDEO_OPEN_SOURCE_SRC})
+   add_subdirectory(tst)
+ endif()
++
++ install(DIRECTORY ${KINESIS_VIDEO_PRODUCER_CPP_SRC}/src/ DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}"
++       FILES_MATCHING PATTERN "*.h" PATTERN ".git" EXCLUDE PATTERN "oe-logs" EXCLUDE PATTERN "oe-workdir" EXCLUDE)
++
++install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/dependency/libkvscproducer/kvscproducer-src/dependency/libkvspic/kvspic-src/src/client/include/ DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}"
++       FILES_MATCHING PATTERN "*.h" PATTERN ".git" EXCLUDE PATTERN "oe-logs" EXCLUDE PATTERN "oe-workdir" EXCLUDE)
++
++install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/dependency/libkvscproducer/kvscproducer-src/dependency/libkvspic/kvspic-src/src/common/include/ DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}"
++       FILES_MATCHING PATTERN "*.h" PATTERN ".git" EXCLUDE PATTERN "oe-logs" EXCLUDE PATTERN "oe-workdir" EXCLUDE)
++
++install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/dependency/libkvscproducer/kvscproducer-src/dependency/libkvspic/kvspic-src/src/utils/include/ DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}"
++       FILES_MATCHING PATTERN "*.h" PATTERN ".git" EXCLUDE PATTERN "oe-logs" EXCLUDE PATTERN "oe-workdir" EXCLUDE)
++
++install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/dependency/libkvscproducer/kvscproducer-src/dependency/libkvspic/kvspic-src/src/mkvgen/include/ DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}"
++       FILES_MATCHING PATTERN "*.h" PATTERN ".git" EXCLUDE PATTERN "oe-logs" EXCLUDE PATTERN "oe-workdir" EXCLUDE)
++
++install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/dependency/libkvscproducer/kvscproducer-src/dependency/libkvspic/kvspic-src/src/view/include/ DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}"
++       FILES_MATCHING PATTERN "*.h" PATTERN ".git" EXCLUDE PATTERN "oe-logs" EXCLUDE PATTERN "oe-workdir" EXCLUDE)
++
++install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/dependency/libkvscproducer/kvscproducer-src/dependency/libkvspic/kvspic-src/src/heap/include/ DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}"
++       FILES_MATCHING PATTERN "*.h" PATTERN ".git" EXCLUDE PATTERN "oe-logs" EXCLUDE PATTERN "oe-workdir" EXCLUDE)
++
++install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/dependency/libkvscproducer/kvscproducer-src/dependency/libkvspic/kvspic-src/src/state/include/ DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}"
++       FILES_MATCHING PATTERN "*.h" PATTERN ".git" EXCLUDE PATTERN "oe-logs" EXCLUDE PATTERN "oe-workdir" EXCLUDE)
++
++install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/dependency/libkvscproducer/kvscproducer-src/src/include/ DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}"
++       FILES_MATCHING PATTERN "*.h" PATTERN ".git" EXCLUDE PATTERN "oe-logs" EXCLUDE PATTERN "oe-workdir" EXCLUDE)
++
++install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/src/credential-providers/ DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}"
++       FILES_MATCHING PATTERN "*.h" PATTERN ".git" EXCLUDE PATTERN "oe-logs" EXCLUDE PATTERN "oe-workdir" EXCLUDE)
++
++ install(TARGETS cproducer DESTINATION lib)
++ install(TARGETS KinesisVideoProducer DESTINATION lib)
++ #install(TARGETS gstkvssink DESTINATION lib/gstreamer-1.0)
+--- git_origin/CMake/Dependencies/libkvscproducer-CMakeLists.txt	2021-11-20 07:45:56.313130256 +0000
++++ git/CMake/Dependencies/libkvscproducer-CMakeLists.txt	2021-11-20 09:55:34.764314505 +0000
+@@ -10,6 +10,7 @@
+ 	GIT_TAG           f2a97fe6eaf78cbffd46ccfa5994bee2bebf99bf
+ 	SOURCE_DIR        "${CMAKE_CURRENT_BINARY_DIR}/kvscproducer-src"
+ 	BINARY_DIR        "${CMAKE_CURRENT_BINARY_DIR}/kvscproducer-build"
++	PATCH_COMMAND     git apply --ignore-whitespace ${CMAKE_SOURCE_DIR}/../../CMake/Dependencies/kvscproducer_cmake.patch
+ 	CONFIGURE_COMMAND ""
+ 	BUILD_COMMAND     ""
+ 	INSTALL_COMMAND   ""
