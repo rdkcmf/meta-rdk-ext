@@ -1,0 +1,210 @@
+##########################################
+Date: Dec 16, 2021 17:28 PM
+From: 86d59f250fb2668c5d7a356a271871de6f703da6 Dec 16, 2021 11:28 PM
+Subject: SERXIONE-219 [NTS][US][BCM] Automated - Fonts category failures - Use harfbuzz ver 1.7.4
+Source: COMCAST
+License: GPLV2
+Upstream-Status: Pending
+Signed-off-by: LeenaSunthari Dhanapalaju <ldhana149@cable.comcast.com>
+##########################################
+
+Index: harfbuzz-1.7.4/src/Makefile.am
+===================================================================
+--- harfbuzz-1.7.4.orig/src/Makefile.am
++++ harfbuzz-1.7.4/src/Makefile.am
+@@ -13,10 +13,10 @@ DISTCHECK_CONFIGURE_FLAGS = --enable-int
+ #AM_CXXFLAGS =
+ 
+ # Convenience targets:
+-lib: $(BUILT_SOURCES) libharfbuzz.la
+-fuzzing: $(BUILT_SOURCES) libharfbuzz-fuzzing.la
++lib: $(BUILT_SOURCES) libharfbuzz-1.7.4.la
++fuzzing: $(BUILT_SOURCES) libharfbuzz-1.7.4-fuzzing.la
+ 
+-lib_LTLIBRARIES = libharfbuzz.la
++lib_LTLIBRARIES = libharfbuzz-1.7.4.la
+ 
+ include Makefile.sources
+ 
+@@ -113,21 +113,21 @@ HBLIBS += $(HBNONPCLIBS)
+ if OS_WIN32
+ export_symbols = -export-symbols harfbuzz.def
+ harfbuzz_def_dependency = harfbuzz.def
+-libharfbuzz_la_LINK = $(CXXLINK) $(libharfbuzz_la_LDFLAGS)
++libharfbuzz_1_7_4_la_LINK = $(CXXLINK) $(libharfbuzz_1_7_4_la_LDFLAGS)
+ else
+ # Use a C linker for GCC, not C++; Don't link to libstdc++
+ if HAVE_GCC
+-libharfbuzz_la_LINK = $(LINK) $(libharfbuzz_la_LDFLAGS)
++libharfbuzz_1_7_4_la_LINK = $(LINK) $(libharfbuzz_1_7_4_la_LDFLAGS)
+ else
+-libharfbuzz_la_LINK = $(CXXLINK) $(libharfbuzz_la_LDFLAGS)
++libharfbuzz_1_7_4_la_LINK = $(CXXLINK) $(libharfbuzz_1_7_4_la_LDFLAGS)
+ endif
+ endif
+ 
+-libharfbuzz_la_SOURCES = $(HBSOURCES) $(HBHEADERS) $(HBNODISTHEADERS)
+-libharfbuzz_la_CPPFLAGS = $(HBCFLAGS)
+-libharfbuzz_la_LDFLAGS = $(AM_LDFLAGS) -lm -version-info $(HB_LIBTOOL_VERSION_INFO) $(export_symbols) -no-undefined
+-libharfbuzz_la_LIBADD = $(HBLIBS)
+-EXTRA_libharfbuzz_la_DEPENDENCIES = $(harfbuzz_def_dependency)
++libharfbuzz_1_7_4_la_SOURCES = $(HBSOURCES) $(HBHEADERS) $(HBNODISTHEADERS)
++libharfbuzz_1_7_4_la_CPPFLAGS = $(HBCFLAGS)
++libharfbuzz_1_7_4_la_LDFLAGS = $(AM_LDFLAGS) -lm -version-info $(HB_LIBTOOL_VERSION_INFO) $(export_symbols) -no-undefined
++libharfbuzz_1_7_4_la_LIBADD = $(HBLIBS)
++EXTRA_libharfbuzz_1_7_4_la_DEPENDENCIES = $(harfbuzz_def_dependency)
+ pkginclude_HEADERS = $(HBHEADERS)
+ nodist_pkginclude_HEADERS = $(HBNODISTHEADERS)
+ pkgconfigdir = $(libdir)/pkgconfig
+@@ -145,14 +145,14 @@ FUZZING_CPPFLAGS= \
+ 	-DHB_BUFFER_MAX_OPS_MIN=64 \
+ 	-DHB_BUFFER_MAX_OPS_DEFAULT=1024 \
+ 	$(NULL)
+-EXTRA_LTLIBRARIES = libharfbuzz-fuzzing.la
+-libharfbuzz_fuzzing_la_LINK = $(libharfbuzz_la_LINK)
+-libharfbuzz_fuzzing_la_SOURCES = $(libharfbuzz_la_SOURCES)
+-libharfbuzz_fuzzing_la_CPPFLAGS = $(libharfbuzz_la_CPPFLAGS) $(FUZZING_CPPFLAGS)
+-libharfbuzz_fuzzing_la_LDFLAGS = $(libharfbuzz_la_LDFLAGS)
+-libharfbuzz_fuzzing_la_LIBADD = $(libharfbuzz_la_LIBADD)
+-EXTRA_libharfbuzz_fuzzing_la_DEPENDENCIES = $(EXTRA_libharfbuzz_la_DEPENDENCIES)
+-CLEANFILES += libharfbuzz-fuzzing.la
++EXTRA_LTLIBRARIES = libharfbuzz-1.7.4-fuzzing.la
++libharfbuzz_1_7_4_fuzzing_la_LINK = $(libharfbuzz_1_7_4_la_LINK)
++libharfbuzz_1_7_4_fuzzing_la_SOURCES = $(libharfbuzz_1_7_4_la_SOURCES)
++libharfbuzz_1_7_4_fuzzing_la_CPPFLAGS = $(libharfbuzz_1_7_4_la_CPPFLAGS) $(FUZZING_CPPFLAGS)
++libharfbuzz_1_7_4_fuzzing_la_LDFLAGS = $(libharfbuzz_1_7_4_la_LDFLAGS)
++libharfbuzz_1_7_4_fuzzing_la_LIBADD = $(libharfbuzz_1_7_4_la_LIBADD)
++EXTRA_libharfbuzz_1_7_4_fuzzing_la_DEPENDENCIES = $(EXTRA_libharfbuzz_1_7_4_la_DEPENDENCIES)
++CLEANFILES += libharfbuzz-1.7.4-fuzzing.la
+ 
+ if HAVE_ICU
+ if HAVE_ICU_BUILTIN
+@@ -161,11 +161,11 @@ HBLIBS += $(ICU_LIBS)
+ HBSOURCES += $(HB_ICU_sources)
+ HBHEADERS += $(HB_ICU_headers)
+ else
+-lib_LTLIBRARIES += libharfbuzz-icu.la
+-libharfbuzz_icu_la_SOURCES = $(HB_ICU_sources)
+-libharfbuzz_icu_la_CPPFLAGS = $(ICU_CFLAGS)
+-libharfbuzz_icu_la_LDFLAGS = $(AM_LDFLAGS) -version-info $(HB_LIBTOOL_VERSION_INFO) -no-undefined
+-libharfbuzz_icu_la_LIBADD = $(ICU_LIBS) libharfbuzz.la
++lib_LTLIBRARIES += libharfbuzz-1.7.4-icu.la
++libharfbuzz_1_7_4_icu_la_SOURCES = $(HB_ICU_sources)
++libharfbuzz_1_7_4_icu_la_CPPFLAGS = $(ICU_CFLAGS)
++libharfbuzz_1_7_4_icu_la_LDFLAGS = $(AM_LDFLAGS) -version-info $(HB_LIBTOOL_VERSION_INFO) -no-undefined
++libharfbuzz_1_7_4_icu_la_LIBADD = $(ICU_LIBS) libharfbuzz-1.7.4.la
+ pkginclude_HEADERS += $(HB_ICU_headers)
+ pkgconfig_DATA += harfbuzz-icu.pc
+ endif
+@@ -173,12 +173,12 @@ endif
+ EXTRA_DIST += harfbuzz-icu.pc.in
+ 
+ if HAVE_GOBJECT
+-lib_LTLIBRARIES += libharfbuzz-gobject.la
+-libharfbuzz_gobject_la_SOURCES = $(HB_GOBJECT_sources)
+-nodist_libharfbuzz_gobject_la_SOURCES = $(HB_GOBJECT_ENUM_sources)
+-libharfbuzz_gobject_la_CPPFLAGS = $(GOBJECT_CFLAGS)
+-libharfbuzz_gobject_la_LDFLAGS = $(AM_LDFLAGS) -version-info $(HB_LIBTOOL_VERSION_INFO) -no-undefined
+-libharfbuzz_gobject_la_LIBADD = $(GOBJECT_LIBS) libharfbuzz.la
++lib_LTLIBRARIES += libharfbuzz-1.7.4-gobject.la
++libharfbuzz_1_7_4_gobject_la_SOURCES = $(HB_GOBJECT_sources)
++nodist_libharfbuzz_1_7_4_gobject_la_SOURCES = $(HB_GOBJECT_ENUM_sources)
++libharfbuzz_1_7_4_gobject_la_CPPFLAGS = $(GOBJECT_CFLAGS)
++libharfbuzz_1_7_4_gobject_la_LDFLAGS = $(AM_LDFLAGS) -version-info $(HB_LIBTOOL_VERSION_INFO) -no-undefined
++libharfbuzz_1_7_4_gobject_la_LIBADD = $(GOBJECT_LIBS) libharfbuzz-1.7.4.la
+ pkginclude_HEADERS += $(HB_GOBJECT_headers)
+ nodist_pkginclude_HEADERS += $(HB_GOBJECT_ENUM_headers)
+ pkgconfig_DATA += harfbuzz-gobject.pc
+@@ -283,23 +283,23 @@ bin_PROGRAMS =
+ 
+ main_SOURCES = main.cc
+ main_CPPFLAGS = $(HBCFLAGS)
+-main_LDADD = libharfbuzz.la $(HBLIBS)
++main_LDADD = libharfbuzz-1.7.4.la $(HBLIBS)
+ 
+ test_SOURCES = test.cc
+ test_CPPFLAGS = $(HBCFLAGS) $(FREETYPE_CFLAGS)
+-test_LDADD = libharfbuzz.la $(HBLIBS) $(FREETYPE_LIBS)
++test_LDADD = libharfbuzz-1.7.4.la $(HBLIBS) $(FREETYPE_LIBS)
+ 
+ test_would_substitute_SOURCES = test-would-substitute.cc
+ test_would_substitute_CPPFLAGS = $(HBCFLAGS) $(FREETYPE_CFLAGS)
+-test_would_substitute_LDADD = libharfbuzz.la $(HBLIBS) $(FREETYPE_LIBS)
++test_would_substitute_LDADD = libharfbuzz-1.7.4.la $(HBLIBS) $(FREETYPE_LIBS)
+ 
+ test_size_params_SOURCES = test-size-params.cc
+ test_size_params_CPPFLAGS = $(HBCFLAGS)
+-test_size_params_LDADD = libharfbuzz.la $(HBLIBS)
++test_size_params_LDADD = libharfbuzz-1.7.4.la $(HBLIBS)
+ 
+ test_buffer_serialize_SOURCES = test-buffer-serialize.cc
+ test_buffer_serialize_CPPFLAGS = $(HBCFLAGS)
+-test_buffer_serialize_LDADD = libharfbuzz.la $(HBLIBS)
++test_buffer_serialize_LDADD = libharfbuzz-1.7.4.la $(HBLIBS)
+ 
+ check: harfbuzz.def # For check-defs.sh
+ 
+@@ -319,7 +319,7 @@ check_PROGRAMS = \
+ 	$(NULL)
+ test_ot_tag_SOURCES = hb-ot-tag.cc
+ test_ot_tag_CPPFLAGS = $(HBCFLAGS) -DMAIN
+-test_ot_tag_LDADD = libharfbuzz.la $(HBLIBS)
++test_ot_tag_LDADD = libharfbuzz-1.7.4.la $(HBLIBS)
+ 
+ TESTS = $(dist_check_SCRIPTS) $(check_PROGRAMS)
+ TESTS_ENVIRONMENT = \
+@@ -337,7 +337,7 @@ INTROSPECTION_SCANNER_ARGS = -I$(srcdir)
+ INTROSPECTION_COMPILER_ARGS = --includedir=$(srcdir)
+ INTROSPECTION_SCANNER_ENV = CC="$(CC)"
+ 
+-HarfBuzz-0.0.gir: libharfbuzz.la libharfbuzz-gobject.la
++HarfBuzz-0.0.gir: libharfbuzz-1.7.4.la libharfbuzz-1.7.4-gobject.la
+ HarfBuzz_0_0_gir_INCLUDES = GObject-2.0
+ HarfBuzz_0_0_gir_CFLAGS = \
+ 	$(INCLUDES) \
+@@ -351,8 +351,8 @@ HarfBuzz_0_0_gir_CFLAGS = \
+ 	-DHB_EXTERN= \
+ 	$(NULL)
+ HarfBuzz_0_0_gir_LIBS = \
+-	libharfbuzz.la \
+-	libharfbuzz-gobject.la \
++	libharfbuzz-1.7.4.la \
++	libharfbuzz-1.7.4-gobject.la \
+ 	$(NULL)
+ HarfBuzz_0_0_gir_FILES = \
+ 	$(HBHEADERS) \
+Index: harfbuzz-1.7.4/util/Makefile.am
+===================================================================
+--- harfbuzz-1.7.4.orig/util/Makefile.am
++++ harfbuzz-1.7.4/util/Makefile.am
+@@ -22,7 +22,7 @@ AM_CPPFLAGS = \
+ 	$(CAIRO_FT_CFLAGS) \
+ 	$(NULL)
+ LDADD = \
+-	$(top_builddir)/src/libharfbuzz.la \
++	$(top_builddir)/src/libharfbuzz-1.7.4.la \
+ 	-lm \
+ 	$(GLIB_LIBS) \
+ 	$(FREETYPE_LIBS) \
+Index: harfbuzz-1.7.4/test/api/Makefile.am
+===================================================================
+--- harfbuzz-1.7.4.orig/test/api/Makefile.am
++++ harfbuzz-1.7.4/test/api/Makefile.am
+@@ -12,7 +12,7 @@ lib:
+ 
+ if HAVE_GLIB
+ AM_CPPFLAGS = -DSRCDIR="\"$(srcdir)\"" -I$(top_srcdir)/src/ -I$(top_builddir)/src/ $(GLIB_CFLAGS)
+-LDADD = $(top_builddir)/src/libharfbuzz.la $(GLIB_LIBS)
++LDADD = $(top_builddir)/src/libharfbuzz-1.7.4.la $(GLIB_LIBS)
+ 
+ EXTRA_DIST += hb-test.h
+ 
+@@ -38,7 +38,7 @@ test_unicode_CPPFLAGS = \
+ test_unicode_LDADD = $(LDADD)
+ if HAVE_ICU
+ test_unicode_CPPFLAGS += $(ICU_CFLAGS)
+-test_unicode_LDADD += $(top_builddir)/src/libharfbuzz-icu.la $(ICU_LIBS)
++test_unicode_LDADD += $(top_builddir)/src/libharfbuzz-1.7.4-icu.la $(ICU_LIBS)
+ endif
+ 
+ 
