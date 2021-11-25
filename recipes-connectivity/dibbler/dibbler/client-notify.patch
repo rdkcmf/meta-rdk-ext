@@ -422,7 +422,7 @@ diff -Naur dibbler-1.0.1_org/scripts/notify-scripts/client-notify-bsd.sh dibbler
 +
 +# Send notification to CCSP PAM
 +# RDK-B has not defined HAL for Ipv6 yet so this is a means to notify
-+echo ""dibbler-client" "add" '${ADDR1}' '1' '\0' '\0' '${ADDR1PREF}' '${ADDR1VALID}' '${PREFIX1}' '${PREFIX1LEN}' '1' '\0' '\0' '${PREFIX1PREF}' '${PREFIX1VALID}' " >> /tmp/ccsp_common_fifo
++echo ""dibbler-client" "add" "${ADDR1}" '1' '\0' '\0' '${ADDR1PREF}' '${ADDR1VALID}' "${PREFIX1}" "${PREFIX1LEN}" '1' '\0' '\0' '${PREFIX1PREF}' '${PREFIX1VALID}' " >> /tmp/ccsp_common_fifo
 +
  # sample return code. Dibbler will just print it out.
  exit 3

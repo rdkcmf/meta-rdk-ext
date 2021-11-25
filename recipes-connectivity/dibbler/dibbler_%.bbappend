@@ -20,6 +20,7 @@ SRC_URI_append_broadband = " file://client-notify.patch \
                              file://server-notify.sh \
                              file://dibbler_clear_sysevent_for_null_option23.patch \
 "
+SRC_URI_append_broadband = " ${@bb.utils.contains('DISTRO_FEATURES', 'rdkb_wan_manager','file://Fix-for-Dibbler-not-sending-address-in-IANA-disabled-case.patch','', d)}"
 
 do_install_append() {
         install -d ${D}${sysconfdir}/dibbler
