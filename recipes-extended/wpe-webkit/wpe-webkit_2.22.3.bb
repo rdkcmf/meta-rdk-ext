@@ -157,6 +157,7 @@ SRC_URI += "file://2.22.2/0289-GST-return-cached-position-when-sink-returns-inva
 #SRC_URI += "file://2.22.3/0290-Revert-Add-support-for-RTCPeerConnection.onicecandid.patch"
 SRC_URI += "file://2.22.2/0290-Tweaking-libsoup-config-in-webkitwebsrc.patch"
 SRC_URI += "file://2.22.3/0291-increase-micro-version-version-to-match-recipe.patch"
+SRC_URI += "file://2.22.3/0292-fixing-rwi-ui-issues.patch"
 
 SRC_URI += "file://2.22/0001-Rework-decryptor-attachment.patch"
 SRC_URI += "file://2.22/0002-Use-isolatedCopy-for-strings-that-can-be-used-in-different-threads.patch"
