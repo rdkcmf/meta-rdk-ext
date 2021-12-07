@@ -10,7 +10,7 @@ S = "${WORKDIR}/curl-7.59.0/"
 SRC_URI = "http://curl.haxx.se/download/curl-7.59.0.tar.bz2 \
            file://0001-replace-krb5-config-with-pkg-config.patch \
 "
-SRC_URI_append_dunfell = "${@bb.utils.contains('DISTRO_FEATURES', 'ssl-1.1.1', '', ' file://0001-Use-openssl1.0.2o-for-curl-netflix.patch', d)}"
+SRC_URI_append_dunfell = "${@bb.utils.contains('PREFERRED_VERSION_netflix', '5.3%','', bb.utils.contains('DISTRO_FEATURES', 'ssl-1.1.1', '', ' file://0001-Use-openssl1.0.2o-for-curl-netflix.patch',d),d)}"
 
 SRC_URI[md5sum] = "a2192804f7c2636a09320416afcf888e"
 SRC_URI[sha256sum] = "b5920ffd6a8c95585fb95070e0ced38322790cb335c39d0dab852d12e157b5a0"
@@ -101,11 +101,12 @@ BBCLASSEXTEND = "native nativesdk"
 CURLGNUTLS = "--without-gnutls --with-ssl"
 DEPENDS += " openssl c-ares"
 
-#Enforce to use openssl_1.0.2o version dunfell build
-DEPENDS_append_dunfell = "${@bb.utils.contains('DISTRO_FEATURES', 'ssl-1.1.1', '', ' openssl-1.0.2o', d)}"
-DEPENDS_remove_dunfell = "${@bb.utils.contains('DISTRO_FEATURES', 'ssl-1.1.1', '', 'openssl', d)}"
-CFLAGS_append_dunfell = "${@bb.utils.contains('DISTRO_FEATURES', 'ssl-1.1.1', '', ' -I${STAGING_INCDIR}/openssl-1.0.2o', d)}"
-LDFLAGS_append_dunfell = "${@bb.utils.contains('DISTRO_FEATURES', 'ssl-1.1.1', '', ' -L${STAGING_LIBDIR}/openssl-1.0.2o -lcrypto-1.0.2o -lssl-1.0.2o', d)}"
+#Enforce to use openssl_1.0.2o version dunfell build with Netflix 5.1
+DEPENDS_append_dunfell = "${@bb.utils.contains('PREFERRED_VERSION_netflix', '5.3%','', bb.utils.contains('DISTRO_FEATURES', 'ssl-1.1.1', '', ' openssl-1.0.2o', d), d)}"
+DEPENDS_remove_dunfell = "${@bb.utils.contains('PREFERRED_VERSION_netflix', '5.3%','', bb.utils.contains('DISTRO_FEATURES', 'ssl-1.1.1', '', 'openssl', d), d)}"
+CFLAGS_append_dunfell = "${@bb.utils.contains('PREFERRED_VERSION_netflix', '5.3%','', bb.utils.contains('DISTRO_FEATURES', 'ssl-1.1.1', '', ' -I${STAGING_INCDIR}/openssl-1.0.2o', d), d)}"
+LDFLAGS_append_dunfell = "${@bb.utils.contains('PREFERRED_VERSION_netflix', '5.3%','', bb.utils.contains('DISTRO_FEATURES', 'ssl-1.1.1', '', ' -L${STAGING_LIBDIR}/openssl-1.0.2o', d), d)}"
+LIBS_append_dunfell  =  "${@bb.utils.contains('PREFERRED_VERSION_netflix', '5.3%', '', bb.utils.contains('DISTRO_FEATURES', 'ssl-1.1.1', '', ' -lcrypto-1.0.2o -lssl-1.0.2o', d), d)}"
 CFLAGS += " -fPIC"
 
 # Latest curl recipe 7.50.1 version comes with Yocto 2.2 is changed to use PACKAGECONFIG
@@ -127,3 +128,4 @@ FILES_lib${BPN}-dev = "${includedir}/netflix \
 FILES_lib${BPN}-staticdev = "${libdir}/netflix/lib*.a"
 
 ALLOW_EMPTY_${PN} = "1"
+
