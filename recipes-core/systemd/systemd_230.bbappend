@@ -23,6 +23,11 @@ do_install_append() {
 
     rm -rf ${D}${base_libdir}/systemd/system/ldconfig.service
     rm -rf ${D}${base_libdir}/systemd/system/sysinit.target.wants/ldconfig.service
+
+    # disable LLMNR queries
+    if [ -f  ${D}${sysconfdir}/systemd/resolved.conf ]; then
+        sed -i '/LLMNR/c\LLMNR=no' ${D}${sysconfdir}/systemd/resolved.conf
+    fi
 }
 
 do_install_append_client() {
