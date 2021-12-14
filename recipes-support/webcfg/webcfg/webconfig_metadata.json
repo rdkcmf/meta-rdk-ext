@@ -993,7 +993,7 @@
                                {
                                   "name": "voiceservice",
                                   "bitposition": 1,
-                                  "support": false,
+                                  "support": true,
                                   "version": "1.0"
                                }
                             ]
