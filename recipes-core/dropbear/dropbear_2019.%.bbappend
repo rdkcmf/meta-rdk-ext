@@ -1,5 +1,7 @@
 FILESEXTRAPATHS_prepend := "${THISDIR}/${PN}:"
 
+SRC_URI_append = " file://dropbear_2019-ssh_log.patch"
+
 SRC_URI_remove_dunfell = " file://verbose.patch \
                            file://revsshipv6.patch \
                            file://0001-Fixed-Race-Conditions-Observed-when-using-port-forwa.patch \
