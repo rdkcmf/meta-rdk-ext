@@ -2,7 +2,7 @@ require wpe-webkit.inc
 
 PV = "2.22.4"
 
-DEPENDS_append = " wpe-backend atk tts libepoxy libgcrypt rdkat rsync-native"
+DEPENDS_append = " atk tts libepoxy libgcrypt rdkat rsync-native"
 RDEPENDS_${PN} += "wpe-backend-rdk-platform-plugin tts rdkat"
 DEPENDS_remove_daisy = " rsync-native"
 
@@ -155,7 +155,7 @@ SRC_URI += "file://2.22/0002-Use-isolatedCopy-for-strings-that-can-be-used-in-di
 SRC_URI += "file://2.22/0003-Fix-use-after-free-in-CoordinatedGraphicsLayer-destruction.patch"
 SRC_URI += "file://2.22.3/0295-enable-inspector-server-based-on-remote-inspector-co.patch"
 SRC_URI += "file://2.22.3/0296-Release-resources-in-suspended-state.patch"
-SRC_URI += "file://2.22.4/0296-Find-libwpe-1.0.patch"
+SRC_URI += "file://2.22/0296-Find-libwpe-1.0.patch"
 SRC_URI += "file://2.22.3/0297-remove-the-existing-buffers-while-doing-rewind.patch"
 SRC_URI += "file://2.22.2/0292-Increase-MSE-appsrc-buffering-min-percent.patch"
 SRC_URI += "file://2.22.2/0293-Enable-wait-video-on-aml-audio-sink.patch"

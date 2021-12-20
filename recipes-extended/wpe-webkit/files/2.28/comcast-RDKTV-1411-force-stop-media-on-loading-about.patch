@@ -1,0 +1,60 @@
+From e3ee2450cdb7aa89bb2a486cbfdfa35ff4123c56 Mon Sep 17 00:00:00 2001
+From: Eugene Mutavchi <Ievgen_Mutavchi@comcast.com>
+Date: Tue, 26 Jan 2021 16:13:21 +0000
+Subject: [PATCH] comcast - RDKTV-1411 - force stop media on loading
+ about:blank
+
+---
+ Source/WebCore/html/HTMLMediaElement.cpp  | 9 +++++++++
+ Source/WebCore/replay/UserInputBridge.cpp | 6 ++++++
+ 2 files changed, 15 insertions(+)
+
+diff --git a/Source/WebCore/html/HTMLMediaElement.cpp b/Source/WebCore/html/HTMLMediaElement.cpp
+index a0909b4959ca..82b809b49dcb 100644
+--- a/Source/WebCore/html/HTMLMediaElement.cpp
++++ b/Source/WebCore/html/HTMLMediaElement.cpp
+@@ -315,6 +315,15 @@ HashSet<HTMLMediaElement*>& HTMLMediaElement::allMediaElements()
+     return elements;
+ }
+ 
++void ForceStopMediaElements()
++{
++    for (auto* mediaElement : HTMLMediaElement::allMediaElements()) {
++        WTFLogAlways("Force stop '%s'", mediaElement->currentSrc().string().utf8().data());
++        ActiveDOMObject* obj = mediaElement;
++        obj->stop();
++    }
++}
++
+ #if ENABLE(MEDIA_SESSION)
+ typedef HashMap<uint64_t, HTMLMediaElement*> IDToElementMap;
+ 
+diff --git a/Source/WebCore/replay/UserInputBridge.cpp b/Source/WebCore/replay/UserInputBridge.cpp
+index fb26d794f7d0..ffb407222b0b 100644
+--- a/Source/WebCore/replay/UserInputBridge.cpp
++++ b/Source/WebCore/replay/UserInputBridge.cpp
+@@ -37,6 +37,7 @@
+ #include "PlatformKeyboardEvent.h"
+ #include "PlatformMouseEvent.h"
+ #include "PlatformWheelEvent.h"
++#include "LegacySchemeRegistry.h"
+ 
+ namespace WebCore {
+ 
+@@ -116,8 +117,13 @@ bool UserInputBridge::logicalScrollRecursively(ScrollLogicalDirection direction,
+     return m_page.focusController().focusedOrMainFrame().eventHandler().logicalScrollRecursively(direction, granularity, nullptr);
+ }
+ 
++void ForceStopMediaElements();  // defined in HTMLMediaElement
+ void UserInputBridge::loadRequest(FrameLoadRequest&& request, InputSource)
+ {
++    if (request.resourceRequest().url().isEmpty() ||
++        LegacySchemeRegistry::shouldLoadURLSchemeAsEmptyDocument(request.resourceRequest().url().protocol().toStringWithoutCopying())) {
++        ForceStopMediaElements();
++    }
+     m_page.mainFrame().loader().load(WTFMove(request));
+ }
+ 
+-- 
+2.25.1
+

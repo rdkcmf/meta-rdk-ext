@@ -1,0 +1,26 @@
+From 90e102e8299c9131e6816b6350c5aaf9b21478d4 Mon Sep 17 00:00:00 2001
+From: "Vivek.A" <Vivek_Arumugam@comcast.com>
+Date: Thu, 28 Apr 2022 11:07:03 +0000
+Subject: [PATCH] comcast - Add secure dump location
+
+---
+ Source/WebKit/Shared/unix/BreakpadExceptionHandler.cpp | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/Source/WebKit/Shared/unix/BreakpadExceptionHandler.cpp b/Source/WebKit/Shared/unix/BreakpadExceptionHandler.cpp
+index b5a6af882611..f8c709e009c1 100644
+--- a/Source/WebKit/Shared/unix/BreakpadExceptionHandler.cpp
++++ b/Source/WebKit/Shared/unix/BreakpadExceptionHandler.cpp
+@@ -58,6 +58,9 @@ void installExceptionHandler()
+     signal (SIGPIPE, SIG_IGN);
+ #endif
+ 
++    if (FileSystem::fileExists("/tmp/.SecureDumpEnable"))
++        breakpadMinidumpDir = "/opt/secure/minidumps";
++
+     execptionHandler = new google_breakpad::ExceptionHandler(google_breakpad::MinidumpDescriptor(breakpadMinidumpDir.utf8().data()), NULL, breakpadCallback, NULL, true, -1);
+ }
+ }
+-- 
+2.17.1
+

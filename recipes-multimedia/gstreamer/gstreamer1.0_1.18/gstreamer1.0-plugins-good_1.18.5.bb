@@ -9,7 +9,6 @@ BUGTRACKER = "https://gitlab.freedesktop.org/gstreamer/gst-plugins-good/-/issues
 SRC_URI = "https://gstreamer.freedesktop.org/src/gst-plugins-good/gst-plugins-good-${PV}.tar.xz \
            file://0001-qt-include-ext-qt-gstqtgl.h-instead-of-gst-gl-gstglf.patch \
 	   file://0001-gst-plugins-good-stubs-soft.h-not-existing-error.patch \
-	   file://0001-qtdemux-dont-check-pushbased-edts-gst1.18.patch \
 	   file://0001-qtdemux-add-senc-parser-gst1.18.patch \
 	   file://0007-Fix-senc-subsample_count-gst1.18.patch \
 	   file://0008-qtdemux-fix-signle-frame-processing-gst1.18.patch \

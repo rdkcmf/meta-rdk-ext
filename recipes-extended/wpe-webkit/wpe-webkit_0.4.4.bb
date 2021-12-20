@@ -2,7 +2,7 @@ require wpe-webkit.inc
 
 PV = "0.4.4+git${SRCPV}"
 
-DEPENDS_append = " wpe-backend atk tts rdkat libgcrypt rsync-native"
+DEPENDS_append = " atk tts rdkat libgcrypt rsync-native"
 RDEPENDS_${PN} += "wpe-backend-rdk-platform-plugin tts rdkat"
 DEPENDS_remove_daisy = " rsync-native"
 
@@ -170,13 +170,14 @@ SRC_URI += "file://0192-RWI-works-for-one-app-session-then-fail.patch"
 SRC_URI += "file://0194-Second-ESPN-App-launch-after-Live-playback-fails.patch"
 SRC_URI += "file://0195-update-the-sample-durtion-based-on-the-delta-of-last.patch"
 SRC_URI += "file://0196-refactor-fetch-body.patch"
+SRC_URI += "file://0296-Find-libwpe-1.0.patch"
 
 # device specific configs
 PACKAGECONFIG[intelce] = "-DUSE_WPEWEBKIT_BACKEND_INTEL_CE=ON -DUSE_WPEWEBKIT_PLATFORM_INTEL_CE=ON -DUSE_HOLE_PUNCH_GSTREAMER=ON -DUSE_KEY_INPUT_HANDLING_LINUX_INPUT=ON,,intelce-display"
 PACKAGECONFIG[nexus] = "-DUSE_WPEWEBKIT_BACKEND_BCM_NEXUS=ON -DUSE_WPEWEBKIT_PLATFORM_BCM_NEXUS=ON -DUSE_HOLE_PUNCH_GSTREAMER=ON -DUSE_KEY_INPUT_HANDLING_LINUX_INPUT=ON,,broadcom-refsw"
 PACKAGECONFIG[rpi] = "-DUSE_WPEWEBKIT_BACKEND_BCM_RPI=ON -DUSE_KEY_INPUT_HANDLING_LINUX_INPUT=ON,,userland"
 PACKAGECONFIG[wayland] = "-DUSE_WPEWEBKIT_BACKEND_WAYLAND=ON -DUSE_WPE_BUFFER_MANAGEMENT_BCM_RPI=ON -DUSE_KEY_INPUT_HANDLING_LINUX_INPUT=OFF,,wayland libxkbcommon"
-PACKAGECONFIG[westeros] = "-DUSE_WPEWEBKIT_BACKEND_WESTEROS=ON -DUSE_WPEWEBKIT_PLATFORM_WESTEROS=ON -DUSE_KEY_INPUT_HANDLING_LINUX_INPUT=OFF -DUSE_HOLE_PUNCH_GSTREAMER=ON -DUSE_HOLE_PUNCH_EXTERNAL=ON -DUSE_WESTEROS_SINK=ON,,wayland westeros libxkbcommon"
+PACKAGECONFIG[westeros] = "-DUSE_WPEWEBKIT_BACKEND_WESTEROS=ON -DUSE_WPEWEBKIT_PLATFORM_WESTEROS=ON -DUSE_KEY_INPUT_HANDLING_LINUX_INPUT=OFF -DUSE_HOLE_PUNCH_GSTREAMER=ON -DUSE_HOLE_PUNCH_EXTERNAL=ON -DUSE_WESTEROS_SINK=ON,,wayland westeros libxkbcommon westeros-sink"
 PACKAGECONFIG[encryptedmedia] = "-DENABLE_ENCRYPTED_MEDIA=ON,-DENABLE_ENCRYPTED_MEDIA=OFF,"
 
 PACKAGECONFIG[mathml] = "-DENABLE_MATHML=ON,-DENABLE_MATHML=OFF,"
@@ -188,6 +189,7 @@ PACKAGECONFIG[vp9] = ",,,gstreamer1.0-plugins-good-matroska"
 PACKAGECONFIG[vp9_hdr] = "-DENABLE_VP9_HDR=ON,-DENABLE_VP9_HDR=OFF,,gstreamer1.0-plugins-good-matroska"
 PACKAGECONFIG[encryptedlocalstorage] = "-DENABLE_SQLITE_ENCRYPTION_EXTENSION=ON,-DENABLE_SQLITE_ENCRYPTION_EXTENSION=OFF,sqlite3see"
 PACKAGECONFIG[shared_jsc] = "-DENABLE_SHARED_JSC=ON,,"
+PACKAGECONFIG[mediastream] ?= "-DENABLE_MEDIA_STREAM=ON -DENABLE_WEB_RTC=ON,-DENABLE_MEDIA_STREAM=OFF -DENABLE_WEB_RTC=OFF,qtwebrtc,qtwebrtc"
 
 PACKAGECONFIG_append = " allinone intl"
 

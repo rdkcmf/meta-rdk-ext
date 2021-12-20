@@ -1,0 +1,38 @@
+From bbecca9deaaf2feeb53e48b00c03fcda1c8a56eb Mon Sep 17 00:00:00 2001
+From: Eugene Mutavchi <Ievgen_Mutavchi@comcast.com>
+Date: Wed, 14 Jul 2021 20:37:49 +0000
+Subject: [PATCH] comcast - LLAMA-2184 - Support for external sink for x-dvb
+
+---
+ .../platform/graphics/gstreamer/GStreamerRegistryScanner.cpp    | 1 +
+ .../platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp | 2 ++
+ 2 files changed, 3 insertions(+)
+
+diff --git a/Source/WebCore/platform/graphics/gstreamer/GStreamerRegistryScanner.cpp b/Source/WebCore/platform/graphics/gstreamer/GStreamerRegistryScanner.cpp
+index eaa0c20272cf..ed874c5ae096 100644
+--- a/Source/WebCore/platform/graphics/gstreamer/GStreamerRegistryScanner.cpp
++++ b/Source/WebCore/platform/graphics/gstreamer/GStreamerRegistryScanner.cpp
+@@ -267,6 +267,7 @@ void GStreamerRegistryScanner::initialize()
+         {VideoDecoder, "video/x-flash-video", {"video/flv", "video/x-flv"}, { }},
+         {VideoDecoder, "video/x-h263", { }, { }},
+         {VideoDecoder, "video/x-msvideocodec", {"video/x-msvideo"}, { }},
++        {VideoDecoder, "video/x-ext-dvb", { "video/x-dvb" }},
+         {Demuxer, "application/vnd.rn-realmedia", { }, { }},
+         {Demuxer, "application/x-3gp", { }, { }},
+         {Demuxer, "application/x-hls", {"application/vnd.apple.mpegurl", "application/x-mpegurl"}, { }},
+diff --git a/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp b/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp
+index 9289562513c2..0e5f1ef66469 100644
+--- a/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp
++++ b/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp
+@@ -3570,6 +3570,8 @@ GstElement* MediaPlayerPrivateGStreamer::createHolePunchVideoSink()
+     // we use a fakeVideoSink so nothing is drawn to the page.
+ 
+ #if USE(WESTEROS_SINK)
++    if (m_isLegacyPlaybin)
++        return nullptr;
+     // Westeros using holepunch.
+     GRefPtr<GstElementFactory> westerosfactory = adoptGRef(gst_element_factory_find("westerossink"));
+     GstElement* videoSink = gst_element_factory_create(westerosfactory.get(), "WesterosVideoSink");
+-- 
+2.25.1
+

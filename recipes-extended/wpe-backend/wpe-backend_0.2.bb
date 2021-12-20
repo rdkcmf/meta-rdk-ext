@@ -19,10 +19,8 @@ S = "${WORKDIR}/git"
 
 inherit cmake pkgconfig
 
-PROVIDES = "wpe-backend"
-RPROVIDES_${PN} = "wpe-backend"
-RPROVIDES_${PN} += "libwpebackend0"
-RPROVIDES_${PN} += "libwpe-0.2-1"
+PROVIDES += "libwpe"
+RPROVIDES_${PN} += "libwpe"
 
 do_configure_prepend() {
     mkdir -p ${STAGING_DATADIR}/cmake/Modules/

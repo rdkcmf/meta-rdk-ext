@@ -1,0 +1,93 @@
+From 15e0a02b021b5f34d84428fc2eb12f49d30362c0 Mon Sep 17 00:00:00 2001
+From: Eugene Mutavchi <Ievgen_Mutavchi@comcast.com>
+Date: Thu, 29 Jul 2021 16:40:17 +0530
+Subject: [PATCH] comcast - XRE-15382 - libwebrtc fake encoder
+
+---
+ .../libwebrtc/GStreamerVideoEncoder.cpp       |  8 ++++
+ .../GStreamerVideoEncoderFactory.cpp          | 41 +++++++++++++++++++
+ 2 files changed, 49 insertions(+)
+
+diff --git a/Source/WebCore/platform/mediastream/libwebrtc/GStreamerVideoEncoder.cpp b/Source/WebCore/platform/mediastream/libwebrtc/GStreamerVideoEncoder.cpp
+index 42f0cf85711a..1661af7bf6ed 100644
+--- a/Source/WebCore/platform/mediastream/libwebrtc/GStreamerVideoEncoder.cpp
++++ b/Source/WebCore/platform/mediastream/libwebrtc/GStreamerVideoEncoder.cpp
+@@ -344,6 +344,14 @@ gst_webrtc_video_encoder_class_init (GstWebrtcVideoEncoderClass * klass)
+           (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS |
+               G_PARAM_CONSTRUCT)));
+ 
++#if 1
++  // Register fake encoder to advertise h264 decoding capability
++  register_known_encoder (ENCODER_X264, "fakesink", "h264parse", "video/x-h264",
++      "video/x-h264,alignment=au,stream-format=byte-stream,profile=baseline",
++      setup_x264enc, "bitrate", set_bitrate_kbit_per_sec, "key-int-max");
++  return;
++#endif
++
+   register_known_encoder (ENCODER_OMXH264, "omxh264enc", "h264parse",
+       "video/x-h264",
+       "video/x-h264,alignment=au,stream-format=byte-stream,profile=baseline",
+diff --git a/Source/WebCore/platform/mediastream/libwebrtc/GStreamerVideoEncoderFactory.cpp b/Source/WebCore/platform/mediastream/libwebrtc/GStreamerVideoEncoderFactory.cpp
+index 276ab667a32d..1e6272f6906a 100644
+--- a/Source/WebCore/platform/mediastream/libwebrtc/GStreamerVideoEncoderFactory.cpp
++++ b/Source/WebCore/platform/mediastream/libwebrtc/GStreamerVideoEncoderFactory.cpp
+@@ -492,8 +492,44 @@ public:
+     }
+ };
+ 
++struct NoopEncoder : public webrtc::VideoEncoder
++{
++    int32_t InitEncode(const webrtc::VideoCodec*, int32_t, size_t) final
++    {
++        return WEBRTC_VIDEO_CODEC_ERROR;
++    }
++    int32_t RegisterEncodeCompleteCallback(webrtc::EncodedImageCallback*) final
++    {
++        return WEBRTC_VIDEO_CODEC_ERROR;
++    }
++    int32_t Release() final
++    {
++        return WEBRTC_VIDEO_CODEC_OK;
++    }
++    void SetRates(const webrtc::VideoEncoder::RateControlParameters&) final
++    {
++    }
++    int32_t Encode(const webrtc::VideoFrame&, const std::vector<webrtc::VideoFrameType>*) final
++    {
++        return WEBRTC_VIDEO_CODEC_ERROR;
++    }
++    void AddCodecIfSupported(std::vector<webrtc::SdpVideoFormat>* supportedFormats)
++    {
++        auto h264Format = webrtc::SdpVideoFormat(cricket::kH264CodecName,
++            { { cricket::kH264FmtpProfileLevelId, cricket::kH264ProfileLevelConstrainedBaseline },
++                { cricket::kH264FmtpLevelAsymmetryAllowed, "1" },
++                { cricket::kH264FmtpPacketizationMode, "1" } });
++        supportedFormats->push_back(h264Format);
++    }
++};
++
++static bool useNoopEncoder() {  return true; }
++
+ std::unique_ptr<webrtc::VideoEncoder> GStreamerVideoEncoderFactory::CreateVideoEncoder(const webrtc::SdpVideoFormat& format)
+ {
++    if (useNoopEncoder())
++        return std::make_unique<NoopEncoder>();
++
+     if (format.name == cricket::kVp8CodecName) {
+         GRefPtr<GstElement> webrtcencoder = adoptGRef(GST_ELEMENT(g_object_ref_sink(gst_element_factory_make("webrtcvideoencoder", NULL))));
+         GRefPtr<GstElement> encoder = nullptr;
+@@ -529,6 +565,11 @@ std::vector<webrtc::SdpVideoFormat> GStreamerVideoEncoderFactory::GetSupportedFo
+ {
+     std::vector<webrtc::SdpVideoFormat> supportedCodecs;
+ 
++    if (useNoopEncoder()) {
++        NoopEncoder().AddCodecIfSupported(&supportedCodecs);
++        return supportedCodecs;
++    }
++
+     supportedCodecs.push_back(webrtc::SdpVideoFormat(cricket::kVp8CodecName));
+     GStreamerH264Encoder().AddCodecIfSupported(&supportedCodecs);
+ 
+-- 
+2.25.1
+

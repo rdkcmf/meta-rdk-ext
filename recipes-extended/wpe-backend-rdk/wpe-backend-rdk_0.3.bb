@@ -4,7 +4,7 @@ SECTION = "wpe"
 LICENSE = "BSD-2-Clause & Apache-2.0"
 LIC_FILES_CHKSUM = "file://COPYING;md5=ab5b52d145a58f5fcc0e2a531e7a2370"
 
-DEPENDS += "wpe-backend glib-2.0"
+DEPENDS += "libwpe glib-2.0"
 
 PV = "0.3+git${SRCPV}"
 
@@ -25,7 +25,7 @@ PACKAGECONFIG ?= "${WPE_BACKEND}"
 PACKAGECONFIG_append += "${@bb.utils.contains('DISTRO_FEATURES', 'gaming-support', 'gamepad', '', d)}"
 
 PACKAGECONFIG[westeros] = "-DUSE_BACKEND_WESTEROS=ON -DUSE_KEY_INPUT_HANDLING_LINUX_INPUT=OFF,,wayland westeros libxkbcommon"
-PACKAGECONFIG[essos] = "-DUSE_BACKEND_ESSOS=ON,-DUSE_BACKEND_ESSOS=OFF,essos libxkbcommon"
+PACKAGECONFIG[essos] = "-DUSE_BACKEND_ESSOS=ON -DUSE_INPUT_LIBINPUT=OFF,-DUSE_BACKEND_ESSOS=OFF,essos libxkbcommon"
 PACKAGECONFIG[gamepad] = "-DUSE_GENERIC_GAMEPAD=ON,-DUSE_GENERIC_GAMEPAD=OFF,"
 
 EXTRA_OECMAKE += " \

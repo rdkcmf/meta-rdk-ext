@@ -1,0 +1,33 @@
+From 6d4e9e15e92f9cc33cc20dc2a5d2b2dbbd9a318f Mon Sep 17 00:00:00 2001
+From: Eugene Mutavchi <Ievgen_Mutavchi@comcast.com>
+Date: Wed, 22 Dec 2021 19:38:27 +0000
+Subject: [PATCH] Find libwpe 1.0
+
+---
+ Source/cmake/FindWPEBackend.cmake | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+Index: git/Source/cmake/FindWPEBackend.cmake
+===================================================================
+--- git.orig/Source/cmake/FindWPEBackend.cmake
++++ git/Source/cmake/FindWPEBackend.cmake
+@@ -37,7 +37,7 @@ find_path(WPE_INCLUDE_DIRS
+ )
+ 
+ find_library(WPE_LIBRARIES
+-    NAMES wpe-0.2
++    NAMES ${PC_WPE_LIBRARIES}
+     HINTS ${PC_WPE_LIBDIR} ${PC_WPE_LIBRARY_DIRS}
+ )
+ 
+Index: git/Source/WebKit/wpe/wpe-webkit.pc.in
+===================================================================
+--- git.orig/Source/WebKit/wpe/wpe-webkit.pc.in
++++ git/Source/WebKit/wpe/wpe-webkit.pc.in
+@@ -7,5 +7,5 @@ Name: WebKit2
+ Description: WPE-flavored Web engine
+ Version: @PROJECT_VERSION@
+ Requires.private: glib-2.0 libsoup-2.4 @WPE_PC_DEPENDENICES@
+-Libs: -L${libdir} -lWPEWebKit -lwpe-0.2
++Libs: -L${libdir} -lWPEWebKit
+ Cflags: -I${includedir}/wpe-@WPE_API_VERSION@ -I${includedir}/wpe-@WPE_API_VERSION@/WPE

@@ -1,0 +1,223 @@
+Index: libsoup-2.68.4/libsoup/soup-session.c
+===================================================================
+--- libsoup-2.68.4.orig/libsoup/soup-session.c
++++ libsoup-2.68.4/libsoup/soup-session.c
+@@ -629,10 +629,10 @@ set_proxy_resolver (SoupSession *session
+ }
+ 
+ static void
+-soup_session_set_property (GObject *object, guint prop_id,
++soup_session_set_property_internal(SoupSession *session, guint prop_id,
+ 			   const GValue *value, GParamSpec *pspec)
+ {
+-	SoupSession *session = SOUP_SESSION (object);
++	/*SoupSession *session = SOUP_SESSION (object);*/
+ 	SoupSessionPrivate *priv = soup_session_get_instance_private (session);
+ 	const char *user_agent;
+ 	SoupSessionFeature *feature;
+@@ -769,7 +769,7 @@ soup_session_set_property (GObject *obje
+ 		set_aliases (&priv->https_aliases, g_value_get_boxed (value));
+ 		break;
+ 	default:
+-		G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
++		G_OBJECT_WARN_INVALID_PROPERTY_ID (G_OBJECT (session), prop_id, pspec);
+ 		break;
+ 	}
+ 
+@@ -783,6 +783,31 @@ soup_session_set_property (GObject *obje
+ }
+ 
+ static void
++soup_session_set_property (GObject *object, guint prop_id,
++                           const GValue *value, GParamSpec *pspec)
++{
++        SoupSession *session = SOUP_SESSION (object);
++        soup_session_set_property_internal(session, prop_id, value, pspec);
++}
++
++void
++soup_session_set_property_values (SoupSession *session, const char *property,
++                           const GValue *value, GParamSpec *pspec)
++{
++     if (!strcmp(SOUP_SESSION_SSL_STRICT, property)) {
++        soup_session_set_property_internal(session, PROP_SSL_STRICT, value, pspec);
++     }
++     else if (!strcmp(SOUP_SESSION_SSL_CA_FILE, property)) {
++        soup_session_set_property_internal(session,PROP_SSL_CA_FILE, value, pspec);
++     }
++     else if (!strcmp(SOUP_SESSION_TLS_INTERACTION, property)) {
++        soup_session_set_property_internal(session,PROP_TLS_INTERACTION, value, pspec);
++     }
++     /*Can be removed once the CA verification is successful*/
++     soup_socket_set_certificate_flags(0x001C);
++}
++
++static void
+ soup_session_get_property (GObject *object, guint prop_id,
+ 			   GValue *value, GParamSpec *pspec)
+ {
+Index: libsoup-2.68.4/libsoup/soup-session.h
+===================================================================
+--- libsoup-2.68.4.orig/libsoup/soup-session.h
++++ libsoup-2.68.4/libsoup/soup-session.h
+@@ -252,6 +252,11 @@ GIOStream *soup_session_connect_finish (
+ 					GAsyncResult                      *result,
+ 					GError                           **error);
+ 
++SOUP_AVAILABLE_IN_2_50
++void soup_session_set_property_values (SoupSession *session,
++		const char *property,
++		const GValue *value,
++		GParamSpec *pspec);
+ G_END_DECLS
+ 
+ #endif /* __SOUP_SESSION_H__ */
+Index: libsoup-2.68.4/libsoup/soup-socket.c
+===================================================================
+--- libsoup-2.68.4.orig/libsoup/soup-socket.c
++++ libsoup-2.68.4/libsoup/soup-socket.c
+@@ -1368,6 +1368,58 @@ soup_socket_accept_certificate (GTlsConn
+ 	return TRUE;
+ }
+ 
++static volatile GTlsCertificateFlags cFlags=G_TLS_CERTIFICATE_VALIDATE_ALL;
++
++void
++soup_socket_set_certificate_flags(unsigned int flags)
++{
++   cFlags=(GTlsCertificateFlags) flags;
++}
++
++static gboolean
++soup_socket_verify_certificate (GTlsConnection *conn, GTlsCertificate *cert,
++                                GTlsCertificateFlags errors, gpointer sock)
++{
++     GTlsCertificate *certificate;
++     char *tmp_name = NULL;
++     SoupSocketPrivate *priv = NULL;
++     GSocketAddress *address = NULL;
++
++     priv = soup_socket_get_instance_private (sock);
++     if (priv) {
++        address = g_socket_get_remote_address(priv->gsock, NULL);
++     }
++
++     if (G_IS_INET_SOCKET_ADDRESS (address)) {
++        tmp_name = g_inet_address_to_string (g_inet_socket_address_get_address (G_INET_SOCKET_ADDRESS (address)));
++     }
++     /*check for errors other than UNKNOWN_CA and BAD_IDENTITY*/
++     if (errors & cFlags) {
++           /*g_critical("soup_socket_verify_certificate ()  invalid certificate %d", (int) errors);
++           g_message("message: soup_socket_verify_certificate ()  invalid certificate %d", (int) errors);*/
++           if (tmp_name) {
++               fprintf(stderr, "libsoup: tls error:  connection from  %s [GTlsCertificateFlags enum value: %d]\n", tmp_name, (int) priv->tls_errors);
++               g_warning("warning : soup_socket_verify_certificate (), connection from  %s  invalid certificate %d", tmp_name, (int) errors);
++               g_free (tmp_name);
++           }
++           else {
++              g_warning("warning : soup_socket_verify_certificate ()  invalid certificate %d", (int) errors);
++           }
++           if (address) {
++              g_object_unref(address);
++           }
++           return FALSE;
++     }
++     else {
++        if (tmp_name)
++           g_message(" soup_socket_verify_certificate (), connection from  %s", tmp_name);
++     }
++     if (address) {
++        g_object_unref(address);
++     }
++     return TRUE;
++}
++
+ static gboolean
+ soup_socket_setup_ssl (SoupSocket    *sock,
+ 		       const char    *ssl_host,
+@@ -1376,6 +1428,7 @@ soup_socket_setup_ssl (SoupSocket    *so
+ {
+ 	SoupSocketPrivate *priv = soup_socket_get_instance_private (sock);
+ 	GTlsBackend *backend = g_tls_backend_get_default ();
++	GTlsCertificate *certificate = NULL;
+ 
+ 	if (G_IS_TLS_CONNECTION (priv->conn))
+ 		return TRUE;
+@@ -1411,14 +1464,29 @@ soup_socket_setup_ssl (SoupSocket    *so
+ 			      "interaction", priv->tls_interaction,
+ 			      NULL);
+ 
+-		g_object_unref (priv->conn);
+-		priv->conn = G_IO_STREAM (conn);
+ 
++		/*Sets conn 's validation flags, to override the default set of checks performed when validating a server certificate.*/
++                g_tls_client_connection_set_validation_flags(conn, G_TLS_CERTIFICATE_NOT_ACTIVATED |
++                                                                   G_TLS_CERTIFICATE_EXPIRED |
++                                                                   G_TLS_CERTIFICATE_REVOKED |
++                                                                   G_TLS_CERTIFICATE_BAD_IDENTITY|
++                                                                   G_TLS_CERTIFICATE_UNKNOWN_CA |
++                                                                   G_TLS_CERTIFICATE_INSECURE |
++                                                                   G_TLS_CERTIFICATE_GENERIC_ERROR
++                                                                   );
+ 		if (!priv->ssl_strict) {
+ 			g_signal_connect (conn, "accept-certificate",
+ 					  G_CALLBACK (soup_socket_accept_certificate),
+ 					  sock);
+ 		}
++		else {
++                        g_signal_connect (conn, "accept-certificate",
++                                          G_CALLBACK (soup_socket_verify_certificate),
++                                          sock);
++                }
++                g_object_unref (priv->conn);
++                priv->conn = G_IO_STREAM (conn);
++
+ 	} else {
+ 		GTlsServerConnection *conn;
+ 
+@@ -1426,12 +1494,30 @@ soup_socket_setup_ssl (SoupSocket    *so
+ 				       cancellable, error,
+ 				       "base-io-stream", priv->conn,
+ 				       "certificate", priv->ssl_creds,
+-				       "use-system-certdb", FALSE,
++				       "use-system-certdb", TRUE,
+ 				       "require-close-notify", FALSE,
+ 				       NULL);
+ 		if (!conn)
+ 			return FALSE;
+ 
++		g_object_set (G_OBJECT (conn),
++                                       "authentication-mode",
++                                       G_TLS_AUTHENTICATION_REQUIRED,
++                                       NULL);
++
++                g_tls_connection_set_use_system_certdb(conn, TRUE);
++
++                g_signal_connect (conn, "accept-certificate",
++                                      G_CALLBACK (soup_socket_verify_certificate),
++                                      sock);
++                g_object_get (sock,
++                         SOUP_SOCKET_TLS_CERTIFICATE, &certificate,
++                         NULL);
++
++                if (certificate) {
++                      g_tls_connection_set_certificate(conn, certificate);
++                }
++
+ 		g_object_unref (priv->conn);
+ 		priv->conn = G_IO_STREAM (conn);
+ 	}
+Index: libsoup-2.68.4/libsoup/soup-socket.h
+===================================================================
+--- libsoup-2.68.4.orig/libsoup/soup-socket.h
++++ libsoup-2.68.4/libsoup/soup-socket.h
+@@ -131,6 +131,9 @@ SoupSocketIOStatus  soup_socket_write
+ 					    GCancellable       *cancellable,
+ 					    GError            **error);
+ 
++void
++soup_socket_set_certificate_flags(unsigned int flags);
++
+ G_END_DECLS
+ 
+ #endif /* __SOUP_SOCKET_H__ */

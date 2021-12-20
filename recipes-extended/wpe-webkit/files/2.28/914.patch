@@ -1,0 +1,76 @@
+From 132709ea8da2b4d838295cba023e22fec98ebb59 Mon Sep 17 00:00:00 2001
+From: Andrzej Surdej <Andrzej_Surdej@comcast.com>
+Date: Fri, 22 Jul 2022 11:32:07 +0000
+Subject: [PATCH 1/2] [MSE] Evict samples from played range till the last sync
+ sample
+
+Change taken from wpe-2.22 branch
+
+Evict as much as possible from already played range to avoid throwing
+quota exceeded error.
+
+This fixes some 4K MSE playback
+---
+ .../WebCore/Modules/mediasource/SourceBuffer.cpp   | 14 ++++++++++++++
+ 1 file changed, 14 insertions(+)
+
+diff --git a/Source/WebCore/Modules/mediasource/SourceBuffer.cpp b/Source/WebCore/Modules/mediasource/SourceBuffer.cpp
+index e546d81180ca..7e86e5ab01dd 100644
+--- a/Source/WebCore/Modules/mediasource/SourceBuffer.cpp
++++ b/Source/WebCore/Modules/mediasource/SourceBuffer.cpp
+@@ -977,6 +977,20 @@ void SourceBuffer::evictCodedFrames(size_t newDataSize)
+     size_t initialBufferedSize = extraMemoryCost();
+ #endif
+ 
++    for (auto& trackBuffer : m_trackBufferMap.values()) {
++        auto t = std::max(MediaTime::zeroTime(), currentTime - MediaTime(2, 1));
++        auto prevSync =
++            trackBuffer.samples.decodeOrder().findSyncSamplePriorToPresentationTime(t);
++        if (prevSync != trackBuffer.samples.decodeOrder().rend()) {
++            // Don't include the sync frame in the range, just finish right before it.
++            prevSync++;
++        }
++        if (prevSync != trackBuffer.samples.decodeOrder().rend()) {
++            maximumRangeEnd = prevSync->second->presentationTime();
++            break;
++        }
++    }
++
+     MediaTime rangeStart = MediaTime::zeroTime();
+     MediaTime rangeEnd = std::max(m_buffered->ranges().start(0), rangeStart + thirtySeconds);
+     while (rangeStart < maximumRangeEnd) {
+-- 
+2.25.1
+
+
+From 949ed2e3fd2fac3063691196f5660098fe4ffac5 Mon Sep 17 00:00:00 2001
+From: Andrzej Surdej <Andrzej_Surdej@comcast.com>
+Date: Fri, 22 Jul 2022 11:54:37 +0000
+Subject: [PATCH 2/2] [MSE] Fix broken ifdefs in evictCodedFrames
+
+---
+ Source/WebCore/Modules/mediasource/SourceBuffer.cpp | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/Source/WebCore/Modules/mediasource/SourceBuffer.cpp b/Source/WebCore/Modules/mediasource/SourceBuffer.cpp
+index 7e86e5ab01dd..a9bb66f65c4e 100644
+--- a/Source/WebCore/Modules/mediasource/SourceBuffer.cpp
++++ b/Source/WebCore/Modules/mediasource/SourceBuffer.cpp
+@@ -1006,12 +1006,12 @@ void SourceBuffer::evictCodedFrames(size_t newDataSize)
+         rangeEnd += thirtySeconds;
+     }
+ 
+-#if !RELEASE_LOG_DISABLED
+     if (!m_bufferFull) {
++#if !RELEASE_LOG_DISABLED
+         DEBUG_LOG(LOGIDENTIFIER, "evicted ", initialBufferedSize - extraMemoryCost());
++#endif
+         return;
+     }
+-#endif
+ 
+     // If there still isn't enough free space and there buffers in time ranges after the current range (ie. there is a gap after
+     // the current buffered range), delete 30 seconds at a time from duration back to the current time range or 30 seconds after
+-- 
+2.25.1
+

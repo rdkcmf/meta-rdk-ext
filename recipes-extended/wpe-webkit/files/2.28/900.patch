@@ -1,0 +1,94 @@
+From 6b84d97a149f1f231d89e2ae903bf93e260e28c6 Mon Sep 17 00:00:00 2001
+From: Andrzej Surdej <Andrzej_Surdej@comcast.com>
+Date: Mon, 27 Jun 2022 12:10:26 +0000
+Subject: [PATCH] CDMInstanceProxy: Use weak ptr for keeping player
+
+Use WeakPtr for keeping media player ptr as it can be used after
+player is destroyed.
+The media player can be removed by HTMLMediaElement::load() request
+while still waiting for decryption key. CDM is not aware of such case
+and tries to use m_player ptr anyway that resuts with crash.
+
+Also reset m_playbackBlockedWaitingForKey when calling load()
+as the player will be re-created.
+---
+ Source/WebCore/html/HTMLMediaElement.cpp                   | 1 +
+ Source/WebCore/platform/encryptedmedia/CDMProxy.h          | 7 ++-----
+ Source/WebCore/platform/graphics/MediaPlayer.h             | 3 ++-
+ .../graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp     | 2 +-
+ 4 files changed, 6 insertions(+), 7 deletions(-)
+
+diff --git a/Source/WebCore/html/HTMLMediaElement.cpp b/Source/WebCore/html/HTMLMediaElement.cpp
+index 925a842d35ad..bd981e7c60e4 100644
+--- a/Source/WebCore/html/HTMLMediaElement.cpp
++++ b/Source/WebCore/html/HTMLMediaElement.cpp
+@@ -1157,6 +1157,7 @@ void HTMLMediaElement::prepareForLoad()
+     m_havePreparedToPlay = false;
+     m_displayMode = Unknown;
+     m_currentSrc = URL();
++    m_playbackBlockedWaitingForKey = false;
+ 
+ #if ENABLE(WIRELESS_PLAYBACK_TARGET)
+     m_failedToPlayToWirelessTarget = false;
+diff --git a/Source/WebCore/platform/encryptedmedia/CDMProxy.h b/Source/WebCore/platform/encryptedmedia/CDMProxy.h
+index 570ed2e4aabe..06b8a2ea26c9 100644
+--- a/Source/WebCore/platform/encryptedmedia/CDMProxy.h
++++ b/Source/WebCore/platform/encryptedmedia/CDMProxy.h
+@@ -256,7 +256,7 @@ public:
+     // Media player query methods - main thread only.
+     const RefPtr<CDMProxy>& proxy() const { ASSERT(isMainThread()); return m_cdmProxy; }
+     virtual bool isWaitingForKey() const { ASSERT(isMainThread()); return m_numDecryptorsWaitingForKey > 0; }
+-    void setPlayer(MediaPlayer* player) { ASSERT(isMainThread()); m_player = player; }
++    void setPlayer(WeakPtr<MediaPlayer>&& player) { ASSERT(isMainThread()); m_player = WTFMove(player); }
+ 
+     // Proxy methods - must be thread-safe.
+     void startedWaitingForKey();
+@@ -264,10 +264,7 @@ public:
+ 
+ private:
+     RefPtr<CDMProxy> m_cdmProxy;
+-    // FIXME: WeakPtr for the m_player? This is accessed from background and main threads, it's
+-    // concerning we could be accessing it in the middle of a shutdown on the main-thread, eh?
+-    // As a CDMProxy, we ***should*** be turned off before this pointer ever goes bad.
+-    MediaPlayer* m_player { nullptr }; // FIXME: MainThread<T>?
++    WeakPtr<MediaPlayer> m_player;
+ 
+     std::atomic<int> m_numDecryptorsWaitingForKey { 0 };
+ };
+diff --git a/Source/WebCore/platform/graphics/MediaPlayer.h b/Source/WebCore/platform/graphics/MediaPlayer.h
+index 67a251165cb9..c47494e52cc9 100644
+--- a/Source/WebCore/platform/graphics/MediaPlayer.h
++++ b/Source/WebCore/platform/graphics/MediaPlayer.h
+@@ -47,6 +47,7 @@
+ #include <wtf/Logger.h>
+ #include <wtf/MediaTime.h>
+ #include <wtf/WallTime.h>
++#include <wtf/WeakPtr.h>
+ #include <wtf/text/StringHash.h>
+ 
+ #if ENABLE(AVF_CAPTIONS)
+@@ -278,7 +279,7 @@ public:
+ #endif
+ };
+ 
+-class WEBCORE_EXPORT MediaPlayer : public MediaPlayerEnums, public RefCounted<MediaPlayer> {
++class WEBCORE_EXPORT MediaPlayer : public MediaPlayerEnums, public RefCounted<MediaPlayer>, public CanMakeWeakPtr<MediaPlayer> {
+     WTF_MAKE_NONCOPYABLE(MediaPlayer); WTF_MAKE_FAST_ALLOCATED;
+ public:
+     static Ref<MediaPlayer> create(MediaPlayerClient&);
+diff --git a/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp b/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp
+index a71068b8d796..3595d12f3b19 100644
+--- a/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp
++++ b/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp
+@@ -3744,7 +3744,7 @@ void MediaPlayerPrivateGStreamer::cdmInstanceAttached(CDMInstance& instance)
+ 
+     m_cdmInstance = reinterpret_cast<CDMInstanceProxy*>(&instance);
+     RELEASE_ASSERT(m_cdmInstance);
+-    m_cdmInstance->setPlayer(m_player);
++    m_cdmInstance->setPlayer(makeWeakPtr(m_player));
+ 
+     GRefPtr<GstContext> context = adoptGRef(gst_context_new("drm-cdm-proxy", FALSE));
+     GstStructure* contextStructure = gst_context_writable_structure(context.get());
+-- 
+2.25.1
+
