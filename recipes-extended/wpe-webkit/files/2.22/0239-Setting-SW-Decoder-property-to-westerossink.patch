@@ -35,11 +35,11 @@ index 6e6aae7ebc3f..de5d403b0c48 100644
          elementSetupCallback(this, m_videoSink.get(), m_pipeline.get());
 +
 +#if ENABLE(MEDIA_STREAM)
-+
++    static const bool enableSWDecoderForWebRTC = getenv("WPE_ENABLE_SW_DECODER_FOR_WEBRTC");
 +    AtomicString val;
 +    bool isPIPContent = false;
 +
-+    if (m_videoSink)
++    if (m_videoSink && enableSWDecoderForWebRTC)
 +    {
 +        if (m_player->doesHaveAttribute("pip", &val))
 +            isPIPContent = equalLettersIgnoringASCIICase(val.string(), "true");
