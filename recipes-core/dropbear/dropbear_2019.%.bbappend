@@ -13,6 +13,8 @@ SRC_URI_append_dunfell = " file://dropbear_2019-verbose.patch \
                            file://dropbear_2019-CVE-2020-36254.patch \
 "
 
+CFLAGS_append_broadband = " -DRDK_BROADBAND"
+
 do_install_append() {
         if [ "${@bb.utils.contains('DISTRO_FEATURES', 'systemd', 'systemd', '', d)}" = "systemd" ]; then
                 sed -i -- '/EnvironmentFile=.*/a BindToDevice=${ESTB_INTERFACE}' ${D}${systemd_unitdir}/system/dropbear@.service

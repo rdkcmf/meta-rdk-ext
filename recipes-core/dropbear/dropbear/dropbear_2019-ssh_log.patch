@@ -10,11 +10,20 @@ Index: dropbear-2019.78/dbutil.c
  
  static void generic_dropbear_exit(int exitcode, const char* format, 
  		va_list param) ATTRIB_NORETURN;
-@@ -155,6 +156,22 @@ void dropbear_log(int priority, const ch
+@@ -155,6 +156,31 @@ void dropbear_log(int priority, const ch
  	va_end(param);
  }
  
 +void ssh_logging(const char* format, ...) {
++#ifdef RDK_BROADBAND
++    if ((access("/rdklogs/logs/rdk_shell.log", F_OK ) != 0)) {
++        symlink("/opt/secure/rdk_shell.log","/rdklogs/logs/rdk_shell.log");
++    }
++#else
++    if ((access("/opt/logs/rdk_shell.log", F_OK ) != 0)) {
++        symlink("/opt/secure/rdk_shell.log","/opt/logs/rdk_shell.log");
++    }
++#endif
 +    FILE* fp = NULL;
 +    fp = fopen(SSH_SHELL_LOG, "a+");
 +    if (fp != NULL) {
