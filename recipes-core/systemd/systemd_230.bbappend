@@ -37,13 +37,13 @@ do_install_append_client() {
     rm -rf ${D}${base_libdir}/systemd/system/systemd-update-done.service
     rm -rf ${D}${base_libdir}/systemd/system/sysinit.target.wants/systemd-update-done.service
     sed -i -e 's/systemd-update-done.service//g' ${D}${systemd_unitdir}/system/systemd-journal-catalog-update.service
-    sed -i -e 's/systemd-update-done.service//g' ${D}${systemd_unitdir}/system/systemd-hwdb-update.service
+    sed -i -e 's/systemd-update-done.service//g' ${D}${systemd_unitdir}/system/systemd-hwdb-update.service || true
 }
 
 do_install_append_hybrid() {
     install -d ${D}${sysconfdir}/udev/rules.d
     install -m 0644 ${WORKDIR}/10-ubi-device-systemd.rules ${D}${sysconfdir}/udev/rules.d/    
-    sed -i -e 's/systemd-update-done.service//g' ${D}${systemd_unitdir}/system/systemd-hwdb-update.service
+    sed -i -e 's/systemd-update-done.service//g' ${D}${systemd_unitdir}/system/systemd-hwdb-update.service || true
 }
 
 do_install_append_broadband() {
@@ -54,7 +54,3 @@ do_install_append_dunfell() {
     install -Dm 0644 ${WORKDIR}/99-default.preset ${D}${systemd_unitdir}/system-preset/99-default.preset
 }
 
-FILES_${PN}-extra-utils_remove = "\
-                        ${bindir}/systemd-cgls \
-                        ${bindir}/systemd-cgtop \
-"
