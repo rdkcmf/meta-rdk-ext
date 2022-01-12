@@ -89,7 +89,7 @@ SRC_URI += "file://2.22/0187-XRE-15546-RDM-RWI-WI-starts-working-only-after-rest
 SRC_URI += "file://2.22/0188-fixed-build-error-when-disabled-WEB_AUDIO-and-enabled_MEDIA_STREAM.patch"
 SRC_URI += "file://2.22/0189-fix-for-DAZN-streams.patch"
 SRC_URI += "file://2.22/0190-Make-CDMInstance-ref-counter-thread-safe.patch"
-#SRC_URI += "file://2.22/0191-Gamepad-for-WPE.patch"
+SRC_URI += "file://2.22/0191-Gamepad-for-WPE.patch"
 
 SRC_URI += "file://2.22/0198-Hack-keep-extrapolating-pts-to-get-game-stream-worki.patch"
 SRC_URI += "file://2.22.2/0199-webrtc-improvements-for-xcloudgames.patch"
