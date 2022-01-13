@@ -143,7 +143,7 @@ SRC_URI += "file://2.22.2/0278-Add-option-to-enable-dolby-vision-in-codec-set.pa
 SRC_URI += "file://2.22.2/0278-Support-for-external-sink-for-x-dvb.patch"
 SRC_URI += "file://2.22/0279-Second-ESPN-App-launch-after-Live-playback-fails.patch"
 
-SRC_URI += "file://2.22/0282-Reduce-live-audio-only-buffering-iHeart.patch"
+#SRC_URI += "file://2.22/0282-Reduce-live-audio-only-buffering-iHeart.patch"
 SRC_URI += "file://2.22/0284-Reduce-queue2-high-watermark-to-speed-up-iheart-playback.patch"
 
 SRC_URI += "file://2.22/0001-Backport-Fix-missing-exception-checks-and-handling-i.patch"
