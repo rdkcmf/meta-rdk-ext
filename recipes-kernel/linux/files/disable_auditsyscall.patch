@@ -1,0 +1,33 @@
+From: c470b9951dda2346e002792cb2ba18c21223b158
+Date: Wed Jan 26 20:50:17  2022
+Subject: TCXB6-10109 - Release CONFIG_AUDIT from CONFIG_AUDITSYSCALL 
+
+An upstream revision from 2015 removes the ability to set CONFIG_AUDIT
+without syscall auditing (CONFIG_AUDITSYSCALL) during build configuration. 
+The patch has posed numerous performance problems for varying reasons. We 
+avoid some of these due to the lack of audit rules loaded into the kernel, 
+however CONFIG_AUDITSYSCALL will set TIF_AUDIT_SYSCALL, resulting in slow 
+path syscall entry and a marked reduction in syscall performance. This reverts
+that change so we can specify CONFIG_AUDIT without CONFIG_AUDITSYSCALL, leaving
+MAC dependencies intact without the performance overhead of AUDITSYSCALL
+
+See: https://patchwork.kernel.org/project/linux-audit/patch/20151208164237.15736.42955.stgit@localhost/
+See: http://lkml.iu.edu/hypermail/linux/kernel/1405.3/02685.html
+Source: COMCAST
+License: GPLV2
+Upstream-Status: Pending
+Signed-off-by: Bow Sineath <James_Sineath@comcast.com>
+
+diff --git a/init/Kconfig b/init/Kconfig
+index b331feea..860e80fa 100644
+--- a/init/Kconfig
++++ b/init/Kconfig
+@@ -319,7 +319,7 @@ config HAVE_ARCH_AUDITSYSCALL
+ 	bool
+ 
+ config AUDITSYSCALL
+-	def_bool y
++	bool
+ 	depends on AUDIT && HAVE_ARCH_AUDITSYSCALL
+ 
+ config AUDIT_WATCH
