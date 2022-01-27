@@ -9,10 +9,10 @@ Change-Id: Id25e5ab63fd002aa7260bbac00b504767ab6b89c
  1 file changed, 7 insertions(+), 3 deletions(-)
 
 diff --git a/Source/WebCore/platform/graphics/texmap/TextureMapperGC3DPlatformLayer.cpp b/Source/WebCore/platform/graphics/texmap/TextureMapperGC3DPlatformLayer.cpp
-index 0359cf4a0159..94ef052ec208 100644
+index 2d703aec036f..427a71d1d606 100644
 --- a/Source/WebCore/platform/graphics/texmap/TextureMapperGC3DPlatformLayer.cpp
 +++ b/Source/WebCore/platform/graphics/texmap/TextureMapperGC3DPlatformLayer.cpp
-@@ -61,9 +61,13 @@ TextureMapperGC3DPlatformLayer::~TextureMapperGC3DPlatformLayer()
+@@ -67,9 +67,13 @@ TextureMapperGC3DPlatformLayer::~TextureMapperGC3DPlatformLayer()
          client()->platformLayerWillBeDestroyed();
  //#endif
  
@@ -39,5 +39,5 @@ index 0359cf4a0159..94ef052ec208 100644
  
  PlatformGraphicsContext3D TextureMapperGC3DPlatformLayer::platformContext()
 -- 
-2.25.1
+2.17.1
 
