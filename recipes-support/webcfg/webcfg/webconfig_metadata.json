@@ -1727,7 +1727,7 @@
                           "bitposition": 1,
                           "support": true,
                           "version": "1.0",
-                          "secondary_doc": false
+                          "secondary_doc": true
                        }
                     ]
        },
