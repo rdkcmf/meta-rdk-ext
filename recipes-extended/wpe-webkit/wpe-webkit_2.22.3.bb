@@ -167,6 +167,7 @@ SRC_URI += "file://2.22/0003-Fix-use-after-free-in-CoordinatedGraphicsLayer-dest
 SRC_URI += "file://2.22.3/0295-enable-inspector-server-based-on-remote-inspector-co.patch"
 SRC_URI += "file://2.22.3/0296-Release-resources-in-suspended-state.patch"
 SRC_URI += "file://2.22.3/0298-disable-xrun-timer-amlhalasink.patch"
+SRC_URI += "file://2.22.3/0297-remove-the-existing-buffers-while-doing-rewind.patch"
 
 # device specific configs
 PACKAGECONFIG[westeros] = "-DUSE_WPEWEBKIT_BACKEND_WESTEROS=ON -DUSE_WPEWEBKIT_PLATFORM_WESTEROS=ON -DUSE_KEY_INPUT_HANDLING_LINUX_INPUT=OFF -DUSE_GSTREAMER_HOLEPUNCH=ON -DUSE_EXTERNAL_HOLEPUNCH=ON -DUSE_WESTEROS_SINK=ON,,westeros"
