@@ -1,0 +1,32 @@
+From 8deeff90fc2dcb49b4d0734afb442aca32035044 Mon Sep 17 00:00:00 2001
+From: Stephen Foulds <stephen.foulds@sky.uk>
+Date: Tue, 8 Feb 2022 12:27:27 +0000
+Subject: [PATCH] Fix compilation error
+
+Source: COMCAST
+License: GPLv2
+Upstream-Status: Submitted https://github.com/containers/crun/pull/865
+Signed-off-by: Stephen Foulds <stephen.foulds@sky.uk>
+---
+ tests/init.c | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/tests/init.c b/tests/init.c
+index 1847abf..0c6d4a6 100644
+--- a/tests/init.c
++++ b/tests/init.c
+@@ -49,6 +49,10 @@
+ #    define SECCOMP_SET_MODE_FILTER 1
+ #  endif
+ 
++#ifndef __NR_seccomp
++#  define __NR_seccomp 0xffff // seccomp syscall number unknown for this architecture
++#endif
++
+ #endif
+ 
+ #ifdef HAVE_ERROR_H
+-- 
+2.25.1
+
+

@@ -1,0 +1,294 @@
+From 44d78165f8e7828434e71f9d3aaa97db37096770 Mon Sep 17 00:00:00 2001
+From: Aditya R <arajan@redhat.com>
+Date: Fri, 11 Feb 2022 17:22:52 +0530
+Subject: [PATCH 1/4] cgroup-destroy: bump delay while deleting from 0.1ms to
+ 10ms
+
+Increase delay between retries from 0.1ms to 10ms
+
+Source: RedHat
+License: GPLv2
+Upstream-Status: Submitted https://github.com/containers/crun/pull/869
+Signed-off-by: Aditya R <arajan@redhat.com>
+---
+ src/libcrun/cgroup-utils.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/libcrun/cgroup-utils.c b/src/libcrun/cgroup-utils.c
+index 51272709..71ef8d35 100644
+--- a/src/libcrun/cgroup-utils.c
++++ b/src/libcrun/cgroup-utils.c
+@@ -459,7 +459,7 @@ destroy_cgroup_path (const char *path, int mode, libcrun_error_t *err)
+         {
+           struct timespec req = {
+             .tv_sec = 0,
+-            .tv_nsec = 100000,
++            .tv_nsec = 10000000,
+           };
+ 
+           nanosleep (&req, NULL);
+
+From df2fecdc61e768c5fa87833673ffecd72c990d26 Mon Sep 17 00:00:00 2001
+From: Aditya R <arajan@redhat.com>
+Date: Thu, 10 Feb 2022 17:46:55 +0530
+Subject: [PATCH 2/4] cgroup-destory: terminate infinite loop and relay error
+ back to callee
+
+Following commit makes sure that we terminate the destory loop if in
+case we ever fail to destory the cgroup for N number of times and relay
+a error back to callee function.
+
+Signed-off-by: Aditya R <arajan@redhat.com>
+---
+ src/libcrun/cgroup-cgroupfs.c |  6 +-----
+ src/libcrun/cgroup-systemd.c  |  6 +-----
+ src/libcrun/cgroup-utils.c    | 17 +++++++++++++++--
+ src/libcrun/cgroup.c          |  6 +-----
+ 4 files changed, 18 insertions(+), 17 deletions(-)
+
+diff --git a/src/libcrun/cgroup-cgroupfs.c b/src/libcrun/cgroup-cgroupfs.c
+index 2f928dfd..afa2efd6 100644
+--- a/src/libcrun/cgroup-cgroupfs.c
++++ b/src/libcrun/cgroup-cgroupfs.c
+@@ -106,11 +106,7 @@ libcrun_destroy_cgroup_cgroupfs (struct libcrun_cgroup_status *cgroup_status,
+   if (UNLIKELY (ret < 0))
+     crun_error_release (err);
+ 
+-  ret = destroy_cgroup_path (cgroup_status->path, mode, err);
+-  if (UNLIKELY (ret < 0))
+-    crun_error_release (err);
+-
+-  return 0;
++  return destroy_cgroup_path (cgroup_status->path, mode, err);
+ }
+ 
+ struct libcrun_cgroup_manager cgroup_manager_cgroupfs = {
+diff --git a/src/libcrun/cgroup-systemd.c b/src/libcrun/cgroup-systemd.c
+index 9f8b45fc..4931fceb 100644
+--- a/src/libcrun/cgroup-systemd.c
++++ b/src/libcrun/cgroup-systemd.c
+@@ -950,11 +950,7 @@ libcrun_destroy_cgroup_systemd (struct libcrun_cgroup_status *cgroup_status,
+   if (UNLIKELY (ret < 0))
+     crun_error_release (err);
+ 
+-  ret = destroy_cgroup_path (cgroup_status->path, mode, err);
+-  if (UNLIKELY (ret < 0))
+-    crun_error_release (err);
+-
+-  return 0;
++  return destroy_cgroup_path (cgroup_status->path, mode, err);
+ }
+ 
+ static int
+diff --git a/src/libcrun/cgroup-utils.c b/src/libcrun/cgroup-utils.c
+index 71ef8d35..301e30e8 100644
+--- a/src/libcrun/cgroup-utils.c
++++ b/src/libcrun/cgroup-utils.c
+@@ -388,6 +388,8 @@ int
+ destroy_cgroup_path (const char *path, int mode, libcrun_error_t *err)
+ {
+   bool repeat = true;
++  int retry_count = 0;
++  const int max_attempts = 500;
+   int ret;
+ 
+   do
+@@ -406,7 +408,13 @@ destroy_cgroup_path (const char *path, int mode, libcrun_error_t *err)
+             {
+               ret = rmdir_all (cgroup_path);
+               if (ret < 0)
+-                repeat = true;
++                {
++                  if (retry_count >= max_attempts)
++                    return crun_make_error (err, errno, "cannot delete path `%s`", cgroup_path);
++
++                  retry_count++;
++                  repeat = true;
++                }
+             }
+         }
+       else
+@@ -450,7 +458,12 @@ destroy_cgroup_path (const char *path, int mode, libcrun_error_t *err)
+                 {
+                   ret = rmdir_all (cgroup_path);
+                   if (ret < 0)
+-                    repeat = true;
++                    {
++                      if (retry_count >= max_attempts)
++                        return crun_make_error (err, errno, "cannot destroy subsystem `%s` at path `%s`", subsystem, cgroup_path);
++                      retry_count++;
++                      repeat = true;
++                    }
+                 }
+             }
+         }
+diff --git a/src/libcrun/cgroup.c b/src/libcrun/cgroup.c
+index 1ba68c98..75c2c9d2 100644
+--- a/src/libcrun/cgroup.c
++++ b/src/libcrun/cgroup.c
+@@ -199,11 +199,7 @@ libcrun_cgroup_destroy (struct libcrun_cgroup_status *cgroup_status, libcrun_err
+   if (UNLIKELY (ret < 0))
+     return ret;
+ 
+-  ret = cgroup_manager->destroy_cgroup (cgroup_status, err);
+-  if (UNLIKELY (ret < 0))
+-    crun_error_release (err);
+-
+-  return 0;
++  return cgroup_manager->destroy_cgroup (cgroup_status, err);
+ }
+ 
+ int
+
+From cdc4f6ad6f9afd3a58bbc91d6f31740f45bffe78 Mon Sep 17 00:00:00 2001
+From: Aditya R <arajan@redhat.com>
+Date: Fri, 11 Feb 2022 17:27:10 +0530
+Subject: [PATCH 3/4] utils, rmdir-all: transfer ownership and responsiblity of
+ fd to rmdir_all_fd
+
+rmdir_all_fd already performs closing of the fd it gets to let it take
+the full responsiblity of fd and remove `cleanup_close` from `rmdir_all`
+
+Signed-off-by: Aditya R <arajan@redhat.com>
+---
+ src/libcrun/cgroup-utils.c | 12 +++++++++---
+ 1 file changed, 9 insertions(+), 3 deletions(-)
+
+diff --git a/src/libcrun/cgroup-utils.c b/src/libcrun/cgroup-utils.c
+index 301e30e8..4d117185 100644
+--- a/src/libcrun/cgroup-utils.c
++++ b/src/libcrun/cgroup-utils.c
+@@ -241,7 +241,10 @@ rmdir_all_fd (int dfd)
+ 
+   dir = fdopendir (dfd);
+   if (dir == NULL)
+-    return -1;
++    {
++      TEMP_FAILURE_RETRY (close (dfd));
++      return -1;
++    }
+ 
+   dfd = dirfd (dir);
+ 
+@@ -265,6 +268,7 @@ rmdir_all_fd (int dfd)
+           libcrun_error_t tmp_err = NULL;
+           size_t i, n_pids = 0, allocated = 0;
+           cleanup_close int child_dfd = -1;
++          int tmp;
+           int child_dfd_clone;
+ 
+           child_dfd = openat (dfd, name, O_DIRECTORY | O_CLOEXEC);
+@@ -286,7 +290,9 @@ rmdir_all_fd (int dfd)
+           for (i = 0; i < n_pids; i++)
+             kill (pids[i], SIGKILL);
+ 
+-          return rmdir_all_fd (child_dfd);
++          tmp = child_dfd;
++          child_dfd = -1;
++          return rmdir_all_fd (tmp);
+         }
+     }
+   return 0;
+@@ -296,7 +302,7 @@ static int
+ rmdir_all (const char *path)
+ {
+   int ret;
+-  cleanup_close int dfd = open (path, O_DIRECTORY | O_CLOEXEC);
++  int dfd = open (path, O_DIRECTORY | O_CLOEXEC);
+   if (UNLIKELY (dfd < 0))
+     return dfd;
+ 
+
+From 4355edc50d3f0d68cfb86891bf7a7fbba170a9e8 Mon Sep 17 00:00:00 2001
+From: Aditya R <arajan@redhat.com>
+Date: Mon, 14 Feb 2022 13:19:52 +0530
+Subject: [PATCH 4/4] test: add a test for crun delete
+
+add a simple test for `crun delete --force`
+
+Signed-off-by: Aditya R <arajan@redhat.com>
+---
+ Makefile.am          |  1 +
+ tests/test_delete.py | 60 ++++++++++++++++++++++++++++++++++++++++++++
+ 2 files changed, 61 insertions(+)
+ create mode 100644 tests/test_delete.py
+
+diff --git a/Makefile.am b/Makefile.am
+index b1d8e303..37aa489e 100644
+--- a/Makefile.am
++++ b/Makefile.am
+@@ -141,6 +141,7 @@ TESTS = tests/test_capabilities.py \
+ 	tests/test_hooks.py \
+ 	tests/test_update.py \
+ 	tests/test_detach.py \
++	tests/test_delete.py \
+ 	tests/test_resources.py \
+ 	tests/test_start.py \
+ 	tests/test_exec.py \
+diff --git a/tests/test_delete.py b/tests/test_delete.py
+new file mode 100644
+index 00000000..db23d339
+--- /dev/null
++++ b/tests/test_delete.py
+@@ -0,0 +1,60 @@
++#!/bin/env python3
++# crun - OCI runtime written in C
++#
++# Copyright (C) 2017, 2018, 2019 Giuseppe Scrivano <giuseppe@scrivano.org>
++# crun is free software; you can redistribute it and/or modify
++# it under the terms of the GNU General Public License as published by
++# the Free Software Foundation; either version 2 of the License, or
++# (at your option) any later version.
++#
++# crun is distributed in the hope that it will be useful,
++# but WITHOUT ANY WARRANTY; without even the implied warranty of
++# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++# GNU General Public License for more details.
++#
++# You should have received a copy of the GNU General Public License
++# along with crun.  If not, see <http://www.gnu.org/licenses/>.
++
++import json
++import subprocess
++import os
++from tests_utils import *
++
++def test_simple_delete():
++    conf = base_config()
++    conf['process']['args'] = ['/init', 'pause']
++    add_all_namespaces(conf)
++
++    out, container_id = run_and_get_output(conf, detach=True, hide_stderr=True)
++    if out != "":
++        return -1
++    try:
++        state = json.loads(run_crun_command(["state", container_id]))
++        if state['status'] != "running":
++            return -1
++        if state['id'] != container_id:
++            return -1
++    finally:
++        freezerCreated=False
++        if not os.path.exists("/sys/fs/cgroup/cgroup.controllers") and os.access('/sys/fs/cgroup/freezer/', os.W_OK):
++            # cgroupv1 freezer can easily simulate stuck or breaking `crun delete -f <cid>`
++            # this should be only done on cgroupv1 systems
++            if not os.path.exists("/sys/fs/cgroup/freezer/frozen/"):
++                freezerCreated=True
++                os.makedirs("/sys/fs/cgroup/freezer/frozen/")
++            with open('/sys/fs/cgroup/freezer/frozen/tasks', 'w') as f:
++                f.write(str(state['pid']))
++            with open('/sys/fs/cgroup/freezer/frozen/freezer.state', 'w') as f:
++                f.write('FROZEN')
++        run_crun_command(["delete", "-f", container_id])
++        if freezerCreated:
++            os.rmdir("/sys/fs/cgroup/freezer/frozen/")
++    return 0
++
++all_tests = {
++    "test_simple_delete" : test_simple_delete,
++}
++
++if __name__ == "__main__":
++    tests_main(all_tests)
++
+
