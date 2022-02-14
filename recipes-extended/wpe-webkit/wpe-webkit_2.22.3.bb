@@ -156,6 +156,8 @@ SRC_URI += "file://2.22.2/0288-Temporary-disable-cookies-in-gst-context.patch"
 SRC_URI += "file://2.22.2/0289-GST-return-cached-position-when-sink-returns-invalid.patch"
 #SRC_URI += "file://2.22.3/0290-Revert-Add-support-for-RTCPeerConnection.onicecandid.patch"
 SRC_URI += "file://2.22.2/0290-Tweaking-libsoup-config-in-webkitwebsrc.patch"
+SRC_URI += "file://2.22.2/0292-Increase-MSE-appsrc-buffering-min-percent.patch"
+SRC_URI += "file://2.22.2/0293-Enable-wait-video-on-aml-audio-sink.patch"
 SRC_URI += "file://2.22.3/0291-increase-micro-version-version-to-match-recipe.patch"
 SRC_URI += "file://2.22.3/0292-fixing-rwi-ui-issues.patch"
 
