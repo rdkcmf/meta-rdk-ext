@@ -165,7 +165,7 @@ SRC_URI += "file://2.22/0003-Fix-use-after-free-in-CoordinatedGraphicsLayer-dest
 SRC_URI += "file://2.22.3/0295-enable-inspector-server-based-on-remote-inspector-co.patch"
 SRC_URI += "file://2.22.3/0296-Release-resources-in-suspended-state.patch"
 SRC_URI += "file://2.22.4/0296-Find-libwpe-1.0.patch"
-
+SRC_URI += "file://2.22.3/0297-remove-the-existing-buffers-while-doing-rewind.patch"
 SRC_URI += "file://2.22.2/0292-Increase-MSE-appsrc-buffering-min-percent.patch"
 SRC_URI += "file://2.22.2/0293-Enable-wait-video-on-aml-audio-sink.patch"
 SRC_URI += "file://2.22.3/0297-Fix-loss-of-ReadyForMoreSamples-notificat.patch"
