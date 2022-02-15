@@ -8,7 +8,7 @@ DEPENDS = "cjson trower-base64 msgpack-c cimplog wdmp-c curl wrp-c"
 DEPENDS_append = "${@bb.utils.contains("DISTRO_FEATURES", "webconfig_bin", " rbus rbus-core cpeabs", " ", d)}"
 DEPENDS_append = " ${@bb.utils.contains('DISTRO_FEATURES', 'aker', ' nanomsg libparodus ', '', d)}"
  
-SRCREV = "83ef79bb725fecd56215a804480661719310ac6e"
+SRCREV =  "eca2453c8be820ffc63d79204e5e5b2732d644bb"
 SRC_URI = "git://github.com/xmidt-org/webcfg.git"
 
 RDEPENDS_${PN} += "util-linux-uuidgen"
@@ -35,6 +35,8 @@ LDFLAGS_append = " ${@bb.utils.contains('DISTRO_FEATURES', 'aker', ' -llibparodu
 
 CFLAGS_append = " ${@bb.utils.contains('DISTRO_FEATURES', 'multipartUtility', '-DMULTIPART_UTILITY', '', d)}"
 
+CFLAGS_append = " ${@bb.utils.contains("DISTRO_FEATURES", "WanFailOverSupportEnable", " -DWAN_FAILOVER_SUPPORTED ", " ", d)} "
+
 CFLAGS_append = " \
         -DBUILD_YOCTO \
         -I${STAGING_INCDIR}/wdmp-c \
@@ -59,6 +61,11 @@ do_install_append() {
       install -d ${D}/etc
       touch ${D}/etc/WEBCONFIG_ENABLE
       (python ${WORKDIR}/metadata_parser.py ${WORKDIR}/webconfig_metadata.json ${D}/etc/webconfig.properties ${MACHINE})
+    fi
+
+    if ${@bb.utils.contains("DISTRO_FEATURES", "WanFailOverSupportEnable", "true", "false", d)}
+    then
+      touch ${D}/etc/CURRENT_INTERFACE
     fi
 }
 
