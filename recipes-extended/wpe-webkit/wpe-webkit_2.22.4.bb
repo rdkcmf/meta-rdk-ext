@@ -9,7 +9,7 @@ DEPENDS_remove_daisy = " rsync-native"
 inherit gettext
 
 #Commits on Feb 3, 2022
-SRCREV = "d6f9e0b5b58f5f190bc107b5f88c6c4e9d7ef621"
+SRCREV = "ed39c92e596238c3eb434d2388177bc61ca90f38"
 BASE_URI ?= "git://github.com/WebPlatformForEmbedded/WPEWebKit.git;protocol=http;branch=wpe-2.22"
 
 SRC_URI = "${BASE_URI}"
@@ -40,7 +40,7 @@ SRC_URI += "file://2.22.4/0036-Enable-HEVC-support-in-OpenCDM-decryptor.patch"
 SRC_URI += "file://2.22.1/0037-fixes-for-Youtube-encrypted-playback.patch"
 SRC_URI += "file://2.22.4/0038-add-EAC3-OpenCDMDecryptorCaps.patch"
 #SRC_URI += "file://2.22/0039-Initial-support-for-SQLite-Encryption-Extension.patch"
-SRC_URI += "file://2.22/0041-Dynamic-insertion-of-decryptor-element.patch"
+SRC_URI += "file://2.22.4/0041-Dynamic-insertion-of-decryptor-element.patch"
 SRC_URI += "file://2.22/0042-MSE-Report-ended-after-seek.patch"
 SRC_URI += "file://2.22/0045-comcast-Amazon-Prime-improvements.patch"
 SRC_URI += "file://2.22/0046-comcast-dont-pause-rendering-on-visible-false-rdkbrowser2-reset.patch"
