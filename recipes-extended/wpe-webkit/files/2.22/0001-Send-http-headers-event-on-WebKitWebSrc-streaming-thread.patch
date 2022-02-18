@@ -1,0 +1,128 @@
+From b206a15030d004eb7a74740634207e85a97046a3 Mon Sep 17 00:00:00 2001
+From: ryadav115 <rajan_yadav@comcast.com>
+Date: Fri, 18 Feb 2022 11:26:49 +0000
+Subject: [PATCH] Send http-headers event on WebKitWebSrc streaming thread
+
+---
+ .../gstreamer/WebKitWebSourceGStreamer.cpp    | 70 ++++++++++++++++++-
+ 1 file changed, 69 insertions(+), 1 deletion(-)
+
+diff --git a/Source/WebCore/platform/graphics/gstreamer/WebKitWebSourceGStreamer.cpp b/Source/WebCore/platform/graphics/gstreamer/WebKitWebSourceGStreamer.cpp
+index 9820b5735b2f..300260968327 100644
+--- a/Source/WebCore/platform/graphics/gstreamer/WebKitWebSourceGStreamer.cpp
++++ b/Source/WebCore/platform/graphics/gstreamer/WebKitWebSourceGStreamer.cpp
+@@ -36,6 +36,7 @@
+ #include <gio/gioenums.h>
+ #include <gst/app/gstappsrc.h>
+ #include <gst/pbutils/missing-plugins.h>
++#include <wtf/Lock.h>
+ #include <wtf/MainThread.h>
+ #include <wtf/Noncopyable.h>
+ #include <wtf/glib/GMutexLocker.h>
+@@ -85,6 +86,69 @@ enum MainThreadSourceNotification {
+     Dispose = 1 << 5
+ };
+ 
++// Sends the header event from the appsrc src pad, but only after the segment event has traversed the pad.
++class HttpHeadersEventSender {
++public:
++    HttpHeadersEventSender(GstAppSrc* appsrc)
++        : m_srcpad(adoptGRef(gst_element_get_static_pad(GST_ELEMENT(appsrc), "src")))
++    {
++        probeId = gst_pad_add_probe(m_srcpad.get(),
++            static_cast<GstPadProbeType>(GST_PAD_PROBE_TYPE_EVENT_DOWNSTREAM | GST_PAD_PROBE_TYPE_BUFFER | GST_PAD_PROBE_TYPE_EVENT_FLUSH),
++            [] (GstPad*, GstPadProbeInfo* info,  gpointer userData) -> GstPadProbeReturn {
++                HttpHeadersEventSender* httpHeadersEventSender = static_cast<HttpHeadersEventSender*>(userData);
++                if (info->type & GST_PAD_PROBE_TYPE_EVENT_DOWNSTREAM) {
++                    GRefPtr<GstEvent> event = GST_PAD_PROBE_INFO_EVENT(info);
++                    if (GST_EVENT_TYPE(event.get()) == GST_EVENT_SEGMENT) {
++                        httpHeadersEventSender->m_segmentEventReceived = true;
++                        if (httpHeadersEventSender->m_httpHeadersEvent) {
++                            gst_pad_push_event(httpHeadersEventSender->m_srcpad.get(), event.leakRef());
++                            GstEvent* httpHeadersEvent;
++                            {
++                                LockHolder locker(httpHeadersEventSender->m_lock);
++                                httpHeadersEvent = httpHeadersEventSender->m_httpHeadersEvent.leakRef();
++                            }
++                            gst_pad_push_event(httpHeadersEventSender->m_srcpad.get(), httpHeadersEvent);
++                            return GST_PAD_PROBE_DROP;
++                        }
++                    }
++                }
++                if (info->type & GST_PAD_PROBE_TYPE_EVENT_FLUSH && GST_EVENT_TYPE(GST_PAD_PROBE_INFO_EVENT(info)) == GST_EVENT_FLUSH_STOP) {
++                    httpHeadersEventSender->m_segmentEventReceived = false;
++                    return GST_PAD_PROBE_OK;
++                }
++                if (httpHeadersEventSender->m_httpHeadersEvent) {
++                    GstEvent* httpHeadersEvent;
++                    {
++                        LockHolder locker(httpHeadersEventSender->m_lock);
++                        httpHeadersEvent = httpHeadersEventSender->m_httpHeadersEvent.leakRef();
++                    }
++                    gst_pad_push_event(httpHeadersEventSender->m_srcpad.get(), httpHeadersEvent);
++                }
++                return GST_PAD_PROBE_OK;
++            }, this, nullptr);
++    }
++
++    virtual ~HttpHeadersEventSender()
++    {
++        if (m_srcpad)
++            gst_pad_remove_probe(m_srcpad.get(), probeId);
++    }
++
++    void setEvent(GRefPtr<GstEvent>&& httpHeadersEvent)
++    {
++        LockHolder locker(m_lock);
++        m_httpHeadersEvent = httpHeadersEvent;
++    }
++private:
++    GRefPtr<GstPad> m_srcpad;
++    gulong probeId;
++    bool m_segmentEventReceived = false;
++    // Guarded by m_lock.
++    GRefPtr<GstEvent> m_httpHeadersEvent;
++    Lock m_lock;
++};
++
++
+ #define WEBKIT_WEB_SRC_GET_PRIVATE(obj) (G_TYPE_INSTANCE_GET_PRIVATE((obj), WEBKIT_TYPE_WEB_SRC, WebKitWebSrcPrivate))
+ struct _WebKitWebSrcPrivate {
+     GstAppSrc* appsrc;
+@@ -106,6 +170,7 @@ struct _WebKitWebSrcPrivate {
+             notifier->invalidate();
+             notifier = nullptr;
+         }
++	delete httpHeadersEventSender;
+     }
+ 
+     CString originalURI;
+@@ -136,6 +201,7 @@ struct _WebKitWebSrcPrivate {
+ 
+     RefPtr<MainThreadNotifier<MainThreadSourceNotification>> notifier;
+     GRefPtr<GstBuffer> buffer;
++    HttpHeadersEventSender* httpHeadersEventSender;
+ };
+ 
+ enum {
+@@ -299,6 +365,8 @@ static void webkit_web_src_init(WebKitWebSrc* src)
+     gst_app_src_set_caps(priv->appsrc, nullptr);
+ 
+     priv->minimumBlocksize = gst_base_src_get_blocksize(GST_BASE_SRC_CAST(priv->appsrc));
++
++    priv->httpHeadersEventSender = new HttpHeadersEventSender(priv->appsrc);
+ }
+ 
+ static void webKitWebSrcDispose(GObject* object)
+@@ -947,7 +1015,7 @@ void CachedResourceStreamingClient::responseReceived(PlatformMediaResource&, con
+ 
+     gst_element_post_message(GST_ELEMENT_CAST(src), gst_message_new_element(GST_OBJECT_CAST(src),
+         gst_structure_copy(httpHeaders)));
+-    gst_pad_push_event(GST_BASE_SRC_PAD(priv->appsrc), gst_event_new_custom(GST_EVENT_CUSTOM_DOWNSTREAM_STICKY, httpHeaders));
++    priv->httpHeadersEventSender->setEvent(adoptGRef(gst_event_new_custom(GST_EVENT_CUSTOM_DOWNSTREAM_STICKY, httpHeaders)));
+ }
+ 
+ void CachedResourceStreamingClient::dataReceived(PlatformMediaResource&, const char* data, int length)
+-- 
+2.17.1
+
