@@ -1,0 +1,22 @@
+##################################################################
+Date: Tue Feb 18 17:12:03 2020 +0000
+From: 
+Subject: [PATCH] Disable bluez powercyle respawn 
+Source: SKY
+License: GPLV2
+Upstream-Status: Pending
+Signed-off-by: Tijo Thomas John <tijo.thomas@sky.uk>
+##################################################################
+
+diff -Naur a/src/main.conf b/src/main.conf
+--- a/src/main.conf	2019-03-04 11:34:13.005872621 +0000
++++ b/src/main.conf	2019-03-04 11:35:09.341873040 +0000
+@@ -116,7 +116,7 @@
+ # Sets whether the adapter should be powered off at start-up if already powered
+ # on.  This is useful to reset the adapter and therefore have the kernel and
+ # userspace in sync. Defaults to 'false'
+-StartupPowerOff = true
++StartupPowerOff = false
+ 
+ # Sets the adapter MTU size for ATT LE connections.  If not set it defaults
+ # to the maximum value which triggers an MTU negotiation when first connected

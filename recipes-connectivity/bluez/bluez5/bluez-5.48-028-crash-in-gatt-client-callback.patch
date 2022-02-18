@@ -1,0 +1,202 @@
+###################################################################################################
+Date: Mon, 17 Dec 2018 15:46:34 +0000
+From 
+From: Ben Gray <ben.gray@sky.uk>
+Subject: [PATCH] This patch brings in a number of fixes from subsequent bluez versions
+and also tries to fix the following crash:
+
+#00 0x0007e740 bluetoothd
+        queue_pop_head
+        ../bluez5_utils-5.48/src/shared/queue.c:173:0
+#01 0x00085a7c bluetoothd
+        enable_ccc_callback
+        ../bluez5_utils-5.48/src/shared/gatt-client.c:1283:0
+
+
+Bluez fixes:
+
+shared/gatt-client: Reset callbacks when unregistering
+If user application is unregistering a notification handler its
+callbacks shall not be called even CCC write is still holding a
+reference to notify_data.
+
+shared/gatt-client: Omit valid errors for primary discovery
+BT_ATT_ERROR_ATTRIBUTE_NOT_FOUND shall not cause anything to be printed
+since it is a valid response and just mark the end of primary discovery.
+
+shared/gatt-client: Fix secondary service discovery
+If the error returned is either BT_ATT_ERROR_ATTRIBUTE_NOT_FOUND or
+BT_ATT_ERROR_UNSUPPORTED_GROUP_TYPE the discovery shall be marked as
+successful and no error shall be printed.
+
+shared/gatt-client: Fix attempting to discovery with handle 0
+If a service was removed an no other service was added it may happen
+that pending_svc has not empty but first_svc and last_svc has not been
+set causing the following request:
+
+< ACL Data TX: Handle 76 flags 0x00 dlen 11
+      ATT: Read By Type Request (0x08) len 6
+        Handle range: 0x0000-0x0000
+        Attribute type: Include (0x2802)
+
+shared/gatt-client: Fix removing services from pending list
+We should remove from pending list service which was just processed,
+not the one that has just started being processed.
+
+Source: SKY
+License: GPLv2+ & LGPLv2.1+
+Upstream-Status: Pending
+Signed-off-by: Tijo Thomas John <tijo.thomas@sky.uk>
+###################################################################################################
+
+--- a/src/shared/gatt-client.c
++++ b/src/shared/gatt-client.c
+@@ -591,10 +591,14 @@ static bool discover_descs(struct discovery_op *op, bool *discovering)
+ 		/* Adjust current service */
+ 		svc = gatt_db_get_service(client->db, chrc_data->value_handle);
+ 		if (op->cur_svc != svc) {
+-			queue_remove(op->pending_svcs, svc);
++			if (op->cur_svc) {
++				queue_remove(op->pending_svcs, op->cur_svc);
++
++				/* Done with the current service */
++				gatt_db_service_set_active(op->cur_svc, true);
++			}
+ 
+ 			/* Done with the current service */
+-			gatt_db_service_set_active(op->cur_svc, true);
+ 			op->cur_svc = svc;
+ 		}
+ 
+@@ -933,14 +937,16 @@ static void discover_secondary_cb(bool success, uint8_t att_ecode,
+ 	discovery_req_clear(client);
+ 
+ 	if (!success) {
+-		util_debug(client->debug_callback, client->debug_data,
+-					"Secondary service discovery failed."
+-					" ATT ECODE: 0x%02x", att_ecode);
+ 		switch (att_ecode) {
+ 		case BT_ATT_ERROR_ATTRIBUTE_NOT_FOUND:
+ 		case BT_ATT_ERROR_UNSUPPORTED_GROUP_TYPE:
++			success = true;
++			att_ecode = 0;
+ 			goto next;
+ 		default:
++			util_debug(client->debug_callback, client->debug_data,
++					"Secondary service discovery failed."
++					" ATT ECODE: 0x%02x", att_ecode);
+ 			goto done;
+ 		}
+ 	}
+@@ -986,7 +992,7 @@ static void discover_secondary_cb(bool success, uint8_t att_ecode,
+ 	}
+ 
+ next:
+-	if (queue_isempty(op->pending_svcs))
++	if (queue_isempty(op->pending_svcs) || !op->svc_first)
+ 		goto done;
+ 
+ 	client->discovery_req = bt_gatt_discover_included_services(client->att,
+@@ -1023,9 +1029,6 @@ static void discover_primary_cb(bool success, uint8_t att_ecode,
+ 	discovery_req_clear(client);
+ 
+ 	if (!success) {
+-		util_debug(client->debug_callback, client->debug_data,
+-					"Primary service discovery failed."
+-					" ATT ECODE: 0x%02x", att_ecode);
+ 		/* Reset error in case of not found */
+ 		switch (att_ecode) {
+ 		case BT_ATT_ERROR_ATTRIBUTE_NOT_FOUND:
+@@ -1033,6 +1036,9 @@ static void discover_primary_cb(bool success, uint8_t att_ecode,
+ 			att_ecode = 0;
+ 			goto secondary;
+ 		default:
++			util_debug(client->debug_callback, client->debug_data,
++					"Primary service discovery failed."
++					" ATT ECODE: 0x%02x", att_ecode);
+ 			goto done;
+ 		}
+ 	}
+@@ -1212,7 +1218,9 @@ static void complete_notify_request(void *data)
+ 	struct notify_data *notify_data = data;
+ 
+ 	notify_data->att_id = 0;
+-	notify_data->callback(0, notify_data->user_data);
++
++	if (notify_data->callback)
++		notify_data->callback(0, notify_data->user_data);
+ }
+ 
+ static bool notify_data_write_ccc(struct notify_data *notify_data, bool enable,
+@@ -1264,6 +1272,8 @@ static void enable_ccc_callback(uint8_t opcode, const void *pdu,
+ 					uint16_t length, void *user_data)
+ {
+ 	struct notify_data *notify_data = user_data;
++	struct bt_gatt_client *client;
++	struct notify_chrc *chrc;
+ 	uint8_t att_ecode;
+ 
+ 	assert(notify_data->chrc->ccc_write_id);
+@@ -1273,15 +1283,22 @@ static void enable_ccc_callback(uint8_t opcode, const void *pdu,
+ 	if (opcode == BT_ATT_OP_ERROR_RSP) {
+ 		att_ecode = process_error(pdu, length);
+ 
++		/* Store before notifying the callback in case it frees it */
++		chrc = notify_data->chrc;
++
+ 		/* Failed to enable. Complete the current request and move on to
+ 		 * the next one in the queue. If there was an error sending the
+ 		 * write request, then just move on to the next queued entry.
+ 		 */
+-		queue_remove(notify_data->client->notify_list, notify_data);
+-		notify_data->callback(att_ecode, notify_data->user_data);
++		if (notify_data->client && notify_data->client->notify_list)
++			queue_remove(notify_data->client->notify_list, notify_data);
++		if (notify_data->callback)
++			notify_data->callback(att_ecode, notify_data->user_data);
+ 
+ 		while ((notify_data = queue_pop_head(
+-					notify_data->chrc->reg_notify_queue))) {
++					chrc->reg_notify_queue))) {
++
++			assert(notify_data->chrc == chrc);
+ 
+ 			if (notify_data_write_ccc(notify_data, true,
+ 							enable_ccc_callback))
+@@ -1292,13 +1309,15 @@ static void enable_ccc_callback(uint8_t opcode, const void *pdu,
+ 	}
+ 
+ 	/* Success! Report success for all remaining requests. */
+-	bt_gatt_client_ref(notify_data->client);
++	client = bt_gatt_client_ref(notify_data->client);
++	if (client) {
+ 
+-	complete_notify_request(notify_data);
+-	queue_remove_all(notify_data->chrc->reg_notify_queue, NULL, NULL,
+-						complete_notify_request);
++		complete_notify_request(notify_data);
++		queue_remove_all(notify_data->chrc->reg_notify_queue, NULL, NULL,
++							complete_notify_request);
+ 
+-	bt_gatt_client_unref(notify_data->client);
++		bt_gatt_client_unref(client);
++	}
+ }
+ 
+ static bool match_notify_chrc_value_handle(const void *a, const void *b)
+@@ -3157,7 +3176,15 @@ bool bt_gatt_client_unregister_notify(struct bt_gatt_client *client,
+ 	/* Remove data if it has been queued */
+ 	queue_remove(notify_data->chrc->reg_notify_queue, notify_data);
+ 
++	/* Reset callbacks */
++	notify_data->callback = NULL;
++	notify_data->notify = NULL;
++
+ 	complete_unregister_notify(notify_data);
++
++	/* Reset the client */
++	notify_data->client = NULL;
++
+ 	return true;
+ }
+ 

@@ -1,0 +1,41 @@
+###################################################################################################
+Date: 14 September 10:46:19 2017 +0100
+From: Ben Gray <ben.gray@sky.uk>
+
+Subject: [PATCH] NGDEV-100839 - Lost RCU (1.0) paring to the STB while performing Voice Search.
+
+	This patch removes the check on the disconnection reason before starting the passive
+	scan.  This fixes an issue where the RCU would disconnect for different reasons not
+	covered by ETIMEDOUT, ECONNRESET & ECONNABORTED, and this meant you could never
+	reconnect the device unless you manually triggered a scan (i.e. started pairing, or
+	power cycled the box).
+
+	Now for any disconnect reason the passive scan will be restarted. However note there
+	is a check before this that ensures the device should be auto-connected, this just
+	removes the disconnect reason as a stumbling block.
+
+
+Source: SKY
+License: GPLv2+ & LGPLv2.1+
+Upstream-Status: Pending
+Signed-off-by: Tijo Thomas John <tijo.thomas@sky.uk>
+###################################################################################################
+
+--- a/src/device.c	2017-09-14 10:46:19.000000000 +0100
++++ b/src/device.c	2017-11-08 16:44:32.000000000 +0000
+@@ -4668,12 +4668,10 @@
+ 	}
+ 
+ 	/*
+-	 * Keep scanning/re-connection active if disconnection reason
+-	 * is connection timeout, remote user terminated connection or local
+-	 * initiated disconnection.
++	 * [Sky] always add the device to the re-connection list regardless
++	 * of the disconnect reason.
+ 	 */
+-	if (err == ETIMEDOUT || err == ECONNRESET || err == ECONNABORTED)
+-		adapter_connect_list_add(device->adapter, device);
++	adapter_connect_list_add(device->adapter, device);
+ 
+ done:
+ 	attio_cleanup(device);

@@ -1,0 +1,137 @@
+###################################################################################################
+Date: Fri, 7 Dec 2018 14:39:19 +0000
+From 71de8b6a5b8cac9e617d38bd01c4c7a8bb463024 Mon Sep 17 00:00:00 2001
+From 0e260e458c155654524ec76163ece3f65a8d4f9f https://git.kernel.org/pub/scm/bluetooth/bluez.git/ Tue Feb 6 07:00:14 2018 -0200
+From b12d1984c6747f7d3bf08d3eee13ee92e31e02bd https://git.kernel.org/pub/scm/bluetooth/bluez.git/ Mon Nov 19 17:19:39 2018 +0200
+From 5c41f6bb54cf1c881931b5631c55c720cf86ecb4 https://git.kernel.org/pub/scm/bluetooth/bluez.git/ Thu Aug 20 23:16:42 2020 -0700
+From: Ben Gray <ben.gray@sky.uk>
+From: Chandresh Pitty <Chandresh_Pitty@cable.comcast.com>
+Subject: [PATCH] Fix gatt characteristic crash on remove
+
+The following patch fixes a crash if a client still has a
+notification pipe open when the characteristic is removed.
+
+Because pipe_io_destroy(chrc->notify_io) is being called
+after the chrc->notify_clients queue is destroyed, but
+pipe_io_destroy calls notify_io_destroy which still references
+the  chrc->notify_clients queue.
+
+Source: SKY Comcast
+License: GPLv2+ & LGPLv2.1+
+Upstream-Status: Pending
+Signed-off-by: Tijo Thomas John <tijo.thomas@sky.uk>
+###################################################################################################
+
+---
+ src/gatt-client.c | 12 ++++++++++--
+ 1 file changed, 10 insertions(+), 2 deletions(-)
+
+Index: bluez-5.48/src/gatt-client.c
+===================================================================
+--- bluez-5.48.orig/src/gatt-client.c
++++ bluez-5.48/src/gatt-client.c
+@@ -1521,8 +1521,10 @@ static DBusMessage *characteristic_acqui
+						register_notify_io_cb,
+						notify_io_cb,
+						client, NULL);
+-	if (!client->notify_id)
++	if (!client->notify_id) {
++		notify_client_unref(client);
+		return btd_error_failed(msg, "Failed to subscribe");
++	}
+
+	queue_push_tail(chrc->notify_clients, client);
+
+@@ -1542,6 +1544,12 @@ static DBusMessage *characteristic_start
+	const char *sender = dbus_message_get_sender(msg);
+	struct async_dbus_op *op;
+	struct notify_client *client;
++	struct btd_device *device = chrc->service->client->device;
++
++	if (device_is_disconnecting(device)) {
++		error("Device is disconnecting. StartNotify is not allowed.");
++		return btd_error_not_connected(msg);
++	}
+
+	if (chrc->notify_io)
+		return btd_error_not_permitted(msg, "Notify acquired");
+@@ -1613,16 +1621,16 @@ static DBusMessage *characteristic_stop_
+	const char *sender = dbus_message_get_sender(msg);
+	struct notify_client *client;
+
+-	client = queue_remove_if(chrc->notify_clients, match_notify_sender,
+-							(void *) sender);
+-	if (!client)
+-		return btd_error_failed(msg, "No notify session started");
+-
+	if (chrc->notify_io) {
+		characteristic_destroy_pipe(chrc, chrc->notify_io->io);
+		return dbus_message_new_method_return(msg);
+	}
+
++	client = queue_remove_if(chrc->notify_clients, match_notify_sender,
++							(void *) sender);
++	if (!client)
++		return btd_error_failed(msg, "No notify session started");
++
+	queue_remove(chrc->service->client->all_notify_clients, client);
+	bt_gatt_client_unregister_notify(gatt, client->notify_id);
+	update_notifying(chrc);
+@@ -1672,13 +1680,22 @@ static const GDBusMethodTable characteri
+	{ }
+ };
+
++static void remove_client(void *data)
++{
++	struct notify_client *ntfy_client = data;
++	struct btd_gatt_client *client = ntfy_client->chrc->service->client;
++
++	queue_remove(client->all_notify_clients, ntfy_client);
++
++	notify_client_unref(ntfy_client);
++}
++
+ static void characteristic_free(void *data)
+ {
+	struct characteristic *chrc = data;
+ 
+ 	/* List should be empty here */
+ 	queue_destroy(chrc->descs, NULL);
+-	queue_destroy(chrc->notify_clients, NULL);
+ 
+	if (chrc->write_io) {
+		queue_remove(chrc->service->client->ios, chrc->write_io->io);
+@@ -1690,6 +1707,8 @@ static void characteristic_free(void *da
+ 		pipe_io_destroy(chrc->notify_io);
+ 	}
+ 
++	queue_destroy(chrc->notify_clients, remove_client);
++
+ 	g_free(chrc->path);
+ 	free(chrc);
+ }
+@@ -1742,16 +1761,6 @@ static struct characteristic *characteri
+	return chrc;
+ }
+ 
+-static void remove_client(void *data)
+-{
+-	struct notify_client *ntfy_client = data;
+-	struct btd_gatt_client *client = ntfy_client->chrc->service->client;
+-
+-	queue_remove(client->all_notify_clients, ntfy_client);
+-
+-	notify_client_unref(ntfy_client);
+-}
+-
+ static void unregister_characteristic(void *data)
+ {
+	struct characteristic *chrc = data;
+@@ -1765,7 +1774,6 @@ static void unregister_characteristic(vo
+	if (chrc->write_op)
+		bt_gatt_client_cancel(gatt, chrc->write_op->id);
+ 
+-	queue_remove_all(chrc->notify_clients, NULL, NULL, remove_client);
+	queue_remove_all(chrc->descs, NULL, NULL, unregister_descriptor);
+ 
+	g_dbus_unregister_interface(btd_get_dbus_connection(), chrc->path,

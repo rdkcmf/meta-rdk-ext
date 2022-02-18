@@ -1,0 +1,187 @@
+###################################################################################################
+Date: Fri, 7 Dec 2018 15:32:27 +0000
+From e88cf206735f4a8988e2e95375006136d349d13d Mon Sep 17 00:00:00 2001
+From: Ben Gray <ben.gray@sky.uk>
+Subject: [PATCH] Added option to set the default MTU.
+
+This avoids a needless MTU negotiation on Sky devices that only
+support BT 4.0 and therefore MTU size of 23 for ATT / L2CAP
+connections on BLE.
+
+Source: SKY
+License: GPLv2+ & LGPLv2.1+
+Upstream-Status: Pending
+Signed-off-by: Tijo Thomas John <tijo.thomas@sky.uk>
+###################################################################################################
+
+---
+ src/adapter.c       | 16 ++++++++++++++++
+ src/adapter.h       |  3 +++
+ src/device.c        |  4 ++++
+ src/gatt-database.c |  2 ++
+ src/hcid.h          |  1 +
+ src/main.c          | 16 ++++++++++++++++
+ src/main.conf       |  5 +++++
+ 7 files changed, 47 insertions(+)
+
+diff --git a/src/adapter.c b/src/adapter.c
+index 28619ee..91fb6ec 100644
+--- a/src/adapter.c
++++ b/src/adapter.c
+@@ -47,6 +47,7 @@
+ #include "bluetooth/sdp_lib.h"
+ #include "lib/uuid.h"
+ #include "lib/mgmt.h"
++#include "lib/l2cap.h"
+ 
+ #include "gdbus/gdbus.h"
+ 
+@@ -8790,3 +8791,18 @@ bool btd_le_connect_before_pairing(void)
+ 
+ 	return false;
+ }
++
++/*
++ * [Sky]
++ * Sets the input and output LE MTU value from the config.  Should be based
++ * on the LMP_VERSION value from the adapter, but alas we don't get that
++ * info via the MGMT interface.
++ */
++int btd_adapter_get_att_mtu(struct btd_adapter *adapter, uint8_t bdaddr_type)
++{
++	if (bdaddr_type == BDADDR_BREDR)
++		return L2CAP_DEFAULT_MTU;
++	else
++		return main_opts.att_le_mtu;
++}
++
+diff --git a/src/adapter.h b/src/adapter.h
+index a85327c..71a395d 100644
+--- a/src/adapter.h
++++ b/src/adapter.h
+@@ -229,3 +229,6 @@ void btd_adapter_for_each_device(struct btd_adapter *adapter,
+ 
+ bool btd_le_connect_before_pairing(void);
+ 
++int btd_adapter_get_att_mtu(struct btd_adapter *adapter,
++			uint8_t bdaddr_type);
++
+diff --git a/src/device.c b/src/device.c
+index 8266ce4..cc77929 100644
+--- a/src/device.c
++++ b/src/device.c
+@@ -5033,6 +5033,8 @@ int device_connect_le(struct btd_device *dev)
+ 			BT_IO_OPT_DEST_TYPE, dev->bdaddr_type,
+ 			BT_IO_OPT_CID, ATT_CID,
+ 			BT_IO_OPT_SEC_LEVEL, sec_level,
++			BT_IO_OPT_MTU,
++			btd_adapter_get_att_mtu(adapter, dev->bdaddr_type),
+ 			BT_IO_OPT_INVALID);
+ 
+ 	if (io == NULL) {
+@@ -5124,6 +5126,8 @@ static int device_browse_gatt(struct btd_device *device, DBusMessage *msg)
+ 				BT_IO_OPT_DEST_TYPE, device->bdaddr_type,
+ 				BT_IO_OPT_CID, ATT_CID,
+ 				BT_IO_OPT_SEC_LEVEL, BT_IO_SEC_LOW,
++				BT_IO_OPT_MTU,
++				btd_adapter_get_att_mtu(adapter, device->bdaddr_type),
+ 				BT_IO_OPT_INVALID);
+ 
+ 	if (device->att_io == NULL) {
+diff --git a/src/gatt-database.c b/src/gatt-database.c
+index 9a33ae7..bafe750 100644
+--- a/src/gatt-database.c
++++ b/src/gatt-database.c
+@@ -3010,6 +3010,8 @@ struct btd_gatt_database *btd_gatt_database_new(struct btd_adapter *adapter)
+ 					btd_adapter_get_address_type(adapter),
+ 					BT_IO_OPT_CID, ATT_CID,
+ 					BT_IO_OPT_SEC_LEVEL, BT_IO_SEC_LOW,
++					BT_IO_OPT_MTU,
++					btd_adapter_get_att_mtu(adapter, BDADDR_LE_PUBLIC),
+ 					BT_IO_OPT_INVALID);
+ 	if (!database->le_io) {
+ 		error("Failed to start listening: %s", gerr->message);
+diff --git a/src/hcid.h b/src/hcid.h
+index 55ad281..a0c21a2 100644
+--- a/src/hcid.h
++++ b/src/hcid.h
+@@ -58,6 +58,7 @@ struct main_opts {
+ 	gboolean	kern_conn_control;
+ 	gboolean	secure_conn;
+ 	gboolean	startup_power_off;
++	uint16_t	att_le_mtu;
+ };
+ 
+ extern struct main_opts main_opts;
+diff --git a/src/main.c b/src/main.c
+index f74c50e..f4657fc 100644
+--- a/src/main.c
++++ b/src/main.c
+@@ -62,6 +62,8 @@
+ 
+ #include "storage.h"
+ 
++#include "src/shared/att.h"
++
+ #define BLUEZ_NAME "org.bluez"
+ 
+ #define DEFAULT_PAIRABLE_TIMEOUT       0 /* disabled */
+@@ -112,6 +114,7 @@ static const char *sky_options[] = {
+ 	"KernelConnectionControl",
+ 	"SecureConnections",
+ 	"StartupPowerOff",
++	"DefaultAttLeMtu",
+ 	NULL
+ };
+ 
+@@ -301,6 +304,7 @@ static int get_mode(const char *str)
+ static void parse_sky_config(GKeyFile *config)
+ {
+ 	GError *err = NULL;
++	int val;
+ 	gboolean boolean;
+ 
+ 
+@@ -327,6 +331,17 @@ static void parse_sky_config(GKeyFile *config)
+ 	else
+ 		main_opts.startup_power_off = boolean;
+ 
++	val = g_key_file_get_integer(config, "sky",
++						"DefaultAttLeMtu", &err);
++	if (err) {
++		DBG("%s", err->message);
++		g_clear_error(&err);
++	} else if ((val < BT_ATT_DEFAULT_LE_MTU) || (val > BT_ATT_MAX_LE_MTU)) {
++		DBG("invalid att le mtu value %d", val);
++	} else {
++		DBG("att_le_mtu=%d", val);
++		main_opts.att_le_mtu = val;
++	}
+ }
+ 
+ static void parse_config(GKeyFile *config)
+@@ -505,6 +520,7 @@ static void init_defaults(void)
+ 	main_opts.kern_conn_control = TRUE;
+ 	main_opts.secure_conn = TRUE;
+ 	main_opts.startup_power_off = FALSE;
++	main_opts.att_le_mtu = BT_ATT_MAX_LE_MTU;
+ }
+ 
+ static void log_handler(const gchar *log_domain, GLogLevelFlags log_level,
+diff --git a/src/main.conf b/src/main.conf
+index 8d714e8..047ab6c 100644
+--- a/src/main.conf
++++ b/src/main.conf
+@@ -118,4 +118,9 @@
+ # userspace in sync. Defaults to 'false'
+ # StartupPowerOff = false
+ 
++# Sets the adapter MTU size for ATT LE connections.  If not set it defaults
++# to the maximum value which triggers an MTU negotiation when first connected
++# to a client.
++# Defaults to 517 (which means MTU negotiation will be performed)
++# DefaultAttLeMtu = 517
+ 
+-- 
+2.18.0
+

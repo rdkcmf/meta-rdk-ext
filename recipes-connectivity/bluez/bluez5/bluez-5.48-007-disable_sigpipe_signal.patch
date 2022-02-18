@@ -1,0 +1,77 @@
+###################################################################################################
+Date: Fri, 7 Dec 2018 14:27:46 +0000
+From 5e47158c36933e0275bb3d1ab2094aa28c3c29fc Mon Sep 17 00:00:00 2001
+From: Ben Gray <ben.gray@sky.uk>
+
+Subject: [PATCH] Disable SIGPIPE signal.
+
+This patch disables the SIGPIPE signal.  Although this is not strictly required
+it does help us avoid situations were bugs in the BleRcuDaemon can cause the
+bluetoothd to terminate.
+
+The problem happens when our code acquires a notification pipe, but then for
+whatever reason shuts the pipe, if bluez then tries to write to the pipe it will
+generate a SIGPIPE signal and terminate.  By disabling the signal it just means
+the write to the pipe will fail with an error which will be logged by bluez.
+
+Source: SKY
+License: GPLv2+ & LGPLv2.1+
+Upstream-Status: Pending
+Signed-off-by: Tijo Thomas John <tijo.thomas@sky.uk>
+###################################################################################################
+---
+ src/main.c | 20 +++++++++++++++++---
+ 1 file changed, 17 insertions(+), 3 deletions(-)
+
+Index: bluez-5.48/src/main.c
+===================================================================
+--- bluez-5.48.orig/src/main.c
++++ bluez-5.48/src/main.c
+@@ -656,7 +656,7 @@ int main(int argc, char *argv[])
+ 	uint16_t sdp_mtu = 0;
+ 	uint32_t sdp_flags = 0;
+ 	int gdbus_flags = 0;
+-	guint signal, watchdog;
++	guint signal_id, watchdog;
+ 	const char *watchdog_usec;
+ 
+ 	init_defaults();
+@@ -680,6 +680,20 @@ int main(int argc, char *argv[])
+ 		exit(0);
+ 	}
+ 
++       /* [Sky] Ignore SIGPIPE signals - we use pipes for GATT notifications and
++        * would rather an error is logged if the pipe write fails rather than
++        * bluetoothd terminating.
++        */
++#ifdef HAVE_SIGSET
++       sigset(SIGPIPE, SIG_IGN);
++#elif defined(HAVE_SIGACTION)
++       memset(&action, 0, sizeof(action));
++       action.sa_handler = SIG_IGN;
++       sigaction(SIGPIPE, &action, NULL);
++#else
++       signal(SIGPIPE, SIG_IGN);
++#endif /* HAVE_SIGSET */
++
+ 	umask(0077);
+ 
+ 	btd_backtrace_init();
+@@ -690,7 +704,7 @@ int main(int argc, char *argv[])
+ 
+ 	event_loop = g_main_loop_new(NULL, FALSE);
+ 
+-	signal = setup_signalfd();
++	signal_id = setup_signalfd();
+ 
+ 	__btd_log_init(option_debug, option_detach);
+ 
+@@ -778,7 +792,7 @@ int main(int argc, char *argv[])
+ 
+ 	sd_notify(0, "STATUS=Quitting");
+ 
+-	g_source_remove(signal);
++	g_source_remove(signal_id);
+ 
+ 	plugin_cleanup();
+ 

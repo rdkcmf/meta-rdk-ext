@@ -1,0 +1,193 @@
+###################################################################################################
+Date: Fri, 7 Dec 2018 14:30:24 +0000
+From 243682afdd6ca7190b0b228840a38162eb59d626 Mon Sep 17 00:00:00 2001
+From: Ben Gray <ben.gray@sky.uk>
+
+Subject: [PATCH] Add argument to set the storage directory.
+
+	With this patch you can now specify the following on the
+	command line:   --storagedir <PATH>
+
+	This is a hacky way of setting the storage dir by opening the
+	directory with a know file descriptor and then setting the
+	storage dir path in the rest of the code to /proc/self/fd/<FD>.
+
+	This could do with a proper fix but would hit so much code that
+	maintaining the patch might be difficult.
+
+Source: SKY
+License: GPLv2+ & LGPLv2.1+
+Upstream-Status: Pending
+Signed-off-by: Tijo Thomas John <tijo.thomas@sky.uk>
+###################################################################################################
+
+---
+ profiles/input/device.c |  4 ++++
+ src/adapter.c           |  4 ++++
+ src/device.c            |  4 ++++
+ src/main.c              | 36 ++++++++++++++++++++++++++++++
+ src/storage.c           |  4 ++++
+ src/storage.h           |  4 ++++
+ 6 files changed, 56 insertions(+)
+
+diff --git a/profiles/input/device.c b/profiles/input/device.c
+index d66c41a..6b63c51 100644
+--- a/profiles/input/device.c
++++ b/profiles/input/device.c
+@@ -56,6 +56,10 @@
+ #include "device.h"
+ #include "hidp_defs.h"
+ 
++/* [Sky] switch to using a dynamic storagedir */
++#undef STORAGEDIR
++#define STORAGEDIR "/proc/self/fd/" STORAGEDIR_FD_NUM_STR
++
+ #define INPUT_INTERFACE "org.bluez.Input1"
+ 
+ enum reconnect_mode_t {
+diff --git a/src/adapter.c b/src/adapter.c
+index ca61a69..8eca76d 100644
+--- a/src/adapter.c
++++ b/src/adapter.c
+@@ -77,6 +77,10 @@
+ #include "advertising.h"
+ #include "eir.h"
+ 
++/* [Sky] switch to using a dynamic storagedir */
++#undef STORAGEDIR
++#define STORAGEDIR "/proc/self/fd/" STORAGEDIR_FD_NUM_STR
++
+ #define ADAPTER_INTERFACE	"org.bluez.Adapter1"
+ 
+ #define MODE_OFF		0x00
+diff --git a/src/device.c b/src/device.c
+index ee61d7c..8266ce4 100644
+--- a/src/device.c
++++ b/src/device.c
+@@ -75,6 +75,10 @@
+ #include "attrib-server.h"
+ #include "eir.h"
+ 
++/* [Sky] switch to using a dynamic storagedir */
++#undef STORAGEDIR
++#define STORAGEDIR "/proc/self/fd/" STORAGEDIR_FD_NUM_STR
++
+ #define IO_CAPABILITY_NOINPUTNOOUTPUT	0x03
+ 
+ #define DISCONNECT_TIMER	2
+diff --git a/src/main.c b/src/main.c
+index 3464047..8a4f0d8 100644
+--- a/src/main.c
++++ b/src/main.c
+@@ -29,6 +29,7 @@
+ 
+ #include <errno.h>
+ #include <stdio.h>
++#include <fcntl.h>
+ #include <unistd.h>
+ #include <stdlib.h>
+ #include <string.h>
+@@ -60,6 +60,8 @@
+ #include "profile.h"
+ #include "systemd.h"
+ 
++#include "storage.h"
++
+ #define BLUEZ_NAME "org.bluez"
+ 
+ #define DEFAULT_PAIRABLE_TIMEOUT       0 /* disabled */
+@@ -142,6 +144,32 @@ static GKeyFile *load_config(const char *file)
+ 	return keyfile;
+ }
+ 
++static int setup_storage_dir(const char *dir)
++{
++	int dirfd;
++	const char default_storage_dir[] = STORAGEDIR;
++
++	if (dir == NULL)
++		dir = default_storage_dir;
++
++	dirfd = open(dir, O_CLOEXEC | O_DIRECTORY);
++	if (dirfd < 0) {
++		error("Failed to open storage dir '%s' : %s", dir, strerror(errno));
++		return -1;
++	}
++
++	/* dup the fd so it has a fixed number as used by all the other
++	 * components */
++	if (dup3(dirfd, STORAGEDIR_FD_NUM, O_CLOEXEC) != STORAGEDIR_FD_NUM) {
++		error("Failed to dup storage dir : %s", dir, strerror(errno));
++		close(dirfd);
++		return -1;
++	}
++
++	close(dirfd);
++	return 0;
++}
++
+ static void parse_did(const char *did)
+ {
+ 	int result;
+@@ -542,6 +570,7 @@ static char *option_debug = NULL;
+ static char *option_plugin = NULL;
+ static char *option_noplugin = NULL;
+ static char *option_configfile = NULL;
++static char *option_storagedir = NULL;
+ static gboolean option_compat = FALSE;
+ static gboolean option_detach = TRUE;
+ static gboolean option_version = FALSE;
+@@ -634,6 +663,8 @@ static GOptionEntry options[] = {
+ 				"Specify plugins not to load", "NAME,..." },
+ 	{ "configfile", 'f', 0, G_OPTION_ARG_STRING, &option_configfile,
+ 			"Specify an explicit path to the config file", "FILE"},
++	{ "storagedir", 's', 0, G_OPTION_ARG_STRING, &option_storagedir,
++			"Specify an explicit path to the storage directory", "DIR"},
+ 	{ "compat", 'C', 0, G_OPTION_ARG_NONE, &option_compat,
+ 				"Provide deprecated command line interfaces" },
+ 	{ "experimental", 'E', 0, G_OPTION_ARG_NONE, &option_experimental,
+@@ -716,6 +747,11 @@ int main(int argc, char *argv[])
+ 
+ 	parse_config(main_conf);
+ 
++	if (setup_storage_dir(option_storagedir) < 0) {
++		error("Unable to setup storagedir");
++		exit(1);
++	}
++
+ 	if (connect_dbus() < 0) {
+ 		error("Unable to get on D-Bus");
+ 		exit(1);
+diff --git a/src/storage.c b/src/storage.c
+index 734a9e0..e578839 100644
+--- a/src/storage.c
++++ b/src/storage.c
+@@ -47,6 +47,10 @@
+ #include "uuid-helper.h"
+ #include "storage.h"
+ 
++/* [Sky] switch to using a dynamic storagedir */
++#undef STORAGEDIR
++#define STORAGEDIR "/proc/self/fd/" STORAGEDIR_FD_NUM_STR
++
+ /* When all services should trust a remote device */
+ #define GLOBAL_TRUST "[all]"
+ 
+diff --git a/src/storage.h b/src/storage.h
+index 1c0ad57..5592257 100644
+--- a/src/storage.h
++++ b/src/storage.h
+@@ -21,6 +21,10 @@
+  *
+  */
+ 
++/* [Sky] The fd number that corresponds to the open storage dir */
++#define STORAGEDIR_FD_NUM      300
++#define STORAGEDIR_FD_NUM_STR "300"
++
+ int read_discoverable_timeout(const char *src, int *timeout);
+ int read_pairable_timeout(const char *src, int *timeout);
+ int read_on_mode(const char *src, char *mode, int length);
+-- 
+2.18.0
+

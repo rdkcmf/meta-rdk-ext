@@ -1,0 +1,36 @@
+###################################################################################################
+Date: Fri, 7 Dec 2018 15:42:24 +0000
+From 32cfb60130f85f93e9506e9d929e5bd0154c7ee7 Mon Sep 17 00:00:00 2001
+From: Ben Gray <ben.gray@sky.uk>
+Subject: [PATCH] Remove autoconnect when device is removed.
+
+Without this when a device is removed then it remains in the autoconnect
+list and in the kernels whitelist.  Meaning it will automatically
+reconnect and we can never get rid of the device.
+
+Source: SKY
+License: GPLv2+ & LGPLv2.1+
+Upstream-Status: Pending
+Signed-off-by: Tijo Thomas John <tijo.thomas@sky.uk>
+###################################################################################################
+
+---
+ src/device.c | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/src/device.c b/src/device.c
+index 89f4bc5..a209feb 100644
+--- a/src/device.c
++++ b/src/device.c
+@@ -5256,6 +5256,8 @@ void btd_device_set_temporary(struct btd_device *device, bool temporary)
+ 	if (temporary) {
+ 		if (device->bredr)
+ 			adapter_whitelist_remove(device->adapter, device);
++		else
++			adapter_auto_connect_remove(device->adapter, device);
+ 		adapter_connect_list_remove(device->adapter, device);
+ 		return;
+ 	}
+-- 
+2.18.0
+

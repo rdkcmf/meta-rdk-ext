@@ -1,0 +1,245 @@
+From: James Dowdells <james.dowdells@sky.uk>
+Date: 02/03/2021
+Subject: [PATCH] Bluez pairing info lost after kernel crash early in boot
+
+If the unit crashes duting boot the bluez info files are corrupted
+as the are updated.  A glib temporary file is saved though and
+this is used to restore the current setup.
+
+Upstream-Status: N/A
+Source: SKY
+License: CLOSED
+Signed-off-by: James Dowdells <james.dowdells@sky.uk>
+
+diff -Naur a/src/adapter.c b/src/adapter.c
+--- a/src/adapter.c	2021-03-02 12:48:39.778127297 +0000
++++ b/src/adapter.c	2021-03-02 12:59:20.773765554 +0000
+@@ -3868,6 +3868,23 @@
+ 		if (entry->d_type != DT_DIR || bachk(entry->d_name) < 0)
+ 			continue;
+ 
++
++		//
++		// use file name here to store the name of
++		// directory we need to check for backups
++	        // Sky addition for AMLOGIC-1276
++		//
++		snprintf(filename, PATH_MAX, STORAGEDIR "/%s/%s/",
++					adapter_dir(adapter), entry->d_name);
++
++		//
++		// check if we need to restore these files due to power cut
++		// causing data loss
++	        // Sky addition for AMLOGIC-1276
++		//
++		restore_file( filename, "info" );
++		restore_file( filename, "attributes" );
++
+ 		snprintf(filename, PATH_MAX, STORAGEDIR "/%s/%s/info",
+ 					adapter_dir(adapter), entry->d_name);
+ 
+diff -Naur a/src/device.c b/src/device.c
+--- a/src/device.c	2021-03-02 12:48:39.778127297 +0000
++++ b/src/device.c	2021-03-02 13:25:38.180163386 +0000
+@@ -36,6 +36,10 @@
+ #include <time.h>
+ 
+ #include <glib.h>
++#include <sys/types.h>
++#include <sys/stat.h>
++#include <unistd.h>
++
+ #include <dbus/dbus.h>
+ 
+ #include "lib/bluetooth.h"
+@@ -3451,6 +3455,15 @@
+ 
+ 	DBG("Restoring %s gatt database from file", peer);
+ 
++	//
++	// Check if we need to restore the cache file before processing the cache
++	// Sky addition for AMLOGIC-1276
++	// 
++	snprintf(filename, PATH_MAX, STORAGEDIR "/%s/cache/", local, peer);
++	restore_file(filename, peer );
++
++
++	DBG("Restoring %s gatt database from file", peer);
+ 	snprintf(filename, PATH_MAX, STORAGEDIR "/%s/cache/%s", local, peer);
+ 
+ 	key_file = g_key_file_new();
+@@ -6357,3 +6370,164 @@
+ {
+ 	btd_service_remove_state_cb(service_state_cb_id);
+ }
++
++/* Sky additions for AMLOGIC-1276 */
++static int CopyFile(const char *source, const char *destination)
++{
++        int input, output;
++	int result;
++
++        if ((input = open(source, O_RDONLY)) == -1) {
++		DBG("can't open: %s", source );
++                return -1;
++        }
++        if ((output = creat(destination, 0660)) == -1) {
++		DBG("can't create: %s", destination);
++                close(input);
++                return -1;
++        }
++        //sendfile will work with non-socket output (i.e. regular file) on Linux 2.6.33+
++        off_t bytesCopied = 0;
++        struct stat fileinfo = { 0 };
++        fstat(input, &fileinfo);
++
++        result = sendfile(output, input, &bytesCopied, fileinfo.st_size);
++
++        close(input);
++        close(output);
++
++        return result;
++}
++
++int restore_file(char *dirname, char *filename )
++{
++        DIR *d;
++        struct dirent *dir;
++        struct stat st;
++        int res;
++	unsigned int size;
++
++        char *full_filename;
++        char *current_filename;
++        char *target_filename;
++
++        char adapter_addr[18];
++        char device_addr[18];
++        int rm_res;
++
++	DBG("");
++	full_filename = (char*)malloc( PATH_MAX );
++	if( full_filename == NULL )
++	{
++		DBG("malloc failed");
++		return -1;
++	}
++	current_filename = (char*)malloc( PATH_MAX );
++	if( current_filename == NULL )
++	{
++		DBG("malloc failed");
++		free( full_filename );
++		return -1;
++	}
++	target_filename = (char*)malloc( PATH_MAX );
++	if( target_filename == NULL )
++	{
++		DBG("malloc failed");
++		free( full_filename );
++		free( current_filename );
++		return -1;
++	}
++
++	//
++	//Generate the full file name of the file we might want to restore
++	//
++        snprintf(full_filename, PATH_MAX, "%s%s", dirname, filename );
++        DBG("Check if we need to recover: %s, dir name %s", full_filename, dirname );
++	
++	//
++        // we will look for the target filename with a '.' after the name
++	// this indicates that we have a back up version of the file
++	//
++        snprintf(target_filename, PATH_MAX, "%s.", filename );
++
++
++        // now process each file in the directory
++        d = opendir(dirname);
++        if (d) {
++                while ((dir = readdir(d)) != NULL) {
++
++                        if(dir->d_type == DT_DIR )
++                        {
++                                continue;
++                        }
++
++                        DBG("Check file: target file %s versus dname %s", target_filename, dir->d_name );
++
++			//
++			// check if the current filename matches the target filename
++			//
++                        if (memcmp(dir->d_name, target_filename, strlen(target_filename)) == 0) {
++                                int copied_bytes;
++				//
++				// We've found a backup file so restore it
++				// the original file can be corrupt so no point checking sizes
++				// or anything else so always restore
++				//
++                          	// Generate the full file name of the file we use to restore
++				//
++                        	snprintf(current_filename, PATH_MAX, "%s%s", dirname, dir->d_name); 
++                                DBG("Use '%s' to restore file from %s", current_filename, filename );
++
++                        	// get the file size info
++                        	res = stat(current_filename, &st);
++                        	if (res < 0) {
++                               		DBG("Error: Cant stat %s, abort restore", current_filename );
++                                	free( full_filename );
++                                	free( current_filename );
++                                	free( target_filename );
++                                	return -1;
++                        	}
++
++                        	size = st.st_size;				
++				//
++				// Copy back up file to official file 
++				//  Do this in 2 stages so we always have a valid copy
++				//
++                                copied_bytes = CopyFile(current_filename, full_filename);
++
++                                if (copied_bytes == size) {
++					//
++					// back up file copied successfully so we can delete it.
++					//
++					DBG(">>>>>>>>>>>>>>>>>>");
++                                        DBG("restored '%s' from %s, size %d !!!!!!!!!!!!!!!!!!!!", filename, current_filename, copied_bytes);
++					DBG(">>>>>>>>>>>>>>>>>>");
++
++                                        rm_res = remove(current_filename);
++
++                                        if (rm_res) {
++                                               DBG("Error: unable to remove %s", current_filename);
++                                        }
++			        	free( full_filename );
++                			free( current_filename );
++					free( target_filename );
++                                        return rm_res;
++                                 } else {
++                                        DBG("Error: unable to copy %s to 'info'", dir->d_name);
++                                 }
++			       
++                        } else {
++                                DBG("Ignore file: %s", dir->d_name);
++                        }
++                }
++                closedir(d);
++        }
++
++	free( full_filename );
++       	free( current_filename );
++	free( target_filename );
++
++        return -1;
++}
++
++
+diff -Naur a/src/device.h b/src/device.h
+--- a/src/device.h	2021-03-02 12:48:39.774127303 +0000
++++ b/src/device.h	2021-03-02 12:52:21.501936816 +0000
+@@ -169,3 +169,6 @@
+ 
+ void btd_device_init(void);
+ void btd_device_cleanup(void);
++
++/* Sky additions for AMLOGIC-1276 */
++int restore_file(char *dirname, char *filename );
