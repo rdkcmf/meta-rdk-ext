@@ -168,6 +168,7 @@ SRC_URI += "file://2.22.4/0296-Find-libwpe-1.0.patch"
 
 SRC_URI += "file://2.22.2/0292-Increase-MSE-appsrc-buffering-min-percent.patch"
 SRC_URI += "file://2.22.2/0293-Enable-wait-video-on-aml-audio-sink.patch"
+SRC_URI += "file://2.22.3/0297-Fix-loss-of-ReadyForMoreSamples-notificat.patch"
 
 # device specific configs
 PACKAGECONFIG[westeros] = "-DUSE_WPEWEBKIT_BACKEND_WESTEROS=ON -DUSE_WPEWEBKIT_PLATFORM_WESTEROS=ON -DUSE_KEY_INPUT_HANDLING_LINUX_INPUT=OFF -DUSE_GSTREAMER_HOLEPUNCH=ON -DUSE_EXTERNAL_HOLEPUNCH=ON -DUSE_WESTEROS_SINK=ON,,westeros westeros-sink"

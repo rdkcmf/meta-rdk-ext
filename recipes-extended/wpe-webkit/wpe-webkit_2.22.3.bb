@@ -166,6 +166,7 @@ SRC_URI += "file://2.22/0002-Use-isolatedCopy-for-strings-that-can-be-used-in-di
 SRC_URI += "file://2.22/0003-Fix-use-after-free-in-CoordinatedGraphicsLayer-destruction.patch"
 SRC_URI += "file://2.22.3/0295-enable-inspector-server-based-on-remote-inspector-co.patch"
 SRC_URI += "file://2.22.3/0296-Release-resources-in-suspended-state.patch"
+SRC_URI += "file://2.22.3/0297-Fix-loss-of-ReadyForMoreSamples-notificat.patch"
 SRC_URI += "file://2.22.3/0298-disable-xrun-timer-amlhalasink.patch"
 SRC_URI += "file://2.22.3/0297-remove-the-existing-buffers-while-doing-rewind.patch"
 
