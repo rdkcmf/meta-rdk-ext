@@ -1,6 +1,7 @@
 FILESEXTRAPATHS_prepend := "${THISDIR}/${BPN}:"
 
 SRC_URI += "file://0001-jsonrpc-v1.3.0-ipv6.patch \
+            file://0001-jsonrpc-v1.3.0-waitclientclose-no-hang.patch \
 "
 EXTRA_OECMAKE += " -DTCP_SOCKET_SERVER=YES -DTCP_SOCKET_CLIENT=YES "
 
