@@ -19,6 +19,10 @@ EXTRA_OECONF += "no-aria"
 EXTRA_OECONF += "no-sm4"
 EXTRA_OECONF += "no-sm2"
 
+#Temporary fix added for DELIA-54629
+SRC_URI_append_hybrid = "${@bb.utils.contains('DISTRO_FEATURES', 'ssl-1.1.1', ' file://disable_sigalgs.patch', '', d)}"
+EXTRA_OECONF_append_hybrid = "${@bb.utils.contains('DISTRO_FEATURES', 'ssl-1.1.1', ' no-tls1_3', '', d)}"
+
 do_install_append () {
         # Install a custom version of c_rehash that can handle sysroots properly.
         # This version is used for example when installing ca-certificates during
