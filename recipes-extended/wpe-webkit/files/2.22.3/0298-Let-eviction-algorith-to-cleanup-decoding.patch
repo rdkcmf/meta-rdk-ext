@@ -1,0 +1,34 @@
+From 0a9e4ac388ae1e19ac11d5c9a030a5f51636b286 Mon Sep 17 00:00:00 2001
+From: Filipe Norte <filipe.norte@consult.red>
+Date: Mon, 7 Feb 2022 16:48:20 +0000
+Subject: [PATCH] LLAMA-5500 - Let eviction algorith to cleanup decoding queue
+
+Reason for change: Memory leak
+Test Procedure: Play videos on apps and check memory usage
+Risks: Medium
+
+Signed-off-by: Filipe Norte <filipe.norte@sky.uk>
+---
+ Source/WebCore/Modules/mediasource/SourceBuffer.cpp | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+diff --git a/Source/WebCore/Modules/mediasource/SourceBuffer.cpp b/Source/WebCore/Modules/mediasource/SourceBuffer.cpp
+index 6d6482ed5092..f21ad9a68a38 100644
+--- a/Source/WebCore/Modules/mediasource/SourceBuffer.cpp
++++ b/Source/WebCore/Modules/mediasource/SourceBuffer.cpp
+@@ -824,6 +824,11 @@ void SourceBuffer::removeCodedFrames(const MediaTime& start, const MediaTime& en
+ {   
+     LOG(MediaSource, "SourceBuffer::removeCodedFrames(%p) - start(%s), end(%s)", this, toString(start).utf8().data(), toString(end).utf8().data());
+
++    // FIXME
++    // Patch: Let eviction algorithm do the cleanup of the decoding queue to avoid mem leak
++    keepDecodeQueue = false;
++   
++
+     // 3.5.9 Coded Frame Removal Algorithm
+     // https://dvcs.w3.org/hg/html-media/raw-file/tip/media-source/media-source.html#sourcebuffer-coded-frame-removal
+
+-- 
+2.29.0
+
+~             
