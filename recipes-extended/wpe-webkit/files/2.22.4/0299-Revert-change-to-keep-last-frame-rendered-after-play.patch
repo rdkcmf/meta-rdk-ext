@@ -1,0 +1,26 @@
+From 6943c8edac250cc1429344fbed426d23ac129706 Mon Sep 17 00:00:00 2001
+From: Jack Howgate <jack.howgate@consult.red>
+Date: Tue, 1 Mar 2022 12:57:27 +0000
+Subject: [PATCH] Revert change to keep last frame rendered after playback is
+ complete
+
+---
+ .../platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp b/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp
+index 81acbb6acde9..42f6a19b2d22 100644
+--- a/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp
++++ b/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp
+@@ -2324,7 +2324,7 @@ void MediaPlayerPrivateGStreamer::didEnd()
+     m_isEndReached = true;
+     timeChanged();
+ 
+-    if (!m_player->client().mediaPlayerIsLooping() && !isMediaSource()) {
++    if (!m_player->client().mediaPlayerIsLooping()) {
+         m_paused = true;
+         m_durationAtEOS = durationMediaTime();
+         changePipelineState(GST_STATE_READY);
+-- 
+2.25.1
+
