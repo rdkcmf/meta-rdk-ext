@@ -1,0 +1,410 @@
+Date: Mar 19, 2019 2:31 AM
+
+From: 622d98afbb4f147d0ead1961c80406072bc45aa7 July 14, 2021 11:39 AM
+      3b4dc84fc0b46c63c2822831f6f232dca99016a6
+      698ef6bbd9324dbd044903ed0f79020e31d70527
+      326d70edd99c3f21cf299dba55214e2c8957e622
+      43ba14bdb34e972a0b72eafeb5d7273ba1fe9837
+      1ecf167cec1696e266de58db6cd904f43c4b532e
+      16395e11db17c11a0866b1996cf801e750fcfc95
+
+    https://git.kernel.org/pub/scm/bluetooth/bluez.git/commit/profiles/audio?id=622d98afbb4f147d0ead1961c80406072bc45aa7
+    https://git.kernel.org/pub/scm/bluetooth/bluez.git/commit/profiles/audio?id=3b4dc84fc0b46c63c2822831f6f232dca99016a6
+    https://git.kernel.org/pub/scm/bluetooth/bluez.git/commit/profiles/audio?id=698ef6bbd9324dbd044903ed0f79020e31d70527
+    https://git.kernel.org/pub/scm/bluetooth/bluez.git/commit/profiles/audio?id=326d70edd99c3f21cf299dba55214e2c8957e622
+    https://git.kernel.org/pub/scm/bluetooth/bluez.git/commit/profiles/audio?id=43ba14bdb34e972a0b72eafeb5d7273ba1fe9837
+    https://git.kernel.org/pub/scm/bluetooth/bluez.git/commit/profiles/audio?id=1ecf167cec1696e266de58db6cd904f43c4b532e
+    https://git.kernel.org/pub/scm/bluetooth/bluez.git/commit/profiles/audio?id=16395e11db17c11a0866b1996cf801e750fcfc95
+
+Subject: [PATCH] DELIA-54431 : avdtp_abort - Bluez 5.54
+
+    Bluetooth continuously Crashing with signature - avdtp_abort
+
+Source: COMCAST
+
+License: GPL-2.0-or-later
+
+Upstream-Status: Completed
+
+Signed-off-by: Chandresh Pitty <Chandresh_Pitty@cable.comcast.com>
+
+Index: bluez-5.54/profiles/audio/a2dp.c
+===================================================================
+--- bluez-5.54.orig/profiles/audio/a2dp.c
++++ bluez-5.54/profiles/audio/a2dp.c
+@@ -117,6 +117,7 @@ struct a2dp_setup {
+ 	gboolean start;
+ 	GSList *cb;
+ 	GIOChannel *io;
++	guint id;
+ 	int ref;
+ };
+ 
+@@ -219,6 +220,9 @@ static void setup_free(struct a2dp_setup
+ 		g_io_channel_unref(s->io);
+ 	}
+ 
++	if (s->id)
++		g_source_remove(s->id);
++
+ 	queue_destroy(s->eps, NULL);
+ 
+ 	setups = g_slist_remove(setups, s);
+@@ -387,7 +391,8 @@ static void finalize_select(struct a2dp_
+ 		if (!cb->select_cb)
+ 			continue;
+ 
+-		cb->select_cb(s->session, s->sep, s->caps, cb->user_data);
++		cb->select_cb(s->session, s->sep, s->caps,
++					error_to_errno(s->err), cb->user_data);
+ 		setup_cb_free(cb);
+ 	}
+ }
+@@ -410,6 +415,41 @@ static void finalize_discover(struct a2d
+ 	}
+ }
+ 
++static gboolean finalize_all(gpointer data)
++{
++	struct a2dp_setup *s = data;
++	struct avdtp_stream *stream = s->err ? NULL : s->stream;
++	GSList *l;
++
++	for (l = s->cb; l != NULL; ) {
++		struct a2dp_setup_cb *cb = l->data;
++
++		l = l->next;
++
++		if (cb->discover_cb) {
++			cb->discover_cb(s->session, s->seps,
++					error_to_errno(s->err), cb->user_data);
++		} else if (cb->select_cb) {
++			cb->select_cb(s->session, s->sep, s->caps,
++					error_to_errno(s->err), cb->user_data);
++		} else if (cb->suspend_cb) {
++			cb->suspend_cb(s->session,
++					error_to_errno(s->err), cb->user_data);
++		} else if (cb->resume_cb) {
++			cb->resume_cb(s->session,
++					error_to_errno(s->err), cb->user_data);
++		} else if (cb->config_cb) {
++			cb->config_cb(s->session, s->sep, stream,
++					error_to_errno(s->err), cb->user_data);
++		} else
++			warn("setup_cb doesn't have any callback function");
++
++		setup_cb_free(cb);
++	}
++
++	return FALSE;
++}
++
+ static struct a2dp_setup *find_setup_by_session(struct avdtp *session)
+ {
+ 	GSList *l;
+@@ -465,7 +505,7 @@ static void stream_state_changed(struct
+ 		int err;
+ 
+ 		setup = find_setup_by_stream(stream);
+-		if (!setup || !setup->start)
++		if (!setup || !setup->start || setup->err)
+ 			return;
+ 
+ 		setup->start = FALSE;
+@@ -614,7 +654,7 @@ static gboolean endpoint_setconf_ind(str
+ 		DBG("Source %p: Set_Configuration_Ind", sep);
+ 
+ 	setup = a2dp_setup_get(session);
+-	if (!session)
++	if (!setup)
+ 		return FALSE;
+ 
+ 	a2dp_sep->stream = stream;
+@@ -723,7 +763,7 @@ static gboolean endpoint_getcap_ind(stru
+ 
+ static void endpoint_open_cb(struct a2dp_setup *setup, gboolean ret)
+ {
+-	int err;
++	int err = error_to_errno(setup->err);
+ 
+ 	if (ret == FALSE) {
+ 		setup->stream = NULL;
+@@ -731,7 +771,9 @@ static void endpoint_open_cb(struct a2dp
+ 		goto done;
+ 	}
+ 
+-	err = avdtp_open(setup->session, setup->stream);
++	if (err == 0)
++		err = avdtp_open(setup->session, setup->stream);
++
+ 	if (err == 0)
+ 		goto done;
+ 
+@@ -1179,6 +1221,19 @@ static gboolean a2dp_reconfigure(gpointe
+ 	struct avdtp_media_codec_capability *rsep_codec;
+ 	struct avdtp_service_capability *cap;
+ 
++	setup->id = 0;
++
++	if (setup->err) {
++		posix_err = error_to_errno(setup->err);
++		goto failed;
++	}
++
++	if (!sep->lsep) {
++		error("no valid local SEP");
++		posix_err = -EINVAL;
++		goto failed;
++	}
++
+ 	if (setup->rsep) {
+ 		cap = avdtp_get_codec(setup->rsep->sep);
+ 		rsep_codec = (struct avdtp_media_codec_capability *) cap->data;
+@@ -1187,6 +1242,12 @@ static gboolean a2dp_reconfigure(gpointe
+ 	if (!setup->rsep || sep->codec != rsep_codec->media_codec_type)
+ 		setup->rsep = find_remote_sep(setup->chan, sep);
+ 
++	if (!setup->rsep) {
++		error("unable to find remote SEP");
++		posix_err = -EINVAL;
++		goto failed;
++	}
++
+ 	posix_err = avdtp_set_configuration(setup->session, setup->rsep->sep,
+ 						sep->lsep,
+ 						setup->caps,
+@@ -1203,6 +1264,20 @@ failed:
+ 	return FALSE;
+ }
+ 
++static bool setup_reconfigure(struct a2dp_setup *setup)
++{
++	if (!setup->reconfigure || setup->id)
++		return false;
++
++	DBG("%p", setup);
++
++	setup->id = g_timeout_add(RECONFIGURE_TIMEOUT, a2dp_reconfigure, setup);
++
++	setup->reconfigure = FALSE;
++
++	return true;
++}
++
+ static struct a2dp_remote_sep *get_remote_sep(struct a2dp_channel *chan,
+ 						struct avdtp_stream *stream)
+ {
+@@ -1239,8 +1314,7 @@ static void close_cfm(struct avdtp *sess
+ 	if (!setup->rsep)
+ 		setup->rsep = get_remote_sep(setup->chan, stream);
+ 
+-	if (setup->reconfigure)
+-		g_timeout_add(RECONFIGURE_TIMEOUT, a2dp_reconfigure, setup);
++	setup_reconfigure(setup);
+ }
+ 
+ static void abort_ind(struct avdtp *session, struct avdtp_local_sep *sep,
+@@ -1284,10 +1358,8 @@ static void abort_cfm(struct avdtp *sess
+ 	if (!setup)
+ 		return;
+ 
+-	if (setup->reconfigure) {
+-		g_timeout_add(RECONFIGURE_TIMEOUT, a2dp_reconfigure, setup);
++	if (setup_reconfigure(setup))
+ 		return;
+-	}
+ 
+ 	setup_unref(setup);
+ }
+@@ -1492,6 +1564,7 @@ static void remove_remote_sep(void *data
+ static void channel_free(void *data)
+ {
+ 	struct a2dp_channel *chan = data;
++	struct a2dp_setup *setup;
+ 
+ 	if (chan->auth_id > 0)
+ 		btd_cancel_authorization(chan->auth_id);
+@@ -1508,6 +1581,18 @@ static void channel_free(void *data)
+ 
+ 	queue_destroy(chan->seps, remove_remote_sep);
+ 	free(chan->last_used);
++
++	setup = find_setup_by_session(chan->session);
++	if (setup) {
++		setup->chan = NULL;
++		setup_ref(setup);
++		/* Finalize pending commands before we NULL setup->session */
++		finalize_setup_errno(setup, -ENOTCONN, finalize_all, NULL);
++		avdtp_unref(setup->session);
++		setup->session = NULL;
++		setup_unref(setup);
++	}
++
+ 	g_free(chan);
+ }
+ 
+@@ -1874,8 +1959,8 @@ static void register_remote_sep(void *da
+ 				sep, remote_sep_free) == FALSE) {
+ 		error("Could not register remote sep %s", sep->path);
+ 		free(sep->path);
+-		sep->path = NULL;
+-		goto done;
++		free(sep);
++		return;
+ 	}
+ 
+ 	DBG("Found remote SEP: %s", sep->path);
+@@ -2186,6 +2271,12 @@ static void transport_cb(GIOChannel *io,
+ 	struct a2dp_setup *setup = user_data;
+ 	uint16_t omtu, imtu;
+ 
++	if (!g_slist_find(setups, setup)) {
++		warn("bt_io_accept: setup %p no longer valid", setup);
++		g_io_channel_shutdown(io, TRUE, NULL);
++		return;
++	}
++
+ 	if (err) {
+ 		error("%s", err->message);
+ 		goto drop;
+@@ -2502,6 +2593,9 @@ static void select_cb(struct a2dp_setup
+ 	struct avdtp_media_codec_capability *codec;
+ 	int err;
+ 
++	if (setup->err)
++		goto done;
++
+ 	if (size >= 0) {
+ 		caps_add_codec(&setup->caps, setup->sep->codec, ret, size);
+ 		goto done;
+@@ -2597,10 +2691,15 @@ static void store_remote_sep(void *data,
+ 	GKeyFile *key_file = (void *) user_data;
+ 	char seid[4], value[256];
+ 	struct avdtp_service_capability *service = avdtp_get_codec(sep->sep);
+-	struct avdtp_media_codec_capability *codec = (void *) service->data;
++	struct avdtp_media_codec_capability *codec;
+ 	unsigned int i;
+ 	ssize_t offset;
+ 
++	if (!service)
++		return;
++
++	codec = (void *) service->data;
++
+ 	sprintf(seid, "%02hhx", avdtp_get_seid(sep->sep));
+ 
+ 	offset = sprintf(value, "%02hhx:%02hhx:", avdtp_get_type(sep->sep),
+@@ -2660,7 +2759,8 @@ static void discover_cb(struct avdtp *se
+ 	DBG("err %p", err);
+ 
+ 	setup->seps = seps;
+-	setup->err = err;
++	if (err)
++		setup->err = err;
+ 
+ 	if (!err) {
+ 		g_slist_foreach(seps, register_remote_sep, setup->chan);
+@@ -3335,4 +3435,4 @@ static void a2dp_exit(void)
+ }
+ 
+ BLUETOOTH_PLUGIN_DEFINE(a2dp, VERSION, BLUETOOTH_PLUGIN_PRIORITY_DEFAULT,
+-							a2dp_init, a2dp_exit)
++		a2dp_init, a2dp_exit)
+Index: bluez-5.54/profiles/audio/a2dp.h
+===================================================================
+--- bluez-5.54.orig/profiles/audio/a2dp.h
++++ bluez-5.54/profiles/audio/a2dp.h
+@@ -55,8 +55,8 @@ struct a2dp_endpoint {
+ 
+ typedef void (*a2dp_discover_cb_t) (struct avdtp *session, GSList *seps,
+ 						int err, void *user_data);
+-typedef void (*a2dp_select_cb_t) (struct avdtp *session,
+-					struct a2dp_sep *sep, GSList *caps,
++typedef void (*a2dp_select_cb_t) (struct avdtp *session, struct a2dp_sep *sep,
++					GSList *caps, int err,
+ 					void *user_data);
+ typedef void (*a2dp_config_cb_t) (struct avdtp *session, struct a2dp_sep *sep,
+ 					struct avdtp_stream *stream, int err,
+Index: bluez-5.54/profiles/audio/avdtp.c
+===================================================================
+--- bluez-5.54.orig/profiles/audio/avdtp.c
++++ bluez-5.54/profiles/audio/avdtp.c
+@@ -3566,7 +3566,6 @@ int avdtp_abort(struct avdtp *session, s
+ {
+ 	struct seid_req req;
+ 	int ret;
+-	struct avdtp_local_sep *sep = stream->lsep;
+ 
+ 	if (!stream && session->discover) {
+ 		/* Don't call cb since it being aborted */
+@@ -3581,7 +3580,7 @@ int avdtp_abort(struct avdtp *session, s
+ 	if (stream->lsep->state == AVDTP_STATE_ABORTING)
+ 		return -EINVAL;
+ 
+-	avdtp_sep_set_state(session, sep, AVDTP_STATE_ABORTING);
++	avdtp_sep_set_state(session, stream->lsep, AVDTP_STATE_ABORTING);
+ 
+ 	if (session->req && stream == session->req->stream)
+ 		return cancel_request(session, ECANCELED);
+@@ -3736,11 +3735,17 @@ uint8_t avdtp_sep_get_seid(struct avdtp_
+ 
+ struct btd_adapter *avdtp_get_adapter(struct avdtp *session)
+ {
++	if (!session)
++		return NULL;
++
+ 	return device_get_adapter(session->device);
+ }
+ 
+ struct btd_device *avdtp_get_device(struct avdtp *session)
+ {
++	if (!session)
++		return NULL;
++
+ 	return session->device;
+ }
+ 
+Index: bluez-5.54/profiles/audio/sink.c
+===================================================================
+--- bluez-5.54.orig/profiles/audio/sink.c
++++ bluez-5.54/profiles/audio/sink.c
+@@ -196,13 +196,16 @@ static void stream_setup_complete(struct
+ }
+ 
+ static void select_complete(struct avdtp *session, struct a2dp_sep *sep,
+-			GSList *caps, void *user_data)
++			GSList *caps, int err, void *user_data)
+ {
+ 	struct sink *sink = user_data;
+ 	int id;
+ 
+ 	sink->connect_id = 0;
+ 
++	if (err)
++		goto failed;
++
+ 	id = a2dp_config(session, sep, stream_setup_complete, caps, sink);
+ 	if (id == 0)
+ 		goto failed;
+Index: bluez-5.54/profiles/audio/source.c
+===================================================================
+--- bluez-5.54.orig/profiles/audio/source.c
++++ bluez-5.54/profiles/audio/source.c
+@@ -193,13 +193,16 @@ static void stream_setup_complete(struct
+ }
+ 
+ static void select_complete(struct avdtp *session, struct a2dp_sep *sep,
+-			GSList *caps, void *user_data)
++			GSList *caps, int err, void *user_data)
+ {
+ 	struct source *source = user_data;
+ 	int id;
+ 
+ 	source->connect_id = 0;
+ 
++	if (err)
++		goto failed;
++
+ 	if (caps == NULL)
+ 		goto failed;
+ 
