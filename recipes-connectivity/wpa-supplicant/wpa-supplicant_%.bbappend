@@ -1,9 +1,14 @@
-
 PACKAGECONFIG_remove = "gnutls"
 PACKAGECONFIG_append = " openssl"
 
 FILESEXTRAPATHS_prepend := "${THISDIR}/files:"
 SRC_URI += "file://openssl_no_md4.patch"
+
+inherit syslog-ng-config-gen
+SYSLOG-NG_FILTER = "wpa_supplicant"
+SYSLOG-NG_SERVICE_wpa_supplicant = "wpa_supplicant.service"
+SYSLOG-NG_DESTINATION_wpa_supplicant = "wpa_supplicant.log"
+SYSLOG-NG_LOGRATE_wpa_supplicant = "high"
 
 do_configure_append () {
    # Add the "-fPIC" option to CFLAGS to allow the Pace WiFi HAL module to link against wpa-supplicant
