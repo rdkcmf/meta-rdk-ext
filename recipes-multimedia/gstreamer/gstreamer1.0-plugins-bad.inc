@@ -115,13 +115,17 @@ ARM_INSTRUCTION_SET = "arm"
 
 EXTRA_OECONF += " \
                 --disable-accurip --disable-adpcmdec --disable-adpcmenc --disable-aiff --disable-asfmux --disable-audiofxbad --disable-audiomixer \
-                --disable-autoconvert --disable-bayer --disable-compositor --disable-debugutils \
+                --disable-autoconvert --disable-bayer --disable-compositor \
                 --disable-dvbsuboverlay --disable-dvdspu --disable-festival --disable-fieldanalysis --disable-freeverb --disable-frei0r --disable-gdp \
                 --disable-geometrictransform --disable-id3tag --disable-inter --disable-interlace --disable-ivtc --disable-jp2kdecimator --disable-jpegformat --disable-librfb \
                 --disable-midi --disable-mpegdemux --disable-mpegpsmux --disable-mpegtsmux --disable-mxf --disable-pcapparse \
                 --disable-pnm --disable-rawparse --disable-removesilence --disable-sdp --disable-segmentclip --disable-siren --disable-speed \
                 --disable-stereo --disable-subenc --disable-videosignal --disable-vmnc --disable-yadif \
                 "
+
+#Enabling debugutils while firebolt_compliance_tdk is enabled
+EXTRA_OECONF += "${@bb.utils.contains('DISTRO_FEATURES', 'enable_firebolt_compliance_tdk','--enable-debugutils', '--disable-debugutils', d)}"
+
 
 EXTRA_OECONF += " --enable-ivfparse --enable-external"
 
