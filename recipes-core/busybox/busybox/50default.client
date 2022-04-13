@@ -20,10 +20,12 @@ MOCA_INTERFACE=${MOCA_INTERFACE:=eth1}
 LAN_INTERFACE=${LAN_INTERFACE:=eth2}
 
 if [ "$interface" = ${MOCA_INTERFACE} ] || [ "$interface" = ${MOCA_INTERFACE}:0 ]; then
+   DUMMY_IP=192.0.2.10
    [ -f /tmp/ani_wifi ] && METRIC_STRING="metric 2000"
 fi
 
 if [ "$interface" = ${WIFI_INTERFACE} ] || [ "$interface" = ${WIFI_INTERFACE}:0 ]; then
+   DUMMY_IP=192.0.2.11
    [ ! -f /tmp/ani_wifi ] && METRIC_STRING="metric 2000"
 fi
 
@@ -31,13 +33,12 @@ echo "`date +"%b %d %T.%6N"` : udhcpc : $1,$interface,$ip,$subnet,$broadcast,$me
 
 case "$1" in
         deconfig)
+                echo "in defconfig"
                 if [[ "$interface" = *:* ]]; then
                         # aliases (e.g. eth0:0) don't like to be called 0.0.0.0
-#                       /sbin/ifconfig $interface 127.0.0.2
-                        echo "in defconfig"
+                        [ ! -z "$DUMMY_IP" ] && /sbin/ifconfig "$interface" "$DUMMY_IP"
                 else
-#                       /sbin/ifconfig $interface 0.0.0.0
-                        echo "in defconfig"
+                        /sbin/ifconfig $interface 0.0.0.0
                 fi
                 ;;
 
