@@ -6,7 +6,10 @@ SYSLOG-NG_LOGRATE_bluetooth_client = "medium"
 
 # Remapping default localstatedir which has a value /var to /opt (persistent memory) across boxes
 # to store bluetooth device and runtime operations data across STB power cycles
-export localstatedir="/opt"
+EXTRA_OECONF_append_hybrid += " --localstatedir=/opt"
+EXTRA_OECONF_append_client += " --localstatedir=/opt"
+
+EXTRA_OECONF_append_broadband += " --localstatedir=/opt/secure"
 
 PACKAGECONFIG_append = " experimental"
 EXTRA_OECONF += " --with-systemdsystemunitdir=${systemd_unitdir}/system"
