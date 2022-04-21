@@ -1,6 +1,6 @@
 require wpe-webkit.inc
 
-PV = "2.22.4+git${SRCPV}"
+PV = "2.22.4"
 
 DEPENDS_append = " wpe-backend atk tts libepoxy libgcrypt rdkat rsync-native"
 RDEPENDS_${PN} += "wpe-backend-rdk-platform-plugin tts rdkat"
