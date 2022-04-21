@@ -20,6 +20,7 @@ SRC_URI_append_broadband = " file://client-notify.patch \
                              file://server-notify.sh \
                              file://dibbler_clear_sysevent_for_null_option23.patch \
 "
+SRC_URI_append_broadband = " ${@bb.utils.contains('DISTRO_FEATURES', 'nat46','file://client-notify-option95.patch','', d)}"
 
 do_install_append() {
         install -d ${D}${sysconfdir}/dibbler
