@@ -51,6 +51,10 @@ case "$1" in
                                 :
                         done
                 fi
+                if [ -n "$serverid" ] ; then
+                        echo  $serverid > /tmp/tmp.dhcp.server.ip
+                        mv /tmp/tmp.dhcp.server.ip /tmp/netsrvmgr.dhcp.server.ip
+                fi
                 /sbin/ifconfig $interface $ip $BROADCAST $NETMASK
                 if [ -n "$router" ] ; then
                         metric=0
