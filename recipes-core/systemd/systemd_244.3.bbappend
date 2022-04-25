@@ -1,3 +1,5 @@
+include ${@bb.utils.contains('DISTRO_FEATURES', 'systemd-profile', 'profiles/rdk-${BPN}-profile-${PV}.inc', 'profiles/generic-profile.inc', d)}
+
 FILESEXTRAPATHS_prepend := "${THISDIR}/${PN}:"
 PACKAGECONFIG_remove_dunfell = " pam idn quotacheck randomseed logind  hostnamed timedated localed resolve coredump tpm"
 

@@ -1,4 +1,4 @@
-include ${@bb.utils.contains('DISTRO_FEATURES', 'systemd-profile', 'profiles/rdk-${PN}-profile.inc', 'profiles/generic-profile.inc', d)}
+include ${@bb.utils.contains('DISTRO_FEATURES', 'systemd-profile', 'profiles/rdk-${BPN}-profile.inc', 'profiles/generic-profile.inc', d)}
 
 FILESEXTRAPATHS_prepend := "${THISDIR}/files:${THISDIR}/backports:"
 
