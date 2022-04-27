@@ -1,0 +1,26 @@
+From 1b1e959cf9629a5898ed751f120059e48ce5b63a Mon Sep 17 00:00:00 2001
+From: Eugene Mutavchi <Ievgen_Mutavchi@comcast.com>
+Date: Wed, 27 Apr 2022 18:19:55 +0000
+Subject: [PATCH] comcast: DELIA-55979: increase the time slice allocated for
+ dispatching DOM timers
+
+---
+ Source/WebCore/platform/ThreadTimers.cpp | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/Source/WebCore/platform/ThreadTimers.cpp b/Source/WebCore/platform/ThreadTimers.cpp
+index 27404043e43e..951f05f7894d 100644
+--- a/Source/WebCore/platform/ThreadTimers.cpp
++++ b/Source/WebCore/platform/ThreadTimers.cpp
+@@ -42,7 +42,7 @@ namespace WebCore {
+ // Fire timers for this length of time, and then quit to let the run loop process user input events.
+ // 100ms is about a perceptable delay in UI, so use a half of that as a threshold.
+ // This is to prevent UI freeze when there are too many timers or machine performance is low.
+-static const Seconds maxDurationOfFiringTimers { 50_ms };
++static const Seconds maxDurationOfFiringTimers { 500_ms };
+ 
+ // Timers are created, started and fired on the same thread, and each thread has its own ThreadTimers
+ // copy to keep the heap and a set of currently firing timers.
+-- 
+2.25.1
+
