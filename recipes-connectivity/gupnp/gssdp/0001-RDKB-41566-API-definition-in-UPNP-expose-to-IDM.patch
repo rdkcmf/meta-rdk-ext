@@ -1,0 +1,54 @@
+From feab38514be53ee67184c26edede05eda3d3f05f Mon Sep 17 00:00:00 2001
+From: Manish Lepuru <manish_lepuru@Comcast.com>
+Date: Sat, 30 Apr 2022 10:30:38 +0000
+Subject: [PATCH] RDKB-41566: API definition in UPNP & expose to IDM
+
+Change-Id: I950891b08198947f7a715c47de60a54c41eea9c1
+---
+ libgssdp/gssdp-resource-browser.c | 19 +++++++++++++++----
+ 1 file changed, 15 insertions(+), 4 deletions(-)
+
+diff --git a/libgssdp/gssdp-resource-browser.c b/libgssdp/gssdp-resource-browser.c
+index ad04042..50b9812 100644
+--- a/libgssdp/gssdp-resource-browser.c
++++ b/libgssdp/gssdp-resource-browser.c
+@@ -44,8 +44,19 @@
+ #include <stdlib.h>
+ 
+ #define RESCAN_TIMEOUT 8 /* 8 seconds */
+-#define MAX_DISCOVERY_MESSAGES 3
+-#define DISCOVERY_FREQUENCY    5000 /* 5000 ms */
++guint max_discovery_frequency = 3;
++guint discovery_frequency = 5000;
++
++gboolean discovery_interval_configuration(guint seconds,guint loss_detection_window){
++    g_message("updating the custom discovery frequency");
++    discovery_frequency = seconds;
++    max_discovery_frequency = (int)(((loss_detection_window-RESCAN_TIMEOUT)*1000)/seconds);
++    if(max_discovery_frequency <= 1){
++        g_message("loss detecction window is almost equal to discovery_frequency so make window size double the discovery_frequency");
++        max_discovery_frequency=2;
++    }
++    return TRUE;
++}
+ 
+ struct _GSSDPResourceBrowserPrivate {
+         GSSDPClient *client;
+@@ -1256,7 +1267,7 @@ discovery_timeout (gpointer data)
+ 
+         priv->num_discovery += 1;
+ 
+-        if (priv->num_discovery >= MAX_DISCOVERY_MESSAGES) {
++        if (priv->num_discovery >= max_discovery_frequency) {
+                 priv->timeout_src = NULL;
+                 priv->num_discovery = 0;
+ 
+@@ -1291,7 +1302,7 @@ start_discovery (GSSDPResourceBrowser *resource_browser)
+         /* And schedule the rest for later */
+         priv->num_discovery = 1;
+         priv->timeout_src =
+-                g_timeout_source_new (DISCOVERY_FREQUENCY);
++                g_timeout_source_new (discovery_frequency);
+         g_source_set_callback (priv->timeout_src,
+                                discovery_timeout,
+                                resource_browser, NULL);
