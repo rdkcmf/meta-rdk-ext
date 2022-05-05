@@ -17,7 +17,7 @@ FILES_${PN}-extra-utils += " \
                         ${bindir}/systemd-socket-activate \
 "
 
-FILES_${PN}-extra-utils_remove = "${rootlibexecdir}/systemd/systemd-socket-proxyd ${bindir}/systemd-cat"
+FILES_${PN}-extra-utils_remove = "${rootlibexecdir}/systemd/systemd-socket-proxyd"
 
 
 # Remove packages from systemd RRECOMMENDS list that are not used in RDK
