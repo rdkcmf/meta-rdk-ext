@@ -16,7 +16,8 @@ PACKAGECONFIG ??= " \
     ${@bb.utils.contains('DISTRO_FEATURES', 'wayland', 'wayland', '', d)} \
     ${@bb.utils.contains('DISTRO_FEATURES', 'opengl', 'eglgles', '', d)} \
     ${@bb.utils.contains('DISTRO_FEATURES', 'directfb', 'directfb', '', d)} \
-    orc curl uvch264 neon dataurisrc\
+    ${@bb.utils.contains('DISTRO_FEATURES', 'enable_firebolt_compliance_tdk', '', 'orc', d)} \
+    curl uvch264 neon dataurisrc\
     hls sbc dash bz2 smoothstreaming \
     "
 # dash = Dynamic Adaptive Streaming over HTTP
