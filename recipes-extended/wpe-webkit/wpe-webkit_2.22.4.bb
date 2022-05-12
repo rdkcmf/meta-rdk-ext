@@ -164,6 +164,7 @@ SRC_URI += "file://2.22.3/0298-Let-eviction-algorith-to-cleanup-decoding.patch"
 #SRC_URI += "file://2.22.4/0299-Revert-change-to-keep-last-frame-rendered-after-play.patch"
 SRC_URI += "file://2.22/0001-Send-http-headers-event-on-WebKitWebSrc-streaming-thread.patch"
 SRC_URI += "file://2.22.3/0301-Revert-EME-Thunder-Fix-race-condition-in-updateLicen.patch"
+SRC_URI += "file://2.22/0001-Disable-directcall-optimisation-for-MIPS.patch"
 
 # device specific configs
 PACKAGECONFIG[westeros] = "-DUSE_WPEWEBKIT_BACKEND_WESTEROS=ON -DUSE_WPEWEBKIT_PLATFORM_WESTEROS=ON -DUSE_KEY_INPUT_HANDLING_LINUX_INPUT=OFF -DUSE_GSTREAMER_HOLEPUNCH=ON -DUSE_EXTERNAL_HOLEPUNCH=ON -DUSE_WESTEROS_SINK=ON,,westeros westeros-sink"
