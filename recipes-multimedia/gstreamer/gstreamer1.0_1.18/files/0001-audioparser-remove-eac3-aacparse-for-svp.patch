@@ -1,0 +1,71 @@
+From 7c34bc62903408d6a91d04fdf74102621937c60d Mon Sep 17 00:00:00 2001
+From: Tony Paul <Tony_Paul@comcast.com>
+Date: Fri, 29 Apr 2022 07:30:45 +0000
+Subject: [PATCH 1/1] audioparser remove eac3 aacparse for svp
+[PATCH] gstreamer-plugins-good audioparser: support SVP and 4K
+
+When playing encrypted 4K content, Secure Video Path is required.
+
+On Broadcom platform 16.2 and above, a secure buffer is introduced.
+During decryption, decrypted video data is put into secure buffer
+instead of general system memory, and SVP meta data is generated and
+pushed down GStreamer together with the original encrypted content.
+It's up to the audio and video decoder to handle the encrypted data
+with SVP meta data.
+Plugins which look into audio/video data need to be removed since
+SOC plugins already cover the audio parser functionality.
+
+Change-Id: I27b09f0fe077d1898c4516e73c2e59144848b675
+Signed-off-by: Hao Li <hao_li@cable.comcast.com>
+
+[PATCH] gstreamer-plugins-good audioparser: support eac3 and ec-3
+
+Disable gstreamer provided eac3 and ec-3 parser.
+Plugins which look into audio/video data need to be removed since
+SOC plugins already cover the audio parser functionality.
+
+Signed-off-by: Azam Ansari <AzamAyub_Ansari@cable.comcast.com>
+
+Signed-off-by: Tony Paul <Tony_Paul@comcast.com>
+---
+ gst/audioparsers/meson.build |  2 --
+ gst/audioparsers/plugin.c    | 10 +++++-----
+ 2 files changed, 5 insertions(+), 7 deletions(-)
+
+diff --git a/gst/audioparsers/meson.build b/gst/audioparsers/meson.build
+index 2bd5d245c..52a38a52d 100644
+--- a/gst/audioparsers/meson.build
++++ b/gst/audioparsers/meson.build
+@@ -1,7 +1,5 @@
+ audioparsers_src = [
+-  'gstaacparse.c',
+   'gstamrparse.c',
+-  'gstac3parse.c',
+   'gstdcaparse.c',
+   'gstflacparse.c',
+   'gstmpegaudioparse.c',
+diff --git a/gst/audioparsers/plugin.c b/gst/audioparsers/plugin.c
+index 8cbfe605d..59bb2adf7 100644
+--- a/gst/audioparsers/plugin.c
++++ b/gst/audioparsers/plugin.c
+@@ -35,12 +35,12 @@ plugin_init (GstPlugin * plugin)
+ {
+   gboolean ret;
+ 
+-  ret = gst_element_register (plugin, "aacparse",
+-      GST_RANK_PRIMARY + 1, GST_TYPE_AAC_PARSE);
+-  ret &= gst_element_register (plugin, "amrparse",
++//  ret = gst_element_register (plugin, "aacparse",
++//      GST_RANK_PRIMARY + 1, GST_TYPE_AAC_PARSE);
++  ret = gst_element_register (plugin, "amrparse",
+       GST_RANK_PRIMARY + 1, GST_TYPE_AMR_PARSE);
+-  ret &= gst_element_register (plugin, "ac3parse",
+-      GST_RANK_PRIMARY + 1, GST_TYPE_AC3_PARSE);
++//  ret &= gst_element_register (plugin, "ac3parse",
++//      GST_RANK_PRIMARY + 1, GST_TYPE_AC3_PARSE);
+   ret &= gst_element_register (plugin, "dcaparse",
+       GST_RANK_PRIMARY + 1, GST_TYPE_DCA_PARSE);
+   ret &= gst_element_register (plugin, "flacparse",
+-- 
+2.25.1
+

@@ -16,6 +16,7 @@ SRC_URI = "https://gstreamer.freedesktop.org/src/gst-plugins-bad/gst-plugins-bad
 	   file://0002-h264parse-always-send-codec-data-updates-gst1.18.patch \
            "
 SRC_URI += "${@bb.utils.contains('DISTRO_FEATURES', 'dunfell', '', 'file://0001-wayland-version-issue-in-gst-plugins-bad.patch ',d)}"
+SRC_URI += "${@bb.utils.contains('DISTRO_FEATURES', 'sage_svp', 'file://0001-videoparser-remove-h264-h265parse-for-svp.patch', '', d)}"
 
 SRC_URI[sha256sum] = "a164923b94f0d08578a6fcaeaac6e0c05da788a46903a1086870e9ca45ad678e"
 

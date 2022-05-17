@@ -1,0 +1,80 @@
+From 02ca676ab46063f2fda50215456b39497c2d0dbf Mon Sep 17 00:00:00 2001
+From: Tony Paul <Tony_Paul@comcast.com>
+Date: Fri, 29 Apr 2022 07:52:11 +0000
+Subject: [PATCH 1/1] videoparser-remove-h264-h265parse-for-svp
+
+Subject: [PATCH] RDK-19714 : 4K DASH IP Linear/VOD Phase 1
+
+        gstreamer-plugins-bad videoparser: support SVP and 4K
+
+        When playing encrypted 4K content, Secure Video Path is required.
+
+        On Broadcom platform 16.2 and above, a secure buffer is introduced.
+        During decryption, decrypted video data is put into secure buffer
+        instead of general system memory, and SVP meta data is generated and
+        pushed down GStreamer together with the original encrypted content.
+        It's up to the audio and video decoder to handle the encrypted data
+        with SVP meta data.
+        Plugins which look into audio/video data need to be removed since
+        SOC plugins already cover video parser functionality.
+
+Source: COMCAST
+
+License: LGPL-2.1-or-later
+
+Upstream-Status: Pending
+
+Signed-off-by: Hao Li <hao_li@cable.comcast.com>
+
+Signed-off-by: Tony Paul <Tony_Paul@comcast.com>
+---
+ gst/videoparsers/meson.build | 2 --
+ gst/videoparsers/plugin.c    | 8 ++++----
+ 2 files changed, 4 insertions(+), 6 deletions(-)
+
+diff --git a/gst/videoparsers/meson.build b/gst/videoparsers/meson.build
+index 2fd164fc3..fbcd50e1c 100644
+--- a/gst/videoparsers/meson.build
++++ b/gst/videoparsers/meson.build
+@@ -4,12 +4,10 @@ vparse_sources = [
+   'gsth263parse.c',
+   'gstdiracparse.c',
+   'dirac_parse.c',
+-  'gsth264parse.c',
+   'gstmpegvideoparse.c',
+   'gstmpeg4videoparse.c',
+   'gstpngparse.c',
+   'gstvc1parse.c',
+-  'gsth265parse.c',
+   'gstvideoparseutils.c',
+   'gstjpeg2000parse.c',
+ ]
+diff --git a/gst/videoparsers/plugin.c b/gst/videoparsers/plugin.c
+index f4690c466..a387696de 100644
+--- a/gst/videoparsers/plugin.c
++++ b/gst/videoparsers/plugin.c
+@@ -44,8 +44,8 @@ plugin_init (GstPlugin * plugin)
+ 
+   ret |= gst_element_register (plugin, "h263parse",
+       GST_RANK_PRIMARY + 1, GST_TYPE_H263_PARSE);
+-  ret |= gst_element_register (plugin, "h264parse",
+-      GST_RANK_PRIMARY + 1, GST_TYPE_H264_PARSE);
++//  ret |= gst_element_register (plugin, "h264parse",
++//      GST_RANK_PRIMARY + 1, GST_TYPE_H264_PARSE);
+   ret |= gst_element_register (plugin, "diracparse",
+       GST_RANK_NONE, GST_TYPE_DIRAC_PARSE);
+   ret |= gst_element_register (plugin, "mpegvideoparse",
+@@ -56,8 +56,8 @@ plugin_init (GstPlugin * plugin)
+       GST_RANK_PRIMARY, GST_TYPE_PNG_PARSE);
+   ret |= gst_element_register (plugin, "jpeg2000parse",
+       GST_RANK_PRIMARY, GST_TYPE_JPEG2000_PARSE);
+-  ret |= gst_element_register (plugin, "h265parse",
+-      GST_RANK_SECONDARY, GST_TYPE_H265_PARSE);
++//  ret |= gst_element_register (plugin, "h265parse",
++//      GST_RANK_SECONDARY, GST_TYPE_H265_PARSE);
+   ret |= gst_element_register (plugin, "vc1parse",
+       GST_RANK_NONE, GST_TYPE_VC1_PARSE);
+ 
+-- 
+2.25.1
+

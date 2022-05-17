@@ -33,6 +33,7 @@ SRC_URI = "https://gstreamer.freedesktop.org/src/gst-plugins-good/gst-plugins-go
            file://0038-fix-for-switching-from-clear-to-encrypted-and-vice-v.patch \
            file://0039-LLAMA-8596-Fix-for-demux-end-of-segment-detection.patch \
            "
+SRC_URI_append = " ${@bb.utils.contains('DISTRO_FEATURES', 'sage_svp', 'file://0001-audioparser-remove-eac3-aacparse-for-svp.patch', '', d)}"
 
 SRC_URI[sha256sum] = "3aaeeea7765fbf8801acce4a503a9b05f73f04e8a35352e9d00232cfd555796b"
 
