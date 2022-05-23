@@ -42,7 +42,7 @@ CFLAGS_append = " \
         -I${STAGING_INCDIR}/wdmp-c \
         -I${STAGING_INCDIR}/cimplog \
         -I${STAGING_INCDIR}/trower-base64 \
-	-I${STAGING_INCDIR}/wrp-c \
+        -I${STAGING_INCDIR}/wrp-c \
         -fPIC \
         "
 CFLAGS_append = " ${@bb.utils.contains('DISTRO_FEATURES', 'webconfig_bin', '-I${STAGING_INCDIR}/rbus -I${STAGING_INCDIR}/rbus-core -I${STAGING_INCDIR}/rtmessage', '', d)}"
@@ -52,9 +52,12 @@ CFLAGS_append = " ${@bb.utils.contains('DISTRO_FEATURES', 'aker', '-I${STAGING_I
 CFLAGS_append_dunfell = " -Wno-format-truncation -Wno-sizeof-pointer-memaccess"
 
 SRC_URI_append += " ${@bb.utils.contains('DISTRO_FEATURES', 'webconfig_bin', 'file://webconfig_metadata.json', '', d)}"
+SRC_URI_append += " ${@bb.utils.contains('DISTRO_FEATURES', 'webconfig_bin', 'file://webconfig_video_metadata.json', '', d)}"
 SRC_URI_append += " ${@bb.utils.contains('DISTRO_FEATURES', 'webconfig_bin', 'file://metadata_parser.py', '', d)}"
+SRC_URI_append += " ${@bb.utils.contains('DISTRO_FEATURES', 'webconfig_bin', 'file://webconfig.service', '', d)}"
+SRC_URI_append += " ${@bb.utils.contains('DISTRO_FEATURES', 'webconfig_bin', 'file://partners_defaults_webcfg_video.json', '', d)}"
 
-do_install_append() {
+do_install_append_broadband() {
     if ${@bb.utils.contains("DISTRO_FEATURES", "webconfig_bin", "true", "false", d)}
     then
       install -d ${D}/usr/ccsp/webconfig
