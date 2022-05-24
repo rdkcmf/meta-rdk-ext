@@ -1,0 +1,43 @@
+##########################################
+Date:  July 02  2021
+From: INTCS-210 : Integrate MxL Meta  sprint 2105 Delivery
+Subject: INTCS-210 : Integrate MxL Meta  sprint 2105 Delivery
+Source: MaxLinear
+License: MaxLinear Code
+Upstream-Status: Pending
+Signed-off-by: Sikkaiappan Subramanian <ssubramanian@maxlinear.com>
+##########################################
+
+Index: git/SrvMessages/SrvMsg.cpp
+===================================================================
+--- git.orig/SrvMessages/SrvMsg.cpp
++++ git/SrvMessages/SrvMsg.cpp
+@@ -9,6 +9,11 @@
+  * released under GNU GPL v2 only licence
+  */
+
++/*
++* Includes MaxLinear's changes dated: 2021.
++* Changed portions - Copyright 2021, MaxLinear, Inc.
++*/
++
+ #include <sstream>
+ #include "Portable.h"
+ #include "SrvMsg.h"
+@@ -255,9 +260,13 @@ void TSrvMsg::processOptions(SPtr<TSrvMs
+         }
+         case OPTION_VENDOR_OPTS:
+         {
+-            SPtr<TOptVendorData> v = SPtr_cast<TOptVendorData>(opt);
+-            appendVendorSpec(ClientDUID, Iface, v->getVendor(), ORO);
+-            break;
++            SPtr<TOptVendorSpecInfo> v = SPtr_cast<TOptVendorSpecInfo>(opt);
++            if (!v) {
++                Log(Warning) << "Option Vendor Opt (type: " << typeid(*opt).name() << ") is NULL. "
++                             << "Option ignored." << LogEnd;
++                appendVendorSpec(ClientDUID, Iface, v->getVendor(), ORO);
++                break;
++            }
+         }
+
+         case OPTION_PREFERENCE:

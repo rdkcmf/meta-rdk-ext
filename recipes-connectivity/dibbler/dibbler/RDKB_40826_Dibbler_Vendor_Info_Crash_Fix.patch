@@ -1,0 +1,18 @@
+Index: dibbler-1.0.1/SrvMessages/SrvMsg.cpp
+===================================================================
+--- dibbler-1.0.1.orig/SrvMessages/SrvMsg.cpp
++++ dibbler-1.0.1/SrvMessages/SrvMsg.cpp
+@@ -255,7 +255,12 @@ void TSrvMsg::processOptions(SPtr<TSrvMs
+         }
+         case OPTION_VENDOR_OPTS:
+         {
+-            SPtr<TOptVendorData> v = (Ptr*) opt;
++            SPtr<TOptVendorSpecInfo> v = (Ptr*) opt;
++            if (!v) {
++                Log(Warning) << "Option Vendor Opt is NULL. "
++                << "Option ignored." << LogEnd;
++                break;
++            }
+             appendVendorSpec(ClientDUID, Iface, v->getVendor(), ORO);
+             break;
+         }
