@@ -56,7 +56,7 @@ S = "${WORKDIR}/bluez-${PV}"
 
 CVE_PRODUCT = "bluez"
 
-inherit autotools pkgconfig systemd update-rc.d distro_features_check ptest
+inherit autotools pkgconfig systemd update-rc.d features_check ptest
 
 EXTRA_OECONF = "\
   --enable-test \

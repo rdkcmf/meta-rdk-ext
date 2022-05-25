@@ -27,7 +27,7 @@ SRC_URI[md5sum] = "5fd4b7af8026e8ae20b3065ee18fe974"
 SRC_URI[sha256sum] = "7c292cd0055dac1a0e6fbb6a7740fd12b6ffb204603c198faf37c11c9d6dcd7a"
 
 REQUIRED_DISTRO_FEATURES = "lxc-secure-containers"
-inherit autotools pkgconfig distro_features_check
+inherit autotools pkgconfig features_check
 
 CACHED_CONFIGUREVARS += "ac_cv_lib_gnutls_gnutls_hash_fast=no"
 

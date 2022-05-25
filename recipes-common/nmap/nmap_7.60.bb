@@ -13,7 +13,7 @@ SRC_URI = "http://nmap.org/dist/${BP}.tar.bz2 \
 SRC_URI[md5sum] = "4e454266559ddf2c4e2109866c62560c"
 SRC_URI[sha256sum] = "a8796ecc4fa6c38aad6139d9515dc8113023a82e9d787e5a5fb5fa1b05516f21"
 
-inherit autotools-brokensep pkgconfig python3native distro_features_check
+inherit autotools-brokensep pkgconfig python3native features_check
 
 PACKAGECONFIG ?= "ncat nping ndiff pcap"
 PACKAGECONFIG += " ${@bb.utils.contains('IMAGE_FEATURES', 'x11-base', 'zenmap', '', d)}"
