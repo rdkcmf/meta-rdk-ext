@@ -19,7 +19,15 @@ SRC_URI_append_broadband = " file://client-notify.patch \
                              file://dibbler-server-init.sh \
                              file://server-notify.sh \
                              file://dibbler_clear_sysevent_for_null_option23.patch \
+                             file://fix_type_casting.patch \
 "
+
+#need to remove this patches one dibbler migrated to 1.0.1+1.0.2RC2
+SRC_URI_remove_tchcbr = "file://fix_type_casting.patch"
+SRC_URI_remove_skyhub4-l07 = "file://fix_type_casting.patch"
+SRC_URI_append_tchcbr = "file://RDKB_40826_Dibbler_Vendor_Info_Crash_Fix.patch"
+
+SRC_URI_append_broadband = " ${@bb.utils.contains('DISTRO_FEATURES', 'nat46','file://client-notify-option95.patch','', d)}"
 
 do_install_append() {
         install -d ${D}${sysconfdir}/dibbler

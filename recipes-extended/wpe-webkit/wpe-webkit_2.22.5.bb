@@ -1,6 +1,6 @@
 require wpe-webkit.inc
 
-PV = "2.22.4"
+PV = "2.22.5+git${SRCPV}"
 
 DEPENDS_append = " wpe-backend atk tts libepoxy libgcrypt rdkat rsync-native"
 RDEPENDS_${PN} += "wpe-backend-rdk-platform-plugin tts rdkat"
@@ -8,8 +8,8 @@ DEPENDS_remove_daisy = " rsync-native"
 
 inherit gettext
 
-#Commits on Feb 3, 2022
-SRCREV = "ed39c92e596238c3eb434d2388177bc61ca90f38"
+#Commits on March 21, 2022
+SRCREV = "3a5aeccf6a306a2cb8a4cddc6add36a3aa6a1c78"
 BASE_URI ?= "git://github.com/WebPlatformForEmbedded/WPEWebKit.git;protocol=http;branch=wpe-2.22"
 
 SRC_URI = "${BASE_URI}"
@@ -85,7 +85,7 @@ SRC_URI += "file://2.22/0185-removed-video-webm-audio-webm-from-mimeTypes.patch"
 SRC_URI += "file://2.22/0187-XRE-15546-RDM-RWI-WI-starts-working-only-after-resta.patch"
 SRC_URI += "file://2.22/0188-fixed-build-error-when-disabled-WEB_AUDIO-and-enabled_MEDIA_STREAM.patch"
 SRC_URI += "file://2.22/0189-fix-for-DAZN-streams.patch"
-SRC_URI += "file://2.22/0190-Make-CDMInstance-ref-counter-thread-safe.patch"
+#SRC_URI += "file://2.22/0190-Make-CDMInstance-ref-counter-thread-safe.patch"
 SRC_URI += "file://2.22/0191-Gamepad-for-WPE.patch"
 
 SRC_URI += "file://2.22/0198-Hack-keep-extrapolating-pts-to-get-game-stream-worki.patch"
@@ -148,7 +148,7 @@ SRC_URI += "file://2.22.2/0288-Temporary-disable-cookies-in-gst-context.patch"
 
 SRC_URI += "file://2.22.2/0289-GST-return-cached-position-when-sink-returns-invalid.patch"
 SRC_URI += "file://2.22.2/0290-Tweaking-libsoup-config-in-webkitwebsrc.patch"
-SRC_URI += "file://2.22.4/0291-increase-micro-version-version-to-match-recipe.patch"
+SRC_URI += "file://2.22.5/0291-increase-micro-version-version-to-match-recipe.patch"
 
 SRC_URI += "file://2.22/0001-Rework-decryptor-attachment.patch"
 SRC_URI += "file://2.22/0002-Use-isolatedCopy-for-strings-that-can-be-used-in-different-threads.patch"
@@ -156,15 +156,17 @@ SRC_URI += "file://2.22/0003-Fix-use-after-free-in-CoordinatedGraphicsLayer-dest
 SRC_URI += "file://2.22.3/0295-enable-inspector-server-based-on-remote-inspector-co.patch"
 SRC_URI += "file://2.22.3/0296-Release-resources-in-suspended-state.patch"
 SRC_URI += "file://2.22.4/0296-Find-libwpe-1.0.patch"
-SRC_URI += "file://2.22.3/0297-remove-the-existing-buffers-while-doing-rewind.patch"
+
 SRC_URI += "file://2.22.2/0292-Increase-MSE-appsrc-buffering-min-percent.patch"
 SRC_URI += "file://2.22.2/0293-Enable-wait-video-on-aml-audio-sink.patch"
-SRC_URI += "file://2.22.3/0297-Fix-loss-of-ReadyForMoreSamples-notificat.patch"
+#SRC_URI += "file://2.22.3/0297-Fix-loss-of-ReadyForMoreSamples-notificat.patch"
+SRC_URI += "file://2.22.3/0297-remove-the-existing-buffers-while-doing-rewind.patch"
 SRC_URI += "file://2.22.3/0298-Let-eviction-algorith-to-cleanup-decoding.patch"
 #SRC_URI += "file://2.22.4/0299-Revert-change-to-keep-last-frame-rendered-after-play.patch"
-SRC_URI += "file://2.22/0001-Send-http-headers-event-on-WebKitWebSrc-streaming-thread.patch"
+#SRC_URI += "file://2.22/0001-Send-http-headers-event-on-WebKitWebSrc-streaming-thread.patch"
+SRC_URI += "file://2.22.5/0300-Revert-SoupNetworkSession-Drop-open-connections.patch"
 SRC_URI += "file://2.22.3/0301-Revert-EME-Thunder-Fix-race-condition-in-updateLicen.patch"
-SRC_URI += "file://2.22/0001-Disable-directcall-optimisation-for-MIPS.patch"
+SRC_URI += "file://2.22.5/comcast-DELIA-55979-increase-the-time-slice-allocate.patch"
 
 # device specific configs
 PACKAGECONFIG[westeros] = "-DUSE_WPEWEBKIT_BACKEND_WESTEROS=ON -DUSE_WPEWEBKIT_PLATFORM_WESTEROS=ON -DUSE_KEY_INPUT_HANDLING_LINUX_INPUT=OFF -DUSE_GSTREAMER_HOLEPUNCH=ON -DUSE_EXTERNAL_HOLEPUNCH=ON -DUSE_WESTEROS_SINK=ON,,westeros westeros-sink"

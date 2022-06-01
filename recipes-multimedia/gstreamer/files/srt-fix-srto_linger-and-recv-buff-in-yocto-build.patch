@@ -1,0 +1,203 @@
+From: Chaitanya Mahanthi <chaitanya.mahanthi@tcs.com>
+Date: Thu, 30 Dec 2021 00:06:35 +0530
+Subject: [PATCH] SRT: resolve issues with recv biffer and SRTO_LINGER
+diff -Naur a/ext/srt/gstsrtobject.c b/ext/srt/gstsrtobject.c
+--- a/ext/srt/gstsrtobject.c	2021-12-29 23:58:22.323667465 +0530
++++ b/ext/srt/gstsrtobject.c	2021-12-30 00:00:07.298008664 +0530
+@@ -47,6 +47,8 @@
+   PROP_LATENCY,
+   PROP_MSG_SIZE,
+   PROP_STATS,
++  PROP_FLIGHT_FLAG_SIZE,
++  PROP_RECV_BUF_SIZE,
+   PROP_LAST
+ };
+ 
+@@ -118,7 +120,6 @@
+ static struct srt_constant_params srt_params[] = {
+   {"SRTO_SNDSYN", SRTO_SNDSYN, 0},      /* 0: non-blocking */
+   {"SRTO_RCVSYN", SRTO_RCVSYN, 0},      /* 0: non-blocking */
+-  {"SRTO_LINGER", SRTO_LINGER, 0},
+   {"SRTO_TSBPMODE", SRTO_TSBPDMODE, 1}, /* Timestamp-based Packet Delivery mode must be enabled */
+   {NULL, -1, -1},
+ };
+@@ -130,7 +131,7 @@
+     GError ** error)
+ {
+   struct srt_constant_params *params = srt_params;
+-
++  struct linger linger = { 0 };
+   for (; params->name != NULL; params++) {
+     if (srt_setsockopt (sock, 0, params->param, &params->val, sizeof (gint))) {
+       g_set_error (error, GST_LIBRARY_ERROR, GST_LIBRARY_ERROR_SETTINGS,
+@@ -139,6 +140,13 @@
+       return FALSE;
+     }
+   }
++ linger.l_onoff = 0;           /* 0: non-blocking */
++  if (srt_setsockopt (sock, 0, SRTO_LINGER, (const char *) &linger,
++          sizeof (linger))) {
++    g_set_error (error, GST_LIBRARY_ERROR, GST_LIBRARY_ERROR_SETTINGS,
++        "failed to set SRTO_LINGER (reason: %s)", srt_getlasterror_str ());
++    return FALSE;
++  }
+ 
+   if (srtobject->passphrase != NULL && srtobject->passphrase[0] != '\0') {
+     gint pbkeylen;
+@@ -173,7 +181,27 @@
+       return FALSE;
+     }
+   }
++  if (gst_structure_has_field (srtobject->parameters, "fc")) {
++    gint fc;
++    if (gst_structure_get_int (srtobject->parameters, "fc", &fc)) {
++      if (srt_setsockopt (sock, 0, SRTO_FC, &fc, sizeof (gint))) {
++        g_set_error (error, GST_LIBRARY_ERROR, GST_LIBRARY_ERROR_SETTINGS,
++            "failed to set flight flag size (reason: %s)",
++            srt_getlasterror_str ());
++      }
++    }
++  }
+ 
++  if (gst_structure_has_field (srtobject->parameters, "rcvbuf")) {
++    gint recv_buf_size;
++    if (gst_structure_get_int (srtobject->parameters, "rcvbuf", &recv_buf_size)) {
++      if (srt_setsockopt (sock, 0, SRTO_RCVBUF, &recv_buf_size, sizeof (gint))) {
++        g_set_error (error, GST_LIBRARY_ERROR, GST_LIBRARY_ERROR_SETTINGS,
++            "failed to set recv. buffer size (reason: %s)",
++            srt_getlasterror_str ());
++      }
++    }
++  }
+   return TRUE;
+ }
+ 
+@@ -268,6 +296,27 @@
+     case PROP_PBKEYLEN:
+       gst_structure_set_value (srtobject->parameters, "pbkeylen", value);
+       break;
++    case PROP_FLIGHT_FLAG_SIZE:
++      gst_structure_set_value (srtobject->parameters, "fc", value);
++      break;
++    case PROP_RECV_BUF_SIZE:{
++      gint fc, max_size;
++
++      if (!gst_structure_get_int (srtobject->parameters, "fc", &fc)) {
++        fc = GST_SRT_DEFAULT_FLIGHT_FLAG_SIZE;
++      }
++
++      max_size = fc * (1500 - 28);
++
++      if (g_value_get_int (value) > max_size) {
++        GST_WARNING_OBJECT (srtobject->element,
++            "Recv. buffer size shall not be greater than (max_size).");
++        return FALSE;
++      }
++
++      gst_structure_set_value (srtobject->parameters, "rcvbuf", value);
++      break;
++    }
+     default:
+       return FALSE;
+   }
+@@ -336,6 +385,25 @@
+     case PROP_STATS:
+       g_value_take_boxed (value, gst_srt_object_get_stats (srtobject));
+       break;
++    case PROP_FLIGHT_FLAG_SIZE:{
++      gint v;
++      if (!gst_structure_get_int (srtobject->parameters, "fc", &v)) {
++        GST_WARNING_OBJECT (srtobject->element, "Failed to get 'fc'");
++        v = GST_SRT_DEFAULT_FLIGHT_FLAG_SIZE;
++      }
++      g_value_set_int (value, v);
++      break;
++    }
++    case PROP_RECV_BUF_SIZE:{
++      gint v;
++
++      if (!gst_structure_get_int (srtobject->parameters, "rcvbuf", &v)) {
++        GST_WARNING_OBJECT (srtobject->element, "Failed to get 'rcvbuf'");
++        v = GST_SRT_DEFAULT_RECV_BUF_SIZE;
++      }
++      g_value_set_int (value, v);
++      break;
++    }
+     default:
+       return FALSE;
+   }
+@@ -454,7 +522,33 @@
+       g_param_spec_boxed ("stats", "Statistics",
+           "SRT Statistics", GST_TYPE_STRUCTURE,
+           G_PARAM_READABLE | G_PARAM_STATIC_STRINGS));
++        
++  /**
++   * GstSRTSrc:flight-flag-size:
++   *
++   * The maximum number of bytes that can be sent without being acknowledged
++   */
++  g_object_class_install_property (gobject_class, PROP_FLIGHT_FLAG_SIZE,
++      g_param_spec_int ("flight-flag-size", "Flight Flag Size",
++          "Maximum number of bytes that can be sent "
++          "without being acknowledged",
++          32, G_MAXINT32, GST_SRT_DEFAULT_FLIGHT_FLAG_SIZE,
++          G_PARAM_READWRITE | GST_PARAM_MUTABLE_READY |
++          G_PARAM_STATIC_STRINGS));
+ 
++  /**
++   * GstSRTSrc:recv-buf-size:
++   *
++   * The receive buffer size in bytes.
++   * It must not be greater than #GstSRTSrc:flight-flag-size * (1500 - 28).
++   */
++  g_object_class_install_property (gobject_class, PROP_RECV_BUF_SIZE,
++      g_param_spec_int ("recv-buf-size", "Recv. Buffer Size",
++          "The number of recv. buffer bytes",
++          GST_SRT_DEFAULT_RECV_BUF_SIZE, G_MAXINT32,
++          GST_SRT_DEFAULT_RECV_BUF_SIZE,
++          G_PARAM_READWRITE | GST_PARAM_MUTABLE_READY |
++          G_PARAM_STATIC_STRINGS));
+ }
+ 
+ static void
+@@ -500,6 +594,17 @@
+ }
+ 
+ static void
++gst_srt_object_set_int_value (GstStructure * s, const gchar * key,
++    const gchar * value)
++{
++  GValue v = G_VALUE_INIT;
++  g_value_init (&v, G_TYPE_INT);
++  g_value_set_int (&v, (gint) strtoul (value, NULL, 10));
++  gst_structure_set_value (s, key, &v);
++  g_value_unset (&v);
++}
++
++static void
+ gst_srt_object_validate_parameters (GstStructure * s, GstUri * uri)
+ {
+   GstSRTConnectionMode connection_mode = GST_SRT_CONNECTION_MODE_NONE;
+@@ -587,6 +692,10 @@
+       } else if (!g_strcmp0 ("pbkeylen", key)) {
+         gst_srt_object_set_enum_value (srtobject->parameters,
+             GST_TYPE_SRT_KEY_LENGTH, key, value);
++      } else if (!g_strcmp0 ("fc", key)) {
++        gst_srt_object_set_int_value (srtobject->parameters, key, value);
++      } else if (!g_strcmp0 ("rcvbuf", key)) {
++        gst_srt_object_set_int_value (srtobject->parameters, key, value);
+       }
+     }
+ 
+diff -Naur a/ext/srt/gstsrtobject.h b/ext/srt/gstsrtobject.h
+--- a/ext/srt/gstsrtobject.h	2021-12-29 23:58:22.143664105 +0530
++++ b/ext/srt/gstsrtobject.h	2021-12-30 00:00:16.317552416 +0530
+@@ -41,6 +41,8 @@
+ #define GST_SRT_DEFAULT_POLL_TIMEOUT -1
+ #define GST_SRT_DEFAULT_LATENCY 125
+ #define GST_SRT_DEFAULT_MSG_SIZE 1316
++#define GST_SRT_DEFAULT_FLIGHT_FLAG_SIZE 25600
++#define GST_SRT_DEFAULT_RECV_BUF_SIZE (8192 * (1500-28))
+ 
+ typedef struct _GstSRTObject GstSRTObject;
+ 

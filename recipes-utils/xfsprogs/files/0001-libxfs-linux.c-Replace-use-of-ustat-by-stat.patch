@@ -1,0 +1,80 @@
+From 4e7a824f6b34dbe0dd2e2a3870891130b937f327 Mon Sep 17 00:00:00 2001
+From: Felix Janda <felix.janda@posteo.de>
+Date: Thu, 8 Sep 2016 10:22:28 +1000
+Subject: [PATCH] libxfs/linux.c: Replace use of ustat by stat
+
+ustat has been used to check whether a device file is mounted.
+The function is deprecated and not supported by uclibc and musl.
+Now do the check using the *mntent functions.
+
+Based on patch by Natanael Copa <ncopa@alpinelinux.org>.
+
+Signed-off-by: Felix Janda <felix.janda@posteo.de>
+Reviewed-by: Eric Sandeen <sandeen@redhat.com>
+Signed-off-by: Dave Chinner <david@fromorbit.com>
+---
+ libxfs/linux.c | 29 ++++++++++++++++++++---------
+ 1 file changed, 20 insertions(+), 9 deletions(-)
+
+diff --git a/libxfs/linux.c b/libxfs/linux.c
+index 2e07d54..b27060a 100644
+--- a/libxfs/linux.c
++++ b/libxfs/linux.c
+@@ -16,12 +16,9 @@
+  * Inc.,  51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
+  */
+ 
+-#define ustat __kernel_ustat
+ #include <xfs/libxfs.h>
+ #include <mntent.h>
+ #include <sys/stat.h>
+-#undef ustat
+-#include <sys/ustat.h>
+ #include <sys/mount.h>
+ #include <sys/ioctl.h>
+ #include <sys/sysinfo.h>
+@@ -49,9 +46,10 @@ static int max_block_alignment;
+ int
+ platform_check_ismounted(char *name, char *block, struct stat64 *s, int verbose)
+ {
+-	/* Pad ust; pre-2.6.28 linux copies out too much in 32bit compat mode */
+-	struct ustat	ust[2];
+-	struct stat64	st;
++	FILE            *f;
++	struct stat64   st, mst;
++	struct mntent   *mnt;
++	char            mounts[MAXPATHLEN];
+ 
+ 	if (!s) {
+ 		if (stat64(block, &st) < 0)
+@@ -61,14 +59,27 @@ platform_check_ismounted(char *name, char *block, struct stat64 *s, int verbose)
+ 		s = &st;
+ 	}
+ 
+-	if (ustat(s->st_rdev, ust) >= 0) {
++	strcpy(mounts, (!access(PROC_MOUNTED, R_OK)) ? PROC_MOUNTED : MOUNTED);
++	if ((f = setmntent(mounts, "r")) == NULL) {
++		fprintf(stderr,
++		    _("%s: %s possibly contains a mounted filesystem\n"),
++		    progname, name);
++		return 1;
++	}
++	while ((mnt = getmntent(f)) != NULL) {
++		if (stat64(mnt->mnt_dir, &mst) < 0)
++			continue;
++		if (mst.st_dev != s->st_rdev)
++			continue;
++
+ 		if (verbose)
+ 			fprintf(stderr,
+ 				_("%s: %s contains a mounted filesystem\n"),
+ 				progname, name);
+-		return 1;
++		break;
+ 	}
+-	return 0;
++	endmntent(f);
++	return mnt != NULL;
+ }
+ 
+ int

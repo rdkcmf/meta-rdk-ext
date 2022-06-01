@@ -1,3 +1,5 @@
+include ${@bb.utils.contains('DISTRO_FEATURES', 'systemd-profile', 'profiles/rdk-${PN}-profile.inc', 'profiles/generic-profile.inc', d)}
+
 FILESEXTRAPATHS_prepend := "${THISDIR}/files:${THISDIR}/backports:"
 
 PACKAGECONFIG_remove = "vconsole ldconfig"
@@ -31,7 +33,7 @@ RRECOMMENDS_${PN} += " \
         util-linux-libmount util-linux-umount \
 "
 
-PACKAGES += "${PN}-usb-support"
+PACKAGES =+ "${PN}-usb-support"
 
 FILES_${PN}-usb-support = " \
         /usb \
@@ -108,7 +110,7 @@ do_install_append_client() {
         rm -rf ${D}${rootlibexecdir}/systemd/system/systemd-update-done.service
         rm -rf ${D}${rootlibexecdir}/systemd/system/sysinit.target.wants/systemd-update-done.service
         sed -i -e 's/systemd-update-done.service//g' ${D}${systemd_unitdir}/system/systemd-journal-catalog-update.service
-        sed -i -e 's/systemd-update-done.service//g' ${D}${systemd_unitdir}/system/systemd-sysusers.service
+        sed -i -e 's/systemd-update-done.service//g' ${D}${systemd_unitdir}/system/systemd-sysusers.service || true
 }
 
 do_install_append_hybrid() {
@@ -120,7 +122,7 @@ do_install_append_hybrid() {
         rm -rf ${D}${rootlibexecdir}/systemd/system/systemd-update-done.service
         rm -rf ${D}${rootlibexecdir}/systemd/system/sysinit.target.wants/systemd-update-done.service
         sed -i -e 's/systemd-update-done.service//g' ${D}${systemd_unitdir}/system/systemd-journal-catalog-update.service
-        sed -i -e 's/systemd-update-done.service//g' ${D}${systemd_unitdir}/system/systemd-sysusers.service
+        sed -i -e 's/systemd-update-done.service//g' ${D}${systemd_unitdir}/system/systemd-sysusers.service || true
 }
 
 SYSTEMD_SERVICE_systemd-binfmt_remove = " systemd-binfmt.service"
@@ -132,7 +134,7 @@ FILES_${PN} += "${sysconfdir}/sysctl.d/50-coredump.conf \
 
 FILES_${PN} += "${sysconfdir}/sysctl.d/50-netfilter.conf \
                "
-FILES_${PN}_remove = "${bindir}/busctl ${datadir}/bash-completion/completions/busctl ${libdir}/libnss_mymachines.so.2 ${rootlibexecdir}/systemd/systemd-bus-proxyd ${rootlibexecdir}/systemd/systemd-socket-proxyd ${rootlibexecdir}/systemd/systemd-ac-power ${rootlibexecdir}/systemd/systemd-fsck ${rootlibexecdir}/systemd/systemd-sleep ${rootlibexecdir}/systemd/system/systemd-fsck*.service ${rootlibexecdir}/systemd/systemd-reply-password ${rootlibexecdir}/systemd/systemd-activate"
+FILES_${PN}_remove = "${bindir}/busctl ${datadir}/bash-completion/completions/busctl ${libdir}/libnss_mymachines.so.2 ${rootlibexecdir}/systemd/systemd-bus-proxyd ${rootlibexecdir}/systemd/systemd-ac-power ${rootlibexecdir}/systemd/systemd-fsck ${rootlibexecdir}/systemd/systemd-sleep ${rootlibexecdir}/systemd/system/systemd-fsck*.service ${rootlibexecdir}/systemd/systemd-reply-password ${rootlibexecdir}/systemd/systemd-activate"
 
 FILES_${PN}_append_client = " /media/apps"
 FILES_${PN}_append_hybrid = " /media/apps"

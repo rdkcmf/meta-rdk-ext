@@ -1,0 +1,68 @@
+## RDM systemd profiling ##
+
+Why profile systemd?
+systemd is the default init system in RDK devices. systemd is rich in features which comes without saying that it is bulky as well for the same reason. 
+By default, systemd is bundled with lot of features and services enabled which might not be really used across all RDK devices. Hence there 
+is a compelling need to tailor or tear-down systemd in RDK so that only stuff that is really required at runtime is enabled thereby reducing 
+the overall footprint occupied by systemd in the firmware and improving performance too (by removing services that were earlier actively running 
+in the device but not used for any real purpose)
+
+
+
+## systemd features ##
+
+List of systemd features available - 
+
+importd - Enables VM and container image import and export service
+coredump - Acquire, save and process core dumps
+gcrypt/bzip2/lz4/zlib - Required when importd is enabled. Probably for image compression/extraction
+audit - Used alongside ima feature
+manpages - man pages for systemd
+cryptsetup - Encrypt block devices
+resolved - DNS service
+networkd - Network manager
+machined - Virtual machine and container registration manager
+logind - User login manager
+efi - Support for EFI firmware boot
+quotacheck - Enabled File system quota check
+randomseed - Load and save the system random seed at boot and shutdown
+seccomp - Support for secccomp. seccomp is a kernel security feature
+journal-upload - Send journal messages over the network
+hostnamed - Daemon to control system hostname from programs
+timedated - Time and date bus mechanism to change the system clock and timezone
+localed - Locale bus mechanism to change the system locale settings, as well as the console key mapping and default X11 key mapping
+smack - Enable support for smack. Smack is a Linux kernel security module that protects data and process interaction from malicious manipulation
+pam - Register user sessions in the systemd login manager
+selinux - Enable selinux support. selinux is a kernel security feature
+valgrind - Enable support for valgrind
+qrencode/microhttpd/libidn/elfutils - Not much information available. These features are listed as optional in systemd README
+firstboot - Initialize basic system settings on or before the first boot-up of a system. The service is started if ConditionFirstBoot=yes is satisfied. 
+            This essentially means that /etc/ is empty
+binfmt -  Configure additional binary formats for executables in the kernel at boot. Its services are being intentioned removed in RDK layer.
+          Services reads configuration files from the above directories to register in the kernel additional binary formats for executables
+backlight - Load and save the display backlight brightness at boot and shutdown
+hibernate - Responsible for system suspend and hibernate
+ima - It stands for Integrit Measurement Architecture - A kernel security feature. This feature might be useful in systemd only when IMA subsystem is enabled in Linux kernel
+myhostname - Resolves local hostname to locally configured IP addresses
+polkit - polkit is an application-level toolkit for controlling system-wide privileges. In systemd, it is necessary power management as an unprivileged user
+rfkill - Restores the RF kill switch state at early boot and saves it on each change
+sysusers - Allocate system users and groups
+timesyncd - Network Time Synchronization
+utmp - Updates login records
+xz - Data compression/decompression util
+
+Note - Out of these features, currently timesyncd, utmp & myhostname are the only features being used in RDK and hence enabled. Rest other features are disabled
+
+How to enable a systemd feature?
+Add the feature to the PACKAGECONFIG variable
+
+
+
+## systemd recommended packages ##
+
+What is RRECOMMENDS?
+List of packages that extends the usability of a package being built. The package being built does not depend on this list of packages in order to successfully build, 
+but rather uses them for extended usability. Must always use the variable in conjunction with a package name override
+
+How to use RRECOMMENDS?
+Add the desired package (belonging to systemd or any other recipe) to RRECOMMENDS_${PN} variable

@@ -173,6 +173,12 @@
                      "bitposition": 1,
                      "support": false,
                      "version": "1.0"
+                   },
+                   {
+                     "name": "telcovoice",
+                     "bitposition": 2,
+                     "support": false,
+                     "version": "1.0"
                    }
                  ]
                },
@@ -371,6 +377,12 @@
                    {
                      "name": "telcovoip",
                      "bitposition": 1,
+                     "support": false,
+                     "version": "1.0"
+                   },
+                   {
+                     "name": "telcovoice",
+                     "bitposition": 2,
                      "support": false,
                      "version": "1.0"
                    }
@@ -573,6 +585,12 @@
                      "bitposition": 1,
                      "support": false,
                      "version": "1.0"
+                   },
+                   {
+                     "name": "telcovoice",
+                     "bitposition": 2,
+                     "support": false,
+                     "version": "1.0"
                    }
                  ]
                },
@@ -771,6 +789,12 @@
                    {
                      "name": "telcovoip",
                      "bitposition": 1,
+                     "support": false,
+                     "version": "1.0"
+                   },
+                   {
+                     "name": "telcovoice",
+                     "bitposition": 2,
                      "support": false,
                      "version": "1.0"
                    }
@@ -973,6 +997,12 @@
                      "bitposition": 1,
                      "support": false,
                      "version": "1.0"
+                   },
+                   {
+                     "name": "telcovoice",
+                     "bitposition": 2,
+                     "support": false,
+                     "version": "1.0"
                    }
                  ]
                },
@@ -1171,6 +1201,12 @@
                    {
                      "name": "telcovoip",
                      "bitposition": 1,
+                     "support": false,
+                     "version": "1.0"
+                   },
+                   {
+                     "name": "telcovoice",
+                     "bitposition": 2,
                      "support": false,
                      "version": "1.0"
                    }
@@ -1373,6 +1409,12 @@
                      "bitposition": 1,
                      "support": false,
                      "version": "1.0"
+                   },
+                   {
+                     "name": "telcovoice",
+                     "bitposition": 2,
+                     "support": false,
+                     "version": "1.0"
                    }
                  ]
                },
@@ -1397,7 +1439,7 @@
                      "version": "1.0"
                    }
                  ]
-               }
+               }  
              ],
     "cbr" : [
               {
@@ -1573,6 +1615,12 @@
                      "bitposition": 1,
                      "support": false,
                      "version": "1.0"
+                   },
+                   {
+                     "name": "telcovoice",
+                     "bitposition": 2,
+                     "support": false,
+                     "version": "1.0"
                    }
                  ]
                },
@@ -1727,7 +1775,7 @@
                           "bitposition": 1,
                           "support": true,
                           "version": "1.0",
-                          "secondary_doc": false
+                          "secondary_doc": true
                        }
                     ]
        },
@@ -1772,6 +1820,12 @@
              "name": "telcovoip",
              "bitposition": 1,
              "support": true,
+             "version": "1.0"
+           },
+           {
+             "name": "telcovoice",
+             "bitposition": 2,
+             "support": false,
              "version": "1.0"
            }
          ]
@@ -1971,6 +2025,12 @@
            {
              "name": "telcovoip",
              "bitposition": 1,
+             "support": false,
+             "version": "1.0"
+           },
+           {
+             "name": "telcovoice",
+             "bitposition": 2,
              "support": true,
              "version": "1.0"
            }
