@@ -1,14 +1,14 @@
-SUMMARY = "C++ library for JSON Schema validation"
+SUMMARY = "JSON schema validator for JSON for Modern C++"
 HOMEPAGE = "https://github.com/pboettch/json-schema-validator"
 LICENSE = "MIT "
 LIC_FILES_CHKSUM = "file://LICENSE;md5=c441d022da1b1663c70181a32225d006"
 
 DEPENDS += " nlohmann-json"
 
-SRC_URI = "git://github.com/pboettch/json-schema-validator.git"
-PV = "2.0+git${SRCPV}"
+SRC_URI = "git://github.com/pboettch/json-schema-validator.git;branch=main;protocol=https"
+PV = "2.1.0+git${SRCPV}"
 
-SRCREV = "7264fa0a05d6ef3e0d3d25beac02fdf4a39280f1"
+SRCREV = "27fc1d094503623dfe39365ba82581507524545c"
 
 S = "${WORKDIR}/git"
 
