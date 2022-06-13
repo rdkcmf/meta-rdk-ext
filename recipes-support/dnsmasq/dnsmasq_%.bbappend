@@ -25,6 +25,8 @@ do_install_append() {
      sed -i -- 's/#dhcp-leasefile=\/var\/lib\/misc\/dnsmasq.leases/dhcp-leasefile=\/tmp\/dnsmasq.leases/g' ${D}/etc/dnsmasq.conf
      touch ${D}${sysconfdir}/resolv.conf
      echo "nameserver 127.0.0.1" > ${D}${sysconfdir}/resolv.conf
+     echo "options timeout:1" >> ${D}${sysconfdir}/resolv.conf
+     echo "options attempts:2" >> ${D}${sysconfdir}/resolv.conf
      touch ${D}${sysconfdir}/resolv.dnsmasq
      install -m 0755 ${S}/../dnsmasqLauncher.sh ${D}${base_libdir}/rdk
 }
