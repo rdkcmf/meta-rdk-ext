@@ -178,6 +178,7 @@ SRC_URI += "file://2.22.5/comcast-DELIA-55979-increase-the-time-slice-allocate.p
 SRC_URI += "file://2.22.6/0001-Avoid-updateing-image-backings-in-nonCompositedWebGL-mo.patch"
 SRC_URI += "file://2.22.6/0304-Fix-crash-on-appsrc-streaming-thread.patch"
 SRC_URI += "file://2.22/0001-Disable-directcall-optimisation-for-MIPS.patch"
+SRC_URI += "file://2.22.6/0305-Bring-back-the-compositor-buffer-that-was-removed.patch"
 
 # device specific configs
 PACKAGECONFIG[westeros] = "-DUSE_WPEWEBKIT_BACKEND_WESTEROS=ON -DUSE_WPEWEBKIT_PLATFORM_WESTEROS=ON -DUSE_KEY_INPUT_HANDLING_LINUX_INPUT=OFF -DUSE_GSTREAMER_HOLEPUNCH=ON -DUSE_EXTERNAL_HOLEPUNCH=ON -DUSE_WESTEROS_SINK=ON,,westeros westeros-sink"
