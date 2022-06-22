@@ -1,0 +1,49 @@
+From 85db102d08aec86b55b0d3b810fe6daeb6638ad4 Mon Sep 17 00:00:00 2001
+From: nganes961 <nambirajan_ganesan@comcast.com>
+Date: Fri, 3 Sep 2021 10:13:40 +0000
+Subject: [PATCH] Fixing Elliptic radial gradients
+
+Signed-off-by: nganes961 <nambirajan_ganesan@comcast.com>
+---
+ .../platform/graphics/cairo/GradientCairo.cpp       | 13 ++++++++++---
+ 1 file changed, 10 insertions(+), 3 deletions(-)
+
+diff --git a/Source/WebCore/platform/graphics/cairo/GradientCairo.cpp b/Source/WebCore/platform/graphics/cairo/GradientCairo.cpp
+index af36e438fb8b..e8a69b7486eb 100644
+--- a/Source/WebCore/platform/graphics/cairo/GradientCairo.cpp
++++ b/Source/WebCore/platform/graphics/cairo/GradientCairo.cpp
+@@ -42,12 +42,21 @@ void Gradient::platformDestroy()
+ 
+ cairo_pattern_t* Gradient::createPlatformGradient(float globalAlpha)
+ {
++    cairo_matrix_t matrix = toCairoMatrix(m_gradientSpaceTransformation);
++    cairo_matrix_invert(&matrix);
++	
+     cairo_pattern_t* gradient = WTF::switchOn(m_data,
+         [&] (const LinearData& data) -> cairo_pattern_t* {
+             return cairo_pattern_create_linear(data.point0.x(), data.point0.y(), data.point1.x(), data.point1.y());
+         },
+         [&] (const RadialData& data) -> cairo_pattern_t* {
+-            return cairo_pattern_create_radial(data.point0.x(), data.point0.y(), data.startRadius, data.point1.x(), data.point1.y(), data.endRadius);
++            cairo_pattern_t *gradient = cairo_pattern_create_radial(data.point0.x(), data.point0.y(), data.startRadius, data.point1.x(), data.point1.y(), data.endRadius);
++            if (data.aspectRatio != 1) {
++                cairo_matrix_translate(&matrix, data.point0.x(), data.point0.y());
++                cairo_matrix_scale(&matrix, 1.0, data.aspectRatio);
++                cairo_matrix_translate(&matrix, -data.point0.x(), -data.point0.y());
++            }
++            return gradient;
+         }
+     );
+ 
+@@ -74,8 +83,6 @@ cairo_pattern_t* Gradient::createPlatformGradient(float globalAlpha)
+         break;
+     }
+ 
+-    cairo_matrix_t matrix = toCairoMatrix(m_gradientSpaceTransformation);
+-    cairo_matrix_invert(&matrix);
+     cairo_pattern_set_matrix(gradient, &matrix);
+ 
+     return gradient;
+-- 
+2.17.1
+

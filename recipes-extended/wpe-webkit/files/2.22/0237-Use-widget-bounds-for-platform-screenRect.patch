@@ -1,0 +1,53 @@
+From fea4f287429a06830bebdb819f4dce59a1b9fe92 Mon Sep 17 00:00:00 2001
+From: Amadeusz Skrzypczak <amadeusz.skrzypczak@redembedded.com>
+Date: Tue, 16 Mar 2021 10:20:14 +0100
+Subject: [PATCH] Use widget bounds for platform screenRect
+
+Patch based on the upstream commit
+https://github.com/WebKit/WebKit/commit/0ff672d2dee5f3c2c23f1841b3925f3b9e20a7fc
+
+---
+ .../WebCore/platform/wpe/PlatformScreenWPE.cpp   | 16 ++++++++++------
+ 1 file changed, 10 insertions(+), 6 deletions(-)
+
+diff --git a/Source/WebCore/platform/wpe/PlatformScreenWPE.cpp b/Source/WebCore/platform/wpe/PlatformScreenWPE.cpp
+index a2d079b0..904ebce5 100644
+--- a/Source/WebCore/platform/wpe/PlatformScreenWPE.cpp
++++ b/Source/WebCore/platform/wpe/PlatformScreenWPE.cpp
+@@ -28,6 +28,7 @@
+ 
+ #include "FloatRect.h"
+ #include "NotImplemented.h"
++#include "Widget.h"
+ 
+ namespace WebCore {
+ 
+@@ -65,16 +66,19 @@ void setScreenDPIObserverHandler(Function<void()>&&, void*)
+     notImplemented();
+ }
+ 
+-FloatRect screenRect(Widget*)
++FloatRect screenRect(Widget* widget)
+ {
+-    notImplemented();
+-    return FloatRect(0, 0, 1024, 640);
++    // WPE can't offer any more useful information about the screen size,
++    // so we use the Widget's bounds rectangle (size of which equals the WPE view size).
++
++    if (!widget)
++        return { };
++    return widget->boundsRect();
+ }
+ 
+-FloatRect screenAvailableRect(Widget*)
++FloatRect screenAvailableRect(Widget* widget)
+ {
+-    notImplemented();
+-    return FloatRect(0, 0, 1024, 640);
++    return screenRect(widget);
+ }
+ 
+ bool screenSupportsExtendedColor(Widget*)
+-- 
+2.17.1
+

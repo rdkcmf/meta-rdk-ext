@@ -8,8 +8,9 @@ DEPENDS = "cjson trower-base64 msgpack-c cimplog wdmp-c curl wrp-c"
 DEPENDS_append = "${@bb.utils.contains("DISTRO_FEATURES", "webconfig_bin", " rbus rbus-core cpeabs", " ", d)}"
 DEPENDS_append = " ${@bb.utils.contains('DISTRO_FEATURES', 'aker', ' nanomsg libparodus ', '', d)}"
  
-SRCREV =  "c8b5f66a0f603bb7d6188e2380463f452012f055"
+SRCREV = "7cc87638407b2d9a8554da7247eb36b5c5bfd6df"
 SRC_URI = "git://github.com/xmidt-org/webcfg.git"
+
 
 RDEPENDS_${PN} += "util-linux-uuidgen"
 
@@ -27,15 +28,13 @@ EXTRA_OECMAKE += " ${@bb.utils.contains('DISTRO_FEATURES', 'webconfig_bin', '-DW
 
 EXTRA_OECMAKE += " ${@bb.utils.contains('DISTRO_FEATURES', 'aker', '-DFEATURE_SUPPORT_AKER=true', '', d)}"
 
-LDFLAGS += "-lcjson -lmsgpackc -ltrower-base64 -lwdmp-c -lcimplog -lcurl -lwrp-c"
+LDFLAGS += "-lcjson -lcimplog -lmsgpackc -ltrower-base64 -lwdmp-c -lcimplog -lcurl -lwrp-c"
 
 LDFLAGS_append = "${@bb.utils.contains("DISTRO_FEATURES", "webconfig_bin", " -lrbus -lrbus-core -lrtMessage -lcpeabs ", " ", d)}"
 
 LDFLAGS_append = " ${@bb.utils.contains('DISTRO_FEATURES', 'aker', ' -llibparodus -lnanomsg ', '', d)}"
 
 CFLAGS_append = " ${@bb.utils.contains('DISTRO_FEATURES', 'multipartUtility', '-DMULTIPART_UTILITY', '', d)}"
-
-CFLAGS_append = " ${@bb.utils.contains("DISTRO_FEATURES", "WanFailOverSupportEnable", " -DWAN_FAILOVER_SUPPORTED ", " ", d)} "
 
 CFLAGS_append = " \
         -DBUILD_YOCTO \
@@ -61,11 +60,6 @@ do_install_append() {
       install -d ${D}/etc
       touch ${D}/etc/WEBCONFIG_ENABLE
       (python ${WORKDIR}/metadata_parser.py ${WORKDIR}/webconfig_metadata.json ${D}/etc/webconfig.properties ${MACHINE})
-    fi
-
-    if ${@bb.utils.contains("DISTRO_FEATURES", "WanFailOverSupportEnable", "true", "false", d)}
-    then
-      touch ${D}/etc/CURRENT_INTERFACE
     fi
 }
 

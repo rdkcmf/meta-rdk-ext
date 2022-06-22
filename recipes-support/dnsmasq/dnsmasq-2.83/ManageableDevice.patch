@@ -10,9 +10,9 @@ Signed-off-by: Anu Chacko <achacko.contractor@libertyglobal.com>
 diff -ruN dnsmasq-2.83.orig/src/rfc2131.c dnsmasq-2.83/src/rfc2131.c
 --- dnsmasq-2.83.orig/src/rfc2131.c	2020-01-15 15:04:33.749218265 +0530
 +++ dnsmasq-2.83/src/rfc2131.c	2020-01-15 15:03:26.425558426 +0530
-@@ -68,6 +68,28 @@ static int pxe_uefi_workaround(int pxe_arch, struct dhcp_netid *netid, struct dh
+@@ -66,6 +66,27 @@
+ static int pxe_uefi_workaround(int pxe_arch, struct dhcp_netid *netid, struct dhcp_packet *mess, struct in_addr local, time_t now, int pxe);
  static void apply_delay(u32 xid, time_t recvtime, struct dhcp_netid *netid);
- static int is_pxe_client(struct dhcp_packet *mess, size_t sz, const char **pxe_vendor);
  
 +#define VENDOR_CLIENT_FILE "/tmp/dhcp_vendor_clients.txt"
 +#define VENDOR_CLIENT_TEMP_FILE "/tmp/dhcp_vendor_clients_temp.txt"
@@ -34,12 +34,11 @@ diff -ruN dnsmasq-2.83.orig/src/rfc2131.c dnsmasq-2.83/src/rfc2131.c
 +                          char *oui,
 +                          char *serial_num,
 +                          char *prod_class);
-+static void del_client (char *mac);
 +
  size_t dhcp_reply(struct dhcp_context *context, char *iface_name, int int_index,
  		  size_t sz, time_t now, int unicast_dest, int loopback,
  		  int *is_inform, int pxe, struct in_addr fallback, time_t recvtime)
-@@ -173,12 +195,84 @@ size_t dhcp_reply(struct dhcp_context *context, char *iface_name, int int_index,
+@@ -170,12 +191,81 @@
  		     the gateway id back. Note that the device class is optional */
  		  if (oui && serial)
  		    {
@@ -64,7 +63,7 @@ diff -ruN dnsmasq-2.83.orig/src/rfc2131.c dnsmasq-2.83/src/rfc2131.c
 +                    /* The oui, serial and class which dnsmasq parsed are not precise,
 +                    we re-parse the data here for vendor clients db*/
 +                    /* Fix to allow all feasible Manageable Devices to be added into the dhcp_vendor_client file */
-+                    while (x < elen && (mess_type == DHCPREQUEST || mess_type == DHCPRELEASE))
++                    while (x < elen && mess_type == DHCPREQUEST)
 +                    {
 +                        if (oui[x] == VENDOR_OPT_OUI_TYPE )
 +                        {
@@ -119,10 +118,7 @@ diff -ruN dnsmasq-2.83.orig/src/rfc2131.c dnsmasq-2.83/src/rfc2131.c
 +                    {
 +                        vmac = extended_hwaddr(mess->htype, mess->hlen, mess->chaddr, clid_len, clid, &vmac_len);
 +                        print_mac(vendor_mac, vmac, vmac_len);
-+                        if (mess_type == DHCPREQUEST)
-+                            add_client(vendor_mac, vendor_oui, vendor_serial, class ? vendor_class : "");
-+                        else if (mess_type == DHCPRELEASE)
-+                            del_client(vendor_mac);
++                        add_client(vendor_mac, vendor_oui, vendor_serial, class?vendor_class:"");
 +                    }
 +                }
 +                break;
@@ -130,12 +126,13 @@ diff -ruN dnsmasq-2.83.orig/src/rfc2131.c dnsmasq-2.83/src/rfc2131.c
  	    }
  	}
        
-@@ -2788,8 +2882,81 @@ static void apply_delay(u32 xid, time_t recvtime, struct dhcp_netid *netid)
+@@ -2664,8 +2754,50 @@
  #endif
    
  
 -  
 -  
+-
 +static void add_client   (char *mac,
 +                          char *oui,
 +                          char *serial_num,
@@ -179,38 +176,7 @@ diff -ruN dnsmasq-2.83.orig/src/rfc2131.c dnsmasq-2.83/src/rfc2131.c
 +            fclose(fp_tmp);
 +            rename(VENDOR_CLIENT_TEMP_FILE, VENDOR_CLIENT_FILE);
 +        }
-+
-+    }
-+}  
-+
-+static void del_client (char *mac)
-+{
-+    char buffer[VENDOR_MAX_BUFFER_SIZE] = {0};
-+    int foundClient = 0;
-+    FILE *fp, *fp_tmp;
  
-+    fp_tmp = fopen(VENDOR_CLIENT_TEMP_FILE,"w");
-+
-+  
-+    if (fp_tmp)
-+    {
-+        fp = fopen(VENDOR_CLIENT_FILE,"r");
- 
-+        if (fp)
-+        {
-+            while( fscanf(fp, "%511s", buffer) != EOF )
-+            {
-+                if (strstr(buffer, mac) != &buffer[0])
-+                {
-+                    fprintf(fp_tmp,"%s\n", buffer);
-+                }
-+                memset(buffer, 0, VENDOR_MAX_BUFFER_SIZE);
-+            }
-+            fclose(fp);
-+            unlink(VENDOR_CLIENT_FILE);
-+        }
-+        fclose(fp_tmp);
-+        rename(VENDOR_CLIENT_TEMP_FILE, VENDOR_CLIENT_FILE);
 +    }
 +}
    

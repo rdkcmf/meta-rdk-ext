@@ -1,0 +1,86 @@
+From 308358ef079453c15c398cece4b7fa5da3328c27 Mon Sep 17 00:00:00 2001
+From: Eugene Mutavchi <Ievgen_Mutavchi@comcast.com>
+Date: Thu, 4 Feb 2021 17:25:17 +0000
+Subject: [PATCH 1/4] Fix memory pressure poller thread leak
+
+---
+ Source/WTF/wtf/MemoryPressureHandler.h        |  3 ++
+ .../wtf/linux/MemoryPressureHandlerLinux.cpp  | 34 +++++++++++++++----
+ 2 files changed, 30 insertions(+), 5 deletions(-)
+
+Index: git/Source/WTF/wtf/MemoryPressureHandler.h
+===================================================================
+--- git.orig/Source/WTF/wtf/MemoryPressureHandler.h
++++ git/Source/WTF/wtf/MemoryPressureHandler.h
+@@ -197,6 +197,8 @@ private:
+     RunLoop::Timer<MemoryPressureHandler> m_holdOffTimer;
+     void holdOffTimerFired();
+ 
++    struct MemoryUsagePollerThreadContext;
++
+     class MemoryUsagePoller {
+         WTF_MAKE_NONCOPYABLE(MemoryUsagePoller); WTF_MAKE_FAST_ALLOCATED;
+     public:
+@@ -205,6 +207,7 @@ private:
+ 
+     private:
+         RefPtr<Thread> m_thread;
++        RefPtr<MemoryUsagePollerThreadContext> m_context;
+     };
+ 
+     std::unique_ptr<MemoryUsagePoller> m_memoryUsagePoller;
+Index: git/Source/WTF/wtf/linux/MemoryPressureHandlerLinux.cpp
+===================================================================
+--- git.orig/Source/WTF/wtf/linux/MemoryPressureHandlerLinux.cpp
++++ git/Source/WTF/wtf/linux/MemoryPressureHandlerLinux.cpp
+@@ -219,10 +219,32 @@ static bool initializeProcessGPUMemoryLi
+     return true;
+ }
+ 
++struct MemoryPressureHandler::MemoryUsagePollerThreadContext
++    : public ThreadSafeRefCounted<MemoryPressureHandler::MemoryUsagePollerThreadContext>
++{
++    void stop()
++    {
++        LockHolder locker(m_lock);
++        m_shouldStop = true;
++        m_condition.notifyAll();
++    }
++
++    // returns false when should stop polling
++    bool sleep(const Seconds timeout)
++    {
++       LockHolder locker(m_lock);
++       return !m_condition.waitFor(m_lock, timeout, [this]() { return m_shouldStop; });
++    }
++
++    Lock m_lock;
++    bool m_shouldStop { false };
++    Condition m_condition;
++};
+ 
+ MemoryPressureHandler::MemoryUsagePoller::MemoryUsagePoller()
+ {
+-    m_thread = Thread::create("WTF: MemoryPressureHandler", [this] {
++    m_context = adoptRef(new MemoryPressureHandler::MemoryUsagePollerThreadContext());
++    m_thread = Thread::create("WTF: MemoryPressureHandler", [this, context = m_context] {
+         do {
+             bool underMemoryPressure = false;
+             bool critical = false;
+@@ -253,13 +275,15 @@ MemoryPressureHandler::MemoryUsagePoller
+                 return;
+             }
+ 
+-            sleep(s_memoryUsagePollerInterval);
++            if (!context->sleep(s_memoryUsagePollerInterval))
++                return;
+         } while (true);
+     });
+ }
+ 
+ MemoryPressureHandler::MemoryUsagePoller::~MemoryUsagePoller()
+ {
++    m_context->stop();
+     if (m_thread)
+         m_thread->detach();
+ }

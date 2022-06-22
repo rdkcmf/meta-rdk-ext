@@ -47,11 +47,6 @@ case "$1" in
 		;;
 
 	renew|bound)
-                if [ -n "$serverid" ] ; then
-                        echo  $serverid > /tmp/tmp.dhcp.server.ip
-                        mv /tmp/tmp.dhcp.server.ip /tmp/netsrvmgr.dhcp.server.ip
-                fi
-
                 if [ $have_bin_ip -eq 1 ]; then
                         ip addr add dev $interface local $ip/$mask $BROADCAST
                 else

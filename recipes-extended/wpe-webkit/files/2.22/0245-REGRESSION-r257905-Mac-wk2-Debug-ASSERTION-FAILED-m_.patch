@@ -1,0 +1,187 @@
+From 03dc152b72d5aa9c4e74c418438d6b2eb06a8e8d Mon Sep 17 00:00:00 2001
+From: "ysuzuki@apple.com"
+ <ysuzuki@apple.com@268f45cc-cd09-0410-ab3c-d52691b4dbfc>
+Date: Tue, 10 Mar 2020 08:32:56 +0000
+Subject: [PATCH] REGRESSION: (r257905) [ Mac wk2 Debug ] ASSERTION FAILED:
+ !m_isolatedWorld->isNormal() || m_wrapper || !m_jsFunction
+ https://bugs.webkit.org/show_bug.cgi?id=208642
+
+Reviewed by Darin Adler.
+
+This patch fixes stale assertions and comments in JSEventListener.h, which has various problems.
+
+1. This assertion is saying, "If m_wrapper is dead, m_jsFunction must be dead". This is wrong. Given that we have conservative
+   GC, JSC never guarantees such a condition. Even if m_wrapper is dead, m_jsFunction can be alive by various reasons: conservative
+   GC finds it, user code stores this function somewhere reachable from the root, etc.
+   The reason why this wrong assertion exists here is because the JSEventListener code and assertion assume that m_jsFunction is nullptr
+   when it is not initialized, and once it is initialized, it should be non nullptr. This is wrong because Weak<> can collect it if it
+   is not retained. This `!m_jsFunction` check mixes "it is not initialized" and "it is already initialized but collected".
+   The correct assertion should be checking `m_wrapper` and `m_jsFunction` are alive (not checking deadness, which is not guaranteed) if
+   the event-listener is once initialized. This patch adds m_isInitialized member to track this status separately from `m_wrapper` and
+   `m_jsFunction`.
+2. JSEventListener::jsFunction has `if (!m_jsFunction)` condition. But this is not correct. This can revive JSFunction if it is collected
+   because m_wrapper is gone or some way, but this is not expected behavior. The correct way is checking `m_isInitialized`. Once the event-listener
+   is initialized, keeping m_wrapper and m_jsFunction alive is the responsibility of JSEventListener's owner.
+3. The comments about "zombie m_jsFunctions" is wrong. We are using JSC::Weak<>. So if the object gets collected, it returns
+   nullptr, not getting a zombie pointer.
+4. We are emitting write-barrier in a wrong order. In the heavily stressed scenario, it is possible that concurrent marking
+   scans JSEventListener just after we emit the write-barrier, and this marking misses the assigned value. We must emit
+   a write-barrier after the assignment. If the write-barrier code is written after the assignment, it correctly offers memory
+   fence to ensure this ordering.
+5. We also remove "world is not normal, anything is allowed" assertion. The assertion is allowing non-normal world to get dead m_wrapper.
+   But skipping event handlers only in non-normal world does not make sense. And it is originally added as a hack to avoid assertions
+   caused by non-normal world.
+
+While we are not sure which test is causing, it seems that we found a real bug by fixing this assertion[1].
+
+[1]: https://bugs.webkit.org/show_bug.cgi?id=208798
+
+* bindings/js/JSEventListener.cpp:
+(WebCore::JSEventListener::JSEventListener):
+(WebCore::JSEventListener::visitJSFunction):
+* bindings/js/JSEventListener.h:
+(WebCore::JSEventListener::wrapper const):
+(WebCore::JSEventListener::setWrapperWhenInitializingJSFunction const):
+(WebCore::JSEventListener::jsFunction const):
+(WebCore::JSEventListener::setWrapper const): Deleted.
+* bindings/js/JSLazyEventListener.cpp:
+(WebCore::JSLazyEventListener::initializeJSFunction const):
+
+git-svn-id: http://svn.webkit.org/repository/webkit/trunk@258189 268f45cc-cd09-0410-ab3c-d52691b4dbfc
+
+NOTE (eocanha):
+
+This patch solves a Disney+ issue with JS code that directly accesses
+mediaSource.sourceBuffers from JavaScript to register an event listener on the
+addsourcebuffer event, but when the event happened, the event listener had
+been declared "dead" by the garbage collector and never ran. If we held
+mediaSource.sourceBuffers in a temporary variable in an outer scope, the
+behaviour didn't happen.
+---
+ .../WebCore/bindings/js/JSEventListener.cpp   | 12 +++---
+ Source/WebCore/bindings/js/JSEventListener.h  | 39 +++++++++++--------
+ .../bindings/js/JSLazyEventListener.cpp       |  2 +-
+ 3 files changed, 31 insertions(+), 22 deletions(-)
+
+diff --git a/Source/WebCore/bindings/js/JSEventListener.cpp b/Source/WebCore/bindings/js/JSEventListener.cpp
+index 9931fe8b1abc..94b8a5b47972 100644
+--- a/Source/WebCore/bindings/js/JSEventListener.cpp
++++ b/Source/WebCore/bindings/js/JSEventListener.cpp
+@@ -50,11 +50,13 @@ JSEventListener::JSEventListener(JSObject* function, JSObject* wrapper, bool isA
+     , m_isAttribute(isAttribute)
+     , m_isolatedWorld(isolatedWorld)
+ {
+-    if (wrapper) {
+-        JSC::Heap::heap(wrapper)->writeBarrier(wrapper, function);
++    if (function) {
++        ASSERT(wrapper);
++        JSC::VM& vm = m_isolatedWorld->vm();
+         m_jsFunction = JSC::Weak<JSC::JSObject>(function);
+-    } else
+-        ASSERT(!function);
++        vm.heap.writeBarrier(wrapper, function);
++        m_isInitialized = true;
++    }
+ }
+ 
+ JSEventListener::~JSEventListener() = default;
+@@ -79,7 +81,7 @@ JSObject* JSEventListener::initializeJSFunction(ScriptExecutionContext&) const
+ 
+ void JSEventListener::visitJSFunction(SlotVisitor& visitor)
+ {
+-    // If m_wrapper is null, then m_jsFunction is zombied, and should never be accessed.
++    // If m_wrapper is null, we are not keeping m_jsFunction alive.
+     if (!m_wrapper)
+         return;
+ 
+diff --git a/Source/WebCore/bindings/js/JSEventListener.h b/Source/WebCore/bindings/js/JSEventListener.h
+index cb8880baee30..8b09bad8977a 100644
+--- a/Source/WebCore/bindings/js/JSEventListener.h
++++ b/Source/WebCore/bindings/js/JSEventListener.h
+@@ -52,7 +52,6 @@ public:
+     DOMWrapperWorld& isolatedWorld() const { return m_isolatedWorld; }
+ 
+     JSC::JSObject* wrapper() const { return m_wrapper.get(); }
+-    void setWrapper(JSC::VM&, JSC::JSObject* wrapper) const { m_wrapper = JSC::Weak<JSC::JSObject>(wrapper); }
+ 
+     virtual String sourceURL() const { return String(); }
+     virtual TextPosition sourcePosition() const { return TextPosition(); }
+@@ -64,10 +63,12 @@ private:
+ protected:
+     JSEventListener(JSC::JSObject* function, JSC::JSObject* wrapper, bool isAttribute, DOMWrapperWorld&);
+     void handleEvent(ScriptExecutionContext&, Event&) override;
++    void setWrapperWhenInitializingJSFunction(JSC::VM&, JSC::JSObject* wrapper) const { m_wrapper = JSC::Weak<JSC::JSObject>(wrapper); }
+ 
+ private:
+     mutable JSC::Weak<JSC::JSObject> m_jsFunction;
+     mutable JSC::Weak<JSC::JSObject> m_wrapper;
++    mutable bool m_isInitialized { false };
+ 
+     bool m_isAttribute;
+     Ref<DOMWrapperWorld> m_isolatedWorld;
+@@ -93,28 +94,34 @@ inline JSC::JSObject* JSEventListener::jsFunction(ScriptExecutionContext& script
+ {
+     // initializeJSFunction can trigger code that deletes this event listener
+     // before we're done. It should always return null in this case.
++    JSC::VM& vm = m_isolatedWorld->vm();
+     auto protect = makeRef(const_cast<JSEventListener&>(*this));
+-    JSC::Strong<JSC::JSObject> wrapper(m_isolatedWorld->vm(), m_wrapper.get());
++    JSC::Strong<JSC::JSObject> wrapper(vm, m_wrapper.get());
+ 
+-    if (!m_jsFunction) {
++    if (!m_isInitialized) {
++        ASSERT(!m_jsFunction);
+         auto* function = initializeJSFunction(scriptExecutionContext);
+-        if (auto* wrapper = m_wrapper.get())
+-            JSC::Heap::heap(wrapper)->writeBarrier(wrapper, function);
+-        m_jsFunction = JSC::Weak<JSC::JSObject>(function);
++        if (function) {
++            m_jsFunction = JSC::Weak<JSC::JSObject>(function);
++            // When JSFunction is initialized, initializeJSFunction must ensure that m_wrapper should be initialized too.
++            ASSERT(m_wrapper);
++            vm.heap.writeBarrier(m_wrapper.get(), function);
++            m_isInitialized = true;
++        }
+     }
+ 
+-    // Verify that we have a valid wrapper protecting our function from
+-    // garbage collection. That is except for when we're not in the normal
+-    // world and can have zombie m_jsFunctions.
+-    ASSERT(!m_isolatedWorld->isNormal() || m_wrapper || !m_jsFunction);
+-
+-    // If m_wrapper is null, then m_jsFunction is zombied, and should never be accessed.
+-    if (!m_wrapper)
++    // m_wrapper and m_jsFunction are Weak<>. nullptr of these fields do not mean that this event-listener is not initialized yet.
++    // If this is initialized once, m_isInitialized should be true, and then m_wrapper and m_jsFunction must be alive. m_wrapper's
++    // liveness should be kept correctly by using ActiveDOMObject, output-constraints, etc. And m_jsFunction must be alive if m_wrapper
++    // is alive since JSEventListener marks m_jsFunction in JSEventListener::visitJSFunction if m_wrapper is alive.
++    // If the event-listener is not initialized yet, we should skip invoking this event-listener.
++    if (!m_isInitialized)
+         return nullptr;
+ 
+-    // Try to verify that m_jsFunction wasn't recycled. (Not exact, since an
+-    // event listener can be almost anything, but this makes test-writing easier).
+-    ASSERT(!m_jsFunction || static_cast<JSC::JSCell*>(m_jsFunction.get())->isObject());
++    ASSERT(m_wrapper);
++    ASSERT(m_jsFunction);
++    // Ensure m_jsFunction is live JSObject as a quick sanity check (while it is already ensured by Weak<>). If this fails, this is possibly JSC GC side's bug.
++    ASSERT(static_cast<JSC::JSCell*>(m_jsFunction.get())->isObject());
+ 
+     return m_jsFunction.get();
+ }
+diff --git a/Source/WebCore/bindings/js/JSLazyEventListener.cpp b/Source/WebCore/bindings/js/JSLazyEventListener.cpp
+index b382b1f946a7..16d3709a2ce6 100644
+--- a/Source/WebCore/bindings/js/JSLazyEventListener.cpp
++++ b/Source/WebCore/bindings/js/JSLazyEventListener.cpp
+@@ -148,7 +148,7 @@ JSObject* JSLazyEventListener::initializeJSFunction(ScriptExecutionContext& exec
+         if (!wrapper()) {
+             // Ensure that 'node' has a JavaScript wrapper to mark the event listener we're creating.
+             // FIXME: Should pass the global object associated with the node
+-            setWrapper(vm, asObject(toJS(exec, globalObject, *m_originalNode)));
++            setWrapperWhenInitializingJSFunction(vm, asObject(toJS(exec, globalObject, *m_originalNode)));
+         }
+ 
+         // Add the event's home element to the scope
+-- 
+2.24.0
+

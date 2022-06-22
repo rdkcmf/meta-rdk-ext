@@ -6,8 +6,8 @@ LIC_FILES_CHKSUM = "file://LICENSE;md5=e3fc50a88d0a364313df4b21ef20c29e"
 
 DEPENDS = "rdk-logger log4c"
 
-SRCREV = "4d96629b8e04230549cd2bee36bc4419a6e5aecc"
-SRC_URI = "git://github.com/xmidt-org/cimplog.git"
+SRCREV = "8b5c60f3930aa287121edd40c97915f692426a61"
+SRC_URI = "git://github.com/Comcast/cimplog.git"
 PV = "git+${SRCPV}"
 
 S = "${WORKDIR}/git"

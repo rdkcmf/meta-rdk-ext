@@ -11,7 +11,7 @@ SECTION = "admin"
 LICENSE = "GPLv2 & GPLv2+ & BSD-3-Clause & LGPLv2.1+"
 LIC_FILES_CHKSUM = "file://${S}/LICENSE;md5=fd57a4b0bc782d7b80fd431f10bbf9d0"
 
-DEPENDS = "bison-native apr gettext-native coreutils-native linux-libc-headers"
+DEPENDS = "bison-native apr gettext-native coreutils-native"
 
 SRC_URI = " \
     git://gitlab.com/apparmor/apparmor.git;protocol=https;branch=apparmor-2.13 \
@@ -64,8 +64,6 @@ do_configure() {
     automake -ac
     ./configure ${CONFIGUREOPTS} ${EXTRA_OECONF}
 }
-_CAP_HDR_REGEX = "s/^\#define[ \t]+CAP_([A-Z0-9_]+)[ \t]+([0-9xa-f]+)(.*)/CAP_\1/p" 
-_CAP_PP_REGEX = "s/[ \\t]\\?CAP_\\([A-Z1-9_]\\+\\)/\{\"\\L\\1\", \\UCAP_\\1\},\\n/pg"
 
 do_compile () {
     # Fixes:
@@ -80,13 +78,6 @@ do_compile () {
     if ${@bb.utils.contains('PACKAGECONFIG','python','true','false', d)}; then
        oe_runmake -C ${B}/utils
     fi
-
-
-    oe_runmake -C ${B}/parser cap_names.h
-
-    echo "#include \"${STAGING_DIR_TARGET}/usr/include/linux/capability.h\"" | cpp -dM -E | LC_ALL=C sed -r -n -e "/CAP_EMPTY_SET/d" -e "${_CAP_HDR_REGEX}" | LC_ALL=C sed -n -e "${_CAP_PP_REGEX}" > ${B}/parser/cap_names.h
-
-
     oe_runmake -C ${B}/parser
     oe_runmake -C ${B}/profiles
 
@@ -215,6 +206,3 @@ RDEPENDS_${PN}_remove += "${@bb.utils.contains('PACKAGECONFIG','perl','','perl',
 RDEPENDS_${PN}-ptest += "perl coreutils dbus-lib bash"
 
 PRIVATE_LIBS_${PN}-ptest = "libapparmor.so*"
-LDFLAGS_remove = "-flto"
-CFLAGS_remove = "-flto"
-CXXFLAGS_remove = "-flto"

@@ -1,0 +1,95 @@
+From 8e8ddbaca121b953eeece3c4a2f28580a6ef943e Mon Sep 17 00:00:00 2001
+From: Eugene Mutavchi <Ievgen_Mutavchi@comcast.com>
+Date: Fri, 5 Feb 2021 14:36:22 +0000
+Subject: [PATCH 3/4] Add non-synchronous pressure notifications
+
+---
+ Source/WTF/wtf/MemoryPressureHandler.h            |  2 +-
+ .../WTF/wtf/linux/MemoryPressureHandlerLinux.cpp  | 15 ++++++++-------
+ Source/WebKit/Shared/ChildProcess.cpp             |  2 +-
+ 3 files changed, 9 insertions(+), 10 deletions(-)
+
+Index: git/Source/WTF/wtf/MemoryPressureHandler.h
+===================================================================
+--- git.orig/Source/WTF/wtf/MemoryPressureHandler.h
++++ git/Source/WTF/wtf/MemoryPressureHandler.h
+@@ -71,7 +71,7 @@ public:
+     WTF_EXPORT_PRIVATE void setShouldUsePeriodicMemoryMonitor(bool);
+ 
+ #if OS(LINUX)
+-    WTF_EXPORT_PRIVATE void triggerMemoryPressureEvent(bool isCritical);
++    WTF_EXPORT_PRIVATE void triggerMemoryPressureEvent(bool isCritical, bool isSynchronous);
+ #endif
+ 
+     void setMemoryKillCallback(WTF::Function<void()>&& function) { m_memoryKillCallback = WTFMove(function); }
+Index: git/Source/WTF/wtf/linux/MemoryPressureHandlerLinux.cpp
+===================================================================
+--- git.orig/Source/WTF/wtf/linux/MemoryPressureHandlerLinux.cpp
++++ git/Source/WTF/wtf/linux/MemoryPressureHandlerLinux.cpp
+@@ -248,6 +248,7 @@ MemoryPressureHandler::MemoryUsagePoller
+         do {
+             bool underMemoryPressure = false;
+             bool critical = false;
++            bool synchronous = false;
+             size_t value = 0;
+ 
+             if (s_pollMaximumProcessMemoryCriticalLimit) {
+@@ -255,6 +256,7 @@ MemoryPressureHandler::MemoryUsagePoller
+                     if (value != static_cast<size_t>(-1) && value > s_pollMaximumProcessMemoryNonCriticalLimit) {
+                         underMemoryPressure = true;
+                         critical = value > s_pollMaximumProcessMemoryCriticalLimit;
++                        synchronous = value > s_pollMaximumProcessMemoryCriticalLimit * 1.05;
+                     }
+                 }
+             }
+@@ -269,8 +271,8 @@ MemoryPressureHandler::MemoryUsagePoller
+             }
+ 
+             if (underMemoryPressure) {
+-                callOnMainThread([critical] {
+-                    MemoryPressureHandler::singleton().triggerMemoryPressureEvent(critical);
++                callOnMainThread([critical, synchronous] {
++                    MemoryPressureHandler::singleton().triggerMemoryPressureEvent(critical, synchronous);
+                 });
+                 return;
+             }
+@@ -290,21 +292,21 @@ MemoryPressureHandler::MemoryUsagePoller
+ 
+ 
+ 
+-void MemoryPressureHandler::triggerMemoryPressureEvent(bool isCritical)
++void MemoryPressureHandler::triggerMemoryPressureEvent(bool isCritical, bool isSynchronous)
+ {
+     if (!m_installed)
+         return;
+ 
+     if (ReliefLogger::loggingEnabled())
+-        LOG(MemoryPressure, "Got memory pressure notification (%s)", isCritical ? "critical" : "non-critical");
++        LOG(MemoryPressure, "Got memory pressure notification (%s, %s) ", isCritical ? "critical" : "non-critical", isSynchronous ? "synchronous" : "non-synchronous");
+ 
+     setUnderMemoryPressure(true);
+ 
+     if (isMainThread())
+-        respondToMemoryPressure(isCritical ? Critical::Yes : Critical::No, isCritical ? Synchronous::Yes : Synchronous::No);
++        respondToMemoryPressure(isCritical ? Critical::Yes : Critical::No, isSynchronous ? Synchronous::Yes : Synchronous::No);
+     else
+-        RunLoop::main().dispatch([this, isCritical] {
+-            respondToMemoryPressure(isCritical ? Critical::Yes : Critical::No, isCritical ? Synchronous::Yes : Synchronous::No);
++        RunLoop::main().dispatch([this, isCritical, isSynchronous] {
++            respondToMemoryPressure(isCritical ? Critical::Yes : Critical::No, isSynchronous ? Synchronous::Yes : Synchronous::No);
+         });
+ 
+     if (ReliefLogger::loggingEnabled() && isUnderMemoryPressure())
+Index: git/Source/WebKit/Shared/ChildProcess.cpp
+===================================================================
+--- git.orig/Source/WebKit/Shared/ChildProcess.cpp
++++ git/Source/WebKit/Shared/ChildProcess.cpp
+@@ -245,7 +245,7 @@ void ChildProcess::didReceiveInvalidMess
+ #if OS(LINUX)
+ void ChildProcess::didReceiveMemoryPressureEvent(bool isCritical)
+ {
+-    MemoryPressureHandler::singleton().triggerMemoryPressureEvent(isCritical);
++    MemoryPressureHandler::singleton().triggerMemoryPressureEvent(isCritical, isCritical);
+ }
+ #endif
+ 

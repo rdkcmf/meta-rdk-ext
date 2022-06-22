@@ -1,0 +1,102 @@
+From: a5ec705ba3fa361bc6b3afa8f405583b662d0b00 Mon Sep 17 00:00:00 2001
+From: Ievgen Mutavchi <Ievgen_Mutavchi@comcast.com>
+Date: Sun, 26 Apr 2020 11:40:13 -0400
+Subject: Propagate parsing errors to MSE SourceBuffer
+Source: COMCAST
+License: GPLV2
+Upstream-Status: None
+Signed-off-by: Eugene Mutavchi <Ievgen_Mutavchi@comcast.com>
+
+
+---
+ .../graphics/gstreamer/mse/AppendPipeline.cpp | 19 +++++++++++++++++++
+ .../graphics/gstreamer/mse/AppendPipeline.h   |  1 +
+ .../mse/SourceBufferPrivateGStreamer.cpp      |  6 ++++++
+ .../mse/SourceBufferPrivateGStreamer.h        |  1 +
+ 4 files changed, 27 insertions(+)
+
+Index: git/Source/WebCore/platform/graphics/gstreamer/mse/AppendPipeline.cpp
+===================================================================
+--- git.orig/Source/WebCore/platform/graphics/gstreamer/mse/AppendPipeline.cpp
++++ git/Source/WebCore/platform/graphics/gstreamer/mse/AppendPipeline.cpp
+@@ -128,6 +128,11 @@ static void appendPipelineStateChangeMes
+     appendPipeline->handleStateChangeMessage(message);
+ }
+ 
++static void appendPipelineErrorMessageCallback(GstBus*, GstMessage* message, AppendPipeline* appendPipeline)
++{
++    appendPipeline->handleErrorMessage(message);
++}
++
+ // Auxiliary class to compute the sample duration when GStreamer provides an invalid one.
+ class BufferMetadataCompleter {
+ public:
+@@ -225,6 +230,7 @@ AppendPipeline::AppendPipeline(Ref<Media
+     g_signal_connect(m_bus.get(), "sync-message::need-context", G_CALLBACK(appendPipelineNeedContextMessageCallback), this);
+     g_signal_connect(m_bus.get(), "message::application", G_CALLBACK(appendPipelineApplicationMessageCallback), this);
+     g_signal_connect(m_bus.get(), "message::state-changed", G_CALLBACK(appendPipelineStateChangeMessageCallback), this);
++    g_signal_connect(m_bus.get(), "message::error", G_CALLBACK(appendPipelineErrorMessageCallback), this);
+ 
+     // We assign the created instances here instead of adoptRef() because gst_bin_add_many()
+     // below will already take the initial reference and we need an additional one for us.
+@@ -504,6 +510,19 @@ void AppendPipeline::handleStateChangeMe
+     }
+ }
+ 
++void AppendPipeline::handleErrorMessage(GstMessage* message)
++{
++    ASSERT(WTF::isMainThread());
++    GUniqueOutPtr<GError> err;
++    GUniqueOutPtr<gchar> debug;
++    gst_message_parse_error(message, &err.outPtr(), &debug.outPtr());
++    GST_ERROR("Error %d: %s", err->code, err->message);
++    if (m_appendState != AppendState::Invalid) {
++        setAppendState(AppendState::Invalid);
++        m_sourceBufferPrivate->didFailParsing();
++    }
++}
++
+ gint AppendPipeline::id()
+ {
+     ASSERT(WTF::isMainThread());
+Index: git/Source/WebCore/platform/graphics/gstreamer/mse/AppendPipeline.h
+===================================================================
+--- git.orig/Source/WebCore/platform/graphics/gstreamer/mse/AppendPipeline.h
++++ git/Source/WebCore/platform/graphics/gstreamer/mse/AppendPipeline.h
+@@ -53,6 +53,7 @@ public:
+     void handleNeedContextSyncMessage(GstMessage*);
+     void handleApplicationMessage(GstMessage*);
+     void handleStateChangeMessage(GstMessage*);
++    void handleErrorMessage(GstMessage*);
+ 
+     gint id();
+     AppendState appendState() { return m_appendState; }
+Index: git/Source/WebCore/platform/graphics/gstreamer/mse/SourceBufferPrivateGStreamer.cpp
+===================================================================
+--- git.orig/Source/WebCore/platform/graphics/gstreamer/mse/SourceBufferPrivateGStreamer.cpp
++++ git/Source/WebCore/platform/graphics/gstreamer/mse/SourceBufferPrivateGStreamer.cpp
+@@ -178,6 +178,12 @@ void SourceBufferPrivateGStreamer::didRe
+         m_sourceBufferPrivateClient->sourceBufferPrivateAppendComplete(SourceBufferPrivateClient::AppendSucceeded);
+ }
+ 
++void SourceBufferPrivateGStreamer::didFailParsing()
++{
++    if (m_sourceBufferPrivateClient)
++        m_sourceBufferPrivateClient->sourceBufferPrivateAppendComplete(SourceBufferPrivateClient::ParsingFailed);
++}
++
+ void SourceBufferPrivateGStreamer::useEncryptedContentSizeLimits()
+ {
+     if (m_sourceBufferPrivateClient)
+Index: git/Source/WebCore/platform/graphics/gstreamer/mse/SourceBufferPrivateGStreamer.h
+===================================================================
+--- git.orig/Source/WebCore/platform/graphics/gstreamer/mse/SourceBufferPrivateGStreamer.h
++++ git/Source/WebCore/platform/graphics/gstreamer/mse/SourceBufferPrivateGStreamer.h
+@@ -76,6 +76,7 @@ public:
+     void didReceiveInitializationSegment(const SourceBufferPrivateClient::InitializationSegment&);
+     void didReceiveSample(MediaSample&);
+     void didReceiveAllPendingSamples();
++    void didFailParsing();
+     void useEncryptedContentSizeLimits();
+ 
+     ContentType type() const { return m_type; }

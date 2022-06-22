@@ -2,7 +2,6 @@ FILESEXTRAPATHS_prepend := "${THISDIR}/dbus:"
 
 SRC_URI_append = " \
     file://dbus_rdk_system_configuration.patch \
-    file://sky-add-option-to-disable-uid-in-auth.patch \
 "
 
 SRC_URI_append_broadband = " \

@@ -33,7 +33,6 @@ interface=$ARM_INTERFACE
 
 ethWanMode=`syscfg get eth_wan_enabled`
 DSLite_Enabled=`syscfg get dslite_enable`
-isMaptEnabled=`syscfg get MAPT_Enable`
 if [ "$interface" ] && [ -f /etc/dibbler/client_back.conf ];then
     sed -i "s/RDK-ESTB-IF/${interface}/g" /etc/dibbler/client_back.conf
 fi
@@ -111,10 +110,6 @@ fi
 
 if [ -f "$DHCP_CONFIG_FILE_TMP" ]; then
     rm -rf $DHCP_CONFIG_FILE_TMP
-fi
-
-if [ x"$isMaptEnabled" = x"true" ]; then
-    echo -e "\n        option 0095 hex" >> $OPTION_FILE
 fi
 
 sed '$d' $DHCP_CONFIG_FILE_RFS > $DHCP_CONFIG_FILE_TMP
