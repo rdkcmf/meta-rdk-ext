@@ -220,6 +220,17 @@
                      "version": "1.0"
                    }
                  ]
+               },
+			   {
+                 "group_id": 15,
+                     "subdocs": [
+                   	       {
+                     		  "name": "gwfailover",
+                     		  "bitposition": 1,
+                     		  "support": false,
+                     		  "version": "1.0"
+                               }
+                            ]
                }
              ],
     "arrisxb6" : [
@@ -441,6 +452,17 @@
                                   "bitposition": 1,
                                   "support": false,
                                   "version": "1.0"
+                               }
+                            ]
+               },
+			   {
+                 "group_id": 15,
+                     "subdocs": [
+                   	       {
+                     		  "name": "gwfailover",
+                     		  "bitposition": 1,
+                     		  "support": false,
+                     		  "version": "1.0"
                                }
                             ]
                }
@@ -666,6 +688,17 @@
                                   "version": "1.0"
                                }
                             ]
+               },
+			   {
+                 "group_id": 15,
+                     "subdocs": [
+                   	       {
+                     		  "name": "gwfailover",
+                     		  "bitposition": 1,
+                     		  "support": false,
+                     		  "version": "1.0"
+                               }
+                            ]
                }
              ],
     "xf3" : [
@@ -889,6 +922,17 @@
                      "version": "1.0"
                    }
                  ]
+               },
+			   {
+                 "group_id": 15,
+                     "subdocs": [
+                   	       {
+                     		  "name": "gwfailover",
+                     		  "bitposition": 1,
+                     		  "support": false,
+                     		  "version": "1.0"
+                               }
+                            ]
                }
              ],
     "arrisxb7" : [
@@ -1110,6 +1154,17 @@
                                   "bitposition": 1,
                                   "support": false,
                                   "version": "1.0"
+                               }
+                            ]
+               },
+			   {
+                 "group_id": 15,
+                     "subdocs": [
+                   	       {
+                     		  "name": "gwfailover",
+                     		  "bitposition": 1,
+                     		  "support": true,
+                     		  "version": "1.0"
                                }
                             ]
                }
@@ -1335,6 +1390,17 @@
                                   "version": "1.0"
                                }
                             ]
+               },
+			   {
+                 "group_id": 15,
+                     "subdocs": [
+                   	       {
+                     		  "name": "gwfailover",
+                     		  "bitposition": 1,
+                     		  "support": true,
+                     		  "version": "1.0"
+                               }
+                            ]
                }
              ],
     "xb8" : [
@@ -1558,6 +1624,17 @@
                      "version": "1.0"
                    }
                  ]
+               },
+			   {
+                 "group_id": 15,
+                 "subdocs": [
+                   {
+                     "name": "gwfailover",
+                     "bitposition": 1,
+                     "support": true,
+                     "version": "1.0"
+                   }
+                 ]
                }
              ],
     "cbr" : [
@@ -1776,6 +1853,17 @@
                  "subdocs": [
                    {
                      "name": "cellularconfig",
+                     "bitposition": 1,
+                     "support": false,
+                     "version": "1.0"
+                   }
+                 ]
+               },
+			   {
+                        "group_id": 15,
+                 "subdocs": [
+                   {
+                     "name": "gwfailover",
                      "bitposition": 1,
                      "support": false,
                      "version": "1.0"
@@ -2004,6 +2092,17 @@
              "version": "1.0"
            }
          ]
+       },
+	   {
+         "group_id": 15,
+         "subdocs": [
+           {
+              "name": "gwfailover",
+              "bitposition": 1,
+              "support": false,
+              "version": "1.0"
+           }
+         ]
        }
      ],
      "sr300" : [
@@ -2225,6 +2324,17 @@
              "bitposition": 1,
              "support": false,
              "version": "1.0"
+           }
+         ]
+       },
+           {
+         "group_id": 15,
+         "subdocs": [
+           {
+             "name": "gwfailover",
+              "bitposition": 1,
+              "support": false,
+              "version": "1.0"
            }
          ]
        }
@@ -2450,6 +2560,17 @@
                                       "version": "1.0"
                                    }
                                 ]
+                   },
+			   	   {
+                    "group_id": 15,
+                         "subdocs": [
+                   	           {
+                     		      "name": "gwfailover",
+                     		      "bitposition": 1,
+                     		      "support": true,
+                     		      "version": "1.0"
+                               	   }
+                                ]
                    }
             ],
      "skyse501" : [
@@ -2672,6 +2793,17 @@
                                       "support": true,
                                       "version": "1.0"
                                    }
+                                ]
+                   },
+			   	   {
+                    "group_id": 15,
+                         "subdocs": [
+                   	           {
+                     		      "name": "gwfailover",
+                     		      "bitposition": 1,
+                     		      "support": false,
+                     		      "version": "1.0"
+                               	   }
                                 ]
                    }
                  ],
