@@ -1,0 +1,145 @@
+From e16c0069732044f081e6d710cab683fa1efc948a Mon Sep 17 00:00:00 2001
+From: bmaria645 <Bhuvaneswari_Mariappan@comcast.com>
+Date: Tue, 28 Jun 2022 06:32:35 +0000
+Subject: [PATCH] 0010-RDKAAMP-121
+
+---
+ libdash/include/ISegmentTemplate.h     | 10 ++++++++--
+ libdash/source/mpd/SegmentTemplate.cpp | 11 ++++++++++-
+ libdash/source/mpd/SegmentTemplate.h   |  5 +++++
+ libdash/source/xml/Node.cpp            |  9 +++++++--
+ 4 files changed, 30 insertions(+), 5 deletions(-)
+
+diff --git a/libdash/include/ISegmentTemplate.h b/libdash/include/ISegmentTemplate.h
+index d707295..3e793d9 100644
+--- a/libdash/include/ISegmentTemplate.h
++++ b/libdash/include/ISegmentTemplate.h
+@@ -22,7 +22,7 @@
+ #include "config.h"
+ 
+ #include "IMultipleSegmentBase.h"
+-
++#include "IFailoverContent.h"
+ namespace dash
+ {
+     namespace mpd
+@@ -55,6 +55,12 @@ namespace dash
+                  */
+                 virtual const std::string&  Getinitialization           ()  const = 0;
+ 
++
++		/**
++		*  Returns a pointer to a dash::mpd::IFailoverContent object that specifies the sections that contain failover content.		       *  @return     a pointer to dash::mpd::IFailoverContent object
++		*/
++		virtual const IFailoverContent*     GetFailoverContent          ()  const = 0;
++
+                 /**
+                  *  Returns a reference to a string that specifies the template to create the Bitstream Switching Segment. Neither \em \$Number\$ nor the \em \$Time\$ identifier shall be included.\n
+                  *  For more details on template-based segment URL construction refer to section 5.3.9.4.4 of <em>ISO/IEC 23009-1, Part 1, 2012</em>.
+@@ -145,4 +151,4 @@ namespace dash
+     }
+ }
+ 
+-#endif /* ISEGMENTTEMPLATE_H_ */
+\ No newline at end of file
++#endif /* ISEGMENTTEMPLATE_H_ */
+diff --git a/libdash/source/mpd/SegmentTemplate.cpp b/libdash/source/mpd/SegmentTemplate.cpp
+index b92c469..20d17e5 100644
+--- a/libdash/source/mpd/SegmentTemplate.cpp
++++ b/libdash/source/mpd/SegmentTemplate.cpp
+@@ -18,6 +18,7 @@ SegmentTemplate::SegmentTemplate    () :
+                     media(""),
+                     index(""),
+                     initialization(""),
++		    failoverContent(NULL),
+                     bitstreamSwitching("")
+ {
+ }
+@@ -49,6 +50,14 @@ void                SegmentTemplate::SetInitialization              (const std::
+ {
+     this->initialization = initialization;
+ }
++const IFailoverContent*     SegmentTemplate::GetFailoverContent         ()  const
++{
++	return this->failoverContent;
++}
++void                SegmentTemplate::SetFailoverContent     (FailoverContent *failoverContent)
++{
++	this->failoverContent = failoverContent;
++}
+ const std::string&  SegmentTemplate::GetbitstreamSwitching          ()  const
+ {
+     return this->bitstreamSwitching;
+@@ -149,4 +158,4 @@ ISegment*           SegmentTemplate::ToSegment                      (const std::
+     delete(seg);
+ 
+     return NULL;
+-}
+\ No newline at end of file
++}
+diff --git a/libdash/source/mpd/SegmentTemplate.h b/libdash/source/mpd/SegmentTemplate.h
+index e5782a8..5f756cb 100644
+--- a/libdash/source/mpd/SegmentTemplate.h
++++ b/libdash/source/mpd/SegmentTemplate.h
+@@ -17,6 +17,7 @@
+ #include "ISegmentTemplate.h"
+ #include "MultipleSegmentBase.h"
+ #include "../helpers/String.h"
++#include "FailoverContent.h"
+ 
+ namespace dash
+ {
+@@ -31,6 +32,7 @@ namespace dash
+                 const std::string&  Getmedia                ()  const;
+                 const std::string&  Getindex                ()  const;
+                 const std::string&  Getinitialization       ()  const;
++		const IFailoverContent* GetFailoverContent  ()  const;
+                 const std::string&  GetbitstreamSwitching   ()  const;
+                 ISegment*           ToInitializationSegment     (const std::vector<IBaseUrl *>& baseurls, const std::string& representationID, uint32_t bandwidth) const;
+                 ISegment*           ToBitstreamSwitchingSegment (const std::vector<IBaseUrl *>& baseurls, const std::string& representationID, uint32_t bandwidth) const;
+@@ -42,8 +44,11 @@ namespace dash
+                 void    SetMedia                (const std::string& media);
+                 void    SetIndex                (const std::string& index);
+                 void    SetInitialization       (const std::string& initialization);
++		void    SetFailoverContent          (FailoverContent *failoverContent);
+                 void    SetBitstreamSwitching   (const std::string& bitstreamSwichting);
+ 
++	    protected:
++	    	FailoverContent *failoverContent;
+             private:
+                 std::string ReplaceParameters   (const std::string& uri, const std::string& representationID, uint32_t bandwidth, uint32_t number, uint32_t time) const;
+                 void        FormatChunk         (std::string& uri, uint32_t number) const;
+diff --git a/libdash/source/xml/Node.cpp b/libdash/source/xml/Node.cpp
+index 8574103..04a7cb7 100644
+--- a/libdash/source/xml/Node.cpp
++++ b/libdash/source/xml/Node.cpp
+@@ -295,11 +295,11 @@ dash::mpd::FCS*                        Node::ToFCS            ()  const
+ 
+     if (this->HasAttribute("t"))
+     {
+-        fcs->SetStartTime(strtoul(this->GetAttributeValue("t").c_str(), NULL, 10));
++        fcs->SetStartTime(strtoull(this->GetAttributeValue("t").c_str(), NULL, 10));
+     }
+     if (this->HasAttribute("d"))
+     {
+-        fcs->SetDuration(strtoul(this->GetAttributeValue("d").c_str(), NULL, 10));
++        fcs->SetDuration(strtoull(this->GetAttributeValue("d").c_str(), NULL, 10));
+     }
+ 
+     fcs->AddRawAttributes(this->attributes);
+@@ -473,6 +473,11 @@ dash::mpd::SegmentTemplate*                 Node::ToSegmentTemplate     ()  cons
+ 
+     for(size_t i = 0; i < subNodes.size(); i++)
+     {
++	if (subNodes.at(i)->GetName() == "FailoverContent")
++	{
++		segmentTemplate->SetFailoverContent(subNodes.at(i)->ToFailoverContent());
++		continue;
++	}
+         if (subNodes.at(i)->GetName() != "SegmentTimeline" && subNodes.at(i)->GetName() != "BitstreamSwitching" &&
+             subNodes.at(i)->GetName() != "Initialization" && subNodes.at(i)->GetName() != "RepresentationIndex")
+             segmentTemplate->AddAdditionalSubNode((xml::INode *) new Node(*(subNodes.at(i))));
+-- 
+2.17.1
+
+
