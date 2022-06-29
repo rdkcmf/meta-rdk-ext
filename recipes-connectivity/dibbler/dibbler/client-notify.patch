@@ -205,7 +205,7 @@ diff -Naur dibbler-1.0.1_org/scripts/notify-scripts/client-notify-bsd.sh dibbler
 +        ;;
 +        "38")
 +        echo "Suboption TimeOffset is  $suboption_data in option $SRV_OPTION17" >> $LOGFILE
-+        sysevent set ipv6-timeoffset "$suboption_data"
++        sysevent set ipv6-timeoffset $(echo "$suboption_data" | tr -d ':')
 +        ;;
 +        "39")
 +         echo "Suboption IP Mode Preference is  $suboption_data in option $SRV_OPTION17" 

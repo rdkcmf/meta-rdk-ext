@@ -8,6 +8,7 @@ SRC_URI += "file://0001-tsdemux-add-the-UNSELECT-stream-flag-to-non-default-.pat
 SRC_URI += "${@bb.utils.contains('DISTRO_FEATURES', 'sage_svp', 'file://0007-videoparser-remove-h264-h265parse-for-svp.patch', '', d)}"
 SRC_URI += "file://0002-h264parse-always-send-codec-data-updates.patch"
 SRC_URI += "file://make43.patch"
+SRC_URI += "file://0001-RDK-30521-h265-parser-patch-to-embed-SEI-timecodes.patch"
 SRC_URI[md5sum] = "2757103e57a096a1a05b3ab85b8381af"
 SRC_URI[sha256sum] = "23ddae506b3a223b94869a0d3eea3e9a12e847f94d2d0e0b97102ce13ecd6966"
 S = "${WORKDIR}/gst-plugins-bad-${PV}"

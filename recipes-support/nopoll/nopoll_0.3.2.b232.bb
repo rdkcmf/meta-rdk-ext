@@ -5,7 +5,7 @@ LIC_FILES_CHKSUM = "file://COPYING;md5=f0504124678c1b3158146e0630229298 \
                    "
 DEPENDS = "openssl"
 LDFLAGS = "-pthread"
-SRCREV = "6c2a10d9ad33c9229291a976db721950a4825af7"
+SRCREV = "41f9cd37cf3bf657a598e2330d99aad316f8d0dd"
 SRC_URI = "git://github.com/Comcast/nopoll.git;branch=nopoll_yocto"
 
 SRC_URI[md5sum] = "0f1ee40491e69d09b354771c6d44bb34"

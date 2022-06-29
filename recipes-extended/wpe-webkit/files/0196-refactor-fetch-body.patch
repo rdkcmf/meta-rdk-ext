@@ -1,0 +1,146 @@
+From f3f2a65decd0901916ddc416f147f0bd21d0bef3 Mon Sep 17 00:00:00 2001
+From: youenn@apple.com
+Date: Jul 20, 2018 9:58:54 AM
+Subject: [PATCH] refactor fetch body - https://bugs.webkit.org/show_bug.cgi?id=187790
+Message: https://trac.webkit.org/changeset/234045/webkit
+
+---
+ .../WebCore/Modules/fetch/FetchBodyOwner.cpp  |  6 ++++
+ Source/WebCore/Modules/fetch/FetchBodyOwner.h |  1 +
+ .../WebCore/Modules/fetch/FetchBodySource.cpp | 31 +++++++++++++++----
+ .../WebCore/Modules/fetch/FetchBodySource.h   |  6 +++-
+ 4 files changed, 37 insertions(+), 7 deletions(-)
+
+diff --git a/Source/WebCore/Modules/fetch/FetchBodyOwner.cpp b/Source/WebCore/Modules/fetch/FetchBodyOwner.cpp
+index 8beb5c5e8c05..9483737a7222 100644
+--- a/Source/WebCore/Modules/fetch/FetchBodyOwner.cpp
++++ b/Source/WebCore/Modules/fetch/FetchBodyOwner.cpp
+@@ -45,6 +45,12 @@ FetchBodyOwner::FetchBodyOwner(ScriptExecutionContext& context, std::optional<Fe
+     suspendIfNeeded();
+ }
+ 
++FetchBodyOwner::~FetchBodyOwner()
++{
++    if (m_readableStreamSource)
++        m_readableStreamSource->detach();
++}
++
+ void FetchBodyOwner::stop()
+ {
+     if (m_body)
+diff --git a/Source/WebCore/Modules/fetch/FetchBodyOwner.h b/Source/WebCore/Modules/fetch/FetchBodyOwner.h
+index e4b4afb4c0b2..0e70f03f3944 100644
+--- a/Source/WebCore/Modules/fetch/FetchBodyOwner.h
++++ b/Source/WebCore/Modules/fetch/FetchBodyOwner.h
+@@ -40,6 +40,7 @@ namespace WebCore {
+ class FetchBodyOwner : public RefCounted<FetchBodyOwner>, public ActiveDOMObject {
+ public:
+     FetchBodyOwner(ScriptExecutionContext&, std::optional<FetchBody>&&, Ref<FetchHeaders>&&);
++    ~FetchBodyOwner();
+ 
+     bool bodyUsed() const { return isDisturbed(); }
+     void arrayBuffer(Ref<DeferredPromise>&&);
+diff --git a/Source/WebCore/Modules/fetch/FetchBodySource.cpp b/Source/WebCore/Modules/fetch/FetchBodySource.cpp
+index 237a46097f69..a28581485f9b 100644
+--- a/Source/WebCore/Modules/fetch/FetchBodySource.cpp
++++ b/Source/WebCore/Modules/fetch/FetchBodySource.cpp
+@@ -34,46 +34,65 @@
+ namespace WebCore {
+ 
+ FetchBodySource::FetchBodySource(FetchBodyOwner& bodyOwner)
+-    : m_bodyOwner(bodyOwner)
++    : m_bodyOwner(&bodyOwner)
+ {
+ }
+ 
+ void FetchBodySource::setActive()
+ {
+-    m_bodyOwner.setPendingActivity(&m_bodyOwner);
++    ASSERT(m_bodyOwner);
++    if (m_bodyOwner)
++        m_bodyOwner->setPendingActivity(m_bodyOwner);
+ }
+ 
+ void FetchBodySource::setInactive()
+ {
+-    m_bodyOwner.unsetPendingActivity(&m_bodyOwner);
++    ASSERT(m_bodyOwner);
++    if (m_bodyOwner)
++        m_bodyOwner->unsetPendingActivity(m_bodyOwner);
+ }
+ 
+ void FetchBodySource::doStart()
+ {
+-    m_bodyOwner.consumeBodyAsStream();
++    ASSERT(m_bodyOwner);
++    if (m_bodyOwner)
++        m_bodyOwner->consumeBodyAsStream();
+ }
+ 
+ void FetchBodySource::doPull()
+ {
+-    m_bodyOwner.feedStream();
++    ASSERT(m_bodyOwner);
++    if (m_bodyOwner)
++        m_bodyOwner->feedStream();
+ }
+ 
+ void FetchBodySource::doCancel()
+ {
+     m_isCancelling = true;
+-    m_bodyOwner.cancel();
++    ASSERT(m_bodyOwner || m_isClosed);
++    if (!m_bodyOwner)
++        return;
++
++    m_bodyOwner->cancel();
++    m_bodyOwner = nullptr;
+ }
+ 
+ void FetchBodySource::close()
+ {
++#ifndef NDEBUG
++    m_isClosed = true;
++#endif
++
+     controller().close();
+     clean();
++    m_bodyOwner = nullptr;
+ }
+ 
+ void FetchBodySource::error(const String& value)
+ {
+     controller().error(value);
+     clean();
++    m_bodyOwner = nullptr;
+ }
+ 
+ } // namespace WebCore
+diff --git a/Source/WebCore/Modules/fetch/FetchBodySource.h b/Source/WebCore/Modules/fetch/FetchBodySource.h
+index 98159b8ce92a..c10fe96e63ec 100644
+--- a/Source/WebCore/Modules/fetch/FetchBodySource.h
++++ b/Source/WebCore/Modules/fetch/FetchBodySource.h
+@@ -49,6 +49,7 @@ public:
+     bool isCancelling() const { return m_isCancelling; }
+ 
+     void resolvePullPromise() { pullFinished(); }
++    void detach() { m_bodyOwner = nullptr; }
+ 
+ private:
+     void doStart() final;
+@@ -57,8 +58,11 @@ private:
+     void setActive() final;
+     void setInactive() final;
+ 
+-    FetchBodyOwner& m_bodyOwner;
++    FetchBodyOwner* m_bodyOwner;
+     bool m_isCancelling { false };
++#ifndef NDEBUG
++    bool m_isClosed { false };
++#endif
+ };
+ 
+ } // namespace WebCore
+-- 
+2.29.0
+

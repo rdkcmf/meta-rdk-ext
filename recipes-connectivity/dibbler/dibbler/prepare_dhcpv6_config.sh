@@ -101,6 +101,8 @@ if [ "$EROUTER_DHCP_OPTION_EMTA_ENABLED" = "true" ] && [ "$ethWanMode" = "true" 
     echo -n "0027000107" >> $OPTION_FILE
 fi
 
+echo -n "0026" >> $OPTION_FILE
+
 
 if [ -f "$DHCP_CONFIG_FILE_RUNTIME" ]; then
       rm -rf $DHCP_CONFIG_FILE_RUNTIME

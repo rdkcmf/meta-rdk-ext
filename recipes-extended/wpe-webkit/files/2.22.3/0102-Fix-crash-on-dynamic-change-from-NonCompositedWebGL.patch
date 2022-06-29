@@ -1,0 +1,96 @@
+From 9b831b42a04b75de4c20e39880ba143af2a970b8 Mon Sep 17 00:00:00 2001
+From: Ievgen Mutavchi <Ievgen_Mutavchi@comcast.com>
+Date: Sun, 26 Apr 2020 13:20:00 -0400
+Subject: [PATCH 91/93] Fix crash on dynamic change from NonCompositedWebGL
+Source: COMCAST
+License: GPLV2
+Upstream-Status: None
+Signed-off-by: Eugene Mutavchi <Ievgen_Mutavchi@comcast.com>
+
+---
+ .../graphics/texmap/TextureMapperGC3DPlatformLayer.cpp |  8 +++++++-
+ .../texmap/coordinated/CoordinatedGraphicsLayer.cpp    | 10 ++++++++++
+ .../CoordinatedGraphics/CoordinatedLayerTreeHost.cpp   |  3 +--
+ 3 files changed, 18 insertions(+), 3 deletions(-)
+
+diff --git a/Source/WebCore/platform/graphics/texmap/TextureMapperGC3DPlatformLayer.cpp b/Source/WebCore/platform/graphics/texmap/TextureMapperGC3DPlatformLayer.cpp
+index e31bc27f4011..72f2f7c0441c 100644
+--- a/Source/WebCore/platform/graphics/texmap/TextureMapperGC3DPlatformLayer.cpp
++++ b/Source/WebCore/platform/graphics/texmap/TextureMapperGC3DPlatformLayer.cpp
+@@ -32,6 +32,7 @@
+ namespace WebCore {
+ 
+ static std::unique_ptr<GLContext> s_windowContext;
++static int s_windowContextRefCount = 0;
+ 
+ static void terminateWindowContext()
+ {
+@@ -49,8 +50,8 @@ TextureMapperGC3DPlatformLayer::TextureMapperGC3DPlatformLayer(GraphicsContext3D
+     case GraphicsContext3D::RenderDirectlyToHostWindow:
+         if (!s_windowContext) {
+             s_windowContext = GLContext::createContextForWindow(reinterpret_cast<GLNativeWindowType>(hostWindow->nativeWindowID()), &PlatformDisplay::sharedDisplayForCompositing());
+-            std::atexit(terminateWindowContext);
+         }
++        s_windowContextRefCount++;
+         break;
+     }
+ 
+@@ -65,6 +66,11 @@ TextureMapperGC3DPlatformLayer::~TextureMapperGC3DPlatformLayer()
+     if (client())
+         client()->platformLayerWillBeDestroyed();
+ #endif
++
++    if (m_renderStyle == GraphicsContext3D::RenderDirectlyToHostWindow && (s_windowContextRefCount - 1) == 0) {
++        s_windowContextRefCount = 0;
++        s_windowContext.reset();
++    }
+ }
+ 
+ GLContext* TextureMapperGC3DPlatformLayer::glContext()
+diff --git a/Source/WebCore/platform/graphics/texmap/coordinated/CoordinatedGraphicsLayer.cpp b/Source/WebCore/platform/graphics/texmap/coordinated/CoordinatedGraphicsLayer.cpp
+index 8592fe163db8..c8f1681eaa85 100644
+--- a/Source/WebCore/platform/graphics/texmap/coordinated/CoordinatedGraphicsLayer.cpp
++++ b/Source/WebCore/platform/graphics/texmap/coordinated/CoordinatedGraphicsLayer.cpp
+@@ -893,6 +893,11 @@ void CoordinatedGraphicsLayer::flushCompositingStateForThisLayerOnly()
+ 
+ void CoordinatedGraphicsLayer::syncPendingStateChangesIncludingSubLayers()
+ {
++    if (!m_coordinator) {
++        LOG_ERROR("No coordinator");
++        return;
++    }
++
+     if (m_layerState.hasPendingChanges()) {
+         m_coordinator->syncLayerState(m_id, m_layerState);
+         resetLayerState();
+@@ -1029,6 +1034,11 @@ void CoordinatedGraphicsLayer::removeTile(uint32_t tileID)
+ 
+ void CoordinatedGraphicsLayer::updateContentBuffersIncludingSubLayers()
+ {
++    if (!m_coordinator) {
++        LOG_ERROR("No coordinator");
++        return;
++    }
++
+     if (CoordinatedGraphicsLayer* mask = downcast<CoordinatedGraphicsLayer>(maskLayer()))
+         mask->updateContentBuffers();
+ 
+diff --git a/Source/WebKit/WebProcess/WebPage/CoordinatedGraphics/CoordinatedLayerTreeHost.cpp b/Source/WebKit/WebProcess/WebPage/CoordinatedGraphics/CoordinatedLayerTreeHost.cpp
+index 2a134e8ac2f3..5b6801e0f83b 100644
+--- a/Source/WebKit/WebProcess/WebPage/CoordinatedGraphics/CoordinatedLayerTreeHost.cpp
++++ b/Source/WebKit/WebProcess/WebPage/CoordinatedGraphics/CoordinatedLayerTreeHost.cpp
+@@ -99,10 +99,9 @@ void CoordinatedLayerTreeHost::setRootCompositingLayer(GraphicsLayer* graphicsLa
+ 
+ void CoordinatedLayerTreeHost::invalidate()
+ {
+-    cancelPendingLayerFlush();
+-
+     m_coordinator.invalidate();
+     LayerTreeHost::invalidate();
++    cancelPendingLayerFlush();
+ }
+ 
+ void CoordinatedLayerTreeHost::pauseRendering()
+-- 
+2.17.1
+

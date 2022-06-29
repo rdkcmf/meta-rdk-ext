@@ -4,8 +4,8 @@ LIC_FILES_CHKSUM = "file://${COREBASE}/meta/COPYING.MIT;md5=3da9cfbcb788c80a0384
 
 S = "${WORKDIR}/git"
 
-SRC_URI = "git://github.com/KhronosGroup/OpenGL-Registry.git;destsuffix=${S}/glesapi;protocol=https;name=gles"
-SRC_URI += "git://github.com/KhronosGroup/EGL-Registry.git;destsuffix=${S}/eglapi;protocol=https;name=egl"
+SRC_URI = "git://github.com/KhronosGroup/OpenGL-Registry.git;destsuffix=${S}/glesapi;branch=main;protocol=https;name=gles"
+SRC_URI += "git://github.com/KhronosGroup/EGL-Registry.git;destsuffix=${S}/eglapi;branch=main;protocol=https;name=egl"
 SRCREV_egl = "2d8e2b659f70cf3b28c7d6cedc408f853ba00a2e"
 SRCREV_gles = "42f61786696df5102625d9b046976ee857645704"
 

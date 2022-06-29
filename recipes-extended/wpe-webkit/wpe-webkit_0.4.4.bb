@@ -168,6 +168,8 @@ SRC_URI += "file://0193-Port-TTS-plugin-changes-to-wpe-0.4.4.patch"
 SRC_URI += "file://add-securedump-location.patch"
 SRC_URI += "file://0192-RWI-works-for-one-app-session-then-fail.patch"
 SRC_URI += "file://0194-Second-ESPN-App-launch-after-Live-playback-fails.patch"
+SRC_URI += "file://0195-update-the-sample-durtion-based-on-the-delta-of-last.patch"
+SRC_URI += "file://0196-refactor-fetch-body.patch"
 
 # device specific configs
 PACKAGECONFIG[intelce] = "-DUSE_WPEWEBKIT_BACKEND_INTEL_CE=ON -DUSE_WPEWEBKIT_PLATFORM_INTEL_CE=ON -DUSE_HOLE_PUNCH_GSTREAMER=ON -DUSE_KEY_INPUT_HANDLING_LINUX_INPUT=ON,,intelce-display"

@@ -1,0 +1,59 @@
+Index: dropbear-2019.78/dbutil.c
+===================================================================
+--- dropbear-2019.78.orig/dbutil.c
++++ dropbear-2019.78/dbutil.c
+@@ -68,6 +68,7 @@
+ #include "atomicio.h"
+ 
+ #define MAX_FMT 100
++#define SSH_SHELL_LOG "/opt/secure/rdk_shell.log"
+ 
+ static void generic_dropbear_exit(int exitcode, const char* format, 
+ 		va_list param) ATTRIB_NORETURN;
+@@ -155,6 +156,31 @@ void dropbear_log(int priority, const ch
+ 	va_end(param);
+ }
+ 
++void ssh_logging(const char* format, ...) {
++#ifdef RDK_BROADBAND
++    if ((access("/rdklogs/logs/rdk_shell.log", F_OK ) != 0)) {
++        symlink("/opt/secure/rdk_shell.log","/rdklogs/logs/rdk_shell.log");
++    }
++#else
++    if ((access("/opt/logs/rdk_shell.log", F_OK ) != 0)) {
++        symlink("/opt/secure/rdk_shell.log","/opt/logs/rdk_shell.log");
++    }
++#endif
++    FILE* fp = NULL;
++    fp = fopen(SSH_SHELL_LOG, "a+");
++    if (fp != NULL) {
++        char printbuf[1024];
++        va_list param;
++        va_start(param, format);
++        vsnprintf(printbuf, sizeof(printbuf), format, param);
++        fprintf(fp, "%s", printbuf);
++        va_end(param);
++        fclose(fp);
++    }
++    else {
++        fprintf(stderr, "Error opening file \n");
++    }
++}
+ 
+ #if DEBUG_TRACE
+ 
+Index: dropbear-2019.78/svr-chansession.c
+===================================================================
+--- dropbear-2019.78.orig/svr-chansession.c
++++ dropbear-2019.78/svr-chansession.c
+@@ -703,6 +703,10 @@ static int sessioncommand(struct Channel
+ 		svr_pubkey_set_forced_command(chansess);
+ 	}
+ 
++        /* To record the commands executed from ssh */
++        if (chansess->cmd) {
++                ssh_logging("%s\n", chansess->cmd);
++        }
+ 
+ #if LOG_COMMANDS
+ 	if (chansess->cmd) {

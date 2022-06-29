@@ -74,7 +74,7 @@ SRC_URI += "file://2.22/0074-Increase-clear-SB-limits-for-4K-devices.patch"
 SRC_URI += "file://2.22/0075-Time-encrypted-content-playback.patch"
 SRC_URI += "file://2.22/0076-Add-API-to-explicitly-request-memory-release.patch"
 SRC_URI += "file://2.22/0077-Disable-memory-pressure-relief-logging.patch"
-SRC_URI += "file://2.22/0079-removed-vpx-and-opus-dependency-on-libwebrtc.patch"
+SRC_URI += "file://2.22/0079-vpx-and-opus-dependency-in-webrtc.patch"
 SRC_URI += "file://2.22/0080-Report-RSS-as-web-page-memory.patch"
 SRC_URI += "file://2.22/0082-XRE-14693-Fixed-Relay-candidate-resolving-on-libwebr.patch"
 
@@ -95,7 +95,7 @@ SRC_URI += "file://2.22/0094-Fix-occasional-HDR-video-playback-stalls-after-seek
 SRC_URI += "file://2.22/0095-Make-sure-updatestart-is-fired-even-if-listener-adde.patch"
 SRC_URI += "file://2.22/0096-Fixing-memory-leak-issues-in-sample-buffer.patch"
 SRC_URI += "file://2.22/0097-Add-MediaError.message-and-clarify-decryption-errors.patch"
-SRC_URI += "file://2.22/0098-Pause-media-and-skip-compositor-scene-rendering-hide.patch"
+SRC_URI += "file://2.22/0098-skip-compositor-scene-rendering-hide.patch"
 SRC_URI += "file://2.22/0099-Backport-fix-for-crash-in-Inspector-AsyncStackTrace-.patch"
 # SRC_URI += "file://2.22/0101-Disable-async-image-decoding.patch"
 SRC_URI += "file://2.22/0102-Fix-crash-on-dynamic-change-from-NonCompositedWebGL.patch"
@@ -176,6 +176,21 @@ SRC_URI += "file://2.22/0271-GStreamer-try-to-detect-and-recover-inconsistent-pl
 SRC_URI += "file://2.22/0272-Fix-media-playback-looping.patch"
 SRC_URI += "file://2.22/0272-Increase-fudge-factor-to-3-frames.patch"
 SRC_URI += "file://2.22/0279-Second-ESPN-App-launch-after-Live-playback-fails.patch"
+SRC_URI += "file://2.22/0281-update-the-sample-durtion-based-on-the-delta-of-last.patch"
+
+SRC_URI += "file://2.22/0001-Backport-Fix-missing-exception-checks-and-handling-i.patch"
+SRC_URI += "file://2.22/0001-Fix-offset-inconsistency-logs.patch"
+SRC_URI += "file://2.22/0003-Backport-DeferGC-calls.patch"
+SRC_URI += "file://2.22/0001-propertyNameEnumerator-must-check-it-can-still-take-.patch"
+SRC_URI += "file://2.22/0002-JSC-Clean-up-DFGPreciseLocalClobberize-to-avoid-dupl.patch"
+SRC_URI += "file://2.22/0003-Add-register-r30-s8-to-Conservative-roots.patch"
+SRC_URI += "file://2.22/0004-Fix-use-after-free-in-GstMappedBuffer-destructor.patch"
+SRC_URI += "file://2.22/0005-Remove-screen-saver-disabler.patch"
+
+SRC_URI += "file://2.22/0285-Media-Make-currentTime-compliant-with-the-spec-when-.patch"
+SRC_URI += "file://2.22/0287-Add-support-for-ipv6-relay-candidate-in-libwebrtc.patch"
+SRC_URI += "file://2.22/0288-Fix-for-syntax-error-invalid-character.patch"
+
 
 # device specific configs
 PACKAGECONFIG[westeros] = "-DUSE_WPEWEBKIT_BACKEND_WESTEROS=ON -DUSE_WPEWEBKIT_PLATFORM_WESTEROS=ON -DUSE_KEY_INPUT_HANDLING_LINUX_INPUT=OFF -DUSE_GSTREAMER_HOLEPUNCH=ON -DUSE_EXTERNAL_HOLEPUNCH=ON -DUSE_WESTEROS_SINK=ON,,westeros"
@@ -192,6 +207,7 @@ PACKAGECONFIG[encryptedlocalstorage] = "-DENABLE_SQLITE_ENCRYPTION_EXTENSION=ON,
 PACKAGECONFIG[shared_jsc] = "-DENABLE_SHARED_JSC=ON,,"
 PACKAGECONFIG[gstreamergl] = "-DUSE_GSTREAMER_GL=ON,-DUSE_GSTREAMER_GL=OFF,"
 PACKAGECONFIG[mediastream] = "-DENABLE_MEDIA_STREAM=ON -DENABLE_WEB_RTC=ON,-DENABLE_MEDIA_STREAM=OFF -DENABLE_WEB_RTC=OFF,libevent,libevent"
+PACKAGECONFIG[webrtcusebuiltinopus] = "-DENABLE_WEBRTC_USE_BUILTIN_OPUS=ON,-DENABLE_WEBRTC_USE_BUILTIN_OPUS=OFF,libopus"
 PACKAGECONFIG[asan] = "-DENABLE_ADDRESS_SANITIZER=ON,-DENABLE_ADDRESS_SANITIZER=OFF,gcc-sanitizers"
 
 PACKAGECONFIG_append = " intl"
@@ -199,8 +215,8 @@ PACKAGECONFIG_append = " intl"
 LEAD_SONAME = "libWPEWebKit-0.1.so"
 FILES_${PN}-web-inspector-plugin += " ${libdir}/wpe-webkit-*/libWPEWebInspectorResources.so"
 
-SELECTED_OPTIMIZATION_remove = "-g"
-SELECTED_OPTIMIZATION_append = " -g1 "
+# SELECTED_OPTIMIZATION_remove = "-g"
+# SELECTED_OPTIMIZATION_append = " -g1 "
 
 TUNE_CCARGS_remove = "-fno-omit-frame-pointer -fno-optimize-sibling-calls"
 

@@ -608,7 +608,7 @@ new file mode 100644
 index 00000000000..cc59aeefa35
 --- /dev/null
 +++ b/Source/WebCore/platform/ttsclient/PlatformSpeechSynthesizerTTSClient.cpp
-@@ -0,0 +1,436 @@
+@@ -0,0 +1,437 @@
 +/* Copyright (C) 2019 RDK Management.  All rights reserved.
 +*
 +* Redistribution and use in source and binary forms, with or without
@@ -805,6 +805,7 @@ index 00000000000..cc59aeefa35
 +        m_currentUtterance = utterance;
 +        if(utterance == m_firstUtterance)
 +            m_firstUtterance = nullptr;
++        setPageMediaVolume(0.25);
 +    }
 +}
 +

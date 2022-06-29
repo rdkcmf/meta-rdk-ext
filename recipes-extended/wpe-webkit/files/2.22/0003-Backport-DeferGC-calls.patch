@@ -1,0 +1,78 @@
+From b2e4b42c6a462cef68c8bfb5ff7e17350d2e7fcb Mon Sep 17 00:00:00 2001
+From: Eugene Mutavchi <Ievgen_Mutavchi@comcast.com>
+Date: Tue, 3 Aug 2021 18:36:23 +0000
+Subject: [PATCH 3/3] Backport DeferGC calls
+
+---
+ Source/JavaScriptCore/jit/Repatch.cpp              | 10 +++++++---
+ Source/JavaScriptCore/runtime/JSGlobalObject.cpp   |  2 ++
+ Source/JavaScriptCore/runtime/SamplingProfiler.cpp |  3 +++
+ 3 files changed, 12 insertions(+), 3 deletions(-)
+
+diff --git a/Source/JavaScriptCore/jit/Repatch.cpp b/Source/JavaScriptCore/jit/Repatch.cpp
+index 6686df0117b0..143e6ab5a3e4 100644
+--- a/Source/JavaScriptCore/jit/Repatch.cpp
++++ b/Source/JavaScriptCore/jit/Repatch.cpp
+@@ -957,18 +957,22 @@ void linkPolymorphicCall(
+ {
+     RELEASE_ASSERT(callLinkInfo.allowStubs());
+     
++    CallFrame* callerFrame = exec->callerFrame();
++    VM& vm = callerFrame->vm();
++
++    // During execution of linkPolymorphicCall, we strongly assume that we never do GC.
++    // GC jettisons CodeBlocks, changes CallLinkInfo etc. and breaks assumption done before and after this call.
++    DeferGCForAWhile deferGCForAWhile(vm.heap);
++
+     if (!newVariant) {
+         linkVirtualFor(exec, callLinkInfo);
+         return;
+     }
+ 
+-    CallFrame* callerFrame = exec->callerFrame();
+-
+     // Our caller must be have a cell for a callee. When calling
+     // this from Wasm, we ensure the callee is a cell.
+     ASSERT(callerFrame->callee().isCell());
+ 
+-    VM& vm = callerFrame->vm();
+     CodeBlock* callerCodeBlock = callerFrame->codeBlock();
+     bool isWebAssembly = isWebAssemblyToJSCallee(callerFrame->callee().asCell());
+ 
+diff --git a/Source/JavaScriptCore/runtime/JSGlobalObject.cpp b/Source/JavaScriptCore/runtime/JSGlobalObject.cpp
+index d1ff93610d05..ccfafb256973 100644
+--- a/Source/JavaScriptCore/runtime/JSGlobalObject.cpp
++++ b/Source/JavaScriptCore/runtime/JSGlobalObject.cpp
+@@ -1265,6 +1265,8 @@ void JSGlobalObject::haveABadTime(VM& vm)
+ 
+     vm.structureCache.clear(); // We may be caching array structures in here.
+ 
++    DeferGC deferGC(vm.heap);
++
+     // Make sure that all allocations or indexed storage transitions that are inlining
+     // the assumption that it's safe to transition to a non-SlowPut array storage don't
+     // do so anymore.
+diff --git a/Source/JavaScriptCore/runtime/SamplingProfiler.cpp b/Source/JavaScriptCore/runtime/SamplingProfiler.cpp
+index b6935e4c7554..d2a60cb0c6bc 100644
+--- a/Source/JavaScriptCore/runtime/SamplingProfiler.cpp
++++ b/Source/JavaScriptCore/runtime/SamplingProfiler.cpp
+@@ -952,6 +952,7 @@ void SamplingProfiler::reportTopFunctions()
+ void SamplingProfiler::reportTopFunctions(PrintStream& out)
+ {
+     LockHolder locker(m_lock);
++    DeferGCForAWhile deferGC(m_vm.heap);
+ 
+     {
+         HeapIterationScope heapIterationScope(m_vm.heap);
+@@ -1005,6 +1006,8 @@ void SamplingProfiler::reportTopBytecodes(PrintStream& out)
+ {
+     LockHolder locker(m_lock);
+ 
++    DeferGCForAWhile deferGC(m_vm.heap);
++
+     {
+         HeapIterationScope heapIterationScope(m_vm.heap);
+         processUnverifiedStackTraces();
+-- 
+2.25.1
+

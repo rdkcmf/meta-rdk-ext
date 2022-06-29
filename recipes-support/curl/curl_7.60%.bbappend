@@ -1,6 +1,9 @@
 FILESEXTRAPATHS_prepend := "${THISDIR}/files:"
 
 SRC_URI += "file://ocsp_request_to_CA_Directly.patch \
+            file://CVE-2020-8231_7.60.patch \
+            file://CVE-2020-8285_7.60.patch \
+            file://CVE-2020-8286_7.60.patch \
 "
 
 CURLGNUTLS = "--without-gnutls --with-ssl"
@@ -16,3 +19,4 @@ EXTRA_OECONF += "${@bb.utils.contains('DISTRO_FEATURES', 'largefile', 'ac_cv_siz
 
 PACKAGECONFIG_append = " ipv6 "
 PACKAGECONFIG[ipv6] = "--enable-ipv6,--disable-ipv6,"
+PACKAGECONFIG[brotli] = "--with-brotli,--without-brotli,brotli"

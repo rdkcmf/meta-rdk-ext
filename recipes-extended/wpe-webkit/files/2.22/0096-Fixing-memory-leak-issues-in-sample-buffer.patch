@@ -9,8 +9,7 @@ Signed-off-by: Eugene Mutavchi <Ievgen_Mutavchi@comcast.com>
 
 ---
  Source/WebCore/Modules/mediasource/SourceBuffer.cpp | 6 ++++++
- Source/WebCore/workers/WorkerThread.cpp             | 6 +++++-
- 2 files changed, 11 insertions(+), 1 deletion(-)
+ 1 files changed, 6 insertions(+), 0 deletions(-)
 
 Index: git/Source/WebCore/Modules/mediasource/SourceBuffer.cpp
 ===================================================================
@@ -29,20 +28,3 @@ Index: git/Source/WebCore/Modules/mediasource/SourceBuffer.cpp
  }
  
  void SourceBuffer::abortIfUpdating()
-Index: git/Source/WebCore/workers/WorkerThread.cpp
-===================================================================
---- git.orig/Source/WebCore/workers/WorkerThread.cpp
-+++ git/Source/WebCore/workers/WorkerThread.cpp
-@@ -310,7 +310,11 @@ void WorkerThread::releaseFastMallocFree
-     std::lock_guard<Lock> lock(threadSetMutex);
- 
-     for (auto* workerThread : workerThreads()) {
--        workerThread->runLoop().postTask([] (ScriptExecutionContext&) {
-+        workerThread->runLoop().postTask([] (ScriptExecutionContext& context) {
-+            JSC::JSLockHolder lock(context.vm());
-+            if (!context.vm().heap.isCurrentThreadBusy()) {
-+                context.vm().heap.collectNow(JSC::Sync, JSC::CollectionScope::Full);
-+            }
-             WTF::releaseFastMallocFreeMemory();
-         });
-     }

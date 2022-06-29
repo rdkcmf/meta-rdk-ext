@@ -1,0 +1,528 @@
+From 2e8b7839fa5617a4654e5196d300c9308f46cb5b Mon Sep 17 00:00:00 2001
+From: "bartlomiej.boczar" <bartlomiej.boczar@consult.red>
+Date: Mon, 11 Oct 2021 09:13:42 +0000
+Subject: [PATCH] Fix for syntax error invalid character
+
+---
+ JSTests/test262.yaml                               | 32 +++++++++----------
+ JSTests/test262/expectations.yaml                  | 24 ---------------
+ .../Unicode/Unicode_218/S7.6_A1.1_T2-expected.txt  |  2 +-
+ .../Unicode/Unicode_218/S7.6_A1.1_T6-expected.txt  |  2 +-
+ .../Unicode/Unicode_218/S7.6_A5.2_T2-expected.txt  |  2 +-
+ .../Unicode/Unicode_218/S7.6_A5.2_T6-expected.txt  |  2 +-
+ .../Unicode/Unicode_218/S7.6_A5.3_T1-expected.txt  |  2 +-
+ .../Unicode/Unicode_218/S7.6_A5.3_T2-expected.txt  |  2 +-
+ .../Unicode/Unicode_320/S7.6_A1.1_T6-expected.txt  |  2 +-
+ .../Unicode/Unicode_320/S7.6_A2.3-expected.txt     |  2 +-
+ .../Unicode/Unicode_320/S7.6_A3.1-expected.txt     |  2 +-
+ .../Unicode/Unicode_320/S7.6_A5.2_T6-expected.txt  |  2 +-
+ .../Unicode/Unicode_320/S7.6_A5.2_T9-expected.txt  |  2 +-
+ .../Unicode/Unicode_320/S7.6_A5.3_T1-expected.txt  |  2 +-
+ .../Unicode/Unicode_320/S7.6_A5.3_T2-expected.txt  |  2 +-
+ .../Unicode/Unicode_410/S7.6_A1.1_T6-expected.txt  |  2 +-
+ .../Unicode/Unicode_410/S7.6_A3.1-expected.txt     |  2 +-
+ .../Unicode/Unicode_410/S7.6_A5.2_T6-expected.txt  |  2 +-
+ .../Unicode/Unicode_410/S7.6_A5.3_T1-expected.txt  |  2 +-
+ .../Unicode/Unicode_410/S7.6_A5.3_T2-expected.txt  |  2 +-
+ .../Unicode/Unicode_500/S7.6_A1.1_T6-expected.txt  |  2 +-
+ .../Unicode/Unicode_500/S7.6_A3.1-expected.txt     |  2 +-
+ .../Unicode/Unicode_500/S7.6_A5.2_T6-expected.txt  |  2 +-
+ .../Unicode/Unicode_500/S7.6_A5.3_T1-expected.txt  |  2 +-
+ .../Unicode/Unicode_500/S7.6_A5.3_T2-expected.txt  |  2 +-
+ .../Unicode/Unicode_510/S7.6_A1.1_T4-expected.txt  |  2 +-
+ .../Unicode/Unicode_510/S7.6_A1.1_T6-expected.txt  |  2 +-
+ .../Unicode/Unicode_510/S7.6_A5.2_T4-expected.txt  |  2 +-
+ .../Unicode/Unicode_510/S7.6_A5.2_T6-expected.txt  |  2 +-
+ Source/JavaScriptCore/parser/Lexer.cpp             | 16 +++++++----
+ 30 files changed, 53 insertions(+), 73 deletions(-)
+
+diff --git a/JSTests/test262.yaml b/JSTests/test262.yaml
+index 15dc218..1364fbc 100644
+--- a/JSTests/test262.yaml
++++ b/JSTests/test262.yaml
+@@ -89044,21 +89044,21 @@
+ - path: test262/test/language/identifier-resolution/unscopables.js
+   cmd: runTest262 :normal, "NoException", ["../../../harness/assert.js", "../../../harness/sta.js"], [:strict]
+ - path: test262/test/language/identifiers/other_id_continue-escaped.js
+-  cmd: runTest262 :fail, "NoException", ["../../../harness/assert.js", "../../../harness/sta.js"], []
++  cmd: runTest262 :normal, "NoException", ["../../../harness/assert.js", "../../../harness/sta.js"], []
+ - path: test262/test/language/identifiers/other_id_continue-escaped.js
+-  cmd: runTest262 :fail, "NoException", ["../../../harness/assert.js", "../../../harness/sta.js"], [:strict]
++  cmd: runTest262 :normal, "NoException", ["../../../harness/assert.js", "../../../harness/sta.js"], [:strict]
+ - path: test262/test/language/identifiers/other_id_continue.js
+-  cmd: runTest262 :fail, "NoException", ["../../../harness/assert.js", "../../../harness/sta.js"], []
++  cmd: runTest262 :normal, "NoException", ["../../../harness/assert.js", "../../../harness/sta.js"], []
+ - path: test262/test/language/identifiers/other_id_continue.js
+-  cmd: runTest262 :fail, "NoException", ["../../../harness/assert.js", "../../../harness/sta.js"], [:strict]
++  cmd: runTest262 :normal, "NoException", ["../../../harness/assert.js", "../../../harness/sta.js"], [:strict]
+ - path: test262/test/language/identifiers/other_id_start-escaped.js
+-  cmd: runTest262 :fail, "NoException", ["../../../harness/assert.js", "../../../harness/sta.js"], []
++  cmd: runTest262 :normal, "NoException", ["../../../harness/assert.js", "../../../harness/sta.js"], []
+ - path: test262/test/language/identifiers/other_id_start-escaped.js
+-  cmd: runTest262 :fail, "NoException", ["../../../harness/assert.js", "../../../harness/sta.js"], [:strict]
++  cmd: runTest262 :normal, "NoException", ["../../../harness/assert.js", "../../../harness/sta.js"], [:strict]
+ - path: test262/test/language/identifiers/other_id_start.js
+-  cmd: runTest262 :fail, "NoException", ["../../../harness/assert.js", "../../../harness/sta.js"], []
++  cmd: runTest262 :normal, "NoException", ["../../../harness/assert.js", "../../../harness/sta.js"], []
+ - path: test262/test/language/identifiers/other_id_start.js
+-  cmd: runTest262 :fail, "NoException", ["../../../harness/assert.js", "../../../harness/sta.js"], [:strict]
++  cmd: runTest262 :normal, "NoException", ["../../../harness/assert.js", "../../../harness/sta.js"], [:strict]
+ - path: test262/test/language/identifiers/part-digits-via-escape-hex.js
+   cmd: runTest262 :normal, "NoException", ["../../../harness/assert.js", "../../../harness/sta.js"], []
+ - path: test262/test/language/identifiers/part-digits-via-escape-hex.js
+@@ -89598,21 +89598,21 @@
+ - path: test262/test/language/identifiers/vals-rus-alpha-upper.js
+   cmd: runTest262 :normal, "NoException", ["../../../harness/assert.js", "../../../harness/sta.js"], [:strict]
+ - path: test262/test/language/identifiers/vertical-tilde-continue-escaped.js
+-  cmd: runTest262 :fail, "SyntaxError", ["../../../harness/assert.js", "../../../harness/sta.js"], []
++  cmd: runTest262 :normal, "SyntaxError", ["../../../harness/assert.js", "../../../harness/sta.js"], []
+ - path: test262/test/language/identifiers/vertical-tilde-continue-escaped.js
+-  cmd: runTest262 :fail, "SyntaxError", ["../../../harness/assert.js", "../../../harness/sta.js"], [:strict]
++  cmd: runTest262 :normal, "SyntaxError", ["../../../harness/assert.js", "../../../harness/sta.js"], [:strict]
+ - path: test262/test/language/identifiers/vertical-tilde-continue.js
+-  cmd: runTest262 :fail, "SyntaxError", ["../../../harness/assert.js", "../../../harness/sta.js"], []
++  cmd: runTest262 :normal, "SyntaxError", ["../../../harness/assert.js", "../../../harness/sta.js"], []
+ - path: test262/test/language/identifiers/vertical-tilde-continue.js
+-  cmd: runTest262 :fail, "SyntaxError", ["../../../harness/assert.js", "../../../harness/sta.js"], [:strict]
++  cmd: runTest262 :normal, "SyntaxError", ["../../../harness/assert.js", "../../../harness/sta.js"], [:strict]
+ - path: test262/test/language/identifiers/vertical-tilde-start-escaped.js
+-  cmd: runTest262 :fail, "SyntaxError", ["../../../harness/assert.js", "../../../harness/sta.js"], []
++  cmd: runTest262 :normal, "SyntaxError", ["../../../harness/assert.js", "../../../harness/sta.js"], []
+ - path: test262/test/language/identifiers/vertical-tilde-start-escaped.js
+-  cmd: runTest262 :fail, "SyntaxError", ["../../../harness/assert.js", "../../../harness/sta.js"], [:strict]
++  cmd: runTest262 :normal, "SyntaxError", ["../../../harness/assert.js", "../../../harness/sta.js"], [:strict]
+ - path: test262/test/language/identifiers/vertical-tilde-start.js
+-  cmd: runTest262 :fail, "SyntaxError", ["../../../harness/assert.js", "../../../harness/sta.js"], []
++  cmd: runTest262 :normal, "SyntaxError", ["../../../harness/assert.js", "../../../harness/sta.js"], []
+ - path: test262/test/language/identifiers/vertical-tilde-start.js
+-  cmd: runTest262 :fail, "SyntaxError", ["../../../harness/assert.js", "../../../harness/sta.js"], [:strict]
++  cmd: runTest262 :normal, "SyntaxError", ["../../../harness/assert.js", "../../../harness/sta.js"], [:strict]
+ - path: test262/test/language/import/dup-bound-names.js
+   cmd: runTest262 :normal, "SyntaxError", ["../../../harness/assert.js", "../../../harness/sta.js"], [:module]
+ - path: test262/test/language/import/escaped-as-import-specifier.js
+diff --git a/JSTests/test262/expectations.yaml b/JSTests/test262/expectations.yaml
+index 875f52d..3195577 100644
+--- a/JSTests/test262/expectations.yaml
++++ b/JSTests/test262/expectations.yaml
+@@ -2818,33 +2818,9 @@ test/language/global-code/script-decl-func-err-non-extensible.js:
+ test/language/global-code/script-decl-var-err.js:
+   default: 'Test262Error: Expected a TypeError to be thrown but no exception was thrown at all'
+   strict mode: 'Test262Error: Expected a TypeError to be thrown but no exception was thrown at all'
+-test/language/identifiers/other_id_continue-escaped.js:
+-  default: "SyntaxError: Invalid unicode escape in identifier: 'a\\u2118'"
+-  strict mode: "SyntaxError: Invalid unicode escape in identifier: 'a\\u2118'"
+-test/language/identifiers/other_id_continue.js:
+-  default: "SyntaxError: Invalid character '\\u2118'"
+-  strict mode: "SyntaxError: Invalid character '\\u2118'"
+-test/language/identifiers/other_id_start-escaped.js:
+-  default: "SyntaxError: Invalid unicode escape in identifier: '\\u2118'"
+-  strict mode: "SyntaxError: Invalid unicode escape in identifier: '\\u2118'"
+-test/language/identifiers/other_id_start.js:
+-  default: "SyntaxError: Invalid character '\\u2118'"
+-  strict mode: "SyntaxError: Invalid character '\\u2118'"
+ test/language/identifiers/val-yield-strict.js:
+   default: 'Test262: This statement should not be evaluated.'
+   strict mode: "SyntaxError: Cannot use 'yield' as a variable name in strict mode."
+-test/language/identifiers/vertical-tilde-continue-escaped.js:
+-  default: 'Test262: This statement should not be evaluated.'
+-  strict mode: 'Test262: This statement should not be evaluated.'
+-test/language/identifiers/vertical-tilde-continue.js:
+-  default: 'Test262: This statement should not be evaluated.'
+-  strict mode: 'Test262: This statement should not be evaluated.'
+-test/language/identifiers/vertical-tilde-start-escaped.js:
+-  default: 'Test262: This statement should not be evaluated.'
+-  strict mode: 'Test262: This statement should not be evaluated.'
+-test/language/identifiers/vertical-tilde-start.js:
+-  default: 'Test262: This statement should not be evaluated.'
+-  strict mode: 'Test262: This statement should not be evaluated.'
+ test/language/literals/numeric/numeric-separator-literal-bil-bd-nsl-bd.js:
+   default: 'SyntaxError: No space between binary literal and identifier'
+   strict mode: 'SyntaxError: No space between binary literal and identifier'
+diff --git a/LayoutTests/sputnik/Unicode/Unicode_218/S7.6_A1.1_T2-expected.txt b/LayoutTests/sputnik/Unicode/Unicode_218/S7.6_A1.1_T2-expected.txt
+index 6263158..509047a 100644
+--- a/LayoutTests/sputnik/Unicode/Unicode_218/S7.6_A1.1_T2-expected.txt
++++ b/LayoutTests/sputnik/Unicode/Unicode_218/S7.6_A1.1_T2-expected.txt
+@@ -1,6 +1,6 @@
+ S7.6_A1.1_T2
+ 
+-FAIL SputnikError: #2118 
++PASS 
+ 
+ TEST COMPLETE
+ 
+diff --git a/LayoutTests/sputnik/Unicode/Unicode_218/S7.6_A1.1_T6-expected.txt b/LayoutTests/sputnik/Unicode/Unicode_218/S7.6_A1.1_T6-expected.txt
+index 1eba35f..0e724a6 100644
+--- a/LayoutTests/sputnik/Unicode/Unicode_218/S7.6_A1.1_T6-expected.txt
++++ b/LayoutTests/sputnik/Unicode/Unicode_218/S7.6_A1.1_T6-expected.txt
+@@ -1,6 +1,6 @@
+ S7.6_A1.1_T6
+ 
+-FAIL SputnikError: #2160 
++PASS 
+ 
+ TEST COMPLETE
+ 
+diff --git a/LayoutTests/sputnik/Unicode/Unicode_218/S7.6_A5.2_T2-expected.txt b/LayoutTests/sputnik/Unicode/Unicode_218/S7.6_A5.2_T2-expected.txt
+index bca1057..c02ea1a 100644
+--- a/LayoutTests/sputnik/Unicode/Unicode_218/S7.6_A5.2_T2-expected.txt
++++ b/LayoutTests/sputnik/Unicode/Unicode_218/S7.6_A5.2_T2-expected.txt
+@@ -1,6 +1,6 @@
+ S7.6_A5.2_T2
+ 
+-FAIL SputnikError: #2118 
++PASS 
+ 
+ TEST COMPLETE
+ 
+diff --git a/LayoutTests/sputnik/Unicode/Unicode_218/S7.6_A5.2_T6-expected.txt b/LayoutTests/sputnik/Unicode/Unicode_218/S7.6_A5.2_T6-expected.txt
+index 1465e32..4c66185 100644
+--- a/LayoutTests/sputnik/Unicode/Unicode_218/S7.6_A5.2_T6-expected.txt
++++ b/LayoutTests/sputnik/Unicode/Unicode_218/S7.6_A5.2_T6-expected.txt
+@@ -1,6 +1,6 @@
+ S7.6_A5.2_T6
+ 
+-FAIL SputnikError: #2160 
++PASS 
+ 
+ TEST COMPLETE
+ 
+diff --git a/LayoutTests/sputnik/Unicode/Unicode_218/S7.6_A5.3_T1-expected.txt b/LayoutTests/sputnik/Unicode/Unicode_218/S7.6_A5.3_T1-expected.txt
+index 914ec9a..91f6ea8 100644
+--- a/LayoutTests/sputnik/Unicode/Unicode_218/S7.6_A5.3_T1-expected.txt
++++ b/LayoutTests/sputnik/Unicode/Unicode_218/S7.6_A5.3_T1-expected.txt
+@@ -1,6 +1,6 @@
+ S7.6_A5.3_T1
+ 
+-FAIL SputnikError: #01F6-01F9 
++FAIL SputnikError: #00B7 
+ 
+ TEST COMPLETE
+ 
+diff --git a/LayoutTests/sputnik/Unicode/Unicode_218/S7.6_A5.3_T2-expected.txt b/LayoutTests/sputnik/Unicode/Unicode_218/S7.6_A5.3_T2-expected.txt
+index d7ed407..810c925 100644
+--- a/LayoutTests/sputnik/Unicode/Unicode_218/S7.6_A5.3_T2-expected.txt
++++ b/LayoutTests/sputnik/Unicode/Unicode_218/S7.6_A5.3_T2-expected.txt
+@@ -1,6 +1,6 @@
+ S7.6_A5.3_T2
+ 
+-FAIL SputnikError: #01F6-01F9 
++FAIL SputnikError: #00B7 
+ 
+ TEST COMPLETE
+ 
+diff --git a/LayoutTests/sputnik/Unicode/Unicode_320/S7.6_A1.1_T6-expected.txt b/LayoutTests/sputnik/Unicode/Unicode_320/S7.6_A1.1_T6-expected.txt
+index 270b7c7..0e724a6 100644
+--- a/LayoutTests/sputnik/Unicode/Unicode_320/S7.6_A1.1_T6-expected.txt
++++ b/LayoutTests/sputnik/Unicode/Unicode_320/S7.6_A1.1_T6-expected.txt
+@@ -1,6 +1,6 @@
+ S7.6_A1.1_T6
+ 
+-FAIL SputnikError: #16EE 
++PASS 
+ 
+ TEST COMPLETE
+ 
+diff --git a/LayoutTests/sputnik/Unicode/Unicode_320/S7.6_A2.3-expected.txt b/LayoutTests/sputnik/Unicode/Unicode_320/S7.6_A2.3-expected.txt
+index 9e6534e..9b064e1 100644
+--- a/LayoutTests/sputnik/Unicode/Unicode_320/S7.6_A2.3-expected.txt
++++ b/LayoutTests/sputnik/Unicode/Unicode_320/S7.6_A2.3-expected.txt
+@@ -1,6 +1,6 @@
+ S7.6_A2.3
+ 
+-FAIL SputnikError: #1369 
++PASS 
+ 
+ TEST COMPLETE
+ 
+diff --git a/LayoutTests/sputnik/Unicode/Unicode_320/S7.6_A3.1-expected.txt b/LayoutTests/sputnik/Unicode/Unicode_320/S7.6_A3.1-expected.txt
+index 13cfde5..2f8b35c 100644
+--- a/LayoutTests/sputnik/Unicode/Unicode_320/S7.6_A3.1-expected.txt
++++ b/LayoutTests/sputnik/Unicode/Unicode_320/S7.6_A3.1-expected.txt
+@@ -1,6 +1,6 @@
+ S7.6_A3.1
+ 
+-FAIL SputnikError: #0221 
++FAIL SputnikError: #00B7 
+ 
+ TEST COMPLETE
+ 
+diff --git a/LayoutTests/sputnik/Unicode/Unicode_320/S7.6_A5.2_T6-expected.txt b/LayoutTests/sputnik/Unicode/Unicode_320/S7.6_A5.2_T6-expected.txt
+index deef42c..4c66185 100644
+--- a/LayoutTests/sputnik/Unicode/Unicode_320/S7.6_A5.2_T6-expected.txt
++++ b/LayoutTests/sputnik/Unicode/Unicode_320/S7.6_A5.2_T6-expected.txt
+@@ -1,6 +1,6 @@
+ S7.6_A5.2_T6
+ 
+-FAIL SputnikError: #16EE 
++PASS 
+ 
+ TEST COMPLETE
+ 
+diff --git a/LayoutTests/sputnik/Unicode/Unicode_320/S7.6_A5.2_T9-expected.txt b/LayoutTests/sputnik/Unicode/Unicode_320/S7.6_A5.2_T9-expected.txt
+index c263932..1b2381c 100644
+--- a/LayoutTests/sputnik/Unicode/Unicode_320/S7.6_A5.2_T9-expected.txt
++++ b/LayoutTests/sputnik/Unicode/Unicode_320/S7.6_A5.2_T9-expected.txt
+@@ -1,6 +1,6 @@
+ S7.6_A5.2_T9
+ 
+-FAIL SputnikError: #1369 
++PASS 
+ 
+ TEST COMPLETE
+ 
+diff --git a/LayoutTests/sputnik/Unicode/Unicode_320/S7.6_A5.3_T1-expected.txt b/LayoutTests/sputnik/Unicode/Unicode_320/S7.6_A5.3_T1-expected.txt
+index 1093f9a..91f6ea8 100644
+--- a/LayoutTests/sputnik/Unicode/Unicode_320/S7.6_A5.3_T1-expected.txt
++++ b/LayoutTests/sputnik/Unicode/Unicode_320/S7.6_A5.3_T1-expected.txt
+@@ -1,6 +1,6 @@
+ S7.6_A5.3_T1
+ 
+-FAIL SputnikError: #0221 
++FAIL SputnikError: #00B7 
+ 
+ TEST COMPLETE
+ 
+diff --git a/LayoutTests/sputnik/Unicode/Unicode_320/S7.6_A5.3_T2-expected.txt b/LayoutTests/sputnik/Unicode/Unicode_320/S7.6_A5.3_T2-expected.txt
+index 2e2f0b8..810c925 100644
+--- a/LayoutTests/sputnik/Unicode/Unicode_320/S7.6_A5.3_T2-expected.txt
++++ b/LayoutTests/sputnik/Unicode/Unicode_320/S7.6_A5.3_T2-expected.txt
+@@ -1,6 +1,6 @@
+ S7.6_A5.3_T2
+ 
+-FAIL SputnikError: #0221 
++FAIL SputnikError: #00B7 
+ 
+ TEST COMPLETE
+ 
+diff --git a/LayoutTests/sputnik/Unicode/Unicode_410/S7.6_A1.1_T6-expected.txt b/LayoutTests/sputnik/Unicode/Unicode_410/S7.6_A1.1_T6-expected.txt
+index 270b7c7..0e724a6 100644
+--- a/LayoutTests/sputnik/Unicode/Unicode_410/S7.6_A1.1_T6-expected.txt
++++ b/LayoutTests/sputnik/Unicode/Unicode_410/S7.6_A1.1_T6-expected.txt
+@@ -1,6 +1,6 @@
+ S7.6_A1.1_T6
+ 
+-FAIL SputnikError: #16EE 
++PASS 
+ 
+ TEST COMPLETE
+ 
+diff --git a/LayoutTests/sputnik/Unicode/Unicode_410/S7.6_A3.1-expected.txt b/LayoutTests/sputnik/Unicode/Unicode_410/S7.6_A3.1-expected.txt
+index 6495e32..2f8b35c 100644
+--- a/LayoutTests/sputnik/Unicode/Unicode_410/S7.6_A3.1-expected.txt
++++ b/LayoutTests/sputnik/Unicode/Unicode_410/S7.6_A3.1-expected.txt
+@@ -1,6 +1,6 @@
+ S7.6_A3.1
+ 
+-FAIL SputnikError: #0242-024F 
++FAIL SputnikError: #00B7 
+ 
+ TEST COMPLETE
+ 
+diff --git a/LayoutTests/sputnik/Unicode/Unicode_410/S7.6_A5.2_T6-expected.txt b/LayoutTests/sputnik/Unicode/Unicode_410/S7.6_A5.2_T6-expected.txt
+index deef42c..4c66185 100644
+--- a/LayoutTests/sputnik/Unicode/Unicode_410/S7.6_A5.2_T6-expected.txt
++++ b/LayoutTests/sputnik/Unicode/Unicode_410/S7.6_A5.2_T6-expected.txt
+@@ -1,6 +1,6 @@
+ S7.6_A5.2_T6
+ 
+-FAIL SputnikError: #16EE 
++PASS 
+ 
+ TEST COMPLETE
+ 
+diff --git a/LayoutTests/sputnik/Unicode/Unicode_410/S7.6_A5.3_T1-expected.txt b/LayoutTests/sputnik/Unicode/Unicode_410/S7.6_A5.3_T1-expected.txt
+index 1babac0..91f6ea8 100644
+--- a/LayoutTests/sputnik/Unicode/Unicode_410/S7.6_A5.3_T1-expected.txt
++++ b/LayoutTests/sputnik/Unicode/Unicode_410/S7.6_A5.3_T1-expected.txt
+@@ -1,6 +1,6 @@
+ S7.6_A5.3_T1
+ 
+-FAIL SputnikError: #0242-024F 
++FAIL SputnikError: #00B7 
+ 
+ TEST COMPLETE
+ 
+diff --git a/LayoutTests/sputnik/Unicode/Unicode_410/S7.6_A5.3_T2-expected.txt b/LayoutTests/sputnik/Unicode/Unicode_410/S7.6_A5.3_T2-expected.txt
+index 570215b..810c925 100644
+--- a/LayoutTests/sputnik/Unicode/Unicode_410/S7.6_A5.3_T2-expected.txt
++++ b/LayoutTests/sputnik/Unicode/Unicode_410/S7.6_A5.3_T2-expected.txt
+@@ -1,6 +1,6 @@
+ S7.6_A5.3_T2
+ 
+-FAIL SputnikError: #0242-024F 
++FAIL SputnikError: #00B7 
+ 
+ TEST COMPLETE
+ 
+diff --git a/LayoutTests/sputnik/Unicode/Unicode_500/S7.6_A1.1_T6-expected.txt b/LayoutTests/sputnik/Unicode/Unicode_500/S7.6_A1.1_T6-expected.txt
+index 270b7c7..0e724a6 100644
+--- a/LayoutTests/sputnik/Unicode/Unicode_500/S7.6_A1.1_T6-expected.txt
++++ b/LayoutTests/sputnik/Unicode/Unicode_500/S7.6_A1.1_T6-expected.txt
+@@ -1,6 +1,6 @@
+ S7.6_A1.1_T6
+ 
+-FAIL SputnikError: #16EE 
++PASS 
+ 
+ TEST COMPLETE
+ 
+diff --git a/LayoutTests/sputnik/Unicode/Unicode_500/S7.6_A3.1-expected.txt b/LayoutTests/sputnik/Unicode/Unicode_500/S7.6_A3.1-expected.txt
+index 89355d2..2f8b35c 100644
+--- a/LayoutTests/sputnik/Unicode/Unicode_500/S7.6_A3.1-expected.txt
++++ b/LayoutTests/sputnik/Unicode/Unicode_500/S7.6_A3.1-expected.txt
+@@ -1,6 +1,6 @@
+ S7.6_A3.1
+ 
+-FAIL SputnikError: #02EC 
++FAIL SputnikError: #00B7 
+ 
+ TEST COMPLETE
+ 
+diff --git a/LayoutTests/sputnik/Unicode/Unicode_500/S7.6_A5.2_T6-expected.txt b/LayoutTests/sputnik/Unicode/Unicode_500/S7.6_A5.2_T6-expected.txt
+index deef42c..4c66185 100644
+--- a/LayoutTests/sputnik/Unicode/Unicode_500/S7.6_A5.2_T6-expected.txt
++++ b/LayoutTests/sputnik/Unicode/Unicode_500/S7.6_A5.2_T6-expected.txt
+@@ -1,6 +1,6 @@
+ S7.6_A5.2_T6
+ 
+-FAIL SputnikError: #16EE 
++PASS 
+ 
+ TEST COMPLETE
+ 
+diff --git a/LayoutTests/sputnik/Unicode/Unicode_500/S7.6_A5.3_T1-expected.txt b/LayoutTests/sputnik/Unicode/Unicode_500/S7.6_A5.3_T1-expected.txt
+index 11bd738..91f6ea8 100644
+--- a/LayoutTests/sputnik/Unicode/Unicode_500/S7.6_A5.3_T1-expected.txt
++++ b/LayoutTests/sputnik/Unicode/Unicode_500/S7.6_A5.3_T1-expected.txt
+@@ -1,6 +1,6 @@
+ S7.6_A5.3_T1
+ 
+-FAIL SputnikError: #02EC 
++FAIL SputnikError: #00B7 
+ 
+ TEST COMPLETE
+ 
+diff --git a/LayoutTests/sputnik/Unicode/Unicode_500/S7.6_A5.3_T2-expected.txt b/LayoutTests/sputnik/Unicode/Unicode_500/S7.6_A5.3_T2-expected.txt
+index bf49904..810c925 100644
+--- a/LayoutTests/sputnik/Unicode/Unicode_500/S7.6_A5.3_T2-expected.txt
++++ b/LayoutTests/sputnik/Unicode/Unicode_500/S7.6_A5.3_T2-expected.txt
+@@ -1,6 +1,6 @@
+ S7.6_A5.3_T2
+ 
+-FAIL SputnikError: #02EC 
++FAIL SputnikError: #00B7 
+ 
+ TEST COMPLETE
+ 
+diff --git a/LayoutTests/sputnik/Unicode/Unicode_510/S7.6_A1.1_T4-expected.txt b/LayoutTests/sputnik/Unicode/Unicode_510/S7.6_A1.1_T4-expected.txt
+index 2e4dfe4..77e38a4 100644
+--- a/LayoutTests/sputnik/Unicode/Unicode_510/S7.6_A1.1_T4-expected.txt
++++ b/LayoutTests/sputnik/Unicode/Unicode_510/S7.6_A1.1_T4-expected.txt
+@@ -1,6 +1,6 @@
+ S7.6_A1.1_T4
+ 
+-PASS 
++FAIL SputnikError: #2E2F 
+ 
+ TEST COMPLETE
+ 
+diff --git a/LayoutTests/sputnik/Unicode/Unicode_510/S7.6_A1.1_T6-expected.txt b/LayoutTests/sputnik/Unicode/Unicode_510/S7.6_A1.1_T6-expected.txt
+index 270b7c7..0e724a6 100644
+--- a/LayoutTests/sputnik/Unicode/Unicode_510/S7.6_A1.1_T6-expected.txt
++++ b/LayoutTests/sputnik/Unicode/Unicode_510/S7.6_A1.1_T6-expected.txt
+@@ -1,6 +1,6 @@
+ S7.6_A1.1_T6
+ 
+-FAIL SputnikError: #16EE 
++PASS 
+ 
+ TEST COMPLETE
+ 
+diff --git a/LayoutTests/sputnik/Unicode/Unicode_510/S7.6_A5.2_T4-expected.txt b/LayoutTests/sputnik/Unicode/Unicode_510/S7.6_A5.2_T4-expected.txt
+index 004f20f..594c41d 100644
+--- a/LayoutTests/sputnik/Unicode/Unicode_510/S7.6_A5.2_T4-expected.txt
++++ b/LayoutTests/sputnik/Unicode/Unicode_510/S7.6_A5.2_T4-expected.txt
+@@ -1,6 +1,6 @@
+ S7.6_A5.2_T4
+ 
+-PASS 
++FAIL SputnikError: #2E2F 
+ 
+ TEST COMPLETE
+ 
+diff --git a/LayoutTests/sputnik/Unicode/Unicode_510/S7.6_A5.2_T6-expected.txt b/LayoutTests/sputnik/Unicode/Unicode_510/S7.6_A5.2_T6-expected.txt
+index deef42c..4c66185 100644
+--- a/LayoutTests/sputnik/Unicode/Unicode_510/S7.6_A5.2_T6-expected.txt
++++ b/LayoutTests/sputnik/Unicode/Unicode_510/S7.6_A5.2_T6-expected.txt
+@@ -1,6 +1,6 @@
+ S7.6_A5.2_T6
+ 
+-FAIL SputnikError: #16EE 
++PASS 
+ 
+ TEST COMPLETE
+ 
+diff --git a/Source/JavaScriptCore/parser/Lexer.cpp b/Source/JavaScriptCore/parser/Lexer.cpp
+index dacd7f2..1a8c662 100644
+--- a/Source/JavaScriptCore/parser/Lexer.cpp
++++ b/Source/JavaScriptCore/parser/Lexer.cpp
+@@ -57,6 +57,10 @@ enum CharacterType {
+     CharacterZero,
+     CharacterNumber,
+ 
++    // For single-byte characters grandfathered into Other_ID_Continue -- namely just U+00B7 MIDDLE DOT.
++    // (http://unicode.org/reports/tr31/#Backward_Compatibility)
++    CharacterOtherIdentifierPart,
++
+     CharacterInvalid,
+     CharacterLineTerminator,
+     CharacterExclamationMark,
+@@ -278,7 +282,7 @@ static constexpr const unsigned short typesOfLatin1Characters[256] = {
+ /* 180 - Sk category        */ CharacterInvalid,
+ /* 181 - Ll category        */ CharacterIdentifierStart,
+ /* 182 - So category        */ CharacterInvalid,
+-/* 183 - Po category        */ CharacterInvalid,
++/* 183 - Po category        */ CharacterOtherIdentifierPart,
+ /* 184 - Sk category        */ CharacterInvalid,
+ /* 185 - No category        */ CharacterInvalid,
+ /* 186 - Ll category        */ CharacterIdentifierStart,
+@@ -727,7 +731,7 @@ ALWAYS_INLINE void Lexer<T>::skipWhitespace()
+ 
+ static NEVER_INLINE bool isNonLatin1IdentStart(UChar c)
+ {
+-    return U_GET_GC_MASK(c) & U_GC_L_MASK;
++    return u_hasBinaryProperty(c, UCHAR_ID_START);
+ }
+ 
+ static ALWAYS_INLINE bool isLatin1(LChar)
+@@ -757,16 +761,15 @@ static inline bool isIdentStart(UChar32 c)
+ 
+ static NEVER_INLINE bool isNonLatin1IdentPart(UChar32 c)
+ {
+-    // FIXME: ES6 says this should be based on the Unicode property ID_Continue now instead.
+-    return (U_GET_GC_MASK(c) & (U_GC_L_MASK | U_GC_MN_MASK | U_GC_MC_MASK | U_GC_ND_MASK | U_GC_PC_MASK)) || c == 0x200C || c == 0x200D;
++    return u_hasBinaryProperty(c, UCHAR_ID_CONTINUE) || c == 0x200C || c == 0x200D;
+ }
+ 
+ static ALWAYS_INLINE bool isIdentPart(LChar c)
+ {
+     // Character types are divided into two groups depending on whether they can be part of an
+-    // identifier or not. Those whose type value is less or equal than CharacterNumber can be
++    // identifier or not. Those whose type value is less or equal than CharacterOtherIdentifierPart can be
+     // part of an identifier. (See the CharacterType definition for more details.)
+-    return typesOfLatin1Characters[c] <= CharacterNumber;
++    return typesOfLatin1Characters[c] <= CharacterOtherIdentifierPart;
+ }
+ 
+ static ALWAYS_INLINE bool isIdentPart(UChar32 c)
+@@ -2312,6 +2315,7 @@ start:
+             goto parseIdent;
+ 
+         FALLTHROUGH;
++    case CharacterOtherIdentifierPart:
+     case CharacterInvalid:
+         m_lexErrorMessage = invalidCharacterMessage();
+         token = ERRORTOK;
+-- 
+1.9.1
+

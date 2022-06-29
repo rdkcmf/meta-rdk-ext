@@ -1,0 +1,119 @@
+From 08174110747edbbe377f766740649e764a9d24de Mon Sep 17 00:00:00 2001
+From: kkanag314 <krishnapriya_kanagaraj@comcast.com>
+Date: Tue, 15 Feb 2022 10:47:16 +0000
+Subject: [PATCH] remove the existing buffers while doing rewind
+
+---
+ Source/WebCore/Modules/mediasource/MediaSource.cpp  |  6 ++++++
+ Source/WebCore/Modules/mediasource/MediaSource.h    |  1 +
+ Source/WebCore/Modules/mediasource/SourceBuffer.cpp | 13 +++++++++++++
+ Source/WebCore/Modules/mediasource/SourceBuffer.h   |  2 ++
+ .../platform/graphics/MediaSourcePrivateClient.h    |  1 +
+ .../mse/MediaPlayerPrivateGStreamerMSE.cpp          |  6 ++++++
+ 6 files changed, 29 insertions(+)
+
+diff --git a/Source/WebCore/Modules/mediasource/MediaSource.cpp b/Source/WebCore/Modules/mediasource/MediaSource.cpp
+index 59b5e3058c15..61a17fbd55ad 100644
+--- a/Source/WebCore/Modules/mediasource/MediaSource.cpp
++++ b/Source/WebCore/Modules/mediasource/MediaSource.cpp
+@@ -1063,6 +1063,12 @@ void MediaSource::regenerateActiveSourceBuffers()
+         sourceBuffer->setBufferedDirty(true);
+ }
+ 
++void MediaSource::clearSourceBuffers()
++{
++   for (auto& sourceBuffer : *m_activeSourceBuffers)
++       sourceBuffer->setClearBuffer(true);
++}
++
+ }
+ 
+ #endif
+diff --git a/Source/WebCore/Modules/mediasource/MediaSource.h b/Source/WebCore/Modules/mediasource/MediaSource.h
+index 7fb65b461353..1d5272505178 100644
+--- a/Source/WebCore/Modules/mediasource/MediaSource.h
++++ b/Source/WebCore/Modules/mediasource/MediaSource.h
+@@ -105,6 +105,7 @@ public:
+     const MediaTime& currentTimeFudgeFactor();
+ 
+     virtual bool hasBufferedTime(const MediaTime&);
++    void clearSourceBuffers() override;
+ 
+ private:
+     explicit MediaSource(ScriptExecutionContext&);
+diff --git a/Source/WebCore/Modules/mediasource/SourceBuffer.cpp b/Source/WebCore/Modules/mediasource/SourceBuffer.cpp
+index 6d6482ed5092..e7159da71d46 100644
+--- a/Source/WebCore/Modules/mediasource/SourceBuffer.cpp
++++ b/Source/WebCore/Modules/mediasource/SourceBuffer.cpp
+@@ -981,6 +981,19 @@ void SourceBuffer::evictCodedFrames(size_t newDataSize)
+     if (isRemoved())
+         return;
+ 
++    // workaround to avoide samplereplacement in YT
++    if (m_shouldClearBuffer) {
++        m_shouldClearBuffer = false;
++        for (auto& trackBufferPair : m_trackBufferMap.values()) {
++            trackBufferPair.samples.clear();
++            trackBufferPair.decodeQueue.clear();
++            trackBufferPair.buffered=PlatformTimeRanges();
++        }
++        setBufferedDirty(true);
++        m_bufferFull = false;
++        return;
++    }
++
+     // This algorithm is run to free up space in this source buffer when new data is appended.
+     // 1. Let new data equal the data that is about to be appended to this SourceBuffer.
+     // 2. If the buffer full flag equals false, then abort these steps.
+diff --git a/Source/WebCore/Modules/mediasource/SourceBuffer.h b/Source/WebCore/Modules/mediasource/SourceBuffer.h
+index 95515486edec..87f585613a70 100644
+--- a/Source/WebCore/Modules/mediasource/SourceBuffer.h
++++ b/Source/WebCore/Modules/mediasource/SourceBuffer.h
+@@ -120,6 +120,7 @@ public:
+     size_t memoryCost() const;
+ 
+     void trySignalAllSamplesEnqueued();
++    void setClearBuffer(bool b) { m_shouldClearBuffer = b; }
+ 
+ private:
+     SourceBuffer(Ref<SourceBufferPrivate>&&, MediaSource*);
+@@ -240,6 +241,7 @@ private:
+     bool m_shouldGenerateTimestamps { false };
+     bool m_useClearContentLimits { true };
+     bool m_didLogQuotaErrorOnce { false };
++    bool m_shouldClearBuffer { false };
+ 
+     static size_t maxBufferSizeVideo;
+     static size_t maxBufferSizeAudio;
+diff --git a/Source/WebCore/platform/graphics/MediaSourcePrivateClient.h b/Source/WebCore/platform/graphics/MediaSourcePrivateClient.h
+index 72187bf0be30..e6e5c3bcb2c1 100644
+--- a/Source/WebCore/platform/graphics/MediaSourcePrivateClient.h
++++ b/Source/WebCore/platform/graphics/MediaSourcePrivateClient.h
+@@ -46,6 +46,7 @@ public:
+     virtual void seekToTime(const MediaTime&) = 0;
+     virtual void monitorSourceBuffers() = 0;
+     virtual bool hasBufferedTime(const MediaTime&) = 0;
++    virtual void clearSourceBuffers() = 0;
+ };
+ 
+ }
+diff --git a/Source/WebCore/platform/graphics/gstreamer/mse/MediaPlayerPrivateGStreamerMSE.cpp b/Source/WebCore/platform/graphics/gstreamer/mse/MediaPlayerPrivateGStreamerMSE.cpp
+index 431466339554..7e8da6e31790 100644
+--- a/Source/WebCore/platform/graphics/gstreamer/mse/MediaPlayerPrivateGStreamerMSE.cpp
++++ b/Source/WebCore/platform/graphics/gstreamer/mse/MediaPlayerPrivateGStreamerMSE.cpp
+@@ -248,6 +248,12 @@ void MediaPlayerPrivateGStreamerMSE::seek(const MediaTime& time)
+         return;
+     }
+ 
++    static const bool gDisableSBClearOnRewind = getenv("WPE_DISABLE_YT_CLEAR_BUFFER_ON_REW");
++    if (MediaPlayer::isYouTubeQuirksEnabled() && !gDisableSBClearOnRewind) {
++        if (time < currentMediaTime() && !isTimeBuffered(time) ) 
++            m_mediaSource->clearSourceBuffers();
++    }
++
+     GST_DEBUG("Seeking from %s to %s seconds", toString(current).utf8().data(), toString(time).utf8().data());
+     fprintf(stderr,"HTML5 video: Seeking from %s to %s seconds [%s]\n",
+                               toString(current).utf8().data(), toString(time).utf8().data(),
+-- 
+2.17.1
+

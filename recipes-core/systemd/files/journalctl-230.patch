@@ -24,7 +24,7 @@ index 9351b85ee..2ff999352 100644
  
                  case OUTPUT_SHORT_PRECISE:
 -                        r = strftime(buf, sizeof(buf), "%b %d %H:%M:%S", gettime_r(&t, &tm));
-+                        r = strftime(buf, sizeof(buf), "%Y %b %d %H:%M:%S", localtime_r(&t, &tm));
++                        r = strftime(buf, sizeof(buf), "%Y %b %d %H:%M:%S", gettime_r(&t, &tm));
                          if (r > 0)
                                  snprintf(buf + strlen(buf), sizeof(buf) - strlen(buf), ".%06llu", (unsigned long long) (x % USEC_PER_SEC));
                          break;

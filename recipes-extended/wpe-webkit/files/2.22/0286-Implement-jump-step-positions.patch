@@ -1,0 +1,689 @@
+From f808a3e2aed227fac3025a9d5c3cc319ca5908b0 Mon Sep 17 00:00:00 2001
+From: Damian Zgoda <damian.zgoda@sky.uk>
+Date: Wed, 25 Aug 2021 09:59:35 +0000
+Subject: [PATCH] Implement `jump-*` step positions
+
+---
+ LayoutTests/animations/computed-style-expected.txt |  2 +-
+ LayoutTests/animations/computed-style.html         |  2 +-
+ .../animation-steps-calculated-value-expected.txt  |  4 +-
+ .../fast/css/animation-steps-calculated-value.html |  4 +-
+ .../transformed-progress-expected.txt              |  6 ++
+ .../transitions/transitions-parsing-expected.txt   | 28 ++++-----
+ LayoutTests/transitions/transitions-parsing.html   | 32 +++++-----
+ Source/WebCore/css/CSSComputedStyleDeclaration.cpp |  2 +-
+ Source/WebCore/css/CSSTimingFunctionValue.cpp      | 30 ++++++++--
+ Source/WebCore/css/CSSTimingFunctionValue.h        | 13 +++--
+ Source/WebCore/css/CSSToStyleMap.cpp               |  6 +-
+ Source/WebCore/css/CSSValueKeywords.in             |  6 ++
+ Source/WebCore/css/parser/CSSPropertyParser.cpp    | 68 +++++++++++++++++-----
+ .../WebCore/platform/animation/TimingFunction.cpp  | 55 +++++++++++++----
+ Source/WebCore/platform/animation/TimingFunction.h | 46 +++++++++++----
+ .../UserInterface/Models/CSSKeywordCompletions.js  |  2 +
+ Source/WebKit/Shared/WebCoreArgumentCoders.cpp     |  8 +--
+ 17 files changed, 224 insertions(+), 90 deletions(-)
+
+diff --git a/LayoutTests/animations/computed-style-expected.txt b/LayoutTests/animations/computed-style-expected.txt
+index f051b62..e3abfa2 100644
+--- a/LayoutTests/animations/computed-style-expected.txt
++++ b/LayoutTests/animations/computed-style-expected.txt
+@@ -14,7 +14,7 @@ PASS test1Style.webkitAnimationIterationCount is '10'
+ PASS test2Style.webkitAnimationIterationCount is '10, infinite'
+ PASS test1Style.webkitAnimationTimingFunction is 'linear'
+ PASS test2Style.webkitAnimationTimingFunction is 'linear, ease-in-out'
+-PASS test3Style.webkitAnimationTimingFunction is 'steps(1, start), steps(1, end), steps(5, end)'
++PASS test3Style.webkitAnimationTimingFunction is 'steps(1, start), steps(1), steps(5)'
+ PASS test1Style.webkitAnimationDirection is 'normal'
+ PASS test2Style.webkitAnimationDirection is 'normal, alternate'
+ 
+diff --git a/LayoutTests/animations/computed-style.html b/LayoutTests/animations/computed-style.html
+index 0be8500..7247faa 100644
+--- a/LayoutTests/animations/computed-style.html
++++ b/LayoutTests/animations/computed-style.html
+@@ -81,7 +81,7 @@ shouldBe("test2Style.webkitAnimationIterationCount", "'10, infinite'");
+ 
+ shouldBe("test1Style.webkitAnimationTimingFunction", "'linear'");
+ shouldBe("test2Style.webkitAnimationTimingFunction", "'linear, ease-in-out'");
+-shouldBe("test3Style.webkitAnimationTimingFunction", "'steps(1, start), steps(1, end), steps(5, end)'");
++shouldBe("test3Style.webkitAnimationTimingFunction", "'steps(1, start), steps(1), steps(5)'");
+ 
+ shouldBe("test1Style.webkitAnimationDirection", "'normal'");
+ shouldBe("test2Style.webkitAnimationDirection", "'normal, alternate'");
+diff --git a/LayoutTests/fast/css/animation-steps-calculated-value-expected.txt b/LayoutTests/fast/css/animation-steps-calculated-value-expected.txt
+index 4adc57c..35c92d4 100644
+--- a/LayoutTests/fast/css/animation-steps-calculated-value-expected.txt
++++ b/LayoutTests/fast/css/animation-steps-calculated-value-expected.txt
+@@ -5,8 +5,8 @@ On success, you will see a series of "PASS" messages, followed by "TEST COMPLETE
+ 
+ PASS testDiv.style['-webkit-animation-timing-function'] is ""
+ testDiv.style['-webkit-animation-timing-function'] = 'steps(calc(1 + 2), end)'
+-PASS testDiv.style['-webkit-animation-timing-function'] is "steps(3, end)"
+-PASS window.getComputedStyle(testDiv).getPropertyValue('-webkit-animation-timing-function') is "steps(3, end)"
++PASS testDiv.style['-webkit-animation-timing-function'] is "steps(3)"
++PASS window.getComputedStyle(testDiv).getPropertyValue('-webkit-animation-timing-function') is "steps(3)"
+ PASS successfullyParsed is true
+ 
+ TEST COMPLETE
+diff --git a/LayoutTests/fast/css/animation-steps-calculated-value.html b/LayoutTests/fast/css/animation-steps-calculated-value.html
+index 284d35e..d09a2a2 100644
+--- a/LayoutTests/fast/css/animation-steps-calculated-value.html
++++ b/LayoutTests/fast/css/animation-steps-calculated-value.html
+@@ -9,8 +9,8 @@ var testDiv = document.getElementById("testDiv");
+ 
+ shouldBeEmptyString("testDiv.style['-webkit-animation-timing-function']");
+ evalAndLog("testDiv.style['-webkit-animation-timing-function'] = 'steps(calc(1 + 2), end)'");
+-shouldBeEqualToString("testDiv.style['-webkit-animation-timing-function']", "steps(3, end)");
+-shouldBeEqualToString("window.getComputedStyle(testDiv).getPropertyValue('-webkit-animation-timing-function')", "steps(3, end)");
++shouldBeEqualToString("testDiv.style['-webkit-animation-timing-function']", "steps(3)");
++shouldBeEqualToString("window.getComputedStyle(testDiv).getPropertyValue('-webkit-animation-timing-function')", "steps(3)");
+ 
+ </script>
+ <script src="../../resources/js-test-post.js"></script>
+diff --git a/LayoutTests/imported/w3c/web-platform-tests/web-animations/timing-model/time-transformations/transformed-progress-expected.txt b/LayoutTests/imported/w3c/web-platform-tests/web-animations/timing-model/time-transformations/transformed-progress-expected.txt
+index f65c3a6..38cf6a7 100644
+--- a/LayoutTests/imported/w3c/web-platform-tests/web-animations/timing-model/time-transformations/transformed-progress-expected.txt
++++ b/LayoutTests/imported/w3c/web-platform-tests/web-animations/timing-model/time-transformations/transformed-progress-expected.txt
+@@ -27,4 +27,10 @@ PASS Test bounds point of step-end easing with iterationStart and delay
+ PASS Test bounds point of step-end easing with iterationStart not at a transition point 
+ PASS Test bounds point of frames easing 
+ PASS Test bounds point of frames easing with iterationStart and delay 
++PASS Test bounds point of steps(jump-both) easing 
++PASS Test bounds point of steps(jump-both) easing with iterationStart and delay 
++PASS Test bounds point of steps(jump-both) easing with iterationStart not at a transition point 
++PASS Test bounds point of steps(jump-none) easing 
++PASS Test bounds point of steps(jump-none) easing with iterationStart and delay 
++PASS Test bounds point of steps(jump-none) easing with iterationStart not at a transition point 
+ 
+diff --git a/LayoutTests/transitions/transitions-parsing-expected.txt b/LayoutTests/transitions/transitions-parsing-expected.txt
+index 6e317fc..f4e125c 100644
+--- a/LayoutTests/transitions/transitions-parsing-expected.txt
++++ b/LayoutTests/transitions/transitions-parsing-expected.txt
+@@ -200,22 +200,22 @@ PASS style.transitionTimingFunction is 'cubic-bezier(0.2, -2, 0.2, 0.4)'
+ PASS computedStyle.transitionTimingFunction is 'cubic-bezier(0.2, -2, 0.2, 0.4)'
+ PASS style.webkitTransitionTimingFunction is 'cubic-bezier(0.2, -2, 0.2, 0.4)'
+ PASS computedStyle.webkitTransitionTimingFunction is 'cubic-bezier(0.2, -2, 0.2, 0.4)'
+-PASS style.transitionTimingFunction is 'step-start'
++PASS style.transitionTimingFunction is 'steps(1, start)'
+ PASS computedStyle.transitionTimingFunction is 'steps(1, start)'
+-PASS style.webkitTransitionTimingFunction is 'step-start'
++PASS style.webkitTransitionTimingFunction is 'steps(1, start)'
+ PASS computedStyle.webkitTransitionTimingFunction is 'steps(1, start)'
+-PASS style.transitionTimingFunction is 'step-end'
+-PASS computedStyle.transitionTimingFunction is 'steps(1, end)'
+-PASS style.webkitTransitionTimingFunction is 'step-end'
+-PASS computedStyle.webkitTransitionTimingFunction is 'steps(1, end)'
+-PASS style.transitionTimingFunction is 'steps(3, end)'
+-PASS computedStyle.transitionTimingFunction is 'steps(3, end)'
+-PASS style.webkitTransitionTimingFunction is 'steps(3, end)'
+-PASS computedStyle.webkitTransitionTimingFunction is 'steps(3, end)'
+-PASS style.transitionTimingFunction is 'steps(4, end)'
+-PASS computedStyle.transitionTimingFunction is 'steps(4, end)'
+-PASS style.webkitTransitionTimingFunction is 'steps(4, end)'
+-PASS computedStyle.webkitTransitionTimingFunction is 'steps(4, end)'
++PASS style.transitionTimingFunction is 'steps(1)'
++PASS computedStyle.transitionTimingFunction is 'steps(1)'
++PASS style.webkitTransitionTimingFunction is 'steps(1)'
++PASS computedStyle.webkitTransitionTimingFunction is 'steps(1)'
++PASS style.transitionTimingFunction is 'steps(3)'
++PASS computedStyle.transitionTimingFunction is 'steps(3)'
++PASS style.webkitTransitionTimingFunction is 'steps(3)'
++PASS computedStyle.webkitTransitionTimingFunction is 'steps(3)'
++PASS style.transitionTimingFunction is 'steps(4)'
++PASS computedStyle.transitionTimingFunction is 'steps(4)'
++PASS style.webkitTransitionTimingFunction is 'steps(4)'
++PASS computedStyle.webkitTransitionTimingFunction is 'steps(4)'
+ PASS style.transitionTimingFunction is 'steps(5, start)'
+ PASS computedStyle.transitionTimingFunction is 'steps(5, start)'
+ PASS style.webkitTransitionTimingFunction is 'steps(5, start)'
+diff --git a/LayoutTests/transitions/transitions-parsing.html b/LayoutTests/transitions/transitions-parsing.html
+index f458451..b37a932 100644
+--- a/LayoutTests/transitions/transitions-parsing.html
++++ b/LayoutTests/transitions/transitions-parsing.html
+@@ -330,28 +330,28 @@ shouldBe("style.webkitTransitionTimingFunction", "'cubic-bezier(0.2, -2, 0.2, 0.
+ shouldBe("computedStyle.webkitTransitionTimingFunction", "'cubic-bezier(0.2, -2, 0.2, 0.4)'");
+ 
+ style.transitionTimingFunction = "step-start";
+-shouldBe("style.transitionTimingFunction", "'step-start'");
++shouldBe("style.transitionTimingFunction", "'steps(1, start)'");
+ shouldBe("computedStyle.transitionTimingFunction", "'steps(1, start)'");
+-shouldBe("style.webkitTransitionTimingFunction", "'step-start'");
++shouldBe("style.webkitTransitionTimingFunction", "'steps(1, start)'");
+ shouldBe("computedStyle.webkitTransitionTimingFunction", "'steps(1, start)'");
+ 
+ style.transitionTimingFunction = "step-end";
+-shouldBe("style.transitionTimingFunction", "'step-end'");
+-shouldBe("computedStyle.transitionTimingFunction", "'steps(1, end)'");
+-shouldBe("style.webkitTransitionTimingFunction", "'step-end'");
+-shouldBe("computedStyle.webkitTransitionTimingFunction", "'steps(1, end)'");
++shouldBe("style.transitionTimingFunction", "'steps(1)'");
++shouldBe("computedStyle.transitionTimingFunction", "'steps(1)'");
++shouldBe("style.webkitTransitionTimingFunction", "'steps(1)'");
++shouldBe("computedStyle.webkitTransitionTimingFunction", "'steps(1)'");
+ 
+ style.transitionTimingFunction = "steps(3)";
+-shouldBe("style.transitionTimingFunction", "'steps(3, end)'");
+-shouldBe("computedStyle.transitionTimingFunction", "'steps(3, end)'");
+-shouldBe("style.webkitTransitionTimingFunction", "'steps(3, end)'");
+-shouldBe("computedStyle.webkitTransitionTimingFunction", "'steps(3, end)'");
+-
+-style.transitionTimingFunction = "steps(4, end)";
+-shouldBe("style.transitionTimingFunction", "'steps(4, end)'");
+-shouldBe("computedStyle.transitionTimingFunction", "'steps(4, end)'");
+-shouldBe("style.webkitTransitionTimingFunction", "'steps(4, end)'");
+-shouldBe("computedStyle.webkitTransitionTimingFunction", "'steps(4, end)'");
++shouldBe("style.transitionTimingFunction", "'steps(3)'");
++shouldBe("computedStyle.transitionTimingFunction", "'steps(3)'");
++shouldBe("style.webkitTransitionTimingFunction", "'steps(3)'");
++shouldBe("computedStyle.webkitTransitionTimingFunction", "'steps(3)'");
++
++style.transitionTimingFunction = "steps(4)";
++shouldBe("style.transitionTimingFunction", "'steps(4)'");
++shouldBe("computedStyle.transitionTimingFunction", "'steps(4)'");
++shouldBe("style.webkitTransitionTimingFunction", "'steps(4)'");
++shouldBe("computedStyle.webkitTransitionTimingFunction", "'steps(4)'");
+ 
+ style.transitionTimingFunction = "steps(5, start)";
+ shouldBe("style.transitionTimingFunction", "'steps(5, start)'");
+diff --git a/Source/WebCore/css/CSSComputedStyleDeclaration.cpp b/Source/WebCore/css/CSSComputedStyleDeclaration.cpp
+index db9c6d7..e5401bd 100644
+--- a/Source/WebCore/css/CSSComputedStyleDeclaration.cpp
++++ b/Source/WebCore/css/CSSComputedStyleDeclaration.cpp
+@@ -1570,7 +1570,7 @@ static Ref<CSSValue> createTimingFunctionValue(const TimingFunction& timingFunct
+     }
+     case TimingFunction::StepsFunction: {
+         auto& function = downcast<StepsTimingFunction>(timingFunction);
+-        return CSSStepsTimingFunctionValue::create(function.numberOfSteps(), function.stepAtStart());
++        return CSSStepsTimingFunctionValue::create(function.numberOfSteps(), function.stepPosition());
+     }
+     case TimingFunction::FramesFunction: {
+         auto& function = downcast<FramesTimingFunction>(timingFunction);
+diff --git a/Source/WebCore/css/CSSTimingFunctionValue.cpp b/Source/WebCore/css/CSSTimingFunctionValue.cpp
+index 90ef6cd..5a03b39 100644
+--- a/Source/WebCore/css/CSSTimingFunctionValue.cpp
++++ b/Source/WebCore/css/CSSTimingFunctionValue.cpp
+@@ -55,16 +55,36 @@ String CSSStepsTimingFunctionValue::customCSSText() const
+     StringBuilder builder;
+     builder.appendLiteral("steps(");
+     builder.appendNumber(m_steps);
+-    if (m_stepAtStart)
+-        builder.appendLiteral(", start)");
+-    else
+-        builder.appendLiteral(", end)");
++    if (m_stepPosition) {
++        switch (m_stepPosition.value()) {
++        case StepsTimingFunction::StepPosition::JumpStart:
++            builder.appendLiteral(", jump-start");
++            break;
++
++        case StepsTimingFunction::StepPosition::JumpNone:
++            builder.appendLiteral(", jump-none");
++            break;
++
++        case StepsTimingFunction::StepPosition::JumpBoth:
++            builder.appendLiteral(", jump-both");
++            break;
++
++        case StepsTimingFunction::StepPosition::Start:
++            builder.appendLiteral(", start");
++            break;
++
++        case StepsTimingFunction::StepPosition::JumpEnd:
++        case StepsTimingFunction::StepPosition::End:
++            break;
++        }
++    }
++    builder.appendLiteral(")");
+     return builder.toString();
+ }
+ 
+ bool CSSStepsTimingFunctionValue::equals(const CSSStepsTimingFunctionValue& other) const
+ {
+-    return m_steps == other.m_steps && m_stepAtStart == other.m_stepAtStart;
++    return m_steps == other.m_steps && m_stepPosition == other.m_stepPosition;
+ }
+ 
+ String CSSFramesTimingFunctionValue::customCSSText() const
+diff --git a/Source/WebCore/css/CSSTimingFunctionValue.h b/Source/WebCore/css/CSSTimingFunctionValue.h
+index 6060979..defbd7e 100644
+--- a/Source/WebCore/css/CSSTimingFunctionValue.h
++++ b/Source/WebCore/css/CSSTimingFunctionValue.h
+@@ -26,6 +26,7 @@
+ #pragma once
+ 
+ #include "CSSValue.h"
++#include "TimingFunction.h"
+ 
+ namespace WebCore {
+ 
+@@ -63,28 +64,28 @@ private:
+ 
+ class CSSStepsTimingFunctionValue final : public CSSValue {
+ public:
+-    static Ref<CSSStepsTimingFunctionValue> create(int steps, bool stepAtStart)
++    static Ref<CSSStepsTimingFunctionValue> create(int steps, std::optional<StepsTimingFunction::StepPosition> stepPosition)
+     {
+-        return adoptRef(*new CSSStepsTimingFunctionValue(steps, stepAtStart));
++        return adoptRef(*new CSSStepsTimingFunctionValue(steps, stepPosition));
+     }
+ 
+     int numberOfSteps() const { return m_steps; }
+-    bool stepAtStart() const { return m_stepAtStart; }
++    std::optional<StepsTimingFunction::StepPosition> stepPosition() const { return m_stepPosition; }
+ 
+     String customCSSText() const;
+ 
+     bool equals(const CSSStepsTimingFunctionValue&) const;
+ 
+ private:
+-    CSSStepsTimingFunctionValue(int steps, bool stepAtStart)
++    CSSStepsTimingFunctionValue(int steps, std::optional<StepsTimingFunction::StepPosition> stepPosition)
+         : CSSValue(StepsTimingFunctionClass)
+         , m_steps(steps)
+-        , m_stepAtStart(stepAtStart)
++        , m_stepPosition(stepPosition)
+     {
+     }
+ 
+     int m_steps;
+-    bool m_stepAtStart;
++    std::optional<StepsTimingFunction::StepPosition> m_stepPosition;
+ };
+ 
+ class CSSFramesTimingFunctionValue final : public CSSValue {
+diff --git a/Source/WebCore/css/CSSToStyleMap.cpp b/Source/WebCore/css/CSSToStyleMap.cpp
+index a0f9bda..84b7446 100644
+--- a/Source/WebCore/css/CSSToStyleMap.cpp
++++ b/Source/WebCore/css/CSSToStyleMap.cpp
+@@ -484,10 +484,10 @@ void CSSToStyleMap::mapAnimationTimingFunction(Animation& animation, const CSSVa
+             animation.setTimingFunction(CubicBezierTimingFunction::create(CubicBezierTimingFunction::EaseInOut));
+             break;
+         case CSSValueStepStart:
+-            animation.setTimingFunction(StepsTimingFunction::create(1, true));
++            animation.setTimingFunction(StepsTimingFunction::create(1, StepsTimingFunction::StepPosition::Start));
+             break;
+         case CSSValueStepEnd:
+-            animation.setTimingFunction(StepsTimingFunction::create(1, false));
++            animation.setTimingFunction(StepsTimingFunction::create(1, StepsTimingFunction::StepPosition::End));
+             break;
+         default:
+             break;
+@@ -500,7 +500,7 @@ void CSSToStyleMap::mapAnimationTimingFunction(Animation& animation, const CSSVa
+         animation.setTimingFunction(CubicBezierTimingFunction::create(cubicTimingFunction.x1(), cubicTimingFunction.y1(), cubicTimingFunction.x2(), cubicTimingFunction.y2()));
+     } else if (is<CSSStepsTimingFunctionValue>(value)) {
+         auto& stepsTimingFunction = downcast<CSSStepsTimingFunctionValue>(value);
+-        animation.setTimingFunction(StepsTimingFunction::create(stepsTimingFunction.numberOfSteps(), stepsTimingFunction.stepAtStart()));
++        animation.setTimingFunction(StepsTimingFunction::create(stepsTimingFunction.numberOfSteps(), stepsTimingFunction.stepPosition()));
+     } else if (is<CSSFramesTimingFunctionValue>(value)) {
+         auto& framesTimingFunction = downcast<CSSFramesTimingFunctionValue>(value);
+         animation.setTimingFunction(FramesTimingFunction::create(framesTimingFunction.numberOfFrames()));
+diff --git a/Source/WebCore/css/CSSValueKeywords.in b/Source/WebCore/css/CSSValueKeywords.in
+index 9423127..2293a0c 100644
+--- a/Source/WebCore/css/CSSValueKeywords.in
++++ b/Source/WebCore/css/CSSValueKeywords.in
+@@ -956,6 +956,12 @@ ease-out
+ ease-in-out
+ step-start
+ step-end
++jump-start
++jump-end
++jump-none
++jump-both
++// start
++// end
+ 
+ //
+ // CSS_PROP_ZOOM
+diff --git a/Source/WebCore/css/parser/CSSPropertyParser.cpp b/Source/WebCore/css/parser/CSSPropertyParser.cpp
+index 02d293c..a0324a00 100644
+--- a/Source/WebCore/css/parser/CSSPropertyParser.cpp
++++ b/Source/WebCore/css/parser/CSSPropertyParser.cpp
+@@ -1448,34 +1448,57 @@ static RefPtr<CSSValue> consumeTransitionProperty(CSSParserTokenRange& range)
+     
+ static RefPtr<CSSValue> consumeSteps(CSSParserTokenRange& range)
+ {
++    // https://drafts.csswg.org/css-easing-1/#funcdef-step-easing-function-steps
++
+     ASSERT(range.peek().functionId() == CSSValueSteps);
+     CSSParserTokenRange rangeCopy = range;
+     CSSParserTokenRange args = consumeFunction(rangeCopy);
+     
+-    RefPtr<CSSPrimitiveValue> steps = consumePositiveInteger(args);
+-    if (!steps)
++    RefPtr<CSSPrimitiveValue> stepsValue = consumePositiveInteger(args);
++    if (!stepsValue)
+         return nullptr;
+     
+-    // FIXME-NEWPARSER: Support the middle value and change from a boolean to an enum.
+-    bool stepAtStart = false;
++    std::optional<StepsTimingFunction::StepPosition> stepPosition;
+     if (consumeCommaIncludingWhitespace(args)) {
+         switch (args.consumeIncludingWhitespace().id()) {
+-            case CSSValueStart:
+-                stepAtStart = true;
++        case CSSValueJumpStart:
++            stepPosition = StepsTimingFunction::StepPosition::JumpStart;
+             break;
+-            case CSSValueEnd:
+-                stepAtStart = false;
+-                break;
+-            default:
+-                return nullptr;
++
++        case CSSValueJumpEnd:
++            stepPosition = StepsTimingFunction::StepPosition::JumpEnd;
++            break;
++
++        case CSSValueJumpNone:
++            stepPosition = StepsTimingFunction::StepPosition::JumpNone;
++            break;
++
++        case CSSValueJumpBoth:
++            stepPosition = StepsTimingFunction::StepPosition::JumpBoth;
++            break;
++
++        case CSSValueStart:
++            stepPosition = StepsTimingFunction::StepPosition::Start;
++            break;
++
++        case CSSValueEnd:
++            stepPosition = StepsTimingFunction::StepPosition::End;
++            break;
++
++        default:
++            return nullptr;
+         }
+     }
+     
+     if (!args.atEnd())
+         return nullptr;
++
++    auto steps = stepsValue->intValue();
++    if (steps <= 1 && stepPosition == StepsTimingFunction::StepPosition::JumpNone)
++        return nullptr;
+     
+     range = rangeCopy;
+-    return CSSStepsTimingFunctionValue::create(steps->intValue(), stepAtStart);
++    return CSSStepsTimingFunctionValue::create(steps, stepPosition);
+ }
+ 
+ static RefPtr<CSSValue> consumeFrames(CSSParserTokenRange& range)
+@@ -1559,11 +1582,26 @@ static RefPtr<CSSValue> consumeSpringFunction(CSSParserTokenRange& range)
+ 
+ static RefPtr<CSSValue> consumeAnimationTimingFunction(CSSParserTokenRange& range, const CSSParserContext& context)
+ {
+-    CSSValueID id = range.peek().id();
+-    if (id == CSSValueEase || id == CSSValueLinear || id == CSSValueEaseIn
+-        || id == CSSValueEaseOut || id == CSSValueEaseInOut || id == CSSValueStepStart || id == CSSValueStepEnd)
++    switch (range.peek().id()) {
++    case CSSValueLinear:
++    case CSSValueEase:
++    case CSSValueEaseIn:
++    case CSSValueEaseOut:
++    case CSSValueEaseInOut:
+         return consumeIdent(range);
+ 
++    case CSSValueStepStart:
++        range.consumeIncludingWhitespace();
++        return CSSStepsTimingFunctionValue::create(1, StepsTimingFunction::StepPosition::Start);
++
++    case CSSValueStepEnd:
++        range.consumeIncludingWhitespace();
++        return CSSStepsTimingFunctionValue::create(1, StepsTimingFunction::StepPosition::End);
++
++    default:
++        break;
++    }
++
+     CSSValueID function = range.peek().functionId();
+     if (function == CSSValueCubicBezier)
+         return consumeCubicBezier(range);
+diff --git a/Source/WebCore/platform/animation/TimingFunction.cpp b/Source/WebCore/platform/animation/TimingFunction.cpp
+index 8c972d6..89c47d1 100644
+--- a/Source/WebCore/platform/animation/TimingFunction.cpp
++++ b/Source/WebCore/platform/animation/TimingFunction.cpp
+@@ -47,7 +47,36 @@ TextStream& operator<<(TextStream& ts, const TimingFunction& timingFunction)
+     }
+     case TimingFunction::StepsFunction: {
+         auto& function = downcast<StepsTimingFunction>(timingFunction);
+-        ts << "steps(" << function.numberOfSteps() << ", " << (function.stepAtStart() ? "start" : "end") << ")";
++        ts << "steps(" << function.numberOfSteps();
++        if (auto stepPosition = function.stepPosition()) {
++            ts << ", ";
++            switch (stepPosition.value()) {
++            case StepsTimingFunction::StepPosition::JumpStart:
++                ts << "jump-start";
++                break;
++
++            case StepsTimingFunction::StepPosition::JumpEnd:
++                ts << "jump-end";
++                break;
++
++            case StepsTimingFunction::StepPosition::JumpNone:
++                ts << "jump-none";
++                break;
++
++            case StepsTimingFunction::StepPosition::JumpBoth:
++                ts << "jump-both";
++                break;
++
++            case StepsTimingFunction::StepPosition::Start:
++                ts << "start";
++                break;
++
++            case StepsTimingFunction::StepPosition::End:
++                ts << "end";
++                break;
++            }
++        }
++        ts << ")";
+         break;
+     }
+     case TimingFunction::FramesFunction: {
+@@ -77,14 +106,15 @@ double TimingFunction::transformTime(double inputTime, double duration, bool bef
+         return UnitBezier(function.x1(), function.y1(), function.x2(), function.y2()).solve(inputTime, epsilon);
+     }
+     case TimingFunction::StepsFunction: {
+-        // https://drafts.csswg.org/css-timing/#step-timing-functions
++        // https://drafts.csswg.org/css-easing-1/#step-timing-functions
+         auto& function = downcast<StepsTimingFunction>(*this);
+         auto steps = function.numberOfSteps();
++        auto stepPosition = function.stepPosition();
+         // 1. Calculate the current step as floor(input progress value × steps).
+         auto currentStep = std::floor(inputTime * steps);
+         // 2. If the step position property is start, increment current step by one.
+-        if (function.stepAtStart())
+-            currentStep++;
++        if (stepPosition == StepsTimingFunction::StepPosition::JumpStart || stepPosition == StepsTimingFunction::StepPosition::Start || stepPosition == StepsTimingFunction::StepPosition::JumpBoth)
++            ++currentStep;
+         // 3. If both of the following conditions are true:
+         //    - the before flag is set, and
+         //    - input progress value × steps mod 1 equals zero (that is, if input progress value × steps is integral), then
+@@ -94,10 +124,15 @@ double TimingFunction::transformTime(double inputTime, double duration, bool bef
+         // 4. If input progress value ≥ 0 and current step < 0, let current step be zero.
+         if (inputTime >= 0 && currentStep < 0)
+             currentStep = 0;
+-        // 5. If input progress value ≤ 1 and current step > steps, let current step be steps.
++        // 5. Calculate jumps based on the step position.
++        if (stepPosition == StepsTimingFunction::StepPosition::JumpNone)
++            --steps;
++        else if (stepPosition == StepsTimingFunction::StepPosition::JumpBoth)
++            ++steps;
++        // 6. If input progress value ≤ 1 and current step > jumps, let current step be jumps.
+         if (inputTime <= 1 && currentStep > steps)
+             currentStep = steps;
+-        // 6. The output progress value is current step / steps.
++        // 7. The output progress value is current step / jumps.
+         return currentStep / steps;
+     }
+     case TimingFunction::FramesFunction: {
+@@ -154,9 +189,9 @@ RefPtr<TimingFunction> TimingFunction::createFromCSSValue(const CSSValue& value)
+         case CSSValueEaseInOut:
+             return CubicBezierTimingFunction::create(CubicBezierTimingFunction::EaseInOut);
+         case CSSValueStepStart:
+-            return StepsTimingFunction::create(1, true);
++            return StepsTimingFunction::create(1, StepsTimingFunction::StepPosition::Start);
+         case CSSValueStepEnd:
+-            return StepsTimingFunction::create(1, false);
++            return StepsTimingFunction::create(1, StepsTimingFunction::StepPosition::End);
+         default:
+             return nullptr;
+         }
+@@ -168,7 +203,7 @@ RefPtr<TimingFunction> TimingFunction::createFromCSSValue(const CSSValue& value)
+     }
+     if (is<CSSStepsTimingFunctionValue>(value)) {
+         auto& stepsTimingFunction = downcast<CSSStepsTimingFunctionValue>(value);
+-        return StepsTimingFunction::create(stepsTimingFunction.numberOfSteps(), stepsTimingFunction.stepAtStart());
++        return StepsTimingFunction::create(stepsTimingFunction.numberOfSteps(), stepsTimingFunction.stepPosition());
+     }
+     if (is<CSSFramesTimingFunctionValue>(value)) {
+         auto& framesTimingFunction = downcast<CSSFramesTimingFunctionValue>(value);
+@@ -199,7 +234,7 @@ String TimingFunction::cssText() const
+ 
+     if (m_type == TimingFunction::StepsFunction) {
+         auto& function = downcast<StepsTimingFunction>(*this);
+-        if (!function.stepAtStart())
++        if (function.stepPosition() == StepsTimingFunction::StepPosition::JumpEnd || function.stepPosition() == StepsTimingFunction::StepPosition::End)
+             return String::format("steps(%d)", function.numberOfSteps());
+     }
+ 
+diff --git a/Source/WebCore/platform/animation/TimingFunction.h b/Source/WebCore/platform/animation/TimingFunction.h
+index f09a593..99084ce 100644
+--- a/Source/WebCore/platform/animation/TimingFunction.h
++++ b/Source/WebCore/platform/animation/TimingFunction.h
+@@ -26,6 +26,7 @@
+ 
+ #include "CSSValue.h"
+ #include "ExceptionOr.h"
++#include <wtf/EnumTraits.h>
+ #include <wtf/Ref.h>
+ #include <wtf/RefCounted.h>
+ 
+@@ -193,13 +194,22 @@ private:
+ 
+ class StepsTimingFunction final : public TimingFunction {
+ public:
+-    static Ref<StepsTimingFunction> create(int steps, bool stepAtStart)
++    enum class StepPosition {
++        JumpStart,
++        JumpEnd,
++        JumpNone,
++        JumpBoth,
++        Start,
++        End,
++    };
++
++    static Ref<StepsTimingFunction> create(int steps, std::optional<StepPosition> stepPosition)
+     {
+-        return adoptRef(*new StepsTimingFunction(steps, stepAtStart));
++        return adoptRef(*new StepsTimingFunction(steps, stepPosition));
+     }
+     static Ref<StepsTimingFunction> create()
+     {
+-        return adoptRef(*new StepsTimingFunction(1, true));
++        return adoptRef(*new StepsTimingFunction(1, StepPosition::End));
+     }
+     
+     bool operator==(const TimingFunction& other) const final
+@@ -207,30 +217,30 @@ public:
+         if (!is<StepsTimingFunction>(other))
+             return false;
+         auto& otherSteps = downcast<StepsTimingFunction>(other);
+-        return m_steps == otherSteps.m_steps && m_stepAtStart == otherSteps.m_stepAtStart;
++        return m_steps == otherSteps.m_steps && m_stepPosition == otherSteps.m_stepPosition;
+     }
+     
+     int numberOfSteps() const { return m_steps; }
+     void setNumberOfSteps(int steps) { m_steps = steps; }
+ 
+-    bool stepAtStart() const { return m_stepAtStart; }
+-    void setStepAtStart(bool stepAtStart) { m_stepAtStart = stepAtStart; }
++    std::optional<StepPosition> stepPosition() const { return m_stepPosition; }
++    void setStepPosition(std::optional<StepPosition> stepPosition) { m_stepPosition = stepPosition; }
+ 
+ private:
+-    StepsTimingFunction(int steps, bool stepAtStart)
++    StepsTimingFunction(int steps, std::optional<StepPosition> stepPosition)
+         : TimingFunction(StepsFunction)
+         , m_steps(steps)
+-        , m_stepAtStart(stepAtStart)
++        , m_stepPosition(stepPosition)
+     {
+     }
+ 
+     Ref<TimingFunction> clone() const final
+     {
+-        return adoptRef(*new StepsTimingFunction(m_steps, m_stepAtStart));
++        return adoptRef(*new StepsTimingFunction(m_steps, m_stepPosition));
+     }
+     
+     int m_steps;
+-    bool m_stepAtStart;
++    std::optional<StepPosition> m_stepPosition;
+ };
+ 
+ class FramesTimingFunction final : public TimingFunction {
+@@ -340,3 +350,19 @@ SPECIALIZE_TYPE_TRAITS_TIMINGFUNCTION(WebCore::CubicBezierTimingFunction, isCubi
+ SPECIALIZE_TYPE_TRAITS_TIMINGFUNCTION(WebCore::StepsTimingFunction, isStepsTimingFunction())
+ SPECIALIZE_TYPE_TRAITS_TIMINGFUNCTION(WebCore::FramesTimingFunction, isFramesTimingFunction())
+ SPECIALIZE_TYPE_TRAITS_TIMINGFUNCTION(WebCore::SpringTimingFunction, isSpringTimingFunction())
++
++namespace WTF {
++
++template<> struct EnumTraits<WebCore::StepsTimingFunction::StepPosition> {
++    using values = EnumValues<
++        WebCore::StepsTimingFunction::StepPosition,
++        WebCore::StepsTimingFunction::StepPosition::JumpStart,
++        WebCore::StepsTimingFunction::StepPosition::JumpEnd,
++        WebCore::StepsTimingFunction::StepPosition::JumpNone,
++        WebCore::StepsTimingFunction::StepPosition::JumpBoth,
++        WebCore::StepsTimingFunction::StepPosition::Start,
++        WebCore::StepsTimingFunction::StepPosition::End
++    >;
++};
++
++} // namespace WTF
+diff --git a/Source/WebInspectorUI/UserInterface/Models/CSSKeywordCompletions.js b/Source/WebInspectorUI/UserInterface/Models/CSSKeywordCompletions.js
+index f225ae3..9cf94445 100644
+--- a/Source/WebInspectorUI/UserInterface/Models/CSSKeywordCompletions.js
++++ b/Source/WebInspectorUI/UserInterface/Models/CSSKeywordCompletions.js
+@@ -76,6 +76,8 @@ WI.CSSKeywordCompletions.forFunction = function(functionName)
+         suggestions.push("url()");
+     else if (functionName === "repeat")
+         suggestions = suggestions.concat(["auto", "auto-fill", "auto-fit", "min-content", "max-content"]);
++    else if (functionName === "steps")
++        suggestions.push("jump-none", "jump-start", "jump-end", "jump-both", "start", "end");
+     else if (functionName.endsWith("gradient")) {
+         suggestions = suggestions.concat(["to", "left", "right", "top", "bottom"]);
+         suggestions = suggestions.concat(WI.CSSKeywordCompletions._colors);
+diff --git a/Source/WebKit/Shared/WebCoreArgumentCoders.cpp b/Source/WebKit/Shared/WebCoreArgumentCoders.cpp
+index 83f9dbf..15cc01e 100644
+--- a/Source/WebKit/Shared/WebCoreArgumentCoders.cpp
++++ b/Source/WebKit/Shared/WebCoreArgumentCoders.cpp
+@@ -486,7 +486,7 @@ void ArgumentCoder<StepsTimingFunction>::encode(Encoder& encoder, const StepsTim
+     encoder.encodeEnum(timingFunction.type());
+     
+     encoder << timingFunction.numberOfSteps();
+-    encoder << timingFunction.stepAtStart();
++    encoder << timingFunction.stepPosition();
+ }
+ 
+ bool ArgumentCoder<StepsTimingFunction>::decode(Decoder& decoder, StepsTimingFunction& timingFunction)
+@@ -496,12 +496,12 @@ bool ArgumentCoder<StepsTimingFunction>::decode(Decoder& decoder, StepsTimingFun
+     if (!decoder.decode(numSteps))
+         return false;
+ 
+-    bool stepAtStart;
+-    if (!decoder.decode(stepAtStart))
++    std::optional<StepsTimingFunction::StepPosition> stepPosition;
++    if (!decoder.decode(stepPosition))
+         return false;
+ 
+     timingFunction.setNumberOfSteps(numSteps);
+-    timingFunction.setStepAtStart(stepAtStart);
++    timingFunction.setStepPosition(stepPosition);
+ 
+     return true;
+ }
+-- 
+1.9.1
+

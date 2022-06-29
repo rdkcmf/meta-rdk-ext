@@ -1,6 +1,10 @@
 FILESEXTRAPATHS_prepend := "${THISDIR}/${BPN}:"
 
-inherit systemd
+inherit systemd syslog-ng-config-gen
+SYSLOG-NG_FILTER_hybrid = "stunnel"
+SYSLOG-NG_SERVICE_stunnel_hybrid = "stunnel.service"
+SYSLOG-NG_DESTINATION_stunnel_hybrid = "stunnel.log"
+SYSLOG-NG_LOGRATE_stunnel_hybrid = "medium"
 
 DEPENDS_append_morty = " systemd "
 DEPENDS_append_daisy = " systemd "

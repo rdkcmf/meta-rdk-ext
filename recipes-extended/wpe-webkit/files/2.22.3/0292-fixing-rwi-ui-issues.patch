@@ -1,0 +1,57 @@
+From 13714c8744616cb2228ae36c1f4aa914a545004f Mon Sep 17 00:00:00 2001
+From: vshata811 <varunkumar_shatagopam@comcast.com>
+Date: Mon, 6 Dec 2021 10:41:19 +0000
+Subject: [PATCH] fixing-rwi-ui-issues
+
+Signed-off-by: vshata811 <varunkumar_shatagopam@comcast.com>
+---
+ .../UserInterface/Views/GeneralStyleDetailsSidebarPanel.css | 6 +++---
+ Source/WebInspectorUI/UserInterface/Views/SidebarPanel.css  | 1 +
+ 2 files changed, 4 insertions(+), 3 deletions(-)
+
+diff --git a/Source/WebInspectorUI/UserInterface/Views/GeneralStyleDetailsSidebarPanel.css b/Source/WebInspectorUI/UserInterface/Views/GeneralStyleDetailsSidebarPanel.css
+index 6d3df5707fba..71b267ca9f69 100644
+--- a/Source/WebInspectorUI/UserInterface/Views/GeneralStyleDetailsSidebarPanel.css
++++ b/Source/WebInspectorUI/UserInterface/Views/GeneralStyleDetailsSidebarPanel.css
+@@ -63,7 +63,7 @@
+     white-space: nowrap;
+ }
+ 
+-.sidebar > .panel.details.css-style > .content ~ :matches(.options-container, .class-list-container) {
++.sidebar > .panel.details.css-style > .content ~ :is(.options-container, .class-list-container) {
+     display: flex;
+     align-items: center;
+     position: absolute;
+@@ -79,7 +79,7 @@
+     padding-top: 1px;
+ }
+ 
+-.sidebar > .panel.details.css-style > .content:not(.supports-new-rule, .has-filter-bar) ~ :matches(.options-container, .class-list-container) {
++.sidebar > .panel.details.css-style > .content:not(.supports-new-rule, .has-filter-bar) ~ :is(.options-container, .class-list-container) {
+     display: none;
+ }
+ 
+@@ -176,7 +176,7 @@ body[dir=rtl] .sidebar > .panel.details.css-style > .content ~ .class-list-conta
+     margin-right: var(--panel-details-css-style-content-class-list-container-new-class-class-name-input-margin-start);
+ }
+ 
+-.sidebar > .panel.details.css-style > .content ~ .class-list-container > *:matches(.new-class, .class-toggle) {
++.sidebar > .panel.details.css-style > .content ~ .class-list-container > *:is(.new-class, .class-toggle) {
+     margin: 1px 3px;
+ }
+ 
+diff --git a/Source/WebInspectorUI/UserInterface/Views/SidebarPanel.css b/Source/WebInspectorUI/UserInterface/Views/SidebarPanel.css
+index f8a6a803622f..15e8dcb1a72d 100644
+--- a/Source/WebInspectorUI/UserInterface/Views/SidebarPanel.css
++++ b/Source/WebInspectorUI/UserInterface/Views/SidebarPanel.css
+@@ -24,6 +24,7 @@
+  */
+ 
+ .sidebar > .panel > .content {
++    position: absolute;
+     top: 0;
+     left: 0;
+     right: 0;
+-- 
+2.17.1
+

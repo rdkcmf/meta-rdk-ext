@@ -1,0 +1,69 @@
+From 16b18e250f9604f5cee27f4841aa6d9442fe46c7 Mon Sep 17 00:00:00 2001
+From: Gurdal Oruklu <gurdal_oruklu@comcast.com>
+Date: Tue, 2 Feb 2021 21:49:41 +0000
+Subject: [PATCH] Revert "[GStreamer][EME] Lock while CDM updates keys"
+
+This reverts commit 715db92582411ccb2976533f56de9b0805e3f939.
+---
+ .../platform/graphics/gstreamer/eme/CDMOpenCDM.cpp   | 20 +++++---------------
+ .../platform/graphics/gstreamer/eme/CDMOpenCDM.h     |  1 -
+ 2 files changed, 5 insertions(+), 16 deletions(-)
+
+Index: git/Source/WebCore/platform/graphics/gstreamer/eme/CDMOpenCDM.cpp
+===================================================================
+--- git.orig/Source/WebCore/platform/graphics/gstreamer/eme/CDMOpenCDM.cpp
++++ git/Source/WebCore/platform/graphics/gstreamer/eme/CDMOpenCDM.cpp
+@@ -88,7 +88,7 @@ class CDMInstanceOpenCDM::Session : publ
+ public:
+     using Notification = void (Session::*)(RefPtr<WebCore::SharedBuffer>&&);
+     using ChallengeGeneratedCallback = Function<void(Session*)>;
+-    using SessionChangedCallback = CompletionHandler<void(Session*, bool, RefPtr<SharedBuffer>&&, KeyStatusVector&)>;
++    using SessionChangedCallback = Function<void(Session*, bool, RefPtr<SharedBuffer>&&, KeyStatusVector&)>;
+ 
+     static Ref<Session> create(CDMInstanceOpenCDM*, OpenCDMSystem&, const String&, const AtomicString&, Ref<WebCore::SharedBuffer>&&, LicenseType, Ref<WebCore::SharedBuffer>&&);
+     ~Session();
+@@ -506,11 +506,7 @@ void CDMInstanceOpenCDM::requestLicense(
+ void CDMInstanceOpenCDM::updateLicense(const String& sessionId, LicenseType, const SharedBuffer& response, LicenseUpdateCallback callback)
+ {
+     GST_TRACE("Updating session %s", sessionId.utf8().data());
+-    // We take the session map mutex here and we do not release it
+-    // until the the update lambda is executed by moving the lock into
+-    // it.
+-    LockHolder locker(m_sessionMapMutex);
+-    auto session = lookupSessionUnlocked(sessionId);
++    auto session = lookupSession(sessionId);
+     if (!session) {
+         GST_WARNING("cannot update the session %s cause we can't find it", sessionId.utf8().data());
+         callback(false, std::nullopt, std::nullopt, std::nullopt, SuccessValue::Failed);
+@@ -694,17 +690,11 @@ bool CDMInstanceOpenCDM::removeSession(c
+     return m_sessionsMap.remove(sessionId);
+ }
+ 
+-RefPtr<CDMInstanceOpenCDM::Session> CDMInstanceOpenCDM::lookupSessionUnlocked(const String& sessionId) const
+-{
+-    ASSERT(m_sessionMapMutex.isLocked());
+-    auto session = m_sessionsMap.find(sessionId);
+-    return session == m_sessionsMap.end() ? nullptr : session->value;
+-}
+-
+ RefPtr<CDMInstanceOpenCDM::Session> CDMInstanceOpenCDM::lookupSession(const String& sessionId) const
+ {
+     LockHolder locker(m_sessionMapMutex);
+-    return lookupSessionUnlocked(sessionId);
++    auto session = m_sessionsMap.find(sessionId);
++    return session == m_sessionsMap.end() ? nullptr : session->value;
+ }
+ 
+ bool CDMInstanceOpenCDM::hasValidSessions() const
+Index: git/Source/WebCore/platform/graphics/gstreamer/eme/CDMOpenCDM.h
+===================================================================
+--- git.orig/Source/WebCore/platform/graphics/gstreamer/eme/CDMOpenCDM.h
++++ git/Source/WebCore/platform/graphics/gstreamer/eme/CDMOpenCDM.h
+@@ -112,7 +112,6 @@ private:
+     bool addSession(const String& sessionId, RefPtr<Session>&& session);
+     bool removeSession(const String& sessionId);
+     RefPtr<Session> lookupSession(const String& sessionId) const;
+-    RefPtr<Session> lookupSessionUnlocked(const String& sessionId) const;
+ 
+     String m_keySystem;
+     OpenCDMSystem& m_openCDMSystem;

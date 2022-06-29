@@ -1,0 +1,118 @@
+From 65ce76f35a323e5fd84199cedb031d6bdb4390d3 Mon Sep 17 00:00:00 2001
+From: bmaria645 <Bhuvaneswari_Mariappan@comcast.com>
+Date: Mon, 9 Aug 2021 09:28:46 +0000
+Subject: [PATCH] RDK-30521:h265 parser patch to embed SEI timecodes
+
+Reason for change:SEI timecode values are available in
+the elementry stream, h265 parser changes to extract the
+SEI timecode.
+Test Procedure: Ensure SEI timecodes are present in ProgressEvents.
+Risks: Low
+
+Signed-off-by: Kailash Baskar <kailash_baskar@comcast.com>
+---
+ gst/videoparsers/gsth265parse.c | 56 +++++++++++++++++++++++++++++++++
+ gst/videoparsers/gsth265parse.h |  6 ++++
+ 2 files changed, 62 insertions(+)
+
+diff --git a/gst/videoparsers/gsth265parse.c b/gst/videoparsers/gsth265parse.c
+index f965a4b49..398e02ab1 100644
+--- a/gst/videoparsers/gsth265parse.c
++++ b/gst/videoparsers/gsth265parse.c
+@@ -140,6 +140,7 @@ gst_h265_parse_init (GstH265Parse * h265parse)
+   gst_base_parse_set_pts_interpolation (GST_BASE_PARSE (h265parse), FALSE);
+   GST_PAD_SET_ACCEPT_INTERSECT (GST_BASE_PARSE_SINK_PAD (h265parse));
+   GST_PAD_SET_ACCEPT_TEMPLATE (GST_BASE_PARSE_SINK_PAD (h265parse));
++  h265parse->have_timecode= FALSE;
+ }
+ 
+ 
+@@ -591,6 +592,39 @@ gst_h265_parse_process_nal (GstH265Parse * h265parse, GstH265NalUnit * nalu)
+         GST_DEBUG_OBJECT (h265parse, "marking SEI in frame at offset %d",
+             h265parse->sei_pos);
+       }
++      {
++         unsigned char *NALUnit= (unsigned char*)nalu->data+nalu->offset;
++         int payloadType= NALUnit[2];
++         int payloadLen= NALUnit[3];
++         switch( payloadType )
++         {
++            case 136:
++               {
++                  int numClockTS= ((NALUnit[4]&0xC0)>>6);
++                  int unitsFieldBasedFlag= ((NALUnit[4]&0x20)>>5);
++                  int countingType= ((NALUnit[4] & 0x0F)<<1)|((NALUnit[5]*0x80)>>7);
++                  int fullTimestampFlag= ((NALUnit[5]&0x40)>>6);
++                  int discontinuityFlag= ((NALUnit[5]&0x20)>>5);
++                  int countDroppedFlag= ((NALUnit[5]&0x10)>>4);
++                  int n_frames= ((NALUnit[5]&0x0F)<<5)|((NALUnit[6]&0xF8)>>3);
++                  int seconds= 0;
++                  int minutes= 0;
++                  int hours= 0;
++                  if ( fullTimestampFlag )
++                  {
++                     seconds= ((NALUnit[6]&0x07)<<3)|((NALUnit[7]&0xE0)>>5);
++                     minutes= ((NALUnit[7]&0x1F)<<1)|((NALUnit[8]&0x80)>>7);
++                     hours= ((NALUnit[8]&0x7C)>>2);
++                     h265parse->hours= hours;
++                     h265parse->minutes= minutes;
++                     h265parse->seconds= seconds;
++                     h265parse->frames= n_frames;
++                     h265parse->have_timecode= TRUE;
++                  }
++               }
++               break;
++         }
++      }
+       break;
+ 
+     case GST_H265_NAL_SLICE_TRAIL_N:
+@@ -666,6 +700,28 @@ gst_h265_parse_process_nal (GstH265Parse * h265parse, GstH265NalUnit * nalu)
+     GST_LOG_OBJECT (h265parse, "collecting NAL in HEVC frame");
+     buf = gst_h265_parse_wrap_nal (h265parse, h265parse->format,
+         nalu->data + nalu->offset, nalu->size);
++    if ( h265parse->have_timecode )
++    {
++       guint fps_n= h265parse->fps_num;
++       guint fps_d= h265parse->fps_den;
++       if ( fps_n % fps_d != 0 )
++       {
++          fps_n= (fps_n + fps_d/2) / fps_d;
++          fps_d= 1;
++       }
++       gst_buffer_add_video_time_code_meta_full( buf,
++                                                 fps_n,
++                                                 fps_d,
++                                                 NULL, /* latest_daily_jam */
++                                                 GST_VIDEO_TIME_CODE_FLAGS_NONE, /* flags */
++                                                 h265parse->hours,
++                                                 h265parse->minutes,
++                                                 h265parse->seconds,
++                                                 h265parse->frames,
++                                                 0 /* field_count */
++                                                 );
++       h265parse->have_timecode= FALSE;
++    }
+     gst_adapter_push (h265parse->frame_out, buf);
+   }
+ }
+diff --git a/gst/videoparsers/gsth265parse.h b/gst/videoparsers/gsth265parse.h
+index 91e84ab1f..7e7913206 100644
+--- a/gst/videoparsers/gsth265parse.h
++++ b/gst/videoparsers/gsth265parse.h
+@@ -92,6 +92,12 @@ struct _GstH265Parse
+ 
+   gboolean sent_codec_tag;
+ 
++  gboolean have_timecode;
++  guint hours;
++  guint minutes;
++  guint seconds;
++  guint frames;
++
+   GstClockTime pending_key_unit_ts;
+   GstEvent *force_key_unit_event;
+ };
+-- 
+2.17.1
+

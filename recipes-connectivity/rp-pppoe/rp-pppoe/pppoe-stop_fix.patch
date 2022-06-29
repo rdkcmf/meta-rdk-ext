@@ -1,0 +1,32 @@
+###################################################################
+Date:   <Oct 6th 2021>
+Source: Deutsche Telekom AG
+Changes copyright 2020-2021 Deutsche Telekom AG
+###################################################################
+Index: rp-pppoe-3.12/scripts/pppoe-stop.in
+===================================================================
+--- rp-pppoe-3.12.orig/scripts/pppoe-stop.in
++++ rp-pppoe-3.12/scripts/pppoe-stop.in
+@@ -81,11 +81,17 @@ if [ -r "$PIDFILE" ] ; then
+     echo "Killing pppoe-connect ($PID)"
+     kill -9 $PID > /dev/null 2>&1
+ 
+-    # Kill pppd again, in case it's still hanging around
+-    if [ -r "$PPPD_PIDFILE" ] ; then
+-	PPPD_PID=`cat "$PPPD_PIDFILE"`
+-	kill -9 $PPPD_PID > /dev/null 2>&1 || exit 1
+-    fi
++    # Kill pppd again, in case it's still hanging after timeout
++    timeout=0
++    while pidof pppd > /dev/null
++    do
++     	if [ $timeout -eq 10 ] ; then
++        	PPPD_PID=`cat "$PPPD_PIDFILE"`
++        	kill -9 $PPPD_PID > /dev/null 2>&1 || exit 1
++     	fi
++       timeout=$((timeout+1))
++       sleep 1
++    done
+ 
+     rm -f "$PIDFILE" "$PPPD_PIDFILE" "$PPPOE_PIDFILE" "$STARTPID"
+ else
