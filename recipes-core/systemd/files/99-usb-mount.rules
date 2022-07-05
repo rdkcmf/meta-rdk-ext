@@ -6,5 +6,8 @@ KERNEL=="sd[a-z]", SUBSYSTEMS=="usb", ACTION=="add",  ENV{SYSTEMD_WANTS}+="usb-m
 
 KERNEL=="sd[a-z]", SUBSYSTEMS=="usb", ACTION=="remove",  RUN+="/bin/systemctl stop usb-mount@%k.service"
 
+SUBSYSTEMS=="usb"  ACTION=="add" RUN+="/lib/rdk/usbpublish.sh add"
+SUBSYSTEMS=="usb"  ACTION=="remove" RUN+="/lib/rdk/usbpublish.sh remove"
+
 
 
