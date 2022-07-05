@@ -7,33 +7,37 @@ else
    CONSOLEFILE="/dev/stdout"
 fi
 
+# Include Device configuration
+if [ -f /etc/device.properties ];then
+     . /etc/device.properties
+fi
+
 echo_t()
 {
-        echo "`date +"%y%m%d-%T.%6N"` $1"
+	if [ "$DEVICE_TYPE" = "broadband" ];then
+            echo "`date +"%y%m%d-%T.%6N"` $1" >> $CONSOLEFILE
+	else
+	    echo "$1"
+	fi
 }
 
 #Check if dnsmasq is already running. If yes, exit the script without restart
 #NOTE: Process is not killed here if found running since it must be cleaned up by systemd during service restart
 for DNS_PID in $(pidof dnsmasq)
 do
-    echo_t "dnsmasq already running" >> $CONSOLEFILE
+    echo_t "dnsmasq already running"
     #If the running instance is in uninterruptible sleep (D), print lsof & mount o/p for future debugging
     DNS_STATE=`cat /proc/$DNS_PID/status | grep State | awk '{print $2}'`
     if [ "$DNS_STATE" = "D" ];then
-        echo_t "dnsmasq is in uninterruptible sleep (D state)" >> $CONSOLEFILE
-        echo_t "List of files opened by dnsmasq:" >> $CONSOLEFILE
+        echo_t "dnsmasq is in uninterruptible sleep (D state)"
+        echo_t "List of files opened by dnsmasq:"
         lsof -p $DNS_PID
-        echo_t "Mount entries:" >> $CONSOLEFILE
+        echo_t "Mount entries:"
         mount
     fi
-    echo_t "Exiting without restart" >> $CONSOLEFILE
+    echo_t "Exiting without restart"
     exit 1
 done
-
-# Include Device configuration
-if [ -f /etc/device.properties ];then
-     . /etc/device.properties
-fi
 
 # Include RFC configuration
 if [ -f /etc/rfc.properties ];then
@@ -80,22 +84,22 @@ fi
 if [ "x$DNSSTRICT_ORDER_ENABLE" == "xtrue" ]; then
       DNS_ADDITIONAL_OPTION=" -o "
 else
-      echo_t "RFC DNSTRICT ORDER is not defined or Enabled $DNSSTRICT_ORDER_ENABLE" >> $CONSOLEFILE
+      echo_t "RFC DNSTRICT ORDER is not defined or Enabled $DNSSTRICT_ORDER_ENABLE"
 fi
 
 # Log the new options
 if [ "$DNS_OPTION" ];then
-      echo_t "Starting dnsmasq with option: $DNS_OPTION" >> $CONSOLEFILE
+      echo_t "Starting dnsmasq with option: $DNS_OPTION" 
 fi
 
 # Starting the DNSMASQ based on the available DNS OPTION
 if [ "$DNS_ADDITIONAL_OPTION" ];then
-      echo_t "Starting dnsmasq with additional dns strict order option: $DNS_ADDITIONAL_OPTION" >> $CONSOLEFILE
+      echo_t "Starting dnsmasq with additional dns strict order option: $DNS_ADDITIONAL_OPTION" 
 fi
 
 if [ -f "$DNS_BIN" ];then
       "$DNS_BIN" $DNS_OPTIONS $DNS_ADDITIONAL_OPTION
 else
-      echo_t "dnsmasq Binary Not Found in the System path /usr/bin" >> $CONSOLEFILE
+      echo_t "dnsmasq Binary Not Found in the System path /usr/bin"
       dnsmasq $DNS_OPTIONS $DNS_ADDITIONAL_OPTION
 fi
