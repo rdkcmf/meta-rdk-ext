@@ -1,0 +1,25 @@
+From 9aa7767ec6afe37778c93f622fee35b519294a7e Mon Sep 17 00:00:00 2001
+From: Pawel Lampe <pawel.lampe@sky.uk>
+Date: Wed, 13 Jul 2022 13:07:05 +0000
+Subject: [PATCH] Enable OCSP by default
+
+---
+ tls/openssl/gtlsclientconnection-openssl.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/tls/openssl/gtlsclientconnection-openssl.c b/tls/openssl/gtlsclientconnection-openssl.c
+index 6c148d8..03ae476 100644
+--- a/tls/openssl/gtlsclientconnection-openssl.c
++++ b/tls/openssl/gtlsclientconnection-openssl.c
+@@ -417,7 +417,7 @@ generate_session_id (const SSL     *ssl,
+ static gboolean
+ use_ocsp (void)
+ {
+-  return g_getenv ("G_TLS_OPENSSL_OCSP_ENABLED") != NULL;
++  return g_getenv ("G_TLS_OPENSSL_OCSP_DISABLED") == NULL;
+ }
+ 
+ static gboolean
+-- 
+2.35.1
+

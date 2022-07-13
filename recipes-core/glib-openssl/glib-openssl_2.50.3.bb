@@ -36,4 +36,5 @@ SRC_URI += "\
     file://force_tls1_2.patch \
     file://0001-XRE-14265-request-client-cert-support.patch \
     file://fix_dates_check.patch \
+    file://Enable-OCSP-by-default.patch \
 "
