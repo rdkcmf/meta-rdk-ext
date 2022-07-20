@@ -168,6 +168,7 @@ SRC_URI += "file://2.22.5/0300-Revert-SoupNetworkSession-Drop-open-connections.p
 SRC_URI += "file://2.22.3/0301-Revert-EME-Thunder-Fix-race-condition-in-updateLicen.patch"
 SRC_URI += "file://2.22.5/comcast-DELIA-55979-increase-the-time-slice-allocate.patch"
 SRC_URI += "file://2.22/0001-Disable-directcall-optimisation-for-MIPS.patch"
+SRC_URI += "file://2.22/0001-RDKTV-18489-Disable-appsink-out-of-segment-samples-d.patch"
 
 # device specific configs
 PACKAGECONFIG[westeros] = "-DUSE_WPEWEBKIT_BACKEND_WESTEROS=ON -DUSE_WPEWEBKIT_PLATFORM_WESTEROS=ON -DUSE_KEY_INPUT_HANDLING_LINUX_INPUT=OFF -DUSE_GSTREAMER_HOLEPUNCH=ON -DUSE_EXTERNAL_HOLEPUNCH=ON -DUSE_WESTEROS_SINK=ON,,westeros westeros-sink"
