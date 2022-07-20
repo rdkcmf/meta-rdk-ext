@@ -1,0 +1,128 @@
+From 77ff1524bbe3e47618c6efa388e6e73e4b10c84c Mon Sep 17 00:00:00 2001
+From: Gnanesha <Gnanesha_Thimmegowda@comcast.com>
+Date: Wed, 20 Jul 2022 09:53:07 -0400
+Subject: [PATCH] RDKAAMP-61: [AAMP] low latency dash stream evaluation
+
+---
+ libdash/libdash/include/ISegmentTemplate.h    | 12 ++++++++++
+ .../libdash/source/mpd/SegmentTemplate.cpp    | 22 +++++++++++++++++--
+ libdash/libdash/source/mpd/SegmentTemplate.h  |  6 +++++
+ libdash/libdash/source/xml/Node.cpp           |  9 +++++++-
+ 4 files changed, 46 insertions(+), 3 deletions(-)
+
+diff --git a/libdash/include/ISegmentTemplate.h b/libdash/libdash/include/ISegmentTemplate.h
+index 3e793d9..9358995 100644
+--- a/libdash/include/ISegmentTemplate.h
++++ b/libdash/include/ISegmentTemplate.h
+@@ -147,6 +147,18 @@ namespace dash
+                  *  @return     a pointer to a dash::mpd::ISegment object
+                  */
+                 virtual ISegment*           GetIndexSegmentFromTime     (const std::vector<IBaseUrl *>& baseurls, const std::string& representationID, uint32_t bandwidth, uint32_t time) const = 0;
++           
++		/**
++                 *  Returns a double that specifies the  Availability Time Offset of Segment Index in all Media Segments of the Representation.\n
++                 *  @return     an double value
++                 */
++                virtual double              GetAvailabilityTimeOffset   ()  const = 0;
++                
++		/**
++                 *  Returns a bool that specifies the  Availability Time complete of Segment Index in all Media Segments of the Representation.\n
++                 *  @return     a bool value
++                 */
++                virtual bool                GetAvailabilityTimeComplete ()  const = 0;                
+         };
+     }
+ }
+diff --git a/libdash/source/mpd/SegmentTemplate.cpp b/libdash/libdash/source/mpd/SegmentTemplate.cpp
+index 20d17e5..1be1584 100644
+--- a/libdash/source/mpd/SegmentTemplate.cpp
++++ b/libdash/source/mpd/SegmentTemplate.cpp
+@@ -18,8 +18,10 @@ SegmentTemplate::SegmentTemplate    () :
+                     media(""),
+                     index(""),
+                     initialization(""),
+-		    failoverContent(NULL),
+-                    bitstreamSwitching("")
++		     failoverContent(NULL),
++                    bitstreamSwitching(""),
++                    availabilityTimeOffset(0.0f),
++                    availabilityTimeComplete(false)
+ {
+ }
+ SegmentTemplate::~SegmentTemplate   ()
+@@ -66,6 +68,22 @@ void                SegmentTemplate::SetBitstreamSwitching          (const std::
+ {
+     this->bitstreamSwitching = bitstreamSwitching;
+ }
++double		    SegmentTemplate::GetAvailabilityTimeOffset  ()  const
++{
++    return this->availabilityTimeOffset;
++}
++void                SegmentTemplate::SetAvailabilityTimeOffset  (double availabilityTimeOffset)
++{
++    this->availabilityTimeOffset = availabilityTimeOffset;
++}
++bool		    SegmentTemplate::GetAvailabilityTimeComplete  ()  const
++{
++    return this->availabilityTimeComplete;
++}
++void                SegmentTemplate::SetAvailabilityTimeComplete  (bool availabilityTimeComplete)
++{
++    this->availabilityTimeComplete = availabilityTimeComplete;
++}
+ ISegment*           SegmentTemplate::ToInitializationSegment        (const std::vector<IBaseUrl *>& baseurls, const std::string& representationID, uint32_t bandwidth) const
+ {
+     return ToSegment(this->initialization, baseurls, representationID, bandwidth, dash::metrics::InitializationSegment);
+diff --git a/libdash/source/mpd/SegmentTemplate.h b/libdash/libdash/source/mpd/SegmentTemplate.h
+index 5f756cb..6c98189 100644
+--- a/libdash/source/mpd/SegmentTemplate.h
++++ b/libdash/libdash/source/mpd/SegmentTemplate.h
+@@ -40,12 +40,16 @@ namespace dash
+                 ISegment*           GetIndexSegmentFromNumber   (const std::vector<IBaseUrl *>& baseurls, const std::string& representationID, uint32_t bandwidth, uint32_t number) const;
+                 ISegment*           GetMediaSegmentFromTime     (const std::vector<IBaseUrl *>& baseurls, const std::string& representationID, uint32_t bandwidth, uint32_t time) const;
+                 ISegment*           GetIndexSegmentFromTime     (const std::vector<IBaseUrl *>& baseurls, const std::string& representationID, uint32_t bandwidth, uint32_t time) const;
++                double              GetAvailabilityTimeOffset   ()  const;
++                bool                GetAvailabilityTimeComplete ()  const;
+ 
+                 void    SetMedia                (const std::string& media);
+                 void    SetIndex                (const std::string& index);
+                 void    SetInitialization       (const std::string& initialization);
+ 		void    SetFailoverContent          (FailoverContent *failoverContent);
+                 void    SetBitstreamSwitching   (const std::string& bitstreamSwichting);
++                void	 SetAvailabilityTimeOffset   (double availabilityTimeOffset);
++                void 	 SetAvailabilityTimeComplete (bool availabilityTimeComplete);
+ 
+ 	    protected:
+ 	    	FailoverContent *failoverContent;
+@@ -59,6 +63,8 @@ namespace dash
+                 std::string index;
+                 std::string initialization;
+                 std::string bitstreamSwitching;
++                double                          availabilityTimeOffset;
++                bool                            availabilityTimeComplete;            
+         };
+     }
+ }
+diff --git a/libdash/source/xml/Node.cpp b/libdash/libdash/source/xml/Node.cpp
+index e89d603..a4efc20 100644
+--- a/libdash/source/xml/Node.cpp
++++ b/libdash/source/xml/Node.cpp
+@@ -470,7 +470,14 @@ dash::mpd::SegmentTemplate*                 Node::ToSegmentTemplate     ()  cons
+     {
+         segmentTemplate->SetBitstreamSwitching(this->GetAttributeValue("bitstreamSwitching"));
+     }
+-
++    if (this->HasAttribute("availabilityTimeOffset"))
++    {
++        segmentTemplate->SetAvailabilityTimeOffset(strtod(this->GetAttributeValue("availabilityTimeOffset").c_str(), NULL));
++    }
++    if (this->HasAttribute("availabilityTimeComplete"))
++    {
++        segmentTemplate->SetAvailabilityTimeComplete(dash::helpers::String::ToBool(this->GetAttributeValue("availabilityTimeComplete")));
++    }	
+     for(size_t i = 0; i < subNodes.size(); i++)
+     {
+ 	if (subNodes.at(i)->GetName() == "FailoverContent")
+-- 
+2.25.1
+
