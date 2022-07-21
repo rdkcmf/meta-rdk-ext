@@ -1386,13 +1386,13 @@
                                   "name": "privatessid",
                                   "bitposition": 1,
                                   "support": true,
-                                  "version": "2.0"
+                                  "version": "1.3"
                                },
                                {
                                   "name": "homessid",
                                   "bitposition": 2,
                                   "support": true,
-                                  "version": "2.0"
+                                  "version": "1.3"
                                },
                                {
                                   "name": "radio",
