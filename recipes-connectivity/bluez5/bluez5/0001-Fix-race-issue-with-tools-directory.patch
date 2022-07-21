@@ -1,0 +1,26 @@
+From abbd54a20471d0f0994822313d12f03c52307fee Mon Sep 17 00:00:00 2001
+From: ramkumar_digumarthi <ramkumar_digumarthi@comcast.com>
+Date: Thu, 21 Jul 2022 13:08:11 +0000
+Subject: [PATCH] Fix race issue with tools directory
+
+Source: http://cgit.openembedded.org/openembedded-core/tree/meta/recipes-connectivity/bluez5/bluez5/0001-Makefile.am-Fix-a-race-issue-for-tools.patch?h=warrior
+License: "GPLv2+ & LGPLv2.1+"
+Upstream-Status: NA
+
+Signed-off-by: ramkumar_digumarthi <ramkumar_digumarthi@comcast.com>
+---
+ Makefile.am | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/Makefile.am b/Makefile.am
+index 8f19ce9..d7d42c2 100644
+--- a/Makefile.am
++++ b/Makefile.am
+@@ -493,6 +493,7 @@ src/builtin.h: src/genbuiltin $(builtin_sources)
+ 	$(AM_V_GEN)$(srcdir)/src/genbuiltin $(builtin_modules) > $@
+ 
+ tools/%.rules:
++	[ -e tools ] || $(MKDIR_P) tools
+ 	$(AM_V_GEN)cp $(srcdir)/$(subst 97-,,$@) $@
+ 
+ $(lib_libbluetooth_la_OBJECTS): $(local_headers)
