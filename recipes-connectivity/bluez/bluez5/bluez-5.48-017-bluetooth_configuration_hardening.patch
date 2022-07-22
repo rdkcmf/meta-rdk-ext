@@ -17,11 +17,19 @@ Signed-off-by: Tijo Thomas John <tijo.thomas@sky.uk>
  src/bluetooth.conf | 40 +++++++++++++++++++++++++++++++++++
  1 file changed, 40 insertions(+)
 
-diff --git a/src/bluetooth.conf b/src/bluetooth.conf
-index 0c0b221..4936cd4 100644
---- a/src/bluetooth.conf
-+++ b/src/bluetooth.conf
-@@ -21,6 +21,46 @@
+Index: bluez-5.48/src/bluetooth.conf
+===================================================================
+--- bluez-5.48.orig/src/bluetooth.conf
++++ bluez-5.48/src/bluetooth.conf
+@@ -12,6 +12,7 @@
+     <allow send_destination="org.bluez"/>
+     <allow send_interface="org.bluez.Agent1"/>
+     <allow send_interface="org.bluez.MediaEndpoint1"/>
++    <allow send_interface="org.bluez.MediaTransport1"/>
+     <allow send_interface="org.bluez.MediaPlayer1"/>
+     <allow send_interface="org.bluez.Profile1"/>
+     <allow send_interface="org.bluez.GattCharacteristic1"/>
+@@ -21,6 +22,49 @@
      <allow send_interface="org.freedesktop.DBus.Properties"/>
    </policy>
  
@@ -29,6 +37,7 @@ index 0c0b221..4936cd4 100644
 +    <allow send_destination="org.bluez"/>
 +    <allow send_interface="org.bluez.Agent1"/>
 +    <allow send_interface="org.bluez.MediaEndpoint1"/>
++    <allow send_interface="org.bluez.MediaTransport1"/>
 +    <allow send_interface="org.bluez.MediaPlayer1"/>
 +    <allow send_interface="org.bluez.Profile1"/>
 +    <allow send_interface="org.bluez.GattCharacteristic1"/>
@@ -42,6 +51,7 @@ index 0c0b221..4936cd4 100644
 +    <allow send_destination="org.bluez"/>
 +    <allow send_interface="org.bluez.Agent1"/>
 +    <allow send_interface="org.bluez.MediaEndpoint1"/>
++    <allow send_interface="org.bluez.MediaTransport1"/>
 +    <allow send_interface="org.bluez.MediaPlayer1"/>
 +    <allow send_interface="org.bluez.Profile1"/>
 +    <allow send_interface="org.bluez.GattCharacteristic1"/>
@@ -50,11 +60,12 @@ index 0c0b221..4936cd4 100644
 +    <allow send_interface="org.freedesktop.DBus.ObjectManager"/>
 +    <allow send_interface="org.freedesktop.DBus.Properties"/>
 +   </policy>
-+ 
++
 +  <policy user="RCU_USR">
 +    <allow send_destination="org.bluez"/>
 +    <allow send_interface="org.bluez.Agent1"/>
 +    <allow send_interface="org.bluez.MediaEndpoint1"/>
++    <allow send_interface="org.bluez.MediaTransport1"/>
 +    <allow send_interface="org.bluez.MediaPlayer1"/>
 +    <allow send_interface="org.bluez.Profile1"/>
 +    <allow send_interface="org.bluez.GattCharacteristic1"/>
