@@ -1,6 +1,9 @@
 FILESEXTRAPATHS_prepend := "${THISDIR}/${BPN}:"
 SRC_URI += " file://openssl-c_rehash.sh \
            "
+
+PTEST_ENABLED = "${@bb.utils.contains('DISTRO_FEATURES', 'benchmark_enable', '1', '0', d)}"
+
 #Disable unapproved cipher algorithms
 EXTRA_OECONF += "no-camellia"
 EXTRA_OECONF += "no-seed"
@@ -27,4 +30,6 @@ do_install_append () {
         install -Dm 0755 ${WORKDIR}/openssl-c_rehash.sh ${D}${bindir}/c_rehash
         sed -i -e 's,/etc/openssl,${sysconfdir}/ssl,g' ${D}${bindir}/c_rehash
 }
+
+inherit ptest-package-deploy
 FILES_${PN} =+ " ${bindir}/c_rehash"
