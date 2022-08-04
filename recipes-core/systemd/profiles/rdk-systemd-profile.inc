@@ -10,9 +10,6 @@ FILES_${PN}-extra-utils += " \
                         ${rootlibexecdir}/systemd/systemd-sysv-install \
                         ${rootlibexecdir}/systemd/system/sysinit.target.wants/systemd-machine-id-commit.service \
                         ${rootlibexecdir}/systemd/system/systemd-machine-id-commit.service \
-                        ${rootlibexecdir}/systemd/system/sysinit.target.wants/systemd-hwdb-update.service \
-                        ${rootlibexecdir}/systemd/system/systemd-hwdb-update.service \
-                        ${base_bindir}/systemd-hwdb \
                         ${base_bindir}/systemd-machine-id-setup \
                         ${bindir}/systemd-socket-activate \
 "
