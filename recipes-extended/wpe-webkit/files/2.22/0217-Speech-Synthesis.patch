@@ -620,7 +620,7 @@ new file mode 100644
 index 000000000000..cc59aeefa35b
 --- /dev/null
 +++ b/Source/WebCore/platform/ttsclient/PlatformSpeechSynthesizerTTSClient.cpp
-@@ -0,0 +1,437 @@
+@@ -0,0 +1,439 @@
 +/* Copyright (C) 2019 RDK Management.  All rights reserved.
 +*
 +* Redistribution and use in source and binary forms, with or without
@@ -754,6 +754,7 @@ index 000000000000..cc59aeefa35b
 +
 +void PlatformSpeechSynthesizerTTSClient::setPageMediaVolume(float volume)
 +{
++#if PLATFORM(BROADCOM)
 +    double readVolume = client()->getPageMediaVolume();
 +    LOG(SpeechSynthesis, "PlatformSpeechSynthesizerTTSClient::%s, read MediaVolume : %lf, volume to be set : %lf", __FUNCTION__, readVolume, volume);
 +    if(volume == readVolume)
@@ -761,6 +762,7 @@ index 000000000000..cc59aeefa35b
 +
 +    LOG(SpeechSynthesis, "PlatformSpeechSynthesizerTTSClient::%s, set MediaVolume to : %lf", __FUNCTION__, volume);
 +    client()->setPageMediaVolume(volume);
++#endif
 +}
 +
 +void PlatformSpeechSynthesizerTTSClient::speak(RefPtr<PlatformSpeechSynthesisUtterance>&& u)

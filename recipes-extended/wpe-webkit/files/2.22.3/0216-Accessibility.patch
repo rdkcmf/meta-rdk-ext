@@ -599,7 +599,7 @@ Index: git/Source/WebKit/WebProcess/WebPage/WebPage.cpp
  #if PLATFORM(COCOA)
      m_pdfPluginEnabled = store.getBoolValueForKey(WebPreferencesKey::pdfPluginEnabledKey());
  #endif
-@@ -5315,6 +5341,14 @@ void WebPage::didCommitLoad(WebFrame* fr
+@@ -5315,6 +5341,15 @@ void WebPage::didCommitLoad(WebFrame* fr
      if (!frame->isMainFrame())
          return;
  
@@ -609,8 +609,9 @@ Index: git/Source/WebKit/WebProcess/WebPage/WebPage.cpp
 +    WTFLogAlways("%s RDKAT processing for WPE", axEnabled ? "Enable" : "Disable");
 +
 +    RDK_AT::EnableProcessing(axEnabled);
++#if PLATFORM(BROADCOM)
 +    RDK_AT::SetVolumeControlCallback(SetMediaVolume, axEnabled ? this : nullptr);
-+
++#endif
      // If previous URL is invalid, then it's not a real page that's being navigated away from.
      // Most likely, this is actually the first load to be committed in this page.
      if (frame->coreFrame()->loader().previousURL().isValid())
