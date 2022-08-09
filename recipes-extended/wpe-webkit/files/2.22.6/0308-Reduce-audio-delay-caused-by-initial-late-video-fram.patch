@@ -1,0 +1,97 @@
+From dfefe9745a8b363fcfe9b4ea7b20fd9717eca38d Mon Sep 17 00:00:00 2001
+From: Manoj Bhatta <manoj_bhatta@comcast.com>
+Date: Sun, 7 Aug 2022 22:01:12 +0000
+Subject: [PATCH 3/3] Reduce audio delay caused by initial late video frame
+
+---
+ .../gstreamer/MediaPlayerPrivateGStreamer.cpp |  4 ++++
+ .../gstreamer/GStreamerMediaStreamSource.cpp  |  5 +++++
+ .../GStreamerVideoDecoderFactory.cpp          | 22 +++++++++++++++++++
+ 3 files changed, 31 insertions(+)
+
+diff --git a/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp b/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp
+index 157bcd7980ff..a8ae7a606261 100644
+--- a/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp
++++ b/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp
+@@ -3207,7 +3207,11 @@ void MediaPlayerPrivateGStreamer::elementSetupCallback(MediaPlayerPrivateGStream
+     else if (g_str_has_prefix(GST_ELEMENT_NAME(element), "brcmaudiodecoder")) {
+         g_object_set(G_OBJECT(element), "audio_pts_disco_threshold", G_MAXUINT, nullptr);
+     }
++#endif
+ 
++#if ENABLE(MEDIA_STREAM)
++    if (player->m_streamPrivate != nullptr && GST_IS_BASE_SINK(element))
++        gst_base_sink_set_sync (GST_BASE_SINK (element), FALSE);
+ #endif
+ 
+     if (g_strcmp0(G_OBJECT_TYPE_NAME(G_OBJECT(element)), "GstQueue2") == 0)
+diff --git a/Source/WebCore/platform/mediastream/gstreamer/GStreamerMediaStreamSource.cpp b/Source/WebCore/platform/mediastream/gstreamer/GStreamerMediaStreamSource.cpp
+index 09a43e60c4c4..b3f4ce355b49 100644
+--- a/Source/WebCore/platform/mediastream/gstreamer/GStreamerMediaStreamSource.cpp
++++ b/Source/WebCore/platform/mediastream/gstreamer/GStreamerMediaStreamSource.cpp
+@@ -152,6 +152,7 @@ struct _WebKitMediaStreamSrc {
+     GstClockTime firstAudioBufferPts;
+     GstElement* videoSrc;
+     GstClockTime firstFramePts;
++    gboolean firstVideoSampleSeen;
+ 
+     std::unique_ptr<WebKitMediaStreamTrackObserver> observer;
+     volatile gint npads;
+@@ -496,6 +497,8 @@ static void webkitMediaStreamSrcPushVideoSample(WebKitMediaStreamSrc* self, GstS
+             auto pad = adoptGRef(gst_element_get_static_pad(self->videoSrc, "src"));
+             gst_pad_set_offset(pad.get(), -self->firstFramePts);
+         }
++        if (self->firstVideoSampleSeen == FALSE)
++            self->firstVideoSampleSeen = TRUE;
+ 
+         gst_app_src_push_sample(GST_APP_SRC(self->videoSrc), gstsample);
+     }
+@@ -503,6 +506,8 @@ static void webkitMediaStreamSrcPushVideoSample(WebKitMediaStreamSrc* self, GstS
+ 
+ static void webkitMediaStreamSrcPushAudioSample(WebKitMediaStreamSrc* self, GstSample* gstsample)
+ {
++    if (self->videoSrc && self->firstVideoSampleSeen == FALSE)
++        return;
+     if (self->audioSrc) {
+         if (!GST_CLOCK_TIME_IS_VALID(self->firstAudioBufferPts)) {
+             auto buffer = gst_sample_get_buffer(gstsample);
+diff --git a/Source/WebCore/platform/mediastream/libwebrtc/GStreamerVideoDecoderFactory.cpp b/Source/WebCore/platform/mediastream/libwebrtc/GStreamerVideoDecoderFactory.cpp
+index b306bf59d568..10226ece0519 100644
+--- a/Source/WebCore/platform/mediastream/libwebrtc/GStreamerVideoDecoderFactory.cpp
++++ b/Source/WebCore/platform/mediastream/libwebrtc/GStreamerVideoDecoderFactory.cpp
+@@ -69,6 +69,25 @@ public:
+             ASSERT_NOT_REACHED();
+     }
+ 
++#if PLATFORM(BROADCOM)
++    static unsigned getGstAutoplugSelectResult(const char* nick)
++    {
++        static GEnumClass* enumClass = static_cast<GEnumClass*>(g_type_class_ref(g_type_from_name("GstAutoplugSelectResult")));
++        ASSERT(enumClass);
++        GEnumValue* ev = g_enum_get_value_by_nick(enumClass, nick);
++        if (!ev)
++            return 0;
++        return ev->value;
++    }
++    static unsigned decodebinAutoplugSelect(GstElement *, GstPad *, GstCaps *, GstElementFactory *factory, gpointer)
++    {
++        if (g_str_has_prefix(gst_plugin_feature_get_plugin_name(GST_PLUGIN_FEATURE_CAST(factory)), "brcm")) {
++            return getGstAutoplugSelectResult("skip");
++        }
++        return getGstAutoplugSelectResult("try");
++    }
++#endif
++
+     GstElement* pipeline()
+     {
+         return m_pipeline.get();
+@@ -107,6 +126,9 @@ public:
+ 
+         auto sinkpad = adoptGRef(gst_element_get_static_pad(capsfilter, "sink"));
+         g_signal_connect(decoder, "pad-added", G_CALLBACK(decodebinPadAddedCb), sinkpad.get());
++#if PLATFORM(BROADCOM)
++        g_signal_connect(decoder, "autoplug-select", G_CALLBACK(decodebinAutoplugSelect), nullptr);
++#endif        
+         // Make the decoder output "parsed" frames only and let the main decodebin
+         // do the real decoding. This allows us to have optimized decoding/rendering
+         // happening in the main pipeline.

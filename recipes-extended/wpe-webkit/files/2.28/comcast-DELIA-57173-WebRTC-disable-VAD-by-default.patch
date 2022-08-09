@@ -1,0 +1,22 @@
+From 781cb2111278913937fa6126cdabbfec8aa4aa7e Mon Sep 17 00:00:00 2001
+From: Manoj Bhatta <manoj_bhatta@comcast.com>
+Date: Fri, 29 Jul 2022 04:56:09 +0000
+Subject: [PATCH]  WebRTC disable VAD by default
+
+---
+ .../webrtc/modules/audio_coding/acm2/audio_coding_module.cc     | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/Source/ThirdParty/libwebrtc/Source/webrtc/modules/audio_coding/acm2/audio_coding_module.cc b/Source/ThirdParty/libwebrtc/Source/webrtc/modules/audio_coding/acm2/audio_coding_module.cc
+index a6f671815599..53831589b087 100644
+--- a/Source/ThirdParty/libwebrtc/Source/webrtc/modules/audio_coding/acm2/audio_coding_module.cc
++++ b/Source/ThirdParty/libwebrtc/Source/webrtc/modules/audio_coding/acm2/audio_coding_module.cc
+@@ -650,7 +650,7 @@ AudioCodingModule::Config::Config(
+       decoder_factory(decoder_factory) {
+   // Post-decode VAD is disabled by default in NetEq, however, Audio
+   // Conference Mixer relies on VAD decisions and fails without them.
+-  neteq_config.enable_post_decode_vad = true;
++  //neteq_config.enable_post_decode_vad = true;
+ }
+ 
+ AudioCodingModule::Config::Config(const Config&) = default;

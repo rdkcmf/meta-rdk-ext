@@ -184,6 +184,10 @@ SRC_URI += "file://2.22.6/0303-appletv-asset-does-not-resume-after-seek.patch"
 SRC_URI += "file://2.22/0001-RDKTV-18489-Disable-appsink-out-of-segment-samples-d.patch"
 SRC_URI += "file://2.22.6/0311-Spinner-wheel-in-France24-app.patch"
 SRC_URI += "file://2.22.6/0310-Fix-eviction-of-currently-played-range-if-current-ti.patch"
+SRC_URI += "file://2.22.6/0306-WebRTC-disable-VAD-by-default.patch"
+SRC_URI += "file://2.22.6/0307-Backport-GStreamer-WebRTC-Handle-broken-data-in-the-.patch"
+SRC_URI += "file://2.22.6/0308-Reduce-audio-delay-caused-by-initial-late-video-fram.patch"
+SRC_URI += "file://2.22.6/0309-libwebrtc-disable-parser-for-non-GST-1.10.patch"
 
 # device specific configs
 PACKAGECONFIG[westeros] = "-DUSE_WPEWEBKIT_BACKEND_WESTEROS=ON -DUSE_WPEWEBKIT_PLATFORM_WESTEROS=ON -DUSE_KEY_INPUT_HANDLING_LINUX_INPUT=OFF -DUSE_GSTREAMER_HOLEPUNCH=ON -DUSE_EXTERNAL_HOLEPUNCH=ON -DUSE_WESTEROS_SINK=ON,,westeros westeros-sink"

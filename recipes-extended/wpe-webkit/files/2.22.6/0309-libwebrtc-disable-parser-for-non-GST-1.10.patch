@@ -1,0 +1,26 @@
+From e21e3c29407306ba1bd026d88ef2bcbf9dc8f888 Mon Sep 17 00:00:00 2001
+From: Manoj Bhatta <manoj_bhatta@comcast.com>
+Date: Wed, 31 Aug 2022 14:45:29 +0000
+Subject: [PATCH] libwebrtc: disable parser for GST 1.10
+
+---
+ .../mediastream/libwebrtc/GStreamerVideoDecoderFactory.cpp  | 6 +++++-
+ 1 file changed, 5 insertions(+), 1 deletion(-)
+
+diff --git a/Source/WebCore/platform/mediastream/libwebrtc/GStreamerVideoDecoderFactory.cpp b/Source/WebCore/platform/mediastream/libwebrtc/GStreamerVideoDecoderFactory.cpp
+index 10226ece0519..cc2499c54fb7 100644
+--- a/Source/WebCore/platform/mediastream/libwebrtc/GStreamerVideoDecoderFactory.cpp
++++ b/Source/WebCore/platform/mediastream/libwebrtc/GStreamerVideoDecoderFactory.cpp
+@@ -349,7 +349,11 @@ private:
+ 
+ class H264Decoder : public GStreamerVideoDecoder {
+ public:
+-    H264Decoder() { m_requireParse = true; }
++    H264Decoder() {
++#if !GST_CHECK_VERSION(1, 10, 0)
++        m_requireParse = true;
++#endif
++    }
+ 
+     int32_t InitDecode(const webrtc::VideoCodec* codecInfo, int32_t nCores) final
+     {

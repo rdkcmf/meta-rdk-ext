@@ -24,6 +24,7 @@ SRC_URI = "${BASE_URI}"
 SRC_URI += "file://2.28/868.patch"
 SRC_URI += "file://2.28/900.patch"
 SRC_URI += "file://2.28/914.patch"
+SRC_URI += "file://2.28/918.patch"
 SRC_URI += "file://2.28/921.patch"
 SRC_URI += "file://2.28/922.patch"
 
@@ -50,6 +51,7 @@ SRC_URI += "file://2.28/comcast-XRE-15382-XIONE-4595-RDKTV-17736-HDR-DV-conf.pat
 SRC_URI += "file://2.28/comcast-RDK-37080-disable-reenqueing-of-audio-sample.patch"
 SRC_URI += "file://2.28/comcast-RDKTV-17281-RDKTV-17781-Workaround-for-AppleTV-rende.patch"
 SRC_URI += "file://2.28/comcast-RDK-37379-Mute-release-logging.patch"
+SRC_URI += "file://2.28/comcast-DELIA-57173-WebRTC-disable-VAD-by-default.patch"
 
 PACKAGECONFIG[westeros]          = "-DUSE_WPEWEBKIT_PLATFORM_WESTEROS=ON -DUSE_GSTREAMER_HOLEPUNCH=ON -DUSE_EXTERNAL_HOLEPUNCH=ON -DUSE_WESTEROS_SINK=ON,,westeros westeros-sink"
 PACKAGECONFIG[encryptedmedia]    = "-DENABLE_ENCRYPTED_MEDIA=ON,-DENABLE_ENCRYPTED_MEDIA=OFF,"
