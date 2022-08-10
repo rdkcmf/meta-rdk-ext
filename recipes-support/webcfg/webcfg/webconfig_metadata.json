@@ -2134,7 +2134,7 @@
                           "bitposition": 1,
                           "support": true,
                           "version": "1.0",
-                          "secondary_doc": false
+                          "secondary_doc": true
                        }
                     ]
        },
@@ -2675,7 +2675,7 @@
                                 ]
                    }
                  ],
-     "skysr213" : [
+     "sr213" : [
       {
          "group_id": 1,
          "subdocs": [
@@ -2803,7 +2803,7 @@
                           "bitposition": 1,
                           "support": true,
                           "version": "1.0",
-                          "secondary_doc": false
+                          "secondary_doc": true
                        }
                     ]
        },
