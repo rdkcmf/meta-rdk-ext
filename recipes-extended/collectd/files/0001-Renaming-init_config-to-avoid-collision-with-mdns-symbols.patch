@@ -1,0 +1,66 @@
+From 31e607649dc0cac33bb40012ef0c65f2c40d93f2 Mon Sep 17 00:00:00 2001
+From: "Vivek.A" <Vivek_Arumugam@comcast.com>
+Date: Wed, 10 Aug 2022 17:08:37 +0000
+Subject: [PATCH] Renaming init_config to avoid collision with mdns symbols
+
+---
+ src/daemon/cmd.c         | 2 +-
+ src/daemon/cmd.h         | 2 +-
+ src/daemon/cmd_windows.c | 2 +-
+ src/daemon/collectd.c    | 2 +-
+ 4 files changed, 4 insertions(+), 4 deletions(-)
+
+diff --git a/src/daemon/cmd.c b/src/daemon/cmd.c
+index 09aee6a..2d49896 100644
+--- a/src/daemon/cmd.c
++++ b/src/daemon/cmd.c
+@@ -164,7 +164,7 @@ static int notify_systemd(void) {
+ #endif /* KERNEL_LINUX */
+ 
+ int main(int argc, char **argv) {
+-  struct cmdline_config config = init_config(argc, argv);
++  struct cmdline_config config = collectd_init_config(argc, argv);
+ 
+ #if COLLECT_DAEMON
+   /*
+diff --git a/src/daemon/cmd.h b/src/daemon/cmd.h
+index 152ee63..3680b67 100644
+--- a/src/daemon/cmd.h
++++ b/src/daemon/cmd.h
+@@ -35,7 +35,7 @@ struct cmdline_config {
+ };
+ 
+ void stop_collectd(void);
+-struct cmdline_config init_config(int argc, char **argv);
++struct cmdline_config collectd_init_config(int argc, char **argv);
+ int run_loop(bool test_readall);
+ 
+ #endif /* CMD_H */
+diff --git a/src/daemon/cmd_windows.c b/src/daemon/cmd_windows.c
+index 2542be5..a2a12ee 100644
+--- a/src/daemon/cmd_windows.c
++++ b/src/daemon/cmd_windows.c
+@@ -35,6 +35,6 @@ int main(int argc, char **argv) {
+     return 1;
+   }
+ 
+-  struct cmdline_config config = init_config(argc, argv);
++  struct cmdline_config config = collectd_init_config(argc, argv);
+   return run_loop(config.test_readall);
+ }
+diff --git a/src/daemon/collectd.c b/src/daemon/collectd.c
+index 2de0e1b..0c6fc42 100644
+--- a/src/daemon/collectd.c
++++ b/src/daemon/collectd.c
+@@ -386,7 +386,7 @@ static int configure_collectd(struct cmdline_config *config) {
+ 
+ void stop_collectd(void) { loop++; }
+ 
+-struct cmdline_config init_config(int argc, char **argv) {
++struct cmdline_config collectd_init_config(int argc, char **argv) {
+   struct cmdline_config config = {
+       .daemonize = true,
+       .create_basedir = true,
+-- 
+2.17.1
+
