@@ -1,0 +1,32 @@
+From 44047791e1119d698cfb326179dd3d9a403526e3 Mon Sep 17 00:00:00 2001
+From: Eugene Mutavchi <Ievgen_Mutavchi@comcast.com>
+Date: Wed, 17 Aug 2022 18:12:37 +0000
+Subject: [PATCH] Fix eviction of currently played range if current time falls
+ into small gap
+
+---
+ Source/WebCore/Modules/mediasource/SourceBuffer.cpp | 8 ++++++++
+ 1 file changed, 8 insertions(+)
+
+diff --git a/Source/WebCore/Modules/mediasource/SourceBuffer.cpp b/Source/WebCore/Modules/mediasource/SourceBuffer.cpp
+index e0770605d7ee..9018b63459a1 100644
+--- a/Source/WebCore/Modules/mediasource/SourceBuffer.cpp
++++ b/Source/WebCore/Modules/mediasource/SourceBuffer.cpp
+@@ -1042,6 +1042,14 @@ void SourceBuffer::evictCodedFrames(size_t newDataSize)
+     // currenTime whichever we hit first.
+     size_t currentTimeRange = buffered.find(currentTime);
+ 
++    if (currentTimeRange == notFound) {
++        auto adjustedCurrentTime = buffered.nearest(currentTime);
++        if (adjustedCurrentTime.isValid() && abs(adjustedCurrentTime - currentTime) < MediaTime(1,1)) {
++            currentTimeRange = buffered.find(adjustedCurrentTime);
++            LOG(MediaSource, "SourceBuffer::evictCodedFrames(%p) - adjustedCurrentTime = %s, adjustedCurrentTimeRange = %zd", this, toString(adjustedCurrentTime).utf8().data(), currentTimeRange);
++        }
++    }
++
+ #if defined(METROLOGICAL)
+     MediaTime minimumRangeStart = currentTime + thirtySeconds;
+ 
+-- 
+2.25.1
+
