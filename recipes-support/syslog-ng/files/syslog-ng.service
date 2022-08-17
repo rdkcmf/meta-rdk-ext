@@ -1,0 +1,21 @@
+[Unit]
+Description=System Logger Daemon
+Documentation=man:syslog-ng(8)
+Before=disk-check.service
+After=previous-log-backup.service
+After=tmp.mount
+Requires=tmp.mount
+DefaultDependencies=no
+
+[Service]
+ExecStartPre=/bin/mkdir -p /tmp/syslog-ng
+ExecStartPre=/bin/sh -c 'if [ ! -f /tmp/syslog-ng.conf ];then cp /etc/syslog-ng/syslog-ng.conf /tmp/syslog-ng.conf ; fi'
+ExecStart=/usr/sbin/syslog-ng  -F -f /tmp/syslog-ng.conf -R /tmp/syslog-ng/syslog-ng.persist -c /tmp/syslog-ng/syslog-ng.ctl -p /tmp/syslog-ng/syslog-ng.pid
+Type=simple
+ExecReload=/bin/kill -HUP $MAINPID
+StandardOutput=journal
+StandardError=journal
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
