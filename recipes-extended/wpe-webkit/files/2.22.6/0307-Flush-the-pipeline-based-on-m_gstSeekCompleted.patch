@@ -1,0 +1,42 @@
+From a323b9c71ae69729b087fb8cdd50928b99cc840f Mon Sep 17 00:00:00 2001
+From: kkanag314 <krishnapriya_kanagaraj@comcast.com>
+Date: Wed, 17 Aug 2022 05:47:56 +0000
+Subject: [PATCH] desync issue
+
+---
+ .../graphics/gstreamer/mse/MediaPlayerPrivateGStreamerMSE.cpp | 4 ++--
+ .../graphics/gstreamer/mse/MediaSourceClientGStreamerMSE.cpp  | 2 +-
+ 2 files changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/Source/WebCore/platform/graphics/gstreamer/mse/MediaPlayerPrivateGStreamerMSE.cpp b/Source/WebCore/platform/graphics/gstreamer/mse/MediaPlayerPrivateGStreamerMSE.cpp
+index 71d737fcb0e5..d7c64e3b184e 100644
+--- a/Source/WebCore/platform/graphics/gstreamer/mse/MediaPlayerPrivateGStreamerMSE.cpp
++++ b/Source/WebCore/platform/graphics/gstreamer/mse/MediaPlayerPrivateGStreamerMSE.cpp
+@@ -349,8 +349,8 @@ bool MediaPlayerPrivateGStreamerMSE::doSeek()
+         m_seeking = false;
+         return false;
+     }
+-    if ((getStateResult == GST_STATE_CHANGE_ASYNC
+-        && !(state == GST_STATE_PLAYING && newState == GST_STATE_PAUSED))
++    if (((getStateResult == GST_STATE_CHANGE_ASYNC
++        && !(state == GST_STATE_PLAYING && newState == GST_STATE_PAUSED)) && !(state == GST_STATE_PAUSED && newState == GST_STATE_PAUSED)) 
+         || state < GST_STATE_PAUSED
+         || m_isEndReached
+         || !m_gstSeekCompleted) {
+diff --git a/Source/WebCore/platform/graphics/gstreamer/mse/MediaSourceClientGStreamerMSE.cpp b/Source/WebCore/platform/graphics/gstreamer/mse/MediaSourceClientGStreamerMSE.cpp
+index 86c5d2af8d4e..02c1e51c5ad6 100644
+--- a/Source/WebCore/platform/graphics/gstreamer/mse/MediaSourceClientGStreamerMSE.cpp
++++ b/Source/WebCore/platform/graphics/gstreamer/mse/MediaSourceClientGStreamerMSE.cpp
+@@ -195,7 +195,7 @@ void MediaSourceClientGStreamerMSE::flush(AtomicString trackId)
+     ASSERT(WTF::isMainThread());
+ 
+     // This is only for on-the-fly reenqueues after appends. When seeking, the seek will do its own flush.
+-    if (m_playerPrivate && !m_playerPrivate->m_seeking)
++    if (m_playerPrivate && (!m_playerPrivate->m_seeking || m_playerPrivate->m_gstSeekCompleted))
+         m_playerPrivate->m_playbackPipeline->flush(trackId);
+ }
+ 
+-- 
+2.17.1
+
+

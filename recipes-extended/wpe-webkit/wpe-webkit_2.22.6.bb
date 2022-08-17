@@ -192,6 +192,7 @@ SRC_URI += "file://2.22.6/0309-libwebrtc-disable-parser-for-non-GST-1.10.patch"
 SRC_URI += "file://2.22.6/0312-Fix-SourceBuffer-sample-time-increment-vs.last-frame.patch"
 SRC_URI += "file://2.22.6/0002-Patch-Realtek-audio-lowlatency-flow.patch"
 SRC_URI += "file://2.22.6/0312-iheart-spinning-wheel.patch"
+SRC_URI += "file://2.22.6/0307-Flush-the-pipeline-based-on-m_gstSeekCompleted.patch"
 
 # device specific configs
 PACKAGECONFIG[westeros] = "-DUSE_WPEWEBKIT_BACKEND_WESTEROS=ON -DUSE_WPEWEBKIT_PLATFORM_WESTEROS=ON -DUSE_KEY_INPUT_HANDLING_LINUX_INPUT=OFF -DUSE_GSTREAMER_HOLEPUNCH=ON -DUSE_EXTERNAL_HOLEPUNCH=ON -DUSE_WESTEROS_SINK=ON,,westeros westeros-sink"
