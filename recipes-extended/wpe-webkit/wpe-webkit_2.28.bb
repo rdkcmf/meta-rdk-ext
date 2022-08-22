@@ -52,6 +52,7 @@ SRC_URI += "file://2.28/comcast-RDK-37080-disable-reenqueing-of-audio-sample.pat
 SRC_URI += "file://2.28/comcast-RDKTV-17281-RDKTV-17781-Workaround-for-AppleTV-rende.patch"
 SRC_URI += "file://2.28/comcast-RDK-37379-Mute-release-logging.patch"
 SRC_URI += "file://2.28/comcast-DELIA-57173-WebRTC-disable-VAD-by-default.patch"
+SRC_URI += "file://2.28/comcast-RDKTV-18852-Restrict-inspection-of-locally-hosted-pages.patch"
 
 PACKAGECONFIG[westeros]          = "-DUSE_WPEWEBKIT_PLATFORM_WESTEROS=ON -DUSE_GSTREAMER_HOLEPUNCH=ON -DUSE_EXTERNAL_HOLEPUNCH=ON -DUSE_WESTEROS_SINK=ON,,westeros westeros-sink"
 PACKAGECONFIG[encryptedmedia]    = "-DENABLE_ENCRYPTED_MEDIA=ON,-DENABLE_ENCRYPTED_MEDIA=OFF,"
