@@ -4,10 +4,10 @@ BUGTRACKER = "http://curl.haxx.se/mail/list.cgi?list=curl-tracker"
 SECTION = "console/network"
 LICENSE = "MIT"
 LIC_FILES_CHKSUM = "file://COPYING;beginline=8;md5=3a34942f4ae3fbf1a303160714e664ac"
+PV = "7.59.0"
+S = "${WORKDIR}/curl-${PV}/"
 
-S = "${WORKDIR}/curl-7.59.0/"
-
-SRC_URI = "http://curl.haxx.se/download/curl-7.59.0.tar.bz2 \
+SRC_URI = "http://curl.haxx.se/download/curl-${PV}.tar.bz2 \
            file://0001-replace-krb5-config-with-pkg-config.patch \
 "
 SRC_URI_append_dunfell = "${@bb.utils.contains('PREFERRED_VERSION_netflix', '5.3%','', bb.utils.contains('DISTRO_FEATURES', 'ssl-1.1.1', '', ' file://0001-Use-openssl1.0.2o-for-curl-netflix.patch',d),d)}"
