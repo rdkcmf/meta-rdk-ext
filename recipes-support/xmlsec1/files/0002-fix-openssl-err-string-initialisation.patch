@@ -1,0 +1,26 @@
+From: Ben Gray <ben.gray@sky.uk>
+Date: Fri Jan 21 09:59:04 UTC 2022
+
+Fixes a crash in libxmlsec1-openssl with openssl 1.1.1 build with
+the OPENSSL_NO_ERR flag.  In this case the openssl error code is
+not correctly initialised before ERR_load_strings is called. So
+this workaround is to call ERR_get_next_error_library() to correctly
+initialise openssl before calling ERR_load_strings.
+
+Upstream-Status: Pending
+Signed-off-by: Ben Gray <ben.gray@sky.uk>
+
+--- a/src/openssl/crypto.c	2020-04-20 18:30:32.000000000 +0000
++++ b/src/openssl/crypto.c	2022-01-21 09:54:46.776642588 +0000
+@@ -473,6 +473,10 @@
+         xmlSecOpenSSLStrReasons[pos].string = xmlSecErrorsGetMsg(pos);
+     }
+ 
++    /* workaround to ensure the openssl err code is initialised prior to ERR_load_strings
++     * if OPENSSL_NO_ERR is defined in the OpenSSL build */
++    ERR_get_next_error_library();
++
+     /* finally load xmlsec strings in OpenSSL */
+     ERR_load_strings(XMLSEC_OPENSSL_ERRORS_LIB, xmlSecOpenSSLStrLib); /* define xmlsec lib name */
+     ERR_load_strings(XMLSEC_OPENSSL_ERRORS_LIB, xmlSecOpenSSLStrDefReason); /* define default reason */
+
