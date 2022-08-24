@@ -182,6 +182,7 @@ SRC_URI += "file://2.22.6/0305-Bring-back-the-compositor-buffer-that-was-removed
 SRC_URI += "file://2.22.6/0306-audio-video-freeze-due-to-xrun-timer.patch"
 SRC_URI += "file://2.22.6/0303-appletv-asset-does-not-resume-after-seek.patch"
 SRC_URI += "file://2.22/0001-RDKTV-18489-Disable-appsink-out-of-segment-samples-d.patch"
+SRC_URI += "file://2.22.6/0311-Spinner-wheel-in-France24-app.patch"
 
 # device specific configs
 PACKAGECONFIG[westeros] = "-DUSE_WPEWEBKIT_BACKEND_WESTEROS=ON -DUSE_WPEWEBKIT_PLATFORM_WESTEROS=ON -DUSE_KEY_INPUT_HANDLING_LINUX_INPUT=OFF -DUSE_GSTREAMER_HOLEPUNCH=ON -DUSE_EXTERNAL_HOLEPUNCH=ON -DUSE_WESTEROS_SINK=ON,,westeros westeros-sink"

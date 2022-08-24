@@ -1,0 +1,58 @@
+From a4d605173e41c4f087ab32dab2a7c15ff48f2961 Mon Sep 17 00:00:00 2001
+From: smathe135 <Simi_Mathew@comcast.com>
+Date: Fri, 19 Aug 2022 05:55:47 +0000
+Subject: [PATCH] DELIA-57462 : Spinner wheel in France24 app
+
+Reason for change: Regression from changes
+https://github.com/WebPlatformForEmbedded/WPEWebKit/commit/b4fdd980207af05ce9cc295eb4710160bb04db4b
+Test Procedure: Test France24 app
+Risks: Low
+
+Signed-off-by: Simi Mathew <simim@tataelxsi.co.in>
+
+diff --git a/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp b/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp
+index 346cc4d72e3f..cee9a5d9789a 100644
+--- a/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp
++++ b/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp
+@@ -1611,24 +1611,6 @@ void MediaPlayerPrivateGStreamer::handleMessage(GstMessage* message)
+                 GstClockTime time;
+                 gst_structure_get(structure, "uri", G_TYPE_STRING, &uri.outPtr(), "fragment-download-time", GST_TYPE_CLOCK_TIME, &time, nullptr);
+                 GST_TRACE("Fragment %s download time %" GST_TIME_FORMAT, uri.get(), GST_TIME_ARGS(time));
+-            } else if (isMediaDiskCacheDisabled() && gst_structure_has_name(structure, "webkit-network-statistics")) {
+-                guint64 networkReadPosition = 0;
+-                guint64 httpResponseTotalSize = 0;
+-
+-                if (gst_structure_get(structure, "read-position", G_TYPE_UINT64, &networkReadPosition, "size", G_TYPE_UINT64, &httpResponseTotalSize, nullptr)) {
+-                    GST_DEBUG_OBJECT(pipeline(), "Updated network read position %" G_GUINT64_FORMAT ", size: %" G_GUINT64_FORMAT, networkReadPosition, httpResponseTotalSize);
+-
+-                    MediaTime mediaDuration = durationMediaTime();
+-                    // Update maxTimeLoaded only if the media duration is
+-                    // available. Otherwise we can't compute it.
+-                    if (httpResponseTotalSize) {
+-                        m_dataReadProgress = static_cast<double>(networkReadPosition) / static_cast<double>(httpResponseTotalSize);
+-                        if (mediaDuration) {
+-                            m_maxTimeLoaded = MediaTime(m_dataReadProgress * static_cast<double>(toGstUnsigned64Time(mediaDuration)), GST_SECOND);
+-                            GST_DEBUG("Updated maxTimeLoaded base on network read position: %s", toString(m_maxTimeLoaded).utf8().data());
+-                        }
+-                    }
+-                }
+             } else if (gst_structure_has_name(structure, "GstCacheDownloadComplete")) {
+                 m_downloadFinished = true;
+                 m_buffering = false;
+diff --git a/Source/WebCore/platform/graphics/gstreamer/WebKitWebSourceGStreamer.cpp b/Source/WebCore/platform/graphics/gstreamer/WebKitWebSourceGStreamer.cpp
+index fe48870a3da7..0594105e603f 100644
+--- a/Source/WebCore/platform/graphics/gstreamer/WebKitWebSourceGStreamer.cpp
++++ b/Source/WebCore/platform/graphics/gstreamer/WebKitWebSourceGStreamer.cpp
+@@ -1078,9 +1078,6 @@ void CachedResourceStreamingClient::dataReceived(PlatformMediaResource&, const c
+         priv->size = priv->offset;
+     }
+ 
+-    gst_element_post_message(GST_ELEMENT_CAST(src), gst_message_new_element(GST_OBJECT_CAST(src),
+-        gst_structure_new("webkit-network-statistics", "read-position", G_TYPE_UINT64, priv->offset, "size", G_TYPE_UINT64, priv->size, nullptr)));
+-
+     // Now split the recv'd buffer into buffers that are of a size basesrc suggests. It is important not
+     // to push buffers that are too large, otherwise incorrect buffering messages can be sent from the
+     // pipeline.
+-- 
+2.17.1
+
