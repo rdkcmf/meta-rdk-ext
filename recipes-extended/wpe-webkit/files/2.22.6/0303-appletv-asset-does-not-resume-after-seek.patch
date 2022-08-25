@@ -1,0 +1,114 @@
+From a68593a2495eb4be11836c2b42e691649b9ec123 Mon Sep 17 00:00:00 2001
+From: smathe135 <Simi_Mathew@comcast.com>
+Date: Mon, 23 May 2022 13:10:00 +0000
+Subject: [PATCH] RDKTV-17057: appletv+ asset does not resume after seek
+
+Reason for change:
+Regression after gstreamer 1.18
+Backport change from wpe-2.28 -
+https://github.com/WebPlatformForEmbedded/WPEWebKit/commit/454be71e7cd8f46a64692aa31437aadae474dfad
+
+[MSE][GStreamer] Google Dynamic Ad Insertion (DAI) support with other
+ preexisting pads
+
+ The current support only worked when there was only one pad remaining.
+ In the case
+ that legitimate black hole probes dealing with a secondary discarded
+ stream type
+ existed, it wouldn't work.
+
+ This new implementation checks the caps and ignores discarded (ie:
+ different from
+ the appsink one) stream types and only works with compatible types,
+ also trying
+ to find new substitute pads with compatible caps.
+Test Procedure: Basic sanity on webapps.
+Risks: NA
+
+Signed-off-by: smathe135 <Simi_Mathew@comcast.com>
+
+---
+ .../graphics/gstreamer/mse/AppendPipeline.cpp | 67 ++++++++++++++++---
+ 1 file changed, 56 insertions(+), 11 deletions(-)
+
+diff --git a/Source/WebCore/platform/graphics/gstreamer/mse/AppendPipeline.cpp b/Source/WebCore/platform/graphics/gstreamer/mse/AppendPipeline.cpp
+index c0126fd7aab1..a0cedd31d341 100644
+--- a/Source/WebCore/platform/graphics/gstreamer/mse/AppendPipeline.cpp
++++ b/Source/WebCore/platform/graphics/gstreamer/mse/AppendPipeline.cpp
+@@ -1267,20 +1267,65 @@ void AppendPipeline::disconnectDemuxerSrcPadFromAppsinkFromAnyThread(GstPad* dem
+     GST_DEBUG_BIN_TO_DOT_FILE_WITH_TS(GST_BIN(m_pipeline.get()), GST_DEBUG_GRAPH_SHOW_ALL, "pad-removed-before");
+ 
+     // Reconnect the other pad if it's the only remaining after removing this one and wasn't connected yet (has a black hole probe).
+-    if (m_demux->numsrcpads == 1) {
+-        auto remainingPad = GST_PAD(m_demux->srcpads->data);
++    auto getPadType = [](GstPad *pad) -> const char* {
++        auto padCaps = adoptGRef(gst_pad_get_current_caps(pad));
++        return padCaps ? capsMediaType(padCaps.get()) : nullptr;
++    };
++
++    const char* demuxerSrcPadType = getPadType(demuxerSrcPad);
++
++    auto oldPeerPad = adoptGRef(gst_element_get_static_pad(m_appsink.get(), "sink"));
++    while (gst_pad_is_linked(oldPeerPad.get())) {
++        // Get sink pad of the parser before appsink.
++        // All the expected elements between the demuxer and appsink are supposed to have pads named "sink".
++        oldPeerPad = adoptGRef(gst_pad_get_peer(oldPeerPad.get()));
++        auto element = adoptGRef(gst_pad_get_parent_element(oldPeerPad.get()));
++        oldPeerPad = adoptGRef(gst_element_get_static_pad(element.get(), "sink"));
++        ASSERT(oldPeerPad);
++    }
+ 
++    const char* oldPeerPadType = getPadType(oldPeerPad.get());
++
++    GstPad* remainingPad = nullptr;
++    // Check if a pad compatible with the appsink is being removed and, if so, look for a remaining compatible pad.
++    if (oldPeerPadType && !g_strcmp0(oldPeerPadType, demuxerSrcPadType)) {
++        // If there are multiple pads present check if any pad matching pipeline stream type exists. If only one pad exists, connect it as main pad.
++        if (GstIterator* iter = gst_element_iterate_src_pads(m_demux.get())) {
++            bool done = false;
++            while (!done) {
++                GValue item = G_VALUE_INIT;
++                switch (gst_iterator_next(iter, &item)) {
++                case GST_ITERATOR_OK:
++                    {
++                        GstPad* pad = static_cast<GstPad*>(g_value_get_object(&item));
++                        const char* padType = getPadType(pad);
++                        if (padType && !g_strcmp0(padType, oldPeerPadType)) {
++                            if (remainingPad) {
++                                remainingPad = nullptr;
++                                done = true;
++                            } else {
++                                remainingPad = pad;
++                            }
++                        }
++                    }
++                break;
++                case GST_ITERATOR_RESYNC:
++                    remainingPad = nullptr;
++                    gst_iterator_resync (iter);
++                    break;
++                case GST_ITERATOR_ERROR:
++                    FALLTHROUGH;
++                case GST_ITERATOR_DONE:
++                    done = true;
++                    break;
++                }
++            }
++            gst_iterator_free (iter);
++        }
++    }
++    if (remainingPad) {
+         auto probeId = GPOINTER_TO_ULONG(g_object_get_data(G_OBJECT(remainingPad), "blackHoleProbeId"));
+         if (remainingPad && probeId) {
+-            auto oldPeerPad = adoptGRef(gst_element_get_static_pad(m_appsink.get(), "sink"));
+-            while (gst_pad_is_linked(oldPeerPad.get())) {
+-                // Get sink pad of the parser before appsink.
+-                // All the expected elements between the demuxer and appsink are supposed to have pads named "sink".
+-                oldPeerPad = adoptGRef(gst_pad_get_peer(oldPeerPad.get()));
+-                auto element = adoptGRef(gst_pad_get_parent_element(oldPeerPad.get()));
+-                oldPeerPad = adoptGRef(gst_element_get_static_pad(element.get(), "sink"));
+-                ASSERT(oldPeerPad);
+-            }
+ 
+             gst_pad_remove_probe(remainingPad, probeId);
+ 
