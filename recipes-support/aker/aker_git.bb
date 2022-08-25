@@ -6,7 +6,7 @@ HOMEPAGE = "https://github.com/Comcast/aker"
 LICENSE = "Apache-2.0"
 LIC_FILES_CHKSUM = "file://LICENSE;md5=e3fc50a88d0a364313df4b21ef20c29e"
 
-SRCREV = "e8423cb8f6974f00f76310480eb6f764dffea46e"
+SRCREV = "ebbf31be22b1cc7928bed070fe84ecdc7191c4c2"
 SRC_URI = "git://github.com/xmidt-org/aker.git;branch=main"
 SRC_URI += "file://aker-01.patch"
 
