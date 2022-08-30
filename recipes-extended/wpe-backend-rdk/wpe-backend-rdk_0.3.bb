@@ -14,6 +14,7 @@ BASE_URI ?= "git://github.com/WebPlatformForEmbedded/WPEBackend-rdk.git;protocol
 SRC_URI = "${BASE_URI}"
 
 SRC_URI += "file://0005-Naive-gamepad-support.patch"
+SRC_URI += "file://83.patch"
 
 S = "${WORKDIR}/git"
 
