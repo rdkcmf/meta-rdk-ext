@@ -66,9 +66,9 @@ fi
 echo "        option 0016 hex 0x0000118b000a65526f75746572312e30" >> $OPTION_FILE
 
 if [ "$EROUTER_DHCP_OPTION_EMTA_ENABLED" = "true" ] &&  [ "$ethWanMode" = "true" ];then 
-	echo -n "        option 0017 hex 0x0000118b000100060027087A087B" >> $OPTION_FILE
+	echo -n "        option 0017 hex 0x0000118b0001000800260027087A087B" >> $OPTION_FILE
 else
-	echo -n "        option 0017 hex 0x0000118b" >> $OPTION_FILE
+	echo -n "        option 0017 hex 0x0000118b000100020026" >> $OPTION_FILE
 fi
     while read line
     do
@@ -101,8 +101,6 @@ fi
 if [ "$EROUTER_DHCP_OPTION_EMTA_ENABLED" = "true" ] && [ "$ethWanMode" = "true" ];then 
     echo -n "0027000107" >> $OPTION_FILE
 fi
-
-echo -n "0026" >> $OPTION_FILE
 
 
 if [ -f "$DHCP_CONFIG_FILE_RUNTIME" ]; then
