@@ -1,0 +1,26 @@
+From 30fdd3b86cc14912c065cea3ee329e35fd8b27bf Mon Sep 17 00:00:00 2001
+From: Pawel Lampe <pawel.lampe@gmail.com>
+Date: Wed, 28 Sep 2022 15:25:56 +0200
+Subject: [PATCH] LLAMA-7992: Fix startup in suspended state
+
+---
+ .../CoordinatedGraphics/DrawingAreaCoordinatedGraphics.cpp  | 6 ++++++
+ 1 file changed, 6 insertions(+)
+
+diff --git a/Source/WebKit/WebProcess/WebPage/CoordinatedGraphics/DrawingAreaCoordinatedGraphics.cpp b/Source/WebKit/WebProcess/WebPage/CoordinatedGraphics/DrawingAreaCoordinatedGraphics.cpp
+index e9f5dead0d49c..eea07139a8e0a 100644
+--- a/Source/WebKit/WebProcess/WebPage/CoordinatedGraphics/DrawingAreaCoordinatedGraphics.cpp
++++ b/Source/WebKit/WebProcess/WebPage/CoordinatedGraphics/DrawingAreaCoordinatedGraphics.cpp
+@@ -77,6 +77,12 @@ DrawingAreaCoordinatedGraphics::DrawingAreaCoordinatedGraphics(WebPage& webPage,
+             m_supportsAsyncScrolling = false;
+     }
+ #endif
++
++    // we're assuming ActivityState::IsInWindow is on by default
++    // thus if it's not - we need to trigger suspend immediately
++    if (!parameters.activityState.contains(ActivityState::IsInWindow)) {
++        activityStateDidChange(ActivityState::IsInWindow, -1, {});
++    }
+ }
+ 
+ DrawingAreaCoordinatedGraphics::~DrawingAreaCoordinatedGraphics() = default;

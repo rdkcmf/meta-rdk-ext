@@ -1,0 +1,22 @@
+From 4bb2348f3deeb2d48179585ed2ba2d4c48c8b353 Mon Sep 17 00:00:00 2001
+From: Pawel Lampe <pawel.lampe@gmail.com>
+Date: Thu, 18 Aug 2022 15:47:38 +0200
+Subject: [PATCH] LLAMA-7407: Fix media player's duration calculation
+
+---
+ .../platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp b/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp
+index a71068b8d796d..2e8639768b9cf 100644
+--- a/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp
++++ b/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp
+@@ -1289,7 +1289,7 @@ MediaTime MediaPlayerPrivateGStreamer::platformDuration() const
+     int64_t duration = 0;
+     if (!gst_element_query_duration(m_pipeline.get(), GST_FORMAT_TIME, &duration) || !GST_CLOCK_TIME_IS_VALID(duration)) {
+         GST_DEBUG_OBJECT(pipeline(), "Time duration query failed for %s", m_url.string().utf8().data());
+-        return MediaTime::positiveInfiniteTime();
++        return m_isLiveStream ? MediaTime::positiveInfiniteTime() : MediaTime::invalidTime();
+     }
+ 
+     GST_LOG_OBJECT(pipeline(), "Duration: %" GST_TIME_FORMAT, GST_TIME_ARGS(duration));

@@ -1,0 +1,83 @@
+From 038137f0126dd4037eddc8241261041b9992e299 Mon Sep 17 00:00:00 2001
+From: Andrzej Surdej <Andrzej_Surdej@comcast.com>
+Date: Mon, 19 Sep 2022 17:29:47 +0200
+Subject: [PATCH] Fix player stucking in buffering (paused) state for
+ progressive streaming
+
+1) Don't emit playbackStateChanged() if the player has just been paused
+   for buffering. The event will be emitted after buffering is completed.
+2) Fix detecting buffering completed from queue messages.
+   Don't reset m_isBuffering as it's used by updateStates() to check if
+   buffering was there at all.
+
+When play state is changed from PAUSED to PLAYING
+and buffering is detected in the same updateStates() run,
+the pipeline state is changed back to PAUSED just before triggering
+playbackStateChanged() notification. As a result at the time of running
+playbackStateChanged() player is already marked as paused triggering
+pauseInternal() from HTMLMediaElement. Once the buffering is completed
+and the player tries to change pipeline state from PAUSED back to PLAYING
+(setting ReadyState and NetworkStatee accordingly) it is instantly
+blocked by HTMLMediaElement (from setReadyState()->updatePlayState())
+as according to HTMLMediaPlayer obj the player should be paused
+(shouldBePlaying evaluates to false) so m_player->pause() is called
+bringing player back to PAUSED state. As a result the player can't
+really exit buffering state by its own and requires external input
+(like HTMLMediaElement::play()).
+
+This fixes stucking in paused state when seeking in Spotify app
+(for progressive content only) and random timeouts in YT Progressive tests.
+Both happens reandomly and seems to be strongly related to network
+conditions.
+---
+ .../graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp   | 9 +++++----
+ 1 file changed, 5 insertions(+), 4 deletions(-)
+
+diff --git a/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp b/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp
+index a71068b8d796d..cfc580ccf7359 100644
+--- a/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp
++++ b/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp
+@@ -2190,7 +2190,6 @@ void MediaPlayerPrivateGStreamer::updateBufferingStatus(GstBufferingMode mode, d
+     GST_DEBUG_OBJECT(pipeline(), "[Buffering] mode: %s, status: %f%%", enumToString(GST_TYPE_BUFFERING_MODE, mode).data(), percentage);
+ 
+     m_didDownloadFinish = percentage == 100;
+-    m_isBuffering = !m_didDownloadFinish;
+ 
+     if (!m_didDownloadFinish)
+         m_isBuffering = true;
+@@ -2203,7 +2202,7 @@ void MediaPlayerPrivateGStreamer::updateBufferingStatus(GstBufferingMode mode, d
+         updateMaxTimeLoaded(percentage);
+ 
+         m_bufferingPercentage = percentage;
+-        if (m_didDownloadFinish || (!wasBuffering && m_isBuffering))
++        if (m_didDownloadFinish || !wasBuffering)
+             updateStates();
+ 
+         break;
+@@ -2513,6 +2512,7 @@ void MediaPlayerPrivateGStreamer::updateStates()
+             break;
+         }
+ 
++        bool shouldPauseForBuffering = false;
+         // Sync states where needed.
+         if (m_currentState == GST_STATE_PAUSED) {
+             if (!m_areVolumeAndMuteInitialized) {
+@@ -2528,7 +2528,8 @@ void MediaPlayerPrivateGStreamer::updateStates()
+         } else if (m_currentState == GST_STATE_PLAYING) {
+             m_isPaused = false;
+ 
+-            if ((m_isBuffering && !m_isLiveStream) || !m_playbackRate) {
++            shouldPauseForBuffering = (m_isBuffering && !m_isLiveStream);
++            if (shouldPauseForBuffering || !m_playbackRate) {
+                 GST_INFO_OBJECT(pipeline(), "[Buffering] Pausing stream for buffering.");
+                 changePipelineState(GST_STATE_PAUSED);
+             }
+@@ -2545,7 +2546,7 @@ void MediaPlayerPrivateGStreamer::updateStates()
+         // the media element gets a chance to enable its page sleep disabler.
+         // Emitting this notification in more cases triggers unwanted code paths
+         // and test timeouts.
+-        if (stateReallyChanged && (m_oldState != m_currentState) && (m_oldState == GST_STATE_PAUSED && m_currentState == GST_STATE_PLAYING)) {
++        if (stateReallyChanged && (m_oldState != m_currentState) && (m_oldState == GST_STATE_PAUSED && m_currentState == GST_STATE_PLAYING) && !shouldPauseForBuffering) {
+             GST_INFO_OBJECT(pipeline(), "Playback state changed from %s to %s. Notifying the media player client", gst_element_state_get_name(m_oldState), gst_element_state_get_name(m_currentState));
+             shouldUpdatePlaybackState = true;
+         }

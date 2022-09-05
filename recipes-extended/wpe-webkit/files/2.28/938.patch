@@ -1,0 +1,71 @@
+From 64d11fba51f9b0d6378d19dbfa230b327b2e1630 Mon Sep 17 00:00:00 2001
+From: Pawel Lampe <pawel.lampe@sky.uk>
+Date: Wed, 31 Aug 2022 10:12:34 +0000
+Subject: [PATCH] Delay playback position query after seek
+
+---
+ .../graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp   | 4 +++-
+ .../graphics/gstreamer/MediaPlayerPrivateGStreamer.h     | 3 ++-
+ .../gstreamer/mse/MediaPlayerPrivateGStreamerMSE.cpp     | 9 +--------
+ 3 files changed, 6 insertions(+), 10 deletions(-)
+
+diff --git a/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp b/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp
+index 1a2f9e9de4bf..4dfeef0ef064 100644
+--- a/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp
++++ b/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp
+@@ -2488,7 +2488,9 @@ void MediaPlayerPrivateGStreamer::finishSeek()
+ {
+     GST_DEBUG_OBJECT(pipeline(), "[Seek] seeked to %s", toString(m_seekTime).utf8().data());
+     m_isSeeking = false;
+-    m_cachedPosition = MediaTime::invalidTime();
++    Seconds now = WTF::WallTime::now().secondsSinceEpoch();
++    m_lastQueryTime = now;
++    m_cachedPosition = m_seekTime;
+     if (m_timeOfOverlappingSeek != m_seekTime && m_timeOfOverlappingSeek.isValid()) {
+         seek(m_timeOfOverlappingSeek);
+         m_timeOfOverlappingSeek = MediaTime::invalidTime();
+diff --git a/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.h b/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.h
+index 24045f1b9c34..7c2e1c8f1bcf 100644
+--- a/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.h
++++ b/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.h
+@@ -270,6 +270,8 @@ protected:
+     virtual bool changePipelineState(GstState);
+     virtual void updatePlaybackRate();
+ 
++    void finishSeek();
++
+ #if USE(GSTREAMER_HOLEPUNCH)
+     GstElement* createHolePunchVideoSink();
+     void pushNextHolePunchBuffer();
+@@ -435,7 +437,6 @@ private:
+     MediaTime playbackPosition() const;
+ 
+     virtual void updateStates();
+-    void finishSeek();
+     virtual void asyncStateChangeDone();
+ 
+     void createGSTPlayBin(const URL&, const String& pipelineName);
+diff --git a/Source/WebCore/platform/graphics/gstreamer/mse/MediaPlayerPrivateGStreamerMSE.cpp b/Source/WebCore/platform/graphics/gstreamer/mse/MediaPlayerPrivateGStreamerMSE.cpp
+index bd0fc202eceb..b937dbb77c54 100644
+--- a/Source/WebCore/platform/graphics/gstreamer/mse/MediaPlayerPrivateGStreamerMSE.cpp
++++ b/Source/WebCore/platform/graphics/gstreamer/mse/MediaPlayerPrivateGStreamerMSE.cpp
+@@ -406,15 +406,8 @@ void MediaPlayerPrivateGStreamerMSE::maybeFinishSeek()
+         return;
+     }
+ 
+-    GST_DEBUG("[Seek] Seeked to %s", toString(m_seekTime).utf8().data());
+-
+     webKitMediaSrcSetReadyForSamples(WEBKIT_MEDIA_SRC(m_source.get()), true);
+-    m_isSeeking = false;
+-    m_cachedPosition = MediaTime::invalidTime();
+-    // The pipeline can still have a pending state. In this case a position query will fail.
+-    // Right now we can use m_seekTime as a fallback.
+-    m_canFallBackToLastFinishedSeekPosition = true;
+-    timeChanged();
++    finishSeek();
+ }
+ 
+ bool MediaPlayerPrivateGStreamerMSE::seeking() const
+-- 
+2.35.1
+

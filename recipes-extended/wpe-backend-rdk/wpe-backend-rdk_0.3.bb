@@ -8,8 +8,8 @@ DEPENDS += "libwpe glib-2.0"
 
 PV = "0.3+git${SRCPV}"
 
-# Revision date: May 18 2021
-SRCREV = "6953f31ccda364095260ec5d07a0faf85d3f8fb4"
+# Revision date: Aug 11 2022
+SRCREV = "13a8f6a2182cd5d95b630f4c94917ac841231ffc"
 BASE_URI ?= "git://github.com/WebPlatformForEmbedded/WPEBackend-rdk.git;protocol=http;branch=master"
 SRC_URI = "${BASE_URI}"
 

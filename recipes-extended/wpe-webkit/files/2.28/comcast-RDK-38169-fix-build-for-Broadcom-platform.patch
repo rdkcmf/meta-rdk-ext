@@ -1,0 +1,23 @@
+From 41f43954dd7f2ed08aaf04f122fbfc54356e212f Mon Sep 17 00:00:00 2001
+From: Eugene Mutavchi <Ievgen_Mutavchi@comcast.com>
+Date: Fri, 16 Sep 2022 20:53:51 +0000
+Subject: [PATCH] comcast RDK-38169 fix build for Broadcom platform
+
+---
+ Source/cmake/OptionsWPE.cmake | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/Source/cmake/OptionsWPE.cmake b/Source/cmake/OptionsWPE.cmake
+index a65750a20f60..8e83d5e03e21 100644
+--- a/Source/cmake/OptionsWPE.cmake
++++ b/Source/cmake/OptionsWPE.cmake
+@@ -309,3 +309,6 @@ endif()
+ if (ENABLE_HDR)
+   add_definitions(-DENABLE_HDR=1)
+ endif()
++if (USE_WPEWEBKIT_PLATFORM_BROADCOM)
++  add_definitions(-DBROADCOM_PLATFORM=1)
++endif()
+-- 
+2.25.1
+

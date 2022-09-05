@@ -1,0 +1,102 @@
+From 0f3a74ed4c4418f264a31689719716e10d8aad10 Mon Sep 17 00:00:00 2001
+From: Olivier Blin <olivier.blin@softathome.com>
+Date: Mon, 1 Feb 2021 12:43:39 +0000
+Subject: [PATCH] clang Linux build cannot link because of
+ __builtin_mul_overflow https://bugs.webkit.org/show_bug.cgi?id=190208
+
+Since r183319, __builtin_mul_overflow is used with gcc or clang in WTF/wtf/CheckedArithmetic.h
+
+This leads to a link failure when WebKit is built on Linux with clang and the libgcc runtime,
+because of an undefined reference to the __mulodi4 symbol.
+
+This is because clang generates code using the __mulodi4 symbol for __builtin_mul_overflow.
+But this symbol is available only in compiler-rt, and not in the libgcc runtime used by most
+Linux distributions of clang.
+
+See also this upstream clang bug: https://bugs.llvm.org/show_bug.cgi?id=28629
+
+Patch by Olivier Blin <olivier.blin@softathome.com> on 2021-02-01
+Reviewed by Mark Lam.
+
+* wtf/CheckedArithmetic.h: Do not use __builtin_mul_overflow with clang on Linux for ARM
+
+Canonical link: https://commits.webkit.org/233530@main
+git-svn-id: https://svn.webkit.org/repository/webkit/trunk@272140 268f45cc-cd09-0410-ab3c-d52691b4dbfc
+---
+ Source/WTF/ChangeLog               | 20 ++++++++++++++++++++
+ Source/WTF/wtf/CheckedArithmetic.h | 13 ++++++++++---
+ 2 files changed, 30 insertions(+), 3 deletions(-)
+
+diff --git a/Source/WTF/ChangeLog b/Source/WTF/ChangeLog
+index bc0578d15ba85..92992b1626f74 100644
+--- a/Source/WTF/ChangeLog
++++ b/Source/WTF/ChangeLog
+@@ -1,3 +1,23 @@
++2021-02-01  Olivier Blin  <olivier.blin@softathome.com>
++
++        clang Linux build cannot link because of __builtin_mul_overflow
++        https://bugs.webkit.org/show_bug.cgi?id=190208
++
++        Since r183319, __builtin_mul_overflow is used with gcc or clang in WTF/wtf/CheckedArithmetic.h
++
++        This leads to a link failure when WebKit is built on Linux with clang and the libgcc runtime,
++        because of an undefined reference to the __mulodi4 symbol.
++
++        This is because clang generates code using the __mulodi4 symbol for __builtin_mul_overflow.
++        But this symbol is available only in compiler-rt, and not in the libgcc runtime used by most
++        Linux distributions of clang.
++
++        See also this upstream clang bug: https://bugs.llvm.org/show_bug.cgi?id=28629
++
++        Reviewed by Mark Lam.
++
++        * wtf/CheckedArithmetic.h: Do not use __builtin_mul_overflow with clang on Linux for ARM
++
+ 2021-02-22  Carlos Garcia Campos  <cgarcia@igalia.com>
+ 
+         [SOUP] Add support for libsoup3
+diff --git a/Source/WTF/wtf/CheckedArithmetic.h b/Source/WTF/wtf/CheckedArithmetic.h
+index 5d88d396c8758..4a23dad91846d 100644
+--- a/Source/WTF/wtf/CheckedArithmetic.h
++++ b/Source/WTF/wtf/CheckedArithmetic.h
+@@ -31,6 +31,13 @@
+ #include <stdint.h>
+ #include <type_traits>
+ 
++/* On Linux with clang, libgcc is usually used instead of compiler-rt, and it does
++ * not provide the __mulodi4 symbol used by clang for __builtin_mul_overflow
++ */
++#if COMPILER(GCC) || (COMPILER(CLANG) && !(CPU(ARM) && OS(LINUX)))
++#define USE_MUL_OVERFLOW 1
++#endif
++
+ /* Checked<T>
+  *
+  * This class provides a mechanism to perform overflow-safe integer arithmetic
+@@ -360,7 +367,7 @@ template <typename LHS, typename RHS, typename ResultType> struct ArithmeticOper
+ 
+     static inline bool multiply(LHS lhs, RHS rhs, ResultType& result) WARN_UNUSED_RETURN
+     {
+-#if COMPILER(GCC_COMPATIBLE)
++#if USE(MUL_OVERFLOW)
+         ResultType temp;
+         if (__builtin_mul_overflow(lhs, rhs, &temp))
+             return false;
+@@ -433,7 +440,7 @@ template <typename LHS, typename RHS, typename ResultType> struct ArithmeticOper
+ 
+     static inline bool multiply(LHS lhs, RHS rhs, ResultType& result) WARN_UNUSED_RETURN
+     {
+-#if COMPILER(GCC_COMPATIBLE)
++#if USE(MUL_OVERFLOW)
+         ResultType temp;
+         if (__builtin_mul_overflow(lhs, rhs, &temp))
+             return false;
+@@ -496,7 +503,7 @@ template <typename ResultType> struct ArithmeticOperations<int, unsigned, Result
+ 
+     static inline bool multiply(int64_t lhs, int64_t rhs, ResultType& result)
+     {
+-#if COMPILER(GCC_COMPATIBLE)
++#if USE(MUL_OVERFLOW)
+         ResultType temp;
+         if (__builtin_mul_overflow(lhs, rhs, &temp))
+             return false;

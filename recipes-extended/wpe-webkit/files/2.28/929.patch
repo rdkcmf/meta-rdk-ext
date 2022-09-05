@@ -1,0 +1,25 @@
+From 2a867dbde4793d86124d01d10fd5237174bef0a8 Mon Sep 17 00:00:00 2001
+From: Pawel Lampe <pawel.lampe@gmail.com>
+Date: Tue, 30 Aug 2022 17:24:37 +0200
+Subject: [PATCH] LLAMA-7399: Drop unsupported initialization data
+
+---
+ .../graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp       | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+diff --git a/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp b/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp
+index a71068b8d796d..fde904f898715 100644
+--- a/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp
++++ b/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp
+@@ -3722,6 +3722,11 @@ void MediaPlayerPrivateGStreamer::initializationDataEncountered(InitData&& initD
+         if (!weakThis)
+             return;
+ 
++        if (weakThis->m_cdmInstance && g_strcmp0(initData.systemId().utf8().data(), GStreamerEMEUtilities::keySystemToUuid(weakThis->m_cdmInstance->keySystem()))) {
++            GST_TRACE_OBJECT(weakThis->pipeline(), "skipping initialization data for a different key system");
++            return;
++        }
++
+         GST_DEBUG("scheduling initializationDataEncountered %s event of size %zu", initData.payloadContainerType().utf8().data(),
+             initData.payload()->size());
+         GST_MEMDUMP("init datas", reinterpret_cast<const uint8_t*>(initData.payload()->data()), initData.payload()->size());
