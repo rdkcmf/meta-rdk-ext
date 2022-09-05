@@ -1,0 +1,57 @@
+From dcd712077f1a172a3bc1476fedea4a85e7340f57 Mon Sep 17 00:00:00 2001
+From: Tony Paul <Tony_Paul@comcast.com>
+Date: Mon, 15 Nov 2021 11:35:27 +0000
+Subject: [PATCH] qtdemux: do not error if with no protection events
+
+This is necessary in cases like CMAF where there won't be any events
+passing thru.
+
+Signed-off-by: Tony Paul <Tony_Paul@comcast.com>
+---
+ gst/isomp4/qtdemux.c | 26 ++++++++++++++++----------
+ 1 file changed, 16 insertions(+), 10 deletions(-)
+
+diff --git a/gst/isomp4/qtdemux.c b/gst/isomp4/qtdemux.c
+index f04ca2d23..243259c5b 100644
+--- a/gst/isomp4/qtdemux.c
++++ b/gst/isomp4/qtdemux.c
+@@ -8522,10 +8522,23 @@ gst_qtdemux_configure_protected_caps (GstQTDemux * qtdemux,
+         GST_FOURCC_ARGS (stream->protection_scheme_type));
+     return FALSE;
+   }
++
++   if (!qtdemux->aamp_player_enabled)
++   {
++    s = gst_caps_get_structure (CUR_STREAM (stream)->caps, 0);
++    if (!gst_structure_has_name (s, "application/x-cenc")) {
++      gst_structure_set (s,
++          "original-media-type", G_TYPE_STRING, gst_structure_get_name (s),
++          NULL);
++      gst_structure_set_name (s, "application/x-cenc");
++    }
++   }
++
+   if (qtdemux->protection_system_ids == NULL) {
+     GST_ERROR_OBJECT (qtdemux, "stream is protected using cenc, but no "
+-        "cenc protection system information has been found");
+-    return FALSE;
++        "cenc protection system information has been found, not setting a "
++        "protection system UUID");
++    return TRUE;
+   }
+ 
+   gst_qtdemux_request_protection_context (qtdemux, stream);
+@@ -8619,6 +8620,11 @@ gst_qtdemux_configure_protected_caps (GstQTDemux * qtdemux,
+         NULL);
+     gst_structure_set_name (s, "application/x-cenc");
+   }
++
++  gst_structure_set (s,
++      GST_PROTECTION_SYSTEM_ID_CAPS_FIELD, G_TYPE_STRING, selected_system,
++      NULL);
++
+   return TRUE;
+ }
+
+-- 
+2.25.1

@@ -1,0 +1,26 @@
+From ddd574e4204df9d82f73aa37dab03ccff1508f5c Mon Sep 17 00:00:00 2001
+From: Tony Paul <Tony_Paul@comcast.com>
+Date: Tue, 26 Oct 2021 15:16:15 +0000
+Subject: [PATCH 1/1] gst plugins good stubs-soft.h not existing error
+
+Signed-off-by: Tony Paul <Tony_Paul@comcast.com>
+---
+ ext/taglib/meson.build | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/ext/taglib/meson.build b/ext/taglib/meson.build
+index dcea2c58e..b803cf6bd 100644
+--- a/ext/taglib/meson.build
++++ b/ext/taglib/meson.build
+@@ -7,7 +7,7 @@ taglib_sources = [
+ taglib_dep = dependency('taglib', version : '>= 1.5', required : get_option('taglib'))
+ 
+ if taglib_dep.found() and add_languages('cpp', native: false, required: get_option('taglib'))
+-  extra_args = []
++  extra_args = ['-mfloat-abi=hard']
+   cxx = meson.get_compiler('cpp')
+   if cxx.has_argument('-fvisibility=hidden')
+     extra_args += ['-fvisibility=hidden']
+-- 
+2.25.1
+

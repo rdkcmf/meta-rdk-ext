@@ -1,0 +1,31 @@
+From 2536c31714700902830f2fb5bdb307ebd039e19c Mon Sep 17 00:00:00 2001
+From: Tony Paul <Tony_Paul@comcast.com>
+Date: Mon, 29 Nov 2021 15:02:21 +0000
+Subject: [PATCH] Subject: [PATCH] XRE-12545: Add Atmos mime type in qtdemux
+
+Added ec+3 mimetype in qtdemux
+
+Source: COMCAST
+License: LGPL-2.1-or-later
+Upstream-Status: Pending
+
+Signed-off-by: Gurdal Oruklu <gurdal_oruklu@comcast.com>
+---
+ gst/isomp4/qtdemux.c | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/gst/isomp4/qtdemux.c b/gst/isomp4/qtdemux.c
+index 1fee819..e1a6ebf 100644
+--- a/gst/isomp4/qtdemux.c
++++ b/gst/isomp4/qtdemux.c
+@@ -15491,6 +15491,7 @@ qtdemux_audio_caps (GstQTDemux * qtdemux, QtDemuxStream * stream,
+       break;
+     case 0x20736d:
+     case GST_MAKE_FOURCC ('e', 'c', '-', '3'):
++    case GST_MAKE_FOURCC ('e', 'c', '+', '3'):
+       _codec ("EAC-3 audio");
+       caps = gst_caps_new_simple ("audio/x-eac3",
+           "framed", G_TYPE_BOOLEAN, TRUE, NULL);
+-- 
+2.14.2
+

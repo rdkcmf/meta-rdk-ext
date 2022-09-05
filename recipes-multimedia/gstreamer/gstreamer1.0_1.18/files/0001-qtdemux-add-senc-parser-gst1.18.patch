@@ -1,0 +1,229 @@
+From 804cf6ee9132c8159efc9549b65df5e981539cf9 Mon Sep 17 00:00:00 2001
+From: Tony Paul <Tony_Paul@comcast.com>
+Date: Mon, 15 Nov 2021 08:39:01 +0000
+Subject: [PATCH 1/1] qtdemux add senc parser gst1.18
+
+Signed-off-by: Tony Paul <Tony_Paul@comcast.com>
+---
+ gst/isomp4/fourcc.h        |   1 +
+ gst/isomp4/qtdemux.c       | 165 +++++++++++++++++++++++++++++++++----
+ gst/isomp4/qtdemux_types.c |   1 +
+ 3 files changed, 149 insertions(+), 18 deletions(-)
+
+diff --git a/gst/isomp4/fourcc.h b/gst/isomp4/fourcc.h
+index 7952d8e3a..70ac37945 100644
+--- a/gst/isomp4/fourcc.h
++++ b/gst/isomp4/fourcc.h
+@@ -402,6 +402,7 @@ G_BEGIN_DECLS
+ #define FOURCC_pssh     GST_MAKE_FOURCC('p','s','s','h')
+ #define FOURCC_tenc     GST_MAKE_FOURCC('t','e','n','c')
+ #define FOURCC_cenc     GST_MAKE_FOURCC('c','e','n','c')
++#define FOURCC_senc     GST_MAKE_FOURCC('s','e','n','c')
+ 
+ G_END_DECLS
+ 
+diff --git a/gst/isomp4/qtdemux.c b/gst/isomp4/qtdemux.c
+index b24240125..149a75753 100644
+--- a/gst/isomp4/qtdemux.c
++++ b/gst/isomp4/qtdemux.c
+@@ -3824,6 +3824,115 @@ qtdemux_parse_cenc_aux_info (GstQTDemux * qtdemux, QtDemuxStream * stream,
+   return TRUE;
+ }
+ 
++/* Parses Sample Encryption Information box ('senc')
++ * The format of this information is defined in
++ * ISO/IEC 23001-7:2016. Returns TRUE if successful; FALSE otherwise. */
++static gboolean
++qtdemux_parse_senc (GstQTDemux * qtdemux, QtDemuxStream * stream, GstByteReader * br)
++{
++  QtDemuxCencSampleSetInfo *ss_info = NULL;
++  guint8 size;
++  gint i;
++  guint8 version = 0;
++  guint32 flags = 0;
++  guint32 sample_count = 0;
++
++  g_return_val_if_fail (qtdemux != NULL, FALSE);
++  g_return_val_if_fail (stream != NULL, FALSE);
++  g_return_val_if_fail (br != NULL, FALSE);
++
++  ss_info = (QtDemuxCencSampleSetInfo *) stream->protection_scheme_info;
++
++  if (ss_info->crypto_info) {
++    GST_LOG_OBJECT (qtdemux, "unreffing existing crypto_info");
++    g_ptr_array_free (ss_info->crypto_info, TRUE);
++  }
++
++  if (!gst_byte_reader_get_uint8 (br, &version))
++    return FALSE;
++
++  if (!gst_byte_reader_get_uint24_be (br, &flags))
++    return FALSE;
++
++  GST_LOG_OBJECT(qtdemux, "version %u", version);
++  GST_LOG_OBJECT(qtdemux, "flags %u", flags);
++
++  if (!gst_byte_reader_get_uint32_be (br, &sample_count))
++      return FALSE;
++
++  GST_LOG_OBJECT(qtdemux, "sample_count %u", sample_count);
++
++  ss_info->crypto_info =
++      g_ptr_array_new_full (sample_count,
++      (GDestroyNotify) qtdemux_gst_structure_free);
++
++  for (i = 0; i < sample_count; ++i) {
++    GstStructure *properties;
++    guint16 n_subsamples = 0;
++    guint8 *data;
++    guint iv_size;
++    GstBuffer *buf;
++
++    properties = qtdemux_get_cenc_sample_properties (qtdemux, stream, i);
++    if (properties == NULL) {
++      GST_ERROR_OBJECT (qtdemux, "failed to get properties for sample %u", i);
++      return FALSE;
++    }
++
++    if (!gst_structure_get_uint (properties, "iv_size", &iv_size)) {
++      GST_ERROR_OBJECT (qtdemux, "failed to get iv_size for sample %u", i);
++      gst_structure_free (properties);
++      return FALSE;
++    }
++
++    if (!gst_byte_reader_dup_data (br, iv_size, &data)) {
++      GST_ERROR_OBJECT (qtdemux, "failed to get IV for sample %u", i);
++      gst_structure_free (properties);
++      return FALSE;
++    }
++
++    GST_MEMDUMP_OBJECT (qtdemux, "iv data", data, iv_size);
++
++    buf = gst_buffer_new_wrapped (data, iv_size);
++    gst_structure_set (properties, "iv", GST_TYPE_BUFFER, buf, NULL);
++    gst_buffer_unref (buf);
++
++    if(flags & 0x2)
++    {
++
++      if (!gst_byte_reader_get_uint16_be (br, &n_subsamples)
++          || !(n_subsamples > 0)) {
++
++        gst_structure_free (properties);
++
++        GST_ERROR_OBJECT (qtdemux,
++            "failed to get subsample count for sample %u", i);
++        return FALSE;
++      }
++
++      if (!gst_byte_reader_dup_data (br, n_subsamples * 6, &data)) {
++        GST_ERROR_OBJECT (qtdemux, "failed to get subsample data for sample %u",
++            i);
++        gst_structure_free (properties);
++        return FALSE;
++      }
++      buf = gst_buffer_new_wrapped (data, n_subsamples * 6);
++      if (!buf) {
++        gst_structure_free (properties);
++        return FALSE;
++      }
++      gst_structure_set (properties,
++          "subsample_count", G_TYPE_UINT, n_subsamples,
++          "subsamples", GST_TYPE_BUFFER, buf, NULL);
++      gst_buffer_unref (buf);
++    } else {
++      gst_structure_set (properties, "subsample_count", G_TYPE_UINT, 0, NULL);
++    }
++    g_ptr_array_add (ss_info->crypto_info, properties);
++  }
++  return TRUE;
++}
++
+ /* Converts a UUID in raw byte form to a string representation, as defined in
+  * RFC 4122. The caller takes ownership of the returned string and is
+  * responsible for freeing it after use. */
+@@ -3895,8 +4004,8 @@ qtdemux_parse_moof (GstQTDemux * qtdemux, const guint8 * buffer, guint length,
+   GNode *moof_node, *traf_node, *tfhd_node, *trun_node, *tfdt_node, *mfhd_node;
+   GNode *uuid_node;
+   GstByteReader mfhd_data, trun_data, tfhd_data, tfdt_data;
+-  GNode *saiz_node, *saio_node, *pssh_node;
+-  GstByteReader saiz_data, saio_data;
++  GNode *saiz_node, *saio_node, *pssh_node, *senc_node;
++  GstByteReader saiz_data, saio_data, senc_data;
+   guint32 ds_size = 0, ds_duration = 0, ds_flags = 0;
+   gint64 base_offset, running_offset;
+   guint32 frag_num;
+@@ -3971,22 +4080,42 @@ qtdemux_parse_moof (GstQTDemux * qtdemux, const guint8 * buffer, guint length,
+         qtdemux->cenc_aux_info_sizes = NULL;
+         goto fail;
+       }
+-      if (base_offset > -1 && base_offset > qtdemux->moof_offset)
+-        offset += (guint64) (base_offset - qtdemux->moof_offset);
+-      if (info_type == FOURCC_cenc && info_type_parameter == 0U) {
+-        GstByteReader br;
+-        if (offset > length) {
+-          GST_DEBUG_OBJECT (qtdemux, "cenc auxiliary info stored out of moof");
+-          qtdemux->cenc_aux_info_offset = offset;
+-        } else {
+-          gst_byte_reader_init (&br, buffer + offset, length - offset);
+-          if (!qtdemux_parse_cenc_aux_info (qtdemux, stream, &br,
+-                  qtdemux->cenc_aux_info_sizes,
+-                  qtdemux->cenc_aux_sample_count)) {
+-            GST_ERROR_OBJECT (qtdemux, "failed to parse cenc auxiliary info");
+-            g_free (qtdemux->cenc_aux_info_sizes);
+-            qtdemux->cenc_aux_info_sizes = NULL;
+-            goto fail;
++      /* Check for senc node
++       * if it exists, parse it to read the subsample information.
++       * if it does not exist, use cenc aux info parser
++       */
++      senc_node =
++          qtdemux_tree_get_child_by_type_full (traf_node, FOURCC_senc,
++          &senc_data);
++      if (senc_node) {
++        GST_DEBUG_OBJECT (qtdemux, "parsing senc box!!!!");
++
++        if (G_UNLIKELY (!qtdemux_parse_senc (qtdemux, stream, &senc_data))) {
++          GST_ERROR_OBJECT (qtdemux, "failed to parse senc box");
++          g_free (qtdemux->cenc_aux_info_sizes);
++          qtdemux->cenc_aux_info_sizes = NULL;
++          goto fail;
++        }
++
++      } else {
++
++        if (base_offset > -1 && base_offset > qtdemux->moof_offset)
++          offset += (guint64) (base_offset - qtdemux->moof_offset);
++        if (info_type == FOURCC_cenc && info_type_parameter == 0U) {
++          GstByteReader br;
++          if (offset > length) {
++            GST_DEBUG_OBJECT (qtdemux, "cenc auxiliary info stored out of moof");
++            qtdemux->cenc_aux_info_offset = offset;
++          } else {
++            gst_byte_reader_init (&br, buffer + offset, length - offset);
++            if (!qtdemux_parse_cenc_aux_info (qtdemux, stream, &br,
++                    qtdemux->cenc_aux_info_sizes,
++                    qtdemux->cenc_aux_sample_count)) {
++              GST_ERROR_OBJECT (qtdemux, "failed to parse cenc auxiliary info");
++              g_free (qtdemux->cenc_aux_info_sizes);
++              qtdemux->cenc_aux_info_sizes = NULL;
++              goto fail;
++            }
+           }
+         }
+       }
+diff --git a/gst/isomp4/qtdemux_types.c b/gst/isomp4/qtdemux_types.c
+index 9852429ba..d0b83888f 100644
+--- a/gst/isomp4/qtdemux_types.c
++++ b/gst/isomp4/qtdemux_types.c
+@@ -218,6 +218,7 @@ static const QtNodeType qt_node_types[] = {
+   {FOURCC_pssh, "protection system specific header", 0},
+   {FOURCC_tenc, "track encryption", 0},
+   {FOURCC_stpp, "XML subtitle sample entry", 0},
++  {FOURCC_senc, "sample encryption box", 0},
+   {FOURCC_clcp, "Closed Caption", 0},
+   {FOURCC_av01, "AV1 Sample Entry", 0},
+   {FOURCC_av1C, "AV1 Codec Configuration", 0},
+-- 
+2.25.1
+

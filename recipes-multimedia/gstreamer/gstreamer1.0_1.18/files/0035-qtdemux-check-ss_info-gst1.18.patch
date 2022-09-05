@@ -1,0 +1,25 @@
+From 7b70fb50fa57bc5cd6b21be00613f638cbd3df2b Mon Sep 17 00:00:00 2001
+From: Tony Paul <Tony_Paul@comcast.com>
+Date: Mon, 15 Nov 2021 11:39:09 +0000
+Subject: [PATCH 1/1] qtdemux check ss_info
+
+Signed-off-by: Tony Paul <Tony_Paul@comcast.com>
+---
+ gst/isomp4/qtdemux.c | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/gst/isomp4/qtdemux.c b/gst/isomp4/qtdemux.c
+index 243259c5b..3d977fa8b 100644
+--- a/gst/isomp4/qtdemux.c
++++ b/gst/isomp4/qtdemux.c
+@@ -3902,6 +3902,7 @@ qtdemux_parse_senc (GstQTDemux * qtdemux, QtDemuxStream * stream, GstByteReader
+   g_return_val_if_fail (br != NULL, FALSE);
+ 
+   ss_info = (QtDemuxCencSampleSetInfo *) stream->protection_scheme_info;
++  g_return_val_if_fail (ss_info != NULL, FALSE);
+ 
+   if (ss_info->crypto_info) {
+     GST_LOG_OBJECT (qtdemux, "unreffing existing crypto_info");
+-- 
+2.25.1
+

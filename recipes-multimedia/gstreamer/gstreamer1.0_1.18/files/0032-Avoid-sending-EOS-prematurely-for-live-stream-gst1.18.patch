@@ -1,0 +1,29 @@
+From 0c536416cf5260b24e11fb2238d5f12b012524de Mon Sep 17 00:00:00 2001
+From: Tony Paul <Tony_Paul@comcast.com>
+Date: Mon, 15 Nov 2021 11:22:21 +0000
+Subject: [PATCH] Avoid sending EOS prematurely for live stream
+Source: COMCAST
+License: GPLV2
+Upstream-Status: Pending
+Signed-off-by: nrajan002c <nambi_rajang@cable.comcast.com>
+
+---
+ gst/isomp4/qtdemux.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/gst/isomp4/qtdemux.c b/gst/isomp4/qtdemux.c
+index 045541cca..f04ca2d23 100644
+--- a/gst/isomp4/qtdemux.c
++++ b/gst/isomp4/qtdemux.c
+@@ -7645,7 +7645,7 @@ gst_qtdemux_process_adapter (GstQTDemux * demux, gboolean force)
+ 
+           /* check for segment end */
+           if (G_UNLIKELY (demux->segment.stop != -1
+-                  && demux->segment.stop <= pts && stream->on_keyframe)
++                  && demux->segment.stop <= dts && stream->on_keyframe)
+               && !(demux->upstream_format_is_time && demux->segment.rate < 0)) {
+             GST_DEBUG_OBJECT (demux, "we reached the end of our segment.");
+             stream->time_position = GST_CLOCK_TIME_NONE;        /* this means EOS */
+-- 
+2.25.1
+

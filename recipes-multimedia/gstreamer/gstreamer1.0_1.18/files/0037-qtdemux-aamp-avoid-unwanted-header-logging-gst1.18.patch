@@ -1,0 +1,37 @@
+From 571ea08f5c992085db7f8a0ed9260585a7d4aeba Mon Sep 17 00:00:00 2001
+From: Tony Paul <Tony_Paul@comcast.com>
+Date: Mon, 15 Nov 2021 11:44:11 +0000
+Subject: [PATCH 1/1] qtdemux aamp avoid unwanted header logging
+
+Signed-off-by: Tony Paul <Tony_Paul@comcast.com>
+---
+ gst/isomp4/qtdemux.c | 11 ++++++++---
+ 1 file changed, 8 insertions(+), 3 deletions(-)
+
+diff --git a/gst/isomp4/qtdemux.c b/gst/isomp4/qtdemux.c
+index 3d977fa8b..ff8019b9a 100644
+--- a/gst/isomp4/qtdemux.c
++++ b/gst/isomp4/qtdemux.c
+@@ -7439,11 +7439,16 @@ gst_qtdemux_process_adapter (GstQTDemux * demux, gboolean force)
+                   GST_FOURCC_ARGS (fourcc));
+               break;
+             default:
+-              GST_WARNING_OBJECT (demux,
+-                  "Unknown fourcc while parsing header : %" GST_FOURCC_FORMAT,
+-                  GST_FOURCC_ARGS (fourcc));
++            {
++              if (!demux->aamp_player_enabled)
++              {
++                 GST_WARNING_OBJECT (demux,
++                     "Unknown fourcc while parsing header : %" GST_FOURCC_FORMAT,
++                     GST_FOURCC_ARGS (fourcc));
++              }
+               /* Let's jump that one and go back to initial state */
+               break;
++	    }
+           }
+         }
+         gst_adapter_unmap (demux->adapter);
+-- 
+2.25.1
+

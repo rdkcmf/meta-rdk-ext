@@ -1,0 +1,32 @@
+From 92db4de17b7f463dd6383e33fb57235acba994c4 Mon Sep 17 00:00:00 2001
+From: Tony Paul <Tony_Paul@comcast.com>
+Date: Wed, 17 Nov 2021 16:13:56 +0000
+Subject: [PATCH] BCOM-4787: Trickplay of Ondemand movies with Ad content
+ broken
+
+Reason for change: qtdemux sends a new_segment event due this the position is updated randomly inbetween trickyplay.
+Signed-off-by: Krishna Priya Kanagaraj <Krishnapriya_kanagaraj@comcast.com>
+Test Procedure: We need to do trickplay in Ondemand contents with ads in it.The position should be properly updated.
+Risks: None
+
+---
+ gst/isomp4/qtdemux.c | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/gst/isomp4/qtdemux.c b/gst/isomp4/qtdemux.c
+index d5c275415..182dfe559 100644
+--- a/gst/isomp4/qtdemux.c
++++ b/gst/isomp4/qtdemux.c
+@@ -7366,7 +7366,8 @@ gst_qtdemux_process_adapter (GstQTDemux * demux, gboolean force)
+             demux->got_moov = TRUE;
+ 
+             gst_event_replace (&demux->pending_newsegment, NULL);
+-            gst_qtdemux_map_and_push_segments (demux, &demux->segment);
++            if(!demux->aamp_override_enabled)
++              gst_qtdemux_map_and_push_segments (demux, &demux->segment);
+ 
+             if (demux->moov_node_compressed) {
+               g_node_destroy (demux->moov_node_compressed);
+-- 
+2.25.1
+

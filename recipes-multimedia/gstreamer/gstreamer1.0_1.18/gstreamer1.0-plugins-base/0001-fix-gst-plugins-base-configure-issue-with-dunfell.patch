@@ -1,0 +1,26 @@
+From e66866a1f77177a0c9c1ce3ebd833b5264404349 Mon Sep 17 00:00:00 2001
+From: Tony Paul <Tony_Paul@comcast.com>
+Date: Fri, 3 Dec 2021 17:30:31 +0000
+Subject: [PATCH 1/1] fix gst plugins base configure issue with dunfell
+
+Signed-off-by: Tony Paul <Tony_Paul@comcast.com>
+---
+ gst-libs/gst/gl/meson.build | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/gst-libs/gst/gl/meson.build b/gst-libs/gst/gl/meson.build
+index 731ee9f5e..a4d271f8d 100644
+--- a/gst-libs/gst/gl/meson.build
++++ b/gst-libs/gst/gl/meson.build
+@@ -556,7 +556,7 @@ if need_win_wayland != 'no'
+   else
+     wayland_client_dep = dependency('wayland-client', version : '>= 1.11', required : false)
+     wayland_cursor_dep = dependency('wayland-cursor', version : '>= 1.0', required : false)
+-    wayland_egl_dep = dependency('wayland-egl', version : '>= 1.0', required : false)
++    wayland_egl_dep = dependency('wayland-egl', version : '>= 0.99', required : false)
+     wayland_protocols_dep = dependency('wayland-protocols', version : '>= 1.15', required : false)
+     wayland_scanner = find_program('wayland-scanner', required: false)
+ 
+-- 
+2.25.1
+

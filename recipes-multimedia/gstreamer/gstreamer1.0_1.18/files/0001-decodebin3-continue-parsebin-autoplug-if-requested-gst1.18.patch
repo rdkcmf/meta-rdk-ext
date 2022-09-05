@@ -1,0 +1,27 @@
+From 0626d0e13db5aa8f7c1c6436c58df0dec3c1a853 Mon Sep 17 00:00:00 2001
+From: Tony Paul <Tony_Paul@comcast.com>
+Date: Mon, 15 Nov 2021 07:30:15 +0000
+Subject: [PATCH 1/1] decodebin3 continue parsebin autoplug if requested by
+ decodebin caps
+
+Signed-off-by: Tony Paul <Tony_Paul@comcast.com>
+---
+ gst/playback/gstdecodebin3.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/gst/playback/gstdecodebin3.c b/gst/playback/gstdecodebin3.c
+index 9f4763096..53b2151a3 100644
+--- a/gst/playback/gstdecodebin3.c
++++ b/gst/playback/gstdecodebin3.c
+@@ -715,7 +715,7 @@ parsebin_autoplug_continue_cb (GstElement * parsebin, GstPad * pad,
+ 
+   /* If it matches our target caps, expose it */
+   if (gst_caps_can_intersect (caps, dbin->caps))
+-    return FALSE;
++    return !gst_caps_is_subset(caps, dbin->caps);
+ 
+   return TRUE;
+ }
+-- 
+2.25.1
+

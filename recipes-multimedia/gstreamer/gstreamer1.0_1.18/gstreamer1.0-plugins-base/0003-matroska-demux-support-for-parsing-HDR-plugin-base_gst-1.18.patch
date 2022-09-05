@@ -1,0 +1,148 @@
+From 56c4c264b54966eb579574a2330a82b478d8e976 Mon Sep 17 00:00:00 2001
+From: Balaji Selvam <balaji_selvam@comcast.com>
+Date: Thu, 30 Jan 2020 07:30:00 +0000
+Subject: [PATCH] Subject: [PATCH] DELIA-30250 : [Field] 4K HDR content using
+ VP9.2 coded
+
+matroska demux added support for parsing HDR information for webm/vp9
+Currently matroska demux does not parse HDR information for webm/vp9
+stream. Added this patch to support parsing of HDR information and
+passing it as caps values downstream.
+
+https://bugzilla.gnome.org/show_bug.cgi?id=790023
+https://bugzilla.gnome.org/show_bug.cgi?id=790115
+
+Source: BUGZILLA
+License: LGPL-2.1-or-later
+Upstream-Status: Submitted [ https://bugzilla.gnome.org/show_bug.cgi?id=790023 ]
+
+Signed-off-by: aansar001c <AzamAyub_Ansari@cable.comcast.com>
+---
+ gst-libs/gst/video/video-color.c     |  23 ++++
+ gst-libs/gst/video/video-color.h     |  15 ++-
+ gst-libs/gst/video/video-prelude.h   |   3 +-
+ gst-libs/gst/video/video.h           |   1 +
+ 6 files changed, 437 insertions(+), 4 deletions(-)
+ create mode 100644 gst-libs/gst/video/video-hdr.c
+ create mode 100644 gst-libs/gst/video/video-hdr.h
+
+diff --git a/gst-libs/gst/video/video-color.c b/gst-libs/gst/video/video-color.c
+index c61588a..e81d1c0 100644
+--- a/gst-libs/gst/video/video-color.c
++++ b/gst-libs/gst/video/video-color.c
+@@ -385,6 +385,7 @@ gst_video_color_matrix_get_Kr_Kb (GstVideoColorMatrix matrix, gdouble * Kr,
+       *Kb = 0.087;
+       break;
+     case GST_VIDEO_COLOR_MATRIX_BT2020:
++    case GST_VIDEO_COLOR_MATRIX_BT2020_CL:
+       *Kr = 0.2627;
+       *Kb = 0.0593;
+       break;
+@@ -476,6 +477,10 @@ gst_video_color_transfer_encode (GstVideoTransferFunction func, gdouble val)
+       else
+         res = 1.0993 * pow (val, 0.45) - 0.0993;
+       break;
++    case GST_VIDEO_TRANSFER_SMPTE_ST_2084:
++      /* TODO: add the code to correctly return the transfer value */
++     res = val;
++      break;
+     case GST_VIDEO_TRANSFER_ADOBERGB:
+       res = pow (val, 1.0 / 2.19921875);
+       break;
+@@ -573,6 +578,10 @@ gst_video_color_transfer_decode (GstVideoTransferFunction func, gdouble val)
+       else
+         res = pow ((val + 0.055) / 1.055, 2.4);
+       break;
++    case GST_VIDEO_TRANSFER_SMPTE_ST_2084:
++      /* TODO: add the code to correctly return the transfer value */
++      res = val;
++      break;
+     case GST_VIDEO_TRANSFER_GAMMA28:
+       res = pow (val, 2.8);
+       break;
+
+diff --git a/gst-libs/gst/video/video-color.h b/gst-libs/gst/video/video-color.h
+index 31a7fab..3060364 100644
+--- a/gst-libs/gst/video/video-color.h
++++ b/gst-libs/gst/video/video-color.h
+@@ -53,6 +53,10 @@ typedef enum {
+  * @GST_VIDEO_COLOR_MATRIX_BT601: ITU-R BT.601 color matrix, also SMPTE170M / ITU-R BT1358 525 / ITU-R BT1700 NTSC
+  * @GST_VIDEO_COLOR_MATRIX_SMPTE240M: SMPTE 240M color matrix
+  * @GST_VIDEO_COLOR_MATRIX_BT2020: ITU-R BT.2020 color matrix. Since: 1.6
++ * @GST_VIDEO_COLOR_MATRIX_SMPTE170M: SMPTE 170M color matrix
++ * @GST_VIDEO_COLOR_MATRIX_BT2020: ITU-R BT.2020 color matrix. Since: 1.6. Non-constant luminance
++ * @GST_VIDEO_COLOR_MATRIX_BT2020_CL: ITU-R BT.2020 color matrix. Since: 1.6. Constant luminance
++
+  *
+  * The color matrix is used to convert between Y'PbPr and
+  * non-linear RGB (R'G'B')
+@@ -64,7 +68,8 @@ typedef enum {
+   GST_VIDEO_COLOR_MATRIX_BT709,
+   GST_VIDEO_COLOR_MATRIX_BT601,
+   GST_VIDEO_COLOR_MATRIX_SMPTE240M,
+-  GST_VIDEO_COLOR_MATRIX_BT2020
++  GST_VIDEO_COLOR_MATRIX_BT2020,
++  GST_VIDEO_COLOR_MATRIX_BT2020_CL
+ } GstVideoColorMatrix;
+
+ GST_VIDEO_API
+@@ -89,9 +94,14 @@ gboolean gst_video_color_matrix_get_Kr_Kb (GstVideoColorMatrix matrix, gdouble *
+  *                             100:1 range
+  * @GST_VIDEO_TRANSFER_LOG316: Logarithmic transfer characteristic
+  *                             316.22777:1 range (100 * sqrt(10) : 1)
++ * @GST_VIDEO_TRANSFER_BT2020_10: Gamma 2.2 curve with a linear segment in the lower
++ *                                range. Used for BT.2020 with 10 bits per
++ *                                component. Since: 1.6.
+  * @GST_VIDEO_TRANSFER_BT2020_12: Gamma 2.2 curve with a linear segment in the lower
+  *                                range. Used for BT.2020 with 12 bits per
+  *                                component. Since: 1.6
++ * @GST_VIDEO_TRANSFER_SMPTE_ST_2084:  SMPTE ST2084 ITU-R  Report BT.2246-5.
++ * @GST_VIDEO_TRANSFER_ARIB_STD_B67: ARIB STD-B67 (HLG))
+  * @GST_VIDEO_TRANSFER_ADOBERGB: Gamma 2.19921875. Since: 1.8
+  * @GST_VIDEO_TRANSFER_BT2020_10: Rec. ITU-R BT.2020-2 with 10 bits per component.
+  *                                (functionally the same as the values
+@@ -123,11 +133,12 @@ typedef enum {
+   GST_VIDEO_TRANSFER_GAMMA28,
+   GST_VIDEO_TRANSFER_LOG100,
+   GST_VIDEO_TRANSFER_LOG316,
++  GST_VIDEO_TRANSFER_BT2020_10,
+   GST_VIDEO_TRANSFER_BT2020_12,
++  GST_VIDEO_TRANSFER_SMPTE_ST_2084,
++  GST_VIDEO_TRANSFER_ARIB_STD_B67,
+   GST_VIDEO_TRANSFER_ADOBERGB,
+-  GST_VIDEO_TRANSFER_BT2020_10,
+   GST_VIDEO_TRANSFER_SMPTE2084,
+-  GST_VIDEO_TRANSFER_ARIB_STD_B67,
+   /**
+    * GST_VIDEO_TRANSFER_BT601:
+    *
+ 
+diff --git a/gst-libs/gst/video/video-prelude.h b/gst-libs/gst/video/video-prelude.h
+index 47a30df..6249994 100644
+--- a/gst-libs/gst/video/video-prelude.h
++++ b/gst-libs/gst/video/video-prelude.h
+@@ -27,7 +27,8 @@
+ #ifdef BUILDING_GST_VIDEO
+ #define GST_VIDEO_API GST_API_EXPORT         /* from config.h */
+ #else
+-#define GST_VIDEO_API GST_API_IMPORT
++//#define GST_VIDEO_API GST_API_IMPORT
++#define GST_VIDEO_API
+ #endif
+ 
+ #ifndef GST_DISABLE_DEPRECATED
+diff --git a/gst-libs/gst/video/video.h b/gst-libs/gst/video/video.h
+index c26df59..aafce3a 100644
+--- a/gst-libs/gst/video/video.h
++++ b/gst-libs/gst/video/video.h
+@@ -35,6 +35,7 @@ typedef struct _GstVideoAlignment GstVideoAlignment;
+ #include <gst/video/video-converter.h>
+ #include <gst/video/video-scaler.h>
+ #include <gst/video/video-multiview.h>
++#include <gst/video/video-hdr.h>
+ 
+ G_BEGIN_DECLS
+ 
+-- 
+2.14.2
+
