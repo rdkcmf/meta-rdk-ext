@@ -15,6 +15,7 @@ SRC_URI = "gitsm://github.com/containers/crun;branch=main \
 SRCREV = "f6fbc8f840df1a414f31a60953ae514fa497c748"
 
 DEPENDS += "yajl libseccomp libtool libcap"
+DEPENDS += "${@bb.utils.contains('DISTRO_FEATURES', 'RDKTV_CHECKPOINT_RESTORE', ' criu', '', d)}"
 
 S = "${WORKDIR}/git"
 
