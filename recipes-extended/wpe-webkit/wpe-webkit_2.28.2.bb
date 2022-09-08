@@ -65,6 +65,7 @@ SRC_URI += "file://2.28/comcast-LLAMA-8558-vttcue-middle-align-keyword-compa.pat
 SRC_URI += "file://2.28/comcast-LLAMA-7963-disable-handling-of-http-protocol.patch"
 SRC_URI += "file://2.28/comcast-LLAMA-8378-Fix-video-resize-issue-with-multiple-vide.patch"
 SRC_URI += "file://2.28/comcast-LLAMA-8893-Fix-audio-mute-when-using-asplayer.patch"
+SRC_URI += "file://2.28.1/comcast-AMLOGIC-3262-disable-scaletempto.patch"
 
 PACKAGECONFIG[westeros]          = "-DUSE_WPEWEBKIT_PLATFORM_WESTEROS=ON -DUSE_GSTREAMER_HOLEPUNCH=ON -DUSE_EXTERNAL_HOLEPUNCH=ON -DUSE_WESTEROS_SINK=ON,,westeros westeros-sink"
 PACKAGECONFIG[encryptedmedia]    = "-DENABLE_ENCRYPTED_MEDIA=ON,-DENABLE_ENCRYPTED_MEDIA=OFF,"
@@ -96,6 +97,7 @@ PACKAGECONFIG[usesoup2]          = "-DUSE_SOUP2=ON, -DUSE_SOUP2=OFF,libsoup-2.4"
 PACKAGECONFIG[native_audio]      = "-DUSE_GSTREAMER_NATIVE_AUDIO=ON, -DUSE_GSTREAMER_NATIVE_AUDIO=OFF,"
 PACKAGECONFIG[native_video]      = "-DUSE_GSTREAMER_NATIVE_VIDEO=ON, -DUSE_GSTREAMER_NATIVE_VIDEO=OFF,"
 PACKAGECONFIG[subtlecrypto]      = ""
+PACKAGECONFIG[instantratechange] = "-DENABLE_INSTANT_RATE_CHANGE=ON,-DENABLE_INSTANT_RATE_CHANGE=OFF,"
 
 PACKAGECONFIG_append = " webcrypto webdriver intl remoteinspector experimental releaselog accessibility speechsynthesis native_video"
 
