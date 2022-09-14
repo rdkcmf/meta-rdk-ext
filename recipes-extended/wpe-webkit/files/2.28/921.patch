@@ -36,7 +36,7 @@ index e546d81180ca..bbb49d3c63db 100644
 2.25.1
 
 
-From a028bb8c226bd6dc7d7340c32050c3794b5589ae Mon Sep 17 00:00:00 2001
+From 35d2b8a08e5d808d6fc5b4e9aa55c16d87cd1b3a Mon Sep 17 00:00:00 2001
 From: Andrzej Surdej <Andrzej_Surdej@comcast.com>
 Date: Wed, 10 Aug 2022 16:59:33 +0200
 Subject: [PATCH 2/2] Improve logging of sample data to match the rest of MSE
@@ -45,25 +45,28 @@ Subject: [PATCH 2/2] Improve logging of sample data to match the rest of MSE
 Use sample.toJSONString() func to log sample data as toFloat()
 may print slightly different value because of limitted precision.
 ---
- .../platform/graphics/gstreamer/mse/PlaybackPipeline.cpp     | 5 ++---
- 1 file changed, 2 insertions(+), 3 deletions(-)
+ .../platform/graphics/gstreamer/mse/PlaybackPipeline.cpp  | 8 +++-----
+ 1 file changed, 3 insertions(+), 5 deletions(-)
 
 diff --git a/Source/WebCore/platform/graphics/gstreamer/mse/PlaybackPipeline.cpp b/Source/WebCore/platform/graphics/gstreamer/mse/PlaybackPipeline.cpp
-index 3422c45480fd..f1fc0dd1d59e 100644
+index 3422c45480fd..938aaf104d78 100644
 --- a/Source/WebCore/platform/graphics/gstreamer/mse/PlaybackPipeline.cpp
 +++ b/Source/WebCore/platform/graphics/gstreamer/mse/PlaybackPipeline.cpp
-@@ -387,9 +387,8 @@ void PlaybackPipeline::enqueueSample(Ref<MediaSample>&& mediaSample)
+@@ -387,11 +387,9 @@ void PlaybackPipeline::enqueueSample(Ref<MediaSample>&& mediaSample)
  
      AtomString trackId = mediaSample->trackID();
  
 -    GST_TRACE("enqueing sample trackId=%s PTS=%f presentationSize=%.0fx%.0f at %" GST_TIME_FORMAT " duration: %" GST_TIME_FORMAT,
 -        trackId.string().utf8().data(), mediaSample->presentationTime().toFloat(),
 -        mediaSample->presentationSize().width(), mediaSample->presentationSize().height(),
+-        GST_TIME_ARGS(WebCore::toGstClockTime(mediaSample->presentationTime())),
+-        GST_TIME_ARGS(WebCore::toGstClockTime(mediaSample->duration())));
 +    GST_TRACE("enqueing sample trackId=%s %s at %" GST_TIME_FORMAT,
-+        trackId.string().utf8().data(), mediaSample->toJSONString().utf8().data(), 
-         GST_TIME_ARGS(WebCore::toGstClockTime(mediaSample->presentationTime())),
-         GST_TIME_ARGS(WebCore::toGstClockTime(mediaSample->duration())));
++        trackId.string().utf8().data(), mediaSample->toJSONString().utf8().data(),
++        GST_TIME_ARGS(WebCore::toGstClockTime(mediaSample->presentationTime())));
  
+     // No need to lock to access the Stream here because the only chance of conflict with this read and with the usage
+     // of the sample fields done in this method would be the deletion of the stream. However, that operation can only
 -- 
 2.25.1
 
