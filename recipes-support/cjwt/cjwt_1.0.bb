@@ -5,8 +5,8 @@ HOMEPAGE = "https://github.com/Comcast/cjwt"
 LICENSE = "Apache-2.0"
 LIC_FILES_CHKSUM = "file://LICENSE;md5=e3fc50a88d0a364313df4b21ef20c29e"
 
-SRCREV = "51714cf769c046ca454ebdf0ae2bc542a3d8b376"
-SRC_URI = "git://github.com/Comcast/cjwt.git"
+SRCREV = "2586a5ea4594f75fe5958c88acfdd7a7f635a067"
+SRC_URI = "git://github.com/xmidt-org/cjwt.git"
 PV = "git+${SRCPV}"
 S = "${WORKDIR}/git"
 
