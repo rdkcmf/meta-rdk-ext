@@ -10,11 +10,11 @@ Signed-off-by: Nambi Rajan <nambi_rajang@cable.comcast.com>
  CMakeLists.txt                    |   6 +
  src/gamepad/CMakeLists.txt        |   5 +
  src/gamepad/interfaces.h          |  36 ++
- src/gamepad/linux_gamepad.cpp     | 775 ++++++++++++++++++++++++++++++
+ src/gamepad/linux_gamepad.cpp     | 763 ++++++++++++++++++++++++++++++++++
  src/gamepad_test/CMakeLists.txt   |  13 +
  src/gamepad_test/gamepad_test.cpp | 120 +++++
  src/loader-impl.cpp               |  11 +
- 7 files changed, 966 insertions(+)
+ 7 files changed, 954 insertions(+)
  create mode 100644 src/gamepad/CMakeLists.txt
  create mode 100644 src/gamepad/interfaces.h
  create mode 100644 src/gamepad/linux_gamepad.cpp
@@ -100,10 +100,10 @@ index 0000000..f495548
 +#endif /* linux_gamepad_interfaces_h */
 diff --git a/src/gamepad/linux_gamepad.cpp b/src/gamepad/linux_gamepad.cpp
 new file mode 100644
-index 0000000..e9ddf4f
+index 0000000..509cbf9
 --- /dev/null
 +++ b/src/gamepad/linux_gamepad.cpp
-@@ -0,0 +1,775 @@
+@@ -0,0 +1,763 @@
 +/*
 + * If not stated otherwise in this file or this component's Licenses.txt file the
 + * following copyright and licenses apply:
@@ -307,7 +307,6 @@ index 0000000..e9ddf4f
 +  std::map<uint32_t /* id */, struct GamepadProxy*> gamepadProxies;
 +  std::map<uint32_t /* id */, struct GamepadInfo > gamepadsInfo;
 +  guint discoverySourceId { INVALID_SOURCE_ID };
-+  bool running { false };
 +
 +  GamepadProvider(struct wpe_gamepad_provider* provider)
 +    : provider(provider)
@@ -335,11 +334,6 @@ index 0000000..e9ddf4f
 +
 +  gboolean discoverGamePads()
 +  {
-+    if (!running) {
-+      discoverySourceId = INVALID_SOURCE_ID;
-+      return G_SOURCE_REMOVE;
-+    }
-+
 +    GDir* dir;
 +    GPatternSpec* pspec;
 +    const char* basePath = "/dev/input/";
@@ -390,17 +384,11 @@ index 0000000..e9ddf4f
 +
 +  void start()
 +  {
-+    if (running)
-+      return;
-+    running = true;
 +    startDiscovery();
 +  }
 +
 +  void stop()
 +  {
-+    if (!running)
-+      return;
-+    running = false;
 +    stopDiscovery();
 +    while(!gamepadsInfo.empty())
 +      closeGamepad(gamepadsInfo.begin()->first);
@@ -478,13 +466,13 @@ index 0000000..e9ddf4f
 +    using SourceData = std::pair<GamepadProvider*, int32_t>;
 +    SourceData *sourcedata = new SourceData(this, gamepad_id);
 +
-+    auto * src = g_unix_fd_source_new(fd, static_cast<GIOCondition>(G_IO_IN | G_IO_ERR | G_IO_HUP));
++    auto * src = g_unix_fd_source_new(fd, static_cast<GIOCondition>(G_IO_IN | G_IO_ERR | G_IO_HUP | G_IO_NVAL));
 +
 +    auto watchGamepad = [](gint fd, GIOCondition condition, gpointer user_data) -> gboolean {
 +      SourceData *sourcedata = static_cast<SourceData*>(user_data);
 +      GamepadProvider& self = *(sourcedata->first);
 +      int32_t gamepad_id = sourcedata->second;
-+      if (condition & (G_IO_HUP | G_IO_ERR)) {
++      if (condition & (G_IO_HUP | G_IO_ERR | G_IO_NVAL)) {
 +        self.closeGamepad(gamepad_id);
 +        return G_SOURCE_REMOVE;
 +      }
