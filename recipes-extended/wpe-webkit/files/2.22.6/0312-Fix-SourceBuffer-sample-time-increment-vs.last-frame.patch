@@ -1,0 +1,34 @@
+From b89a9b86af9d3ca7abddaabd023f656c71abf43d Mon Sep 17 00:00:00 2001
+From: kkanag314 <krishnapriya_kanagaraj@comcast.com>
+Date: Wed, 21 Sep 2022 12:50:47 +0000
+Subject: [PATCH] Fix SourceBuffer sample time increment vs. last frame
+ duration check is broken
+
+---
+ Source/WebCore/Modules/mediasource/SourceBuffer.cpp | 10 ++++++++--
+ 1 file changed, 8 insertions(+), 2 deletions(-)
+
+diff --git a/Source/WebCore/Modules/mediasource/SourceBuffer.cpp b/Source/WebCore/Modules/mediasource/SourceBuffer.cpp
+index f21ad9a68a38..62642592c7dd 100644
+--- a/Source/WebCore/Modules/mediasource/SourceBuffer.cpp
++++ b/Source/WebCore/Modules/mediasource/SourceBuffer.cpp
+@@ -1698,8 +1698,14 @@ void SourceBuffer::sourceBufferPrivateDidReceiveSample(MediaSample& sample)
+         // OR
+         // ↳ If last decode timestamp for track buffer is set and the difference between decode timestamp and
+         // last decode timestamp is greater than 2 times last frame duration:
+-        if (trackBuffer.lastDecodeTimestamp.isValid() && (decodeTimestamp < trackBuffer.lastDecodeTimestamp
+-            || (trackBuffer.greatestDecodeDuration.isValid() && (decodeTimestamp - trackBuffer.lastDecodeTimestamp) > (trackBuffer.greatestDecodeDuration * 2)))) {
++        MediaTime decodeDurationToCheck = trackBuffer.greatestDecodeDuration;
++
++        if (decodeDurationToCheck.isValid() && trackBuffer.lastFrameDuration.isValid()
++            && (trackBuffer.lastFrameDuration > decodeDurationToCheck))
++            decodeDurationToCheck = trackBuffer.lastFrameDuration;
++
++        if (trackBuffer.lastDecodeTimestamp.isValid() && (decodeTimestamp < trackBuffer.lastDecodeTimestamp
++            || (decodeDurationToCheck.isValid() && (decodeTimestamp - trackBuffer.lastDecodeTimestamp) > (decodeDurationToCheck * 2)))) {
+ 
+             // 1.6.1:
+             if (m_mode == AppendMode::Segments) {
+-- 
+2.17.1
+
