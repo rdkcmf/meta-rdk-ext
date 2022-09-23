@@ -17,7 +17,7 @@ PACKAGECONFIG ??= " \
     ${@bb.utils.contains('DISTRO_FEATURES', 'opengl', 'eglgles', '', d)} \
     ${@bb.utils.contains('DISTRO_FEATURES', 'directfb', 'directfb', '', d)} \
     ${@bb.utils.contains('DISTRO_FEATURES', 'enable_firebolt_compliance_tdk', '', 'orc', d)} \
-    curl uvch264 neon dataurisrc\
+    curl uvch264 neon dataurisrc \
     hls sbc dash bz2 smoothstreaming \
     "
 # dash = Dynamic Adaptive Streaming over HTTP
@@ -125,7 +125,7 @@ EXTRA_OECONF += " \
                 "
 
 #Enabling debugutils while firebolt_compliance_tdk is enabled
-EXTRA_OECONF += "${@bb.utils.contains('DISTRO_FEATURES', 'enable_firebolt_compliance_tdk','--enable-debugutils', '--disable-debugutils', d)}"
+EXTRA_OECONF += "${@bb.utils.contains_any('DISTRO_FEATURES', 'enable_firebolt_compliance_tdk benchmark_enable','--enable-debugutils', '--disable-debugutils', d)}"
 
 
 EXTRA_OECONF += " --enable-ivfparse --enable-external"
