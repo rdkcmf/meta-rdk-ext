@@ -14,8 +14,7 @@ SRC_URI_append_broadband = "  file://RDKCENTRAL_XDNS_core.patch \
                               file://RDKCENTRAL_XDNS_LOG.patch \
                               file://RDKCENTRAL_XDNS_Refactor.patch \
                               file://RDKCENTRAL_XDNS_Enable_IPV6.patch \
-                              file://RDKCENTRAL_XDNS_support-dns-failover-via-tcp.patch \
-                              file://dnsmasq-clientid-in-dhcp-server-reply.patch "
+                              file://RDKCENTRAL_XDNS_support-dns-failover-via-tcp.patch "
 
 SRC_URI_append_broadband += " ${@bb.utils.contains('DISTRO_FEATURES', 'bci', 'file://RDKCENTRAL_MultiProfile_XDNS.patch', '', d)}"
 
