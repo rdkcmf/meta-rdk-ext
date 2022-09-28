@@ -190,6 +190,7 @@ SRC_URI += "file://2.22.6/0307-Backport-GStreamer-WebRTC-Handle-broken-data-in-t
 SRC_URI += "file://2.22.6/0308-Reduce-audio-delay-caused-by-initial-late-video-fram.patch"
 SRC_URI += "file://2.22.6/0309-libwebrtc-disable-parser-for-non-GST-1.10.patch"
 SRC_URI += "file://2.22.6/0312-Fix-SourceBuffer-sample-time-increment-vs.last-frame.patch"
+SRC_URI += "file://2.22.6/0002-Patch-Realtek-audio-lowlatency-flow.patch"
 
 # device specific configs
 PACKAGECONFIG[westeros] = "-DUSE_WPEWEBKIT_BACKEND_WESTEROS=ON -DUSE_WPEWEBKIT_PLATFORM_WESTEROS=ON -DUSE_KEY_INPUT_HANDLING_LINUX_INPUT=OFF -DUSE_GSTREAMER_HOLEPUNCH=ON -DUSE_EXTERNAL_HOLEPUNCH=ON -DUSE_WESTEROS_SINK=ON,,westeros westeros-sink"

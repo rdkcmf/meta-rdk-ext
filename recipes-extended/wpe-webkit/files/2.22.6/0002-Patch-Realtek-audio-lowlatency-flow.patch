@@ -1,0 +1,49 @@
+From 00c5fba72e64252ea6332d1e895ee3038b1d7418 Mon Sep 17 00:00:00 2001
+From: "corey.hsu" <corey.hsu@realtek.com>
+Date: Sat, 8 Oct 2022 02:36:30 +0800
+Subject: [PATCH 1/1] [Patch] Realtek audio lowlatency flow.
+Source: Realtek
+License: GPLV2
+Upstream-Status: Pending
+
+Signed-off-by: corey.hsu <corey.hsu@realtek.com>
+---
+ .../graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp   | 9 +++++++++
+ Source/cmake/OptionsWPE.cmake                            | 1 +
+ 2 files changed, 10 insertions(+)
+
+diff --git a/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp b/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp
+index cee9a5d9789a..88c384a87a61 100644
+--- a/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp
++++ b/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp
+@@ -3218,6 +3218,15 @@ void MediaPlayerPrivateGStreamer::elementSetupCallback(MediaPlayerPrivateGStream
+         }
+ #endif
+     }
++#if ENABLE(MEDIA_STREAM) && PLATFORM(REALTEK)
++    if (g_object_class_find_property (G_OBJECT_GET_CLASS (element),"media-tunnel")) {
++        if (player->m_streamPrivate != nullptr) {
++            GST_INFO("Enable 'immediate-output' in rtkaudiosink");
++            g_object_set (G_OBJECT(element), "media-tunnel", FALSE, nullptr);
++            g_object_set (G_OBJECT(element), "audio-service", TRUE, nullptr);
++        }
++    }
++#endif
+     // FIXME: Following is a hack needed to get westeros-sink autoplug correctly with playbin3.
+     if (!player->m_isLegacyPlaybin && westerosSinkCaps && g_str_has_prefix(GST_ELEMENT_NAME(element), "decodebin3")) {
+         GstCaps* defaultCaps = nullptr;
+diff --git a/Source/cmake/OptionsWPE.cmake b/Source/cmake/OptionsWPE.cmake
+index b25421c32137..16e54e84c42a 100644
+--- a/Source/cmake/OptionsWPE.cmake
++++ b/Source/cmake/OptionsWPE.cmake
+@@ -214,6 +214,7 @@ SET_AND_EXPOSE_TO_BUILD(WTF_PLATFORM_WESTEROS ${USE_WPEWEBKIT_PLATFORM_WESTEROS}
+ SET_AND_EXPOSE_TO_BUILD(WTF_PLATFORM_BROADCOM ${USE_WPEWEBKIT_PLATFORM_BROADCOM})
+ SET_AND_EXPOSE_TO_BUILD(WTF_PLATFORM_QCOM_DB ${USE_WPEWEBKIT_PLATFORM_QCOM_DB})
+ SET_AND_EXPOSE_TO_BUILD(WTF_PLATFORM_RPI ${USE_WPEWEBKIT_PLATFORM_RPI})
++SET_AND_EXPOSE_TO_BUILD(WTF_PLATFORM_REALTEK ${USE_WPEWEBKIT_PLATFORM_REALTEK})
+ 
+ if (ENABLE_LOGS)
+     SET_AND_EXPOSE_TO_BUILD(LOG_DISABLED FALSE)
+-- 
+2.37.3
+
