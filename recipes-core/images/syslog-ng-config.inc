@@ -58,7 +58,7 @@ python update_constants () {
         conf.write("@version: %s\n" % (syslogng_version))
         conf.write("# Syslog-ng configuration file, created by syslog-ng configuration generator\n")
         conf.write("\n# First, set some global options.\n")
-        conf.write("options { flush_lines(0);owner(\"root\"); perm(0644); stats_freq(0);use-dns(no);dns-cache(no);time-zone(\"Etc/UTC\"); };\n")
+        conf.write("options { flush_lines(0);owner(\"root\"); perm(0664); stats_freq(0);use-dns(no);dns-cache(no);time-zone(\"Etc/UTC\"); };\n")
         conf.write("\n@define log_path \"%s\"\n" % (log_path))
         conf.write("\n########################\n")
         conf.write("# Sources\n")
