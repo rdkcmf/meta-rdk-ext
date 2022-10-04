@@ -15,4 +15,5 @@ FILES_${PN}_remove += " ${datadir}/gstreamer-1.0/presets/*.prs"
 
 SRC_URI_append = " \
   file://0001-backported-qtdemux-distinguish-TFDT-with-value-0-from-no-TFDT-a.patch \
+  file://0040-Backport-Keep-sample-data-from-the-current-fragment.patch \
 "
