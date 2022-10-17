@@ -1,20 +1,20 @@
-Date: Nov 6, 2018 1:41 AM
-From: ebecd56aaa2727b6305d39c69951fbdc8740f800 Oct 31, 2018 11:56 PM
+Date: Thu, 20 Oct 2022 18:33:57 +0000
+From e34e3222395abec0d8ca7746a1bf5b7da2337321 Mon Sep 17 00:00:00 2001
 Subject: Naive-gamepad-support.patch
 Source: COMCAST
 License: Apache-2.0
 Upstream-Status: None
 
-Signed-off-by: Nambi Rajan <nambi_rajang@cable.comcast.com>
+Signed-off-by:  Manoj Bhatta <manoj_bhatta@comcast.com>
 ---
  CMakeLists.txt                    |   6 +
  src/gamepad/CMakeLists.txt        |   5 +
  src/gamepad/interfaces.h          |  36 ++
- src/gamepad/linux_gamepad.cpp     | 763 ++++++++++++++++++++++++++++++++++
+ src/gamepad/linux_gamepad.cpp     | 768 ++++++++++++++++++++++++++++++
  src/gamepad_test/CMakeLists.txt   |  13 +
  src/gamepad_test/gamepad_test.cpp | 120 +++++
  src/loader-impl.cpp               |  11 +
- 7 files changed, 954 insertions(+)
+ 7 files changed, 959 insertions(+)
  create mode 100644 src/gamepad/CMakeLists.txt
  create mode 100644 src/gamepad/interfaces.h
  create mode 100644 src/gamepad/linux_gamepad.cpp
@@ -100,10 +100,10 @@ index 0000000..f495548
 +#endif /* linux_gamepad_interfaces_h */
 diff --git a/src/gamepad/linux_gamepad.cpp b/src/gamepad/linux_gamepad.cpp
 new file mode 100644
-index 0000000..509cbf9
+index 0000000..4c33006
 --- /dev/null
 +++ b/src/gamepad/linux_gamepad.cpp
-@@ -0,0 +1,763 @@
+@@ -0,0 +1,768 @@
 +/*
 + * If not stated otherwise in this file or this component's Licenses.txt file the
 + * following copyright and licenses apply:
@@ -196,6 +196,7 @@ index 0000000..509cbf9
 +  // buttons[13]	Bottom button in left cluster
 +  // buttons[14]	Right button in left cluster
 +  // buttons[15]	Left button in left cluster
++  // buttons[16]	Center button in center cluster
 +
 +  struct MapEntry {
 +    const int32_t code;
@@ -217,12 +218,16 @@ index 0000000..509cbf9
 +    { BTN_THUMBR, 11 }, // stick pressed button
 +    { ABS_HAT0Y,  12 },
 +    { ABS_HAT0X,  14 },
++    { BTN_MODE,   16 },
++    { KEY_HOMEPAGE,   16 },
 +
 +    // TODO: Add configurable re-mapping for any controller
 +    //
 +    // Append:  XBOX Wireless Controller
 +    //
++    { ABS_Z,       6 },  // trigger
 +    { ABS_BRAKE,   6 },  // trigger
++    { ABS_RZ,      7 },  // trigger
 +    { ABS_GAS,     7 },  // trigger
 +    { KEY_BACK,    8 }   // Left center "menu/start" button
 +
@@ -252,8 +257,8 @@ index 0000000..509cbf9
 +  static const MapEntry map[] = {
 +    { ABS_X,  0 },
 +    { ABS_Y,  1 },
-+    { ABS_Z,  2 },
-+    { ABS_RZ, 3 },
++    { ABS_RX, 2 },
++    { ABS_RY, 3 },
 +  };
 +
 +  static const size_t mapSize = sizeof(map)/sizeof(map[0]);
@@ -460,7 +465,7 @@ index 0000000..509cbf9
 +    info = GamepadInfo { gamepad_id, fd, name, path, INVALID_SOURCE_ID, axisInfo, {}, {} };
 +
 +    // fixme: figureout the actual mapping from the device
-+    info.buttonValues.resize(16, 0.0);
++    info.buttonValues.resize(17, 0.0);
 +    info.axisValues.resize(4, 0.0);
 +
 +    using SourceData = std::pair<GamepadProvider*, int32_t>;
@@ -765,7 +770,7 @@ index 0000000..509cbf9
 +      }
 +      case EV_ABS:
 +      {
-+        if (event.code == ABS_GAS || event.code == ABS_BRAKE) // L/R triggers
++        if (event.code == ABS_Z || event.code == ABS_RZ || event.code == ABS_BRAKE || event.code == ABS_GAS) // L/R triggers
 +          updateTriggerValue(event.code, event.value);
 +        else
 +        if (event.code == ABS_HAT0X || event.code == ABS_HAT0Y)
@@ -1041,6 +1046,3 @@ index 7571daa..5590bec 100644
  #ifdef BACKEND_ESSOS
          if (!std::strcmp(object_name, "_wpe_renderer_backend_egl_interface"))
              return &essos_renderer_backend_egl_interface;
--- 
-2.17.1
-
