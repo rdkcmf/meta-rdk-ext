@@ -1,0 +1,345 @@
+###############################################################################
+Date: Mon 19 April 13:00:00 UTC 2021
+From: 27047ddf33a19b668ab19d4476485cf8ebf7ede0 Mon 19 April 13:00:00 UTC 2021
+Subject: ADAHUB-126 : [OS] DHCPv6 sending Solicit instead of DHCPv6 Renew
+Source: SKY
+License: GPLV2
+Upstream-Status: Pending
+Signed-off-by: Vysakh A V <vysakh.venugopal@sky.uk>
+###############################################################################
+diff --git a/AddrMgr/AddrAddr.cpp b/AddrMgr/AddrAddr.cpp
+index 98002dd3..89f72aca 100644
+--- a/AddrMgr/AddrAddr.cpp
++++ b/AddrMgr/AddrAddr.cpp
+@@ -29,10 +29,14 @@ using namespace std;
+  *
+  */
+ TAddrAddr::TAddrAddr(SPtr<TIPv6Addr> addr, long pref, long valid) {
++	struct timespec ts;
+     this->Prefered = pref;
+     this->Valid = valid;
+     this->Addr=addr;
+     this->Timestamp = (unsigned long)time(NULL);
++	if (clock_gettime(CLOCK_MONOTONIC, &ts) == 0) {
++		this->Timestamp = (unsigned long)ts.tv_sec;
++	}
+     this->Tentative = ADDRSTATUS_UNKNOWN;
+     this->Prefix = 128;
+ 
+@@ -55,10 +59,14 @@ TAddrAddr::TAddrAddr(SPtr<TIPv6Addr> addr, long pref, long valid) {
+  *
+  */
+ TAddrAddr::TAddrAddr(SPtr<TIPv6Addr> addr, long pref, long valid, int prefix) {
++	struct timespec ts;
+     this->Prefered = pref;
+     this->Valid = valid;
+     this->Addr=addr;
+     this->Timestamp = (unsigned long)time(NULL);
++	if (clock_gettime(CLOCK_MONOTONIC, &ts) == 0) {
++		this->Timestamp = (unsigned long)ts.tv_sec;
++	}
+     this->Tentative = ADDRSTATUS_UNKNOWN;
+     this->Prefix = prefix;
+ 
+@@ -96,7 +104,11 @@ SPtr<TIPv6Addr> TAddrAddr::get() {
+ unsigned long TAddrAddr::getPrefTimeout()
+ {
+     unsigned long ts = Timestamp + Prefered;
++	struct timespec ts_local;
+     unsigned long x  = (unsigned long)time(NULL);
++	if (clock_gettime(CLOCK_MONOTONIC, &ts_local) == 0) {
++		x  = (unsigned long)ts_local.tv_sec;
++	}
+     if (ts<Timestamp) { // (Timestamp + T1 overflowed (unsigned long) maximum value
+         return DHCPV6_INFINITY;
+     }
+@@ -117,6 +129,12 @@ unsigned long TAddrAddr::getValidTimeout()
+ {
+     unsigned long ts = Timestamp + Valid;
+     unsigned long x  = (unsigned long)time(NULL);
++	struct timespec ts_local;
++
++	if (clock_gettime(CLOCK_MONOTONIC, &ts_local) == 0) {
++		x = (unsigned long)ts_local.tv_sec;
++	}
++	
+     if (ts<Timestamp) { // (Timestamp + T1 overflowed (unsigned long) maximum value
+ 	return DHCPV6_INFINITY;
+     }
+@@ -136,7 +154,7 @@ long TAddrAddr::getTimestamp()
+ // set timestamp
+ void TAddrAddr::setTimestamp(long ts)
+ {
+-    this->Timestamp = ts;
++	this->Timestamp = ts;
+ }
+ 
+ void TAddrAddr::setTentative(enum EAddrStatus state)
+@@ -157,7 +175,12 @@ void TAddrAddr::setValid(unsigned long valid)
+ // set timestamp
+ void TAddrAddr::setTimestamp()
+ {
++	struct timespec ts;
+     this->Timestamp = (unsigned long)time(NULL);
++
++	if (clock_gettime(CLOCK_MONOTONIC, &ts) == 0) {
++		this->Timestamp = (unsigned long)ts.tv_sec;
++	}
+ }
+ 
+ enum EAddrStatus TAddrAddr::getTentative()
+diff --git a/AddrMgr/AddrIA.cpp b/AddrMgr/AddrIA.cpp
+index e9db51b7..adc41979 100644
+--- a/AddrMgr/AddrIA.cpp
++++ b/AddrMgr/AddrIA.cpp
+@@ -39,9 +39,14 @@ using namespace std;
+ TAddrIA::TAddrIA(const std::string& ifacename, int ifindex, TIAType type, SPtr<TIPv6Addr> addr,
+                  SPtr<TDUID> duid, unsigned long t1, unsigned long t2,unsigned long id)
+     :IAID(id),T1(t1),T2(t2), State(STATE_NOTCONFIGURED), 
+-     Tentative(ADDRSTATUS_UNKNOWN), Timestamp((unsigned long)time(NULL)),
++     Tentative(ADDRSTATUS_UNKNOWN),
+      Unicast(false), Iface_(ifacename), Ifindex_(ifindex), Type(type)
+ {
++	struct timespec clockts;
++
++	if (clock_gettime(CLOCK_MONOTONIC, &clockts) == 0) {
++		this->Timestamp = (unsigned long)clockts.tv_sec;
++	}
+     this->setDUID(duid);
+     if (addr)
+         this->setUnicast(addr);
+@@ -282,12 +287,16 @@ bool TAddrIA::delPrefix(SPtr<TIPv6Addr> x)
+ // --------------------------------------------------------------------
+ unsigned long TAddrIA::getT1Timeout() {
+     unsigned long ts, x;
++	struct timespec clockts;
++	
+     ts = Timestamp + T1;
+     if (ts<Timestamp) { // (Timestamp + T1 overflowed (unsigned long) maximum value
+ 	return DHCPV6_INFINITY;
+     }
+-    
+-    x  = (unsigned long)time(NULL);
++
++    if (clock_gettime(CLOCK_MONOTONIC, &clockts) == 0) {
++	    x = (unsigned long)clockts.tv_sec;
++	}	
+     if (ts>x)  
+         return ts-x;
+     else
+@@ -296,13 +305,16 @@ unsigned long TAddrIA::getT1Timeout() {
+ 
+ unsigned long TAddrIA::getT2Timeout() {
+     unsigned long ts, x;
++	struct timespec clockts;
+     ts = Timestamp + T2;
+     if (ts<Timestamp) { // (Timestamp + T1 overflowed (unsigned long) maximum value
+ 	return DHCPV6_INFINITY;
+     }
+ 
+-    x  = (unsigned long)time(NULL);
+-    if (ts>x) 
++    if (clock_gettime(CLOCK_MONOTONIC, &clockts) == 0) {
++		x = (unsigned long)clockts.tv_sec;
++	}
++	if (ts>x) 
+         return ts-x;
+     else 
+         return 0;
+@@ -365,7 +377,7 @@ unsigned long TAddrIA::getValidTimeout() {
+ // set timestamp
+ void TAddrIA::setTimestamp(unsigned long ts)
+ {
+-    this->Timestamp = ts;
++	this->Timestamp = ts;
+     SPtr<TAddrAddr> ptr;
+     AddrLst.first();
+     while (ptr = AddrLst.get() )
+@@ -375,7 +387,12 @@ void TAddrIA::setTimestamp(unsigned long ts)
+ }
+ 
+ void TAddrIA::setTimestamp() {
+-    this->setTimestamp((unsigned long)time(NULL));
++	unsigned long ts;
++	struct timespec clockts;
++	if (clock_gettime(CLOCK_MONOTONIC, &clockts) == 0) {
++		ts = (unsigned long)clockts.tv_sec;
++	}
++	this->setTimestamp(ts);
+ }
+ 
+ unsigned long TAddrIA::getTimestamp()
+@@ -393,6 +410,8 @@ unsigned long TAddrIA::getTimestamp()
+ unsigned long TAddrIA::getTentativeTimeout()
+ {
+     unsigned long min = DHCPV6_INFINITY;
++	unsigned long x;
++	struct timespec clockts;
+     switch (this->getTentative()) 
+     {
+     case ADDRSTATUS_YES:
+@@ -404,10 +423,13 @@ unsigned long TAddrIA::getTentativeTimeout()
+         AddrLst.first();
+         while ( ptrAddr = AddrLst.get() )
+         {
++			if (clock_gettime(CLOCK_MONOTONIC, &clockts) == 0) {
++				x = (unsigned long)clockts.tv_sec;
++			}
+             if (ptrAddr->getTentative()==ADDRSTATUS_UNKNOWN)
+-                if (min > ptrAddr->getTimestamp()+DADTIMEOUT-(unsigned long)time(NULL) )
++				if (min > ptrAddr->getTimestamp()+DADTIMEOUT-x)
+                 {
+-                    min = ptrAddr->getTimestamp()+DADTIMEOUT-(unsigned long)time(NULL);
++					min = ptrAddr->getTimestamp()+DADTIMEOUT-x;
+                 }
+         }
+     }
+@@ -423,12 +445,18 @@ unsigned long TAddrIA::getTentativeTimeout()
+  */
+ enum EAddrStatus TAddrIA::getTentative()
+ {
++    unsigned long localts;
++    struct timespec clockts;
+     if (Tentative != ADDRSTATUS_UNKNOWN)
+     	return Tentative;
+ 
+     SPtr<TAddrAddr> ptrAddr;
+     AddrLst.first();
+ 
++    if (clock_gettime(CLOCK_MONOTONIC, &clockts) == 0) {
++        localts = (unsigned long)clockts.tv_sec;
++    }
++
+     bool allChecked = true;
+ 
+     while ( ptrAddr = AddrLst.get() ) {
+@@ -441,7 +469,7 @@ enum EAddrStatus TAddrIA::getTentative()
+ 	case ADDRSTATUS_NO:
+ 	    continue;
+ 	case ADDRSTATUS_UNKNOWN:
+-        if ( ptrAddr->getTimestamp()+DADTIMEOUT < (unsigned long)time(NULL) )
++		if ( ptrAddr->getTimestamp()+DADTIMEOUT < localts )
+         {
+ 
+             switch (is_addr_tentative(NULL, Ifindex_, ptrAddr->get()->getPlain()) ) 
+diff --git a/ClntMessages/ClntMsg.cpp b/ClntMessages/ClntMsg.cpp
+index 84c9c5de..4262f403 100644
+--- a/ClntMessages/ClntMsg.cpp
++++ b/ClntMessages/ClntMsg.cpp
+@@ -321,8 +321,11 @@ TClntMsg::~TClntMsg() {
+ 
+ void TClntMsg::setDefaults()
+ {
+-    FirstTimeStamp = time(NULL);
+-    LastTimeStamp  = time(NULL);
++    struct timespec ts;
++	if (clock_gettime(CLOCK_MONOTONIC, &ts) == 0) {
++		FirstTimeStamp = (unsigned long)ts.tv_sec;
++		LastTimeStamp  = (unsigned long)ts.tv_sec;
++	}
+ 
+     RC  = 0;
+     RT  = 0;
+@@ -341,7 +344,11 @@ void TClntMsg::setDefaults()
+ 
+ unsigned long TClntMsg::getTimeout()
+ {
+-    long diff = (LastTimeStamp+RT) - time(NULL);
++	struct timespec ts;
++	long diff;
++	if (clock_gettime(CLOCK_MONOTONIC, &ts) == 0) {
++		diff = (LastTimeStamp+RT) - (unsigned long)ts.tv_sec;
++	}
+     return (diff<0) ? 0 : diff;
+ }
+ 
+@@ -351,7 +358,14 @@ void TClntMsg::send()
+     char* pkt = new char[size];
+     memset(pkt, 0, size);
+ 
+-    srand((uint32_t)time(NULL));
++       struct timespec ts;
++       uint32_t diff;
++
++       if (clock_gettime(CLOCK_MONOTONIC, &ts) == 0) {
++               diff = (uint32_t)ts.tv_sec;
++       }
++
++    srand(diff);
+     if (!RC)
+ 	RT=(int)(0.5+IRT+IRT*(0.2*(double)rand()/(double)RAND_MAX-0.1));
+     else
+@@ -397,7 +411,9 @@ void TClntMsg::send()
+ 		   << "/" << Iface << " to multicast." << LogEnd;
+ 	ClntIfaceMgr().sendMulticast(Iface, pkt, getSize());
+     }
+-    LastTimeStamp = time(NULL);
++	if (clock_gettime(CLOCK_MONOTONIC, &ts) == 0) {
++		LastTimeStamp = (unsigned long)ts.tv_sec;
++	}
+     delete [] pkt;
+ }
+ 
+diff --git a/ClntMessages/ClntMsgConfirm.cpp b/ClntMessages/ClntMsgConfirm.cpp
+index 65359859..71aac037 100644
+--- a/ClntMessages/ClntMsgConfirm.cpp
++++ b/ClntMessages/ClntMsgConfirm.cpp
+@@ -85,6 +85,7 @@ void TClntMsgConfirm::answer(SPtr<TClntMsg> reply)
+ }
+ 
+ void TClntMsgConfirm::addrsAccepted() {
++	struct timespec ts;
+     SPtr<TAddrIA> ptrIA;
+     SPtr<TOpt> ptrOpt;
+     this->firstOption();
+@@ -108,7 +109,9 @@ void TClntMsgConfirm::addrsAccepted() {
+         ptrIA->setState(STATE_CONFIGURED);
+ 
+         // Once confirmed, this triggers the
+-        ptrIA->setTimestamp( (uint32_t)time(NULL) - ptrIA->getT1() );
++		if (clock_gettime(CLOCK_MONOTONIC, &ts) == 0) {
++            ptrIA->setTimestamp( (uint32_t)ts.tv_sec - ptrIA->getT1() );
++		}
+ 
+         SPtr<TIfaceIface> ptrIface = ClntIfaceMgr().getIfaceByID(ptrIA->getIfindex());
+         if (!ptrIface)
+diff --git a/ClntOptions/ClntOptElapsed.cpp b/ClntOptions/ClntOptElapsed.cpp
+index 974b63ae..19bcd67e 100644
+--- a/ClntOptions/ClntOptElapsed.cpp
++++ b/ClntOptions/ClntOptElapsed.cpp
+@@ -18,13 +18,19 @@
+ TClntOptElapsed::TClntOptElapsed( char * buf,  int n, TMsg* parent)
+     :TOptInteger(OPTION_ELAPSED_TIME, OPTION_ELAPSED_TIME_LEN, buf,n, parent)
+ {
+-    Timestamp = (uint32_t)time(NULL);
++	struct timespec ts;
++    if (clock_gettime(CLOCK_MONOTONIC, &ts) == 0) {
++	    Timestamp = (uint32_t)ts.tv_sec;
++	}	
+ }
+ 
+ TClntOptElapsed::TClntOptElapsed(TMsg* parent)
+     :TOptInteger(OPTION_ELAPSED_TIME, OPTION_ELAPSED_TIME_LEN, 0, parent)
+ {
+-    Timestamp = (uint32_t)time(NULL);
++	struct timespec ts;
++	if (clock_gettime(CLOCK_MONOTONIC, &ts) == 0) {
++		Timestamp = (uint32_t)ts.tv_sec;
++	}
+ }
+ 
+ bool TClntOptElapsed::doDuties()
+@@ -34,6 +40,12 @@ bool TClntOptElapsed::doDuties()
+ 
+ char * TClntOptElapsed::storeSelf(char* buf)
+ {
+-    Value = (unsigned int)((uint32_t)time(NULL) - Timestamp)*100;
++	struct timespec ts;
++    uint32_t diff;
++
++	if (clock_gettime(CLOCK_MONOTONIC, &ts) == 0) {
++		diff = (uint32_t)ts.tv_sec;
++	}
++	Value = (unsigned int)(diff - Timestamp)*100;
+     return TOptInteger::storeSelf(buf);
+ }
