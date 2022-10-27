@@ -88,7 +88,6 @@ PACKAGECONFIG[native_video]      = "-DUSE_GSTREAMER_NATIVE_VIDEO=ON, -DUSE_GSTRE
 
 PACKAGECONFIG_append = " webdriver intl remoteinspector experimental releaselog accessibility speechsynthesis native_video"
 
-LEAD_SONAME = "libWPEWebKit-1.0.so"
 FILES_${PN} += " ${libdir}/wpe-webkit-1.0/injected-bundle/libWPEInjectedBundle.so"
 FILES_${PN}-web-inspector-plugin += " ${libdir}/wpe-webkit-1.0/libWPEWebInspectorResources.so"
 

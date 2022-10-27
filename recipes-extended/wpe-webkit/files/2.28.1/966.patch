@@ -1,0 +1,32 @@
+From fad8cf5dd8552e693ab1155ec1c71a3ae9cab101 Mon Sep 17 00:00:00 2001
+From: Andrzej Surdej <Andrzej_Surdej@comcast.com>
+Date: Mon, 24 Oct 2022 13:15:32 +0200
+Subject: [PATCH] [WebAudio][Amlogic] Play webaudio as system sound
+
+Set Amlogic audio sink property direct-mode=false so webaudio
+is treated as system sound and won't collide with other
+kind of audio playbacks (main, text to speech)
+---
+ .../platform/audio/gstreamer/AudioDestinationGStreamer.cpp  | 6 ++++++
+ 1 file changed, 6 insertions(+)
+
+diff --git a/Source/WebCore/platform/audio/gstreamer/AudioDestinationGStreamer.cpp b/Source/WebCore/platform/audio/gstreamer/AudioDestinationGStreamer.cpp
+index 1a5495fd764d..68b7ff40b030 100644
+--- a/Source/WebCore/platform/audio/gstreamer/AudioDestinationGStreamer.cpp
++++ b/Source/WebCore/platform/audio/gstreamer/AudioDestinationGStreamer.cpp
+@@ -48,6 +48,12 @@ static void autoAudioSinkChildAddedCallback(GstChildProxy*, GObject* object, gch
+ {
+     if (GST_IS_AUDIO_BASE_SINK(object))
+         g_object_set(GST_AUDIO_BASE_SINK(object), "buffer-time", static_cast<gint64>(100000), nullptr);
++
++#if PLATFORM(AMLOGIC)
++    if (!g_strcmp0(G_OBJECT_TYPE_NAME(object), "GstAmlHalAsink")) {
++        g_object_set(object, "direct-mode", FALSE, nullptr);
++    }
++#endif
+ }
+ 
+ std::unique_ptr<AudioDestination> AudioDestination::create(AudioIOCallback& callback, const String&, unsigned numberOfInputChannels, unsigned numberOfOutputChannels, float sampleRate)
+-- 
+2.25.1
+

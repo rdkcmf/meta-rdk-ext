@@ -193,6 +193,7 @@ SRC_URI += "file://2.22.6/0312-Fix-SourceBuffer-sample-time-increment-vs.last-fr
 SRC_URI += "file://2.22.6/0002-Patch-Realtek-audio-lowlatency-flow.patch"
 SRC_URI += "file://2.22.6/0312-iheart-spinning-wheel.patch"
 SRC_URI += "file://2.22.6/0307-Flush-the-pipeline-based-on-m_gstSeekCompleted.patch"
+SRC_URI += "file://2.22.6/0001-DELIA-58210-Flush-pending-canvas-drawing.patch"
 
 # device specific configs
 PACKAGECONFIG[westeros] = "-DUSE_WPEWEBKIT_BACKEND_WESTEROS=ON -DUSE_WPEWEBKIT_PLATFORM_WESTEROS=ON -DUSE_KEY_INPUT_HANDLING_LINUX_INPUT=OFF -DUSE_GSTREAMER_HOLEPUNCH=ON -DUSE_EXTERNAL_HOLEPUNCH=ON -DUSE_WESTEROS_SINK=ON,,westeros westeros-sink"
@@ -218,7 +219,6 @@ PACKAGECONFIG_append = " intl"
 PACKAGECONFIG_append = " remoteinspector"
 #PACKAGECONFIG_append = " gamepad"
 
-LEAD_SONAME = "libWPEWebKit-0.1.so"
 FILES_${PN}-web-inspector-plugin += " ${libdir}/wpe-webkit-*/libWPEWebInspectorResources.so"
 
 SELECTED_OPTIMIZATION_remove = "-g"

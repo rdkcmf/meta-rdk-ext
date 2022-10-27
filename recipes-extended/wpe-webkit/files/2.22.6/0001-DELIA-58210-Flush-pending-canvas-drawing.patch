@@ -1,0 +1,35 @@
+From 42f3a286a947f28e589055ef310914e3b35ac8fc Mon Sep 17 00:00:00 2001
+From: Andrzej Surdej <Andrzej_Surdej@comcast.com>
+Date: Wed, 12 Oct 2022 19:14:44 +0200
+Subject: [PATCH] ImageBufferCairo: Make sure all drawing is done on swapBuffer
+
+Flush compositor surface to make sure all drawings are stored
+inside backing GL texture. Compositor uses GL texture directly,
+outside of cairo ecosystem so Cairo doesn't know if the data is accessed.
+
+This fixes HTML canvas issue on both 2.22 and 2.28 that canvas renders
+previous image insted of current one. If this is the very first drawing
+then some trashes are displayed (empty, parts of some previous graphics, etc).
+
+Happens with accelerated 2D canvas enabled only
+---
+ Source/WebCore/platform/graphics/cairo/ImageBufferCairo.cpp | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/Source/WebCore/platform/graphics/cairo/ImageBufferCairo.cpp b/Source/WebCore/platform/graphics/cairo/ImageBufferCairo.cpp
+index 0e6a3be80c95..1253839352b4 100644
+--- a/Source/WebCore/platform/graphics/cairo/ImageBufferCairo.cpp
++++ b/Source/WebCore/platform/graphics/cairo/ImageBufferCairo.cpp
+@@ -183,6 +183,9 @@ void ImageBufferData::swapBuffersIfNeeded()
+     cairo_set_operator(m_compositorCr.get(), CAIRO_OPERATOR_SOURCE);
+     cairo_paint(m_compositorCr.get());
+ 
++    // Flush all pending drawing operations as compositor uses GL texture directly, outside of Cairo
++    cairo_surface_flush(m_compositorSurface.get());
++
+     if (previousActiveContext)
+         previousActiveContext->makeContextCurrent();
+ }
+-- 
+2.25.1
+

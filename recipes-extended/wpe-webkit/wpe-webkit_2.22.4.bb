@@ -190,7 +190,6 @@ PACKAGECONFIG_append = " intl"
 PACKAGECONFIG_append = " remoteinspector"
 #PACKAGECONFIG_append = " gamepad"
 
-LEAD_SONAME = "libWPEWebKit-0.1.so"
 FILES_${PN}-web-inspector-plugin += " ${libdir}/wpe-webkit-*/libWPEWebInspectorResources.so"
 
 SELECTED_OPTIMIZATION_remove = "-g"

@@ -26,7 +26,7 @@ inherit cmake pkgconfig perlnative pythonnative
 WPE_BACKEND ?= "${@bb.utils.contains('DISTRO_FEATURES', 'wayland', 'westeros', '', d)}"
 
 # The libprovision prebuilt libs currently support glibc ARM only.
-PROVISIONING ?= "provisioning"
+PROVISIONING ?= ""
 PROVISIONING_libc-musl = ""
 PROVISIONING_mipsel = ""
 PROVISIONING_x86 = ""
@@ -104,13 +104,16 @@ WPE_WEBKIT_OPTIMIZATION ?= "-O2"
 SELECTED_OPTIMIZATION_remove = "-pipe"
 SELECTED_OPTIMIZATION_append = " ${WPE_WEBKIT_OPTIMIZATION}"
 
-LEAD_SONAME ?= "libWPEWebKit.so"
-
 PACKAGES =+ "${PN}-web-inspector-plugin"
 
 FILES_${PN}-web-inspector-plugin += "${libdir}/libWPEWebInspectorResources.so"
 INSANE_SKIP_${PN}-web-inspector-plugin = "dev-so"
 INSANE_SKIP_${PN}_append = " rpaths"
+
+DEBIAN_NOAUTONAME_${PN} = "1"
+DEBIAN_NOAUTONAME_${PN}-dbg = "1"
+DEBIAN_NOAUTONAME_${PN}-dev = "1"
+DEBIAN_NOAUTONAME_${PN}-web-inspector-plugin = "1"
 
 RDEPS_MEDIASOURCE = " \
     gstreamer1.0-plugins-good-isomp4 \

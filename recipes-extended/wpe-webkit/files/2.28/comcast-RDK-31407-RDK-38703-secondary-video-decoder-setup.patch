@@ -1,0 +1,38 @@
+From 8a80d286a800c97fa9091684cd941be7298ee302 Mon Sep 17 00:00:00 2001
+From: Eugene Mutavchi <Ievgen_Mutavchi@comcast.com>
+Date: Wed, 19 Oct 2022 18:49:14 +0000
+Subject: [PATCH] comcast - RDK-31407 - RDK-38703 - secondary video decoder setup for pip
+ video
+
+---
+ .../graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp   | 9 ++++++++-
+ 1 file changed, 8 insertions(+), 1 deletion(-)
+
+diff --git a/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp b/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp
+index f640a9f49948..838897615684 100644
+--- a/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp
++++ b/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp
+@@ -3615,12 +3615,19 @@ GstElement* MediaPlayerPrivateGStreamer::createHolePunchVideoSink()
+     // we use a fakeVideoSink so nothing is drawn to the page.
+ 
+ #if USE(WESTEROS_SINK)
+-    if (m_isLegacyPlaybin)
++    AtomString val;
++    bool hasPIPAttribute =
++        m_player->doesHaveAttribute("pip", &val) && equalLettersIgnoringASCIICase(val, "true");
++    if (m_isLegacyPlaybin && !hasPIPAttribute)
+         return nullptr;
+     // Westeros using holepunch.
+     GRefPtr<GstElementFactory> westerosfactory = adoptGRef(gst_element_factory_find("westerossink"));
+     GstElement* videoSink = gst_element_factory_create(westerosfactory.get(), "WesterosVideoSink");
+     g_object_set(G_OBJECT(videoSink), "zorder", 0.0f, nullptr);
++    if (hasPIPAttribute) {
++        WTFLogAlways("HTML5 video: setting up sink with minimum resource usage.");
++        g_object_set(G_OBJECT(videoSink), "res-usage", 0u, nullptr);
++    }
+     return videoSink;
+ #endif
+ 
+-- 
+2.25.1
+

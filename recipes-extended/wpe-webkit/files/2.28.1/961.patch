@@ -1,0 +1,60 @@
+From 7dd817e6b5b62d4c9f27d999225de0830c9e4bfd Mon Sep 17 00:00:00 2001
+From: Andrzej Surdej <Andrzej_Surdej@comcast.com>
+Date: Tue, 18 Oct 2022 12:34:08 +0200
+Subject: [PATCH] Exclude Broadcom native audio decoding path from webaudio
+ decoder
+
+Extend skipping of "brcmaudfilter" element on BROADCOM platform also
+(beside BCM_NEXUS). This way we drop Broadcom native audio decoding
+path that doesn't produce raw audio output anyway.
+
+This fixes webaudio AudioContext.decodeAudioData() pipeline creation
+error for audio formats with sw decoder available. Now decodebin
+will automatically pick up sw decoder if available instead of brcm.
+---
+ .../platform/audio/gstreamer/AudioFileReaderGStreamer.cpp | 8 ++++----
+ 1 file changed, 4 insertions(+), 4 deletions(-)
+
+diff --git a/Source/WebCore/platform/audio/gstreamer/AudioFileReaderGStreamer.cpp b/Source/WebCore/platform/audio/gstreamer/AudioFileReaderGStreamer.cpp
+index 6b5d2e45a850..9aa70632d2cf 100644
+--- a/Source/WebCore/platform/audio/gstreamer/AudioFileReaderGStreamer.cpp
++++ b/Source/WebCore/platform/audio/gstreamer/AudioFileReaderGStreamer.cpp
+@@ -36,7 +36,7 @@
+ #include <wtf/glib/GRefPtr.h>
+ #include <wtf/glib/GUniquePtr.h>
+ 
+-#if PLATFORM(BCM_NEXUS)
++#if PLATFORM(BCM_NEXUS) || PLATFORM(BROADCOM)
+ typedef enum {
+   GST_AUTOPLUG_SELECT_TRY,
+   GST_AUTOPLUG_SELECT_EXPOSE,
+@@ -85,7 +85,7 @@ private:
+     bool m_errorOccurred { false };
+ };
+ 
+-#if PLATFORM(BCM_NEXUS)
++#if PLATFORM(BCM_NEXUS) || PLATFORM(BROADCOM)
+ GstAutoplugSelectResult decodebinAutoplugSelectCallback(GstElement*, GstPad*, GstCaps*, GstElementFactory* factory)
+ {
+     return !g_strcmp0(gst_plugin_feature_get_name(GST_PLUGIN_FEATURE(factory)), "brcmaudfilter") ? GST_AUTOPLUG_SELECT_SKIP : GST_AUTOPLUG_SELECT_TRY;
+@@ -146,7 +146,7 @@ AudioFileReader::~AudioFileReader()
+ 
+     if (m_decodebin) {
+         g_signal_handlers_disconnect_matched(m_decodebin.get(), G_SIGNAL_MATCH_DATA, 0, 0, nullptr, nullptr, this);
+-#if PLATFORM(BCM_NEXUS)
++#if PLATFORM(BCM_NEXUS) || PLATFORM(BROADCOM)
+         g_signal_handlers_disconnect_matched(m_decodebin.get(), G_SIGNAL_MATCH_FUNC, 0, 0, nullptr, gpointer(decodebinAutoplugSelectCallback), nullptr);
+ #endif
+         m_decodebin = nullptr;
+@@ -339,7 +339,7 @@ void AudioFileReader::decodeAudioForBusCreation()
+     }
+ 
+     m_decodebin = gst_element_factory_make("decodebin", "decodebin");
+-#if PLATFORM(BCM_NEXUS)
++#if PLATFORM(BCM_NEXUS) || PLATFORM(BROADCOM)
+     g_signal_connect_swapped(m_decodebin.get(), "autoplug-select", G_CALLBACK(decodebinAutoplugSelectCallback), nullptr);
+ #endif
+     g_signal_connect_swapped(m_decodebin.get(), "pad-added", G_CALLBACK(decodebinPadAddedCallback), this);
+-- 
+2.25.1
+
