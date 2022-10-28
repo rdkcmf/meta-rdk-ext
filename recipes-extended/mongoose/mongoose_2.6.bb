@@ -18,29 +18,20 @@ SRC_URI += " \
 	file://dont_strip.patch \
 	file://mongoose-reorder-buildargs.patch \
 	file://Add-options-support.patch \
+	file://Add-soname-and-fix-install-target.patch \
 	"
 
 SRC_URI[md5sum] = "56afae4cfb86e836024df31224db8104"
 SRC_URI[sha256sum] = "d87c9c50404ae8a88bddf1cedf2596b0887fc226d4c62e46862fa99c270a8e8d"
 
-EXTRA_OEMAKE = "'CC=${CC}' 'COPT=${CFLAGS}'"
-
-TARGET_CC_ARCH +="${LDFLAGS}"
-
 do_compile () {
     oe_runmake linux
 }
 
-# Shared libs created by the RDK build aren't versioned, so we need
-# to force the .so files into the runtime package (and keep them
-# out of -dev package).
-FILES_SOLIBSDEV = ""
-FILES_${PN} += "${libdir}/*.so"
-
 do_install () {
-    install -d ${D}${bindir} ${D}${includedir}
-    install -m 0755 mongoose ${D}${bindir}
-    install -d ${D}${libdir}
-    install -m 0755 _mongoose.so ${D}${libdir}/libmongoose.so
-    install -m 0755 *.h ${D}${includedir}/
+    oe_runmake install DESTDIR=${D}
 }
+
+# Don't install mongoose binary by default
+PACKAGES =+ "${PN}-bin"
+FILES_${PN}-bin += "${bindir}/mongoose"

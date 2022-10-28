@@ -1,0 +1,56 @@
+From f88eefe54d030a1f108e8d71cf7ae0858728adb8 Mon Sep 17 00:00:00 2001
+From: Damian Wrobel <dwrobel.contractor@libertyglobal.com>
+Date: Fri, 28 Oct 2022 13:19:54 +0200
+Subject: [PATCH] Add soname and fix install target
+
+ - Adds missing SONAME,
+ - Honors CFLAGS, LDFLAGS and DESTDIR
+ - Installs proper symlinks,
+ - Remove executable bit from mongoose.h.
+
+Signed-off-by: Damian Wrobel <dwrobel.contractor@libertyglobal.com>
+---
+ Makefile | 22 ++++++++++++----------
+ 1 file changed, 12 insertions(+), 10 deletions(-)
+
+Index: mongoose/Makefile
+===================================================================
+--- mongoose.orig/Makefile
++++ mongoose/Makefile
+@@ -22,14 +22,17 @@ all:
+ ###                 UNIX build: linux, bsd, mac, rtems
+ ##########################################################################
+ 
+-CFLAGS=		-W -Wall -std=c99 -pedantic -Os $(COPT)
++CFLAGS?=	-W -Wall -std=c99 -pedantic -Os
+ MAC_SHARED=	-flat_namespace -bundle -undefined suppress
+ LINFLAGS=	$(CFLAGS) -D_POSIX_SOURCE -D_BSD_SOURCE -ldl -lpthread
+-LIB=		_$(PROG).so
++MAJOR_VERSION=	2
++MINOR_VERSION=	6
++VERSION=	$(MAJOR_VERSION).$(MINOR_VERSION)
++LIB=		lib$(PROG).so
+ 
+ linux:
+-	$(CC) $(LINFLAGS) mongoose.c -shared -fPIC -fpic -o $(LIB)
+-	$(CC) mongoose.c main.c $(LINFLAGS) -o $(PROG)
++	$(CC) $(LINFLAGS) $(LDFLAGS) mongoose.c -shared -Wl,-soname,$(LIB).$(MAJOR_VERSION) -fPIC -fpic -o $(LIB).$(VERSION)
++	$(CC) mongoose.c main.c $(LINFLAGS) $(LDFLAGS) -o $(PROG)
+ bsd:
+ 	$(CC) $(CFLAGS) mongoose.c -shared -lpthread -s -fpic -fPIC -o $(LIB)
+ 	$(CC) $(CFLAGS) mongoose.c main.c -lpthread -s -o $(PROG)
+@@ -96,9 +99,8 @@ release: clean
+ clean:
+ 	rm -rf *.o *.core $(PROG) *.obj $(PROG).1.txt *.dSYM *.tgz
+ install:
+-	mkdir -p ${prefix}/bin
+-	mkdir -p ${prefix}/lib
+-	mkdir -p ${prefix}/include/mongoose
+-	cp mongoose.h ${prefix}/include/mongoose
+-	cp $(PROG) ${prefix}/bin
+-	cp $(LIB) ${prefix}/lib/lib$(PROG).so
++	install -pDm644 mongoose.h $(DESTDIR)$(includedir)/mongoose.h
++	install -pDm755 $(PROG) $(DESTDIR)$(bindir)/$(PROG)
++	install -pDm755 $(LIB).$(VERSION) $(DESTDIR)$(libdir)/$(LIB).$(VERSION)
++	ln -sf $(LIB).$(MAJOR_VERSION) $(DESTDIR)$(libdir)/$(LIB)
++	ln -sf $(LIB).$(VERSION) $(DESTDIR)$(libdir)/$(LIB).$(MAJOR_VERSION)
