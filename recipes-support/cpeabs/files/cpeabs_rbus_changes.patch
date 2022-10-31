@@ -1,0 +1,149 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index bf9d65e..047f8e6 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -43,7 +43,6 @@ include_directories(${INCLUDE_DIR}
+                     ${INCLUDE_DIR}/cjson
+                     ${INCLUDE_DIR}/msgpack
+                     ${INCLUDE_DIR}/rbus
+-		    ${INCLUDE_DIR}/rbus-core
+ 		    ${INCLUDE_DIR}/rtmessage
+ 		    ${INCLUDE_DIR}/wdmp-c
+ 		    ${INCLUDE_DIR}/cimplog
+@@ -103,43 +102,19 @@ ExternalProject_Add(wdmp-c
+ add_library(libwdmp-c STATIC SHARED IMPORTED)
+ add_dependencies(libwdmp-c wdmp-c)
+ 
+-# rtMessage external dependency
+-#-------------------------------------------------------------------------------
+-ExternalProject_Add(rtMessage
+-     PREFIX ${CMAKE_CURRENT_BINARY_DIR}/_prefix/rtMessage
+-     GIT_REPOSITORY https://github.com/rdkcmf/rdk-rtmessage.git
+-     GIT_TAG rdk-next
+-     CMAKE_ARGS += -DBUILD_RTMESSAGE_LIB=ON
+-                   -DBUILD_RTMESSAGE_SAMPLE_APP=ON
+-                   -DBUILD_FOR_DESKTOP=ON
+-                   -DBUILD_DATAPROVIDER_LIB=ON
+-                   -DCMAKE_INSTALL_PREFIX=${INSTALL_DIR} -DBUILD_TESTING=OFF
+-)
+-add_library(librtMessage STATIC SHARED IMPORTED)
+-add_dependencies(librtMessage rtMessage)
+-
+-# rbus-core external dependency	
+-#-------------------------------------------------------------------------------
+-ExternalProject_Add(rbus-core
+-     DEPENDS rtMessage
+-     PREFIX ${CMAKE_CURRENT_BINARY_DIR}/_prefix/rbus-core
+-     GIT_REPOSITORY https://github.com/rdkcmf/rbuscore.git
+-     GIT_TAG rdk-next
+-     CMAKE_ARGS += DBUILD_FOR_DESKTOP=ON -DCMAKE_INSTALL_PREFIX=${INSTALL_DIR}
+-                   -DBUILD_TESTING=OFF
+-)
+-add_library(librbus-core STATIC SHARED IMPORTED)
+-add_dependencies(librbus-core rbus-core)
+-
+ # rbus external dependency
+ #-------------------------------------------------------------------------------
+ ExternalProject_Add(rbus
+-     DEPENDS rtMessage rbus-core
+      PREFIX ${CMAKE_CURRENT_BINARY_DIR}/_prefix/rbus
+-     GIT_REPOSITORY https://github.com/rdkcmf/rbus.git
+-     GIT_TAG rdk-next
++     GIT_REPOSITORY https://github.com/rdkcentral/rbus.git
++     GIT_TAG main
+      CMAKE_ARGS += -DBUILD_FOR_DESKTOP=ON -DCMAKE_INSTALL_PREFIX=${INSTALL_DIR} -DBUILD_TESTING=OFF
+ )
++add_library(librbuscore STATIC SHARED IMPORTED)
++add_dependencies(librbuscore rbuscore)
++
++add_library(librtMessage STATIC SHARED IMPORTED)
++add_dependencies(librtMessage rtMessage)
+ 
+ add_library(librbus STATIC SHARED IMPORTED)
+ add_dependencies(librbus rbus)
+diff --git a/include/cpeabs.h b/include/cpeabs.h
+index b47c884..4cfb22c 100644
+--- a/include/cpeabs.h
++++ b/include/cpeabs.h
+@@ -22,11 +22,6 @@
+ #if ! defined(DEVICE_EXTENDER)
+ #include <cimplog.h>
+ #include <rbus/rbus.h>
+-#include <rbus/rbus_object.h>
+-#include <rbus/rbus_property.h>
+-#include <rbus/rbus_value.h>
+-#include <rbus-core/rbus_core.h>
+-#include <rbus-core/rbus_session_mgr.h>
+ #endif
+ 
+ /*----------------------------------------------------------------------------*/
+diff --git a/src/rdkb/impl.c b/src/rdkb/impl.c
+index 7ad28cf..124c137 100644
+--- a/src/rdkb/impl.c
++++ b/src/rdkb/impl.c
+@@ -21,11 +21,6 @@
+ #include <fcntl.h>
+ #include <errno.h>
+ #include <rbus/rbus.h>
+-#include <rbus/rbus_object.h>
+-#include <rbus/rbus_property.h>
+-#include <rbus/rbus_value.h>
+-#include <rbus-core/rbus_core.h>
+-#include <rbus-core/rbus_session_mgr.h>
+ #include "cpeabs.h"
+ /*----------------------------------------------------------------------------*/
+ /*                                   Macros                                   */
+diff --git a/src/rdkc/impl.c b/src/rdkc/impl.c
+index 3bde5e9..5c1539e 100644
+--- a/src/rdkc/impl.c
++++ b/src/rdkc/impl.c
+@@ -21,11 +21,6 @@
+ #include <fcntl.h>
+ #include <errno.h>
+ #include <rbus/rbus.h>
+-#include <rbus/rbus_object.h>
+-#include <rbus/rbus_property.h>
+-#include <rbus/rbus_value.h>
+-#include <rbus-core/rbus_core.h>
+-#include <rbus-core/rbus_session_mgr.h>
+ #include <stdio.h>
+ #include <sys/sysinfo.h>
+ #include <cjson/cJSON.h>
+diff --git a/src/rdkv/impl.c b/src/rdkv/impl.c
+index 51b1b15..f5ce53d 100644
+--- a/src/rdkv/impl.c
++++ b/src/rdkv/impl.c
+@@ -21,11 +21,6 @@
+ #include <fcntl.h>
+ #include <errno.h>
+ #include <rbus/rbus.h>
+-#include <rbus/rbus_object.h>
+-#include <rbus/rbus_property.h>
+-#include <rbus/rbus_value.h>
+-#include <rbus-core/rbus_core.h>
+-#include <rbus-core/rbus_session_mgr.h>
+ #include <stdio.h>
+ #include <sys/sysinfo.h>
+ #include <cjson/cJSON.h>
+diff --git a/tests/CMakeLists.txt b/tests/CMakeLists.txt
+index e98d3b8..f2ca99b 100644
+--- a/tests/CMakeLists.txt
++++ b/tests/CMakeLists.txt
+@@ -46,7 +46,7 @@ set(SOURCES test_rdkb.c ${PROJECT_SOURCE_DIR}/src/rdkb/impl.c )
+ 
+ add_executable(test_rdkb ${SOURCES})
+ 
+-target_link_libraries (test_rdkb -lcjson -lcunit -lmsgpackc -lwdmp-c -lcimplog -lpthread -lrbus -lrbus-core)
++target_link_libraries (test_rdkb -lcjson -lcunit -lmsgpackc -lwdmp-c -lcimplog -lpthread -lrbus)
+ 
+ target_link_libraries (test_rdkb gcov -Wl,--no-as-needed )
+ 
+@@ -61,7 +61,7 @@ set(SOURCES test_rdkv.c ${PROJECT_SOURCE_DIR}/src/rdkv/impl.c )
+ 
+ add_executable(test_rdkv ${SOURCES})
+ 
+-target_link_libraries (test_rdkv -lcjson -lcunit -lmsgpackc -lwdmp-c -lcimplog -lpthread -lrbus -lrbus-core)
++target_link_libraries (test_rdkv -lcjson -lcunit -lmsgpackc -lwdmp-c -lcimplog -lpthread -lrbus)
+ 
+ target_link_libraries (test_rdkv gcov -Wl,--no-as-needed )
+ 

@@ -5,11 +5,14 @@ LICENSE = "Apache-2.0"
 LIC_FILES_CHKSUM = "file://LICENSE;md5=e3fc50a88d0a364313df4b21ef20c29e"
 
 DEPENDS = "cjson trower-base64 msgpack-c cimplog wdmp-c curl wrp-c"
-DEPENDS_append = "${@bb.utils.contains("DISTRO_FEATURES", "webconfig_bin", " rbus rbus-core cpeabs", " ", d)}"
+DEPENDS_append = "${@bb.utils.contains("DISTRO_FEATURES", "webconfig_bin", " rbus cpeabs", " ", d)}"
 DEPENDS_append = " ${@bb.utils.contains('DISTRO_FEATURES', 'aker', ' nanomsg libparodus ', '', d)}"
 
 SRCREV =  "b65ae3cbbecda07da2b888c9d54a53a3f1c3f0d7"
-SRC_URI = "git://github.com/xmidt-org/webcfg.git"
+SRC_URI = " \
+    git://github.com/xmidt-org/webcfg.git \
+    file://webcfg_rbus_changes.patch \
+    "
 
 RDEPENDS_${PN} += "util-linux-uuidgen"
 
@@ -29,7 +32,7 @@ EXTRA_OECMAKE += " ${@bb.utils.contains('DISTRO_FEATURES', 'aker', '-DFEATURE_SU
 
 LDFLAGS += "-lcjson -lmsgpackc -ltrower-base64 -lwdmp-c -lcimplog -lcurl -lwrp-c"
 
-LDFLAGS_append = "${@bb.utils.contains("DISTRO_FEATURES", "webconfig_bin", " -lrbus -lrbus-core -lrtMessage -lcpeabs ", " ", d)}"
+LDFLAGS_append = "${@bb.utils.contains("DISTRO_FEATURES", "webconfig_bin", " -lrbus -lcpeabs ", " ", d)}"
 
 LDFLAGS_append = " ${@bb.utils.contains('DISTRO_FEATURES', 'aker', ' -llibparodus -lnanomsg ', '', d)}"
 
@@ -45,7 +48,7 @@ CFLAGS_append = " \
         -I${STAGING_INCDIR}/wrp-c \
         -fPIC \
         "
-CFLAGS_append = " ${@bb.utils.contains('DISTRO_FEATURES', 'webconfig_bin', '-I${STAGING_INCDIR}/rbus -I${STAGING_INCDIR}/rbus-core -I${STAGING_INCDIR}/rtmessage', '', d)}"
+CFLAGS_append = " ${@bb.utils.contains('DISTRO_FEATURES', 'webconfig_bin', '-I${STAGING_INCDIR}/rbus -I${STAGING_INCDIR}/rtmessage', '', d)}"
 
 CFLAGS_append = " ${@bb.utils.contains('DISTRO_FEATURES', 'aker', '-I${STAGING_INCDIR}/nanomsg -I${STAGING_INCDIR}/libparodus', '', d)}"
 

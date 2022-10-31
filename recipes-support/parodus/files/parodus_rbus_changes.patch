@@ -1,0 +1,96 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index e7e541b..ec46ff3 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -44,10 +44,7 @@ include_directories(${INCLUDE_DIR}
+ 					)	
+ 
+ if (ENABLE_WEBCFGBIN)
+-include_directories(${INCLUDE_DIR}/rbus
+-		    ${INCLUDE_DIR}/rbus-core
+-		    ${INCLUDE_DIR}/rtmessage
+-)
++include_directories(${INCLUDE_DIR}/rbus)
+ endif (ENABLE_WEBCFGBIN)
+ 
+ # Get git commit hash 
+@@ -237,46 +234,21 @@ include_directories(${INCLUDE_DIR}
+ endif (FEATURE_DNS_QUERY)
+ 
+ if (ENABLE_WEBCFGBIN)
+-# rtMessage external dependency
+-#-------------------------------------------------------------------------------
+-ExternalProject_Add(rtMessage
+-     DEPENDS cJSON
+-     PREFIX ${CMAKE_CURRENT_BINARY_DIR}/_prefix/rtMessage
+-     GIT_REPOSITORY https://github.com/rdkcmf/rdk-rtmessage.git
+-     GIT_TAG rdk-next
+-     CMAKE_ARGS += -DBUILD_RTMESSAGE_LIB=ON
+-                   -DBUILD_RTMESSAGE_SAMPLE_APP=ON
+-                   -DBUILD_FOR_DESKTOP=OFF
+-		   -DCJSON_BUILD=OFF
+-                   -DBUILD_DATAPROVIDER_LIB=ON
+-                   -DCMAKE_INSTALL_PREFIX=${INSTALL_DIR} -DBUILD_TESTING=OFF
+-)
+-add_library(librtMessage STATIC SHARED IMPORTED)
+-add_dependencies(librtMessage rtMessage)
+-
+-# rbus-core external dependency
+-#-------------------------------------------------------------------------------
+-ExternalProject_Add(rbus-core
+-     DEPENDS rtMessage
+-     PREFIX ${CMAKE_CURRENT_BINARY_DIR}/_prefix/rbus-core
+-     GIT_REPOSITORY https://github.com/rdkcmf/rbuscore.git
+-     GIT_TAG rdk-next
+-     CMAKE_ARGS += -DBUILD_FOR_DESKTOP=ON -DCMAKE_INSTALL_PREFIX=${INSTALL_DIR}
+-                   -DBUILD_TESTING=OFF
+-)
+-add_library(librbus-core STATIC SHARED IMPORTED)
+-add_dependencies(librbus-core rbus-core)
+-
+ # rbus external dependency
+ #-------------------------------------------------------------------------------
+ ExternalProject_Add(rbus
+-     DEPENDS rtMessage rbus-core
+      PREFIX ${CMAKE_CURRENT_BINARY_DIR}/_prefix/rbus
+-     GIT_REPOSITORY https://github.com/rdkcmf/rbus.git
+-     GIT_TAG rdk-next
++     GIT_REPOSITORY https://github.com/rdkcentral/rbus.git
++     GIT_TAG main
+      CMAKE_ARGS += -DBUILD_FOR_DESKTOP=ON -DCMAKE_INSTALL_PREFIX=${INSTALL_DIR} -DBUILD_TESTING=OFF
+ )
+ 
++add_library(librbuscore STATIC SHARED IMPORTED)
++add_dependencies(librbuscore rbuscore)
++
++add_library(librtMessage STATIC SHARED IMPORTED)
++add_dependencies(librtMessage rtMessage)
++
+ add_library(librbus STATIC SHARED IMPORTED)
+ add_dependencies(librbus rbus)
+ endif (ENABLE_WEBCFGBIN)
+diff --git a/src/CMakeLists.txt b/src/CMakeLists.txt
+index 12cdc4f..8b7af65 100644
+--- a/src/CMakeLists.txt
++++ b/src/CMakeLists.txt
+@@ -63,6 +63,6 @@ target_link_libraries (parodus -llibseshat)
+ endif (ENABLE_SESHAT)
+ 
+ if (ENABLE_WEBCFGBIN)
+-target_link_libraries (parodus -lrbus -lrbus-core -lrtMessage)
++target_link_libraries (parodus -lrbus)
+ endif (ENABLE_WEBCFGBIN)
+ install (TARGETS parodus DESTINATION bin)
+diff --git a/tests/CMakeLists.txt b/tests/CMakeLists.txt
+index 9f16c73..a0ba8f7 100644
+--- a/tests/CMakeLists.txt
++++ b/tests/CMakeLists.txt
+@@ -33,7 +33,7 @@ set (PARODUS_COMMON_LIBS ${PARODUS_COMMON_LIBS} -lucresolv -lresolv)
+ endif (FEATURE_DNS_QUERY)
+ 
+ if (ENABLE_WEBCFGBIN)
+-set (PARODUS_COMMON_LIBS ${PARODUS_COMMON_LIBS} -lrbus -lrbus-core)
++set (PARODUS_COMMON_LIBS ${PARODUS_COMMON_LIBS} -lrbus)
+ endif (ENABLE_WEBCFGBIN)
+ 
+ if(NOT DISABLE_VALGRIND)
