@@ -38,6 +38,7 @@ CFLAGS_append = " \
     -I${STAGING_INCDIR}/ucresolv \
     -DFEATURE_DNS_QUERY \
     "
+CFLAGS_append = " -DINCLUDE_BREAKPAD " 
 CFLAGS_append = "${@bb.utils.contains("DISTRO_FEATURES", "seshat", "-I${STAGING_INCDIR}/libseshat ", " ", d)}"
 CFLAGS_append = "${@bb.utils.contains("DISTRO_FEATURES", "seshat", "-DENABLE_SESHAT ", " ", d)}"
 CFLAGS_append = "${@bb.utils.contains("DISTRO_FEATURES", "webconfig_bin", " -I${STAGING_INCDIR}/rbus -I${STAGING_INCDIR}/rbus-core -I${STAGING_INCDIR}/rtmessage ", " ", d)}"
