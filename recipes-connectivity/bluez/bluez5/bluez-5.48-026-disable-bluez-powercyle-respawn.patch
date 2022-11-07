@@ -3,7 +3,6 @@ Date: Tue Feb 18 17:12:03 2020 +0000
 From: 
 Subject: [PATCH] Disable bluez powercyle respawn 
 Source: SKY
-License: GPLV2
 Upstream-Status: Pending
 Signed-off-by: Tijo Thomas John <tijo.thomas@sky.uk>
 ##################################################################

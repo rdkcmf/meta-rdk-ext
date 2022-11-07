@@ -5,7 +5,6 @@ Subject: pciutils 3.5.1 version supports querying HWDB to get interface
          details which uses libudev. Adding flag to exclude HWDB lookup
          in pci_lookup_name() call to avoid memory leak
 Source: None
-License: "BSD & MIT"
 Upstream-Status: Pending
 Signed-off-by: Uma Kumar <Uma_Kumar@cable.comcast.com>
 ##########################################

@@ -2,7 +2,6 @@ Date: Nov 28, 2017 13:10
 From: Jef Oliver <jef.oliver at intel.com>
 Subject: Change rtnl_link_af_ops.ao_override_rtm behavior
 Source: Intel
-License: LGPLV2.1
 Upstream-Status: accepted
 
 rtnl_link_af_ops.ao_override_rtm allows for a link module to

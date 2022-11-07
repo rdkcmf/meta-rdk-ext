@@ -4,7 +4,6 @@ Date: Fri, 27 Nov 2020 14:44:33 +0000
 Subject: [PATCH] Change config file dir from etc to opt
 Upstream-Status: Pending
 Source: Pending
-License: Pending
 
 Reason for change: Dobby needs to read/write to the smcroute
 config file. By default, smcroute reads the config from /etc

@@ -5,7 +5,6 @@ Subject: RDKB-22373: Upgrade lighttpd to 1.4.53
 Porting the patches added to lighttpd-1.4.45 version to latest 1.4.53 version as well.
 Older patches are slightly modified to make it compatible with latest version.
 Source: COMCAST
-License: BSD-3-Clause
 Upstream-Status: None
 Signed-off-by: Rakhil P E <Rakhil_PuthiyaveettilEdachena@comcast.com>
 

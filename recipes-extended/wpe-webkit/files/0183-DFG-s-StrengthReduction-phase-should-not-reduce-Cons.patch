@@ -7,7 +7,6 @@ Subject: [PATCH] DFG's StrengthReduction phase should not reduce Construct
  https://bugs.webkit.org/show_bug.cgi?id=192386 <rdar://problem/46445516>
 
 Source: Apple webkit https://github.com/WebKit/webkit/commit/b85119d646324e12df422e3705d6afb593074e6b
-License: GPLV2
 Upstream-Status: Submited
 Signed-off-by: Balaji Selvam <Balaji_Selvam.comcast.com>
 

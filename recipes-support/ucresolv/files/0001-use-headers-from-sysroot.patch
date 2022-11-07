@@ -6,7 +6,6 @@ Subject: [PATCH] Use embedded gconv.h during compilation
 
 Source: OPENSOURCE
 
-License: LGPL-2.1-or-later
 
 Upstream-Status: pending
 

@@ -2,7 +2,6 @@ Date: Sun, 13 May 2007 21:17:32 +0000 (-0400)
 From: 7847207aed1b44faf077eed14a9ac9c68244eba5 May 13, 2007 9:17 PM 
 Subject: fix building with tcpd support disabled
 Source: GENTOO
-License: BSD
 Upstream-Status: Backport
 Signed-off-by: Timothy Redaelli <drizzt@gentoo.org>
 Signed-off-by: Mike Frysinger <vapier@gentoo.org>

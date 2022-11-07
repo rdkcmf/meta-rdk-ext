@@ -2,7 +2,6 @@ Date: Mar 4, 2020 10:29:52 AM
 From: 1ad675b8532f329bebaf40cda54192d0cb4feecb Feb 26, 2020 10:31:59 PM
 Subject: add install targets to cmake
 Source: COMCAST
-License: MIT
 Upstream-Status: Pending
 Signed-off-by: Thomas Lea <Thomas_Lea@comcast.com>
 ---

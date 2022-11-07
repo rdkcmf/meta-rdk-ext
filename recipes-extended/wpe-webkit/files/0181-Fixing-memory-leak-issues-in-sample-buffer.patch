@@ -2,7 +2,6 @@ Date: Mar 9, 2020 1:41 AM
 From: 618c18439a50aa61b63c35d1540f8d1f061adf2c Oct 31, 2018 11:56 PM
 Subject: [PATCH] Fixing memory leak issues in sample buffer
 Source: COMCAST
-License: GPLV2
 Upstream-Status: Pending
 Signed-off-by: nrajan002c <nambi_rajang@cable.comcast.com>
 ---

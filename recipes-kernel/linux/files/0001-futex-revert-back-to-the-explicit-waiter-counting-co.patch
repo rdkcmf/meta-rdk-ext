@@ -23,7 +23,6 @@ Subject: [PATCH] RDKB-9028 : kernel patches for futex
 
 Source: LINUX
 
-License: GPL-2.0-or-later
 
 Upstream-Status: [ https://patchwork.ozlabs.org/patch/403862/ ]
 

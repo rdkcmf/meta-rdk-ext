@@ -8,7 +8,6 @@ Subject: [PATCH] XRE-13409: avoid pausing rendering on visible=false
 
 Source: COMCAST
 
-License: BSD-2-Clause
 
 Upstream-Status: Pending
 

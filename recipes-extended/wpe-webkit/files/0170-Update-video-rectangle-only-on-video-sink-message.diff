@@ -10,7 +10,6 @@ when the sink is being terminated by another thread. Now adding a
 condition to update the video rect only on video-sink's NULL-READY
 
 Source: COMCAST
-License: BSD-2-Clause & BSD-3-Clause & LGPL-2.0 & LGPL-2.1
 Upstream-Status: Pending
 Signed-off-by: Vivek.A <Vivek_Arumugam@Comcast.Com>
 ---

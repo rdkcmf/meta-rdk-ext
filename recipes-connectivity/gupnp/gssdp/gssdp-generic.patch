@@ -10,7 +10,6 @@ Subject: [PATCH] gssdp,gupnp,gupnp-av: Add recipes
 
 Source: COMCAST
 
-License: LGPL-2.0-or-later
 
 Upstream-Status: Pending
 

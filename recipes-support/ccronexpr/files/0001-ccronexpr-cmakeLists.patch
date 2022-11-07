@@ -3,7 +3,6 @@ From: Thomas Lea <thomas_lea@comcast.com>
 Date: Mon, 21 Sep 2020 08:56:02 -0500
 Subject: [PATCH] Added CMakeLists.txt
 Source: COMCAST
-License: Apache 2.0
 Upstream-Status: Pending
 
 Signed-off-by: Thomas Lea <thomas_lea@comcast.com>

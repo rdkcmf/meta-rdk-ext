@@ -12,7 +12,6 @@ Subject: [PATCH] RDKALL-1627 : Security Vulnerability for glibc, zlib and libtas
 
 Source: OPENEMBEDDED
 
-License: Zlib
 
 Upstream-Status: Submitted [ https://git.congatec.com/yocto-1-5/poky/commit/b2196ca25697bfb6c1412780a27cea5be1d80d6c ]
 

@@ -10,7 +10,6 @@ Subject: [PATCH 5/7] Always use -O2 for compiling fork.c
 
 Source: OPENEMBEDDED
 
-License: LGPL-2.1-or-later
 
 Upstream-Status: Submitted [ http://cgit.openembedded.org/openembedded-core/tree/meta/recipes-core/uclibc/uclibc-git/0005-Always-use-O2-for-compiling-fork.c.patch?h=jethro ]
 

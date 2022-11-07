@@ -8,7 +8,6 @@ Subject: [PATCH] Escape left brace.
     Perl 5.26.  See:http://search.cpan.org/dist/perl-5.22.0/pod/perldelta.pod#A_literal_%22{%22_should_now_be_escaped_in_a_pattern
     * bin/automake.in (substitute_ac_subst_variables): Escape left brace.
 Source: GIT
-License: GPLV2
 Upstream-Status: Backport [ http://git.savannah.gnu.org/cgit/automake.git/commit/?id=13f00eb4493c217269b76614759e452d8302955e]
 Signed-off-by: Adam Duskett <aduskett@gmail.com>
 ---

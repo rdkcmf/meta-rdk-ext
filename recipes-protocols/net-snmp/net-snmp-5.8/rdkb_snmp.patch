@@ -3,7 +3,6 @@ Date: Mar 02 18:05:10 2019
 From: 6610b7f79333fc70f852bb44bfed9cae9abeba40 Oct 28 07:13:18 2017
 Subject: apply rdkb_snp.patch for netsnmp version 5.8
 Source: COMCAST
-License: BSD-2-Clause
 Upstream-Status: Pending
 Signed-off-by: Uma Kumar <Uma_Kumar@cable.comcast.com>
 ##########################################

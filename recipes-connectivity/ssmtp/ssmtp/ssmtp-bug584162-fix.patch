@@ -31,7 +31,6 @@ Subject: [PATCH] RDKCOM-447: ssmtp: misc cleanups and fixes
 
 Source: DEBIAN
 
-License: GPL-2.0-or-later
 
 Upstream-Status: Submitted [ https://sources.debian.net/patches/ssmtp/2.64-8/ ]
 

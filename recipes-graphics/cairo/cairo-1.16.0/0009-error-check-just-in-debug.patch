@@ -3,7 +3,6 @@ From: wouterlucas <wouter@wouterlucas.com>
 Date:  	Wed Apr 06 11:19:01 2016 -0700
 Subject: [PATCH] cairo: cairo to check for gl errors only in debug mode
 Source: OPENSOURCE
-License: "(MPL-1.1 | LGPLv2.1) & GPLv3+"
 Upstream-Status: Backport
 Signed-off-by: mselva006c <mani_selvaraj@comcast.com>
 

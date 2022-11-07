@@ -9,7 +9,6 @@ Subject: [PATCH] DELIA-12929: Added caching support for truncated response.
 
 Source: COMCAST
 
-License: GPL-2.0-or-later
 
 Upstream-Status: Pending
 

@@ -10,7 +10,6 @@ Subject: [PATCH] WKIT-340: backported gstappsrc push_sample from gst 1.5.91
 
 Source: COMCAST
 
-License: LGPL-2.1-or-later
 
 Upstream-Status: Pending
 

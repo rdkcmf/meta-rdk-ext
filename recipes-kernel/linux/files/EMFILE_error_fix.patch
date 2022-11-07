@@ -2,7 +2,6 @@ Date: Oct 21, 2021 1:41 AM
 From: ebecd56aaa2727b6305d39c69951fbdc8740f800 Oct 31, 2018 11:56 PM
 Subject:EMFILE_ERROR_FIX from 4.9 Linux version 
 Source: COMCAST
-License: GPLV2
 Upstream-Status: Pending
 Signed-off-by: lchand953 <lokesh_chandrasekar3@comcast.com>
 Index: linux/fs/notify/dnotify/dnotify.c

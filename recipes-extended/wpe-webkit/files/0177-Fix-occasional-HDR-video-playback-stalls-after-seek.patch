@@ -2,7 +2,6 @@ Date: Mon, 27 Jan 2020 13:18:07 -0500
 From: 75f44d9c3d254788e4d36aa24f69285ca55bda56 Mon Sep 17 00:00:00 2001
 Subject: [PATCH] Fix occasional HDR video playback stalls after seek
 Source: COMCAST
-License: GPLV2
 Upstream-Status: None
 Signed-off-by: Eugene Mutavchi <Ievgen_Mutavchi@comcast.com>
 

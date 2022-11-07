@@ -5,7 +5,6 @@ Subject: [PATCH] fixed build error on JSC
 /build/DerivedSources/ForwardingHeaders/JavaScriptCore/LocalAllocatorInlines.h:36:
  undefined reference to `JSC::Heap::vm() const'
 Source: COMCAST
-License: LGPL-2.1-or-later
 Upstream-Status: Pending
 Signed-off-by: Balaji Selvam <Balaji_selvam@Comcast.Com>
 ---

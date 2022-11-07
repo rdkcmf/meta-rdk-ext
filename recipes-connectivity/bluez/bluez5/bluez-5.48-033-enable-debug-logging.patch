@@ -6,7 +6,6 @@ add -d option when starting the daemon to enable debug logs
 
 Upstream-Status: N/A
 Source: Comcast
-License: CLOSED
 Signed-off-by: Eugene Gallagher <eugene_gallagher@comcast.com>
 
 diff -Naur a/src/bluetooth.service.in b/src/bluetooth.service.in

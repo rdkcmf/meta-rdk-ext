@@ -19,7 +19,6 @@ Subject: [PATCH 6/7] ldso: limited support for $ORIGIN in rpath
 
 Source: OPENEMBEDDED
 
-License: LGPL-2.1-or-later
 
 Upstream-Status: Submitted [ http://lists.busybox.net/pipermail/uclibc/2011-March/045003.html ]
 

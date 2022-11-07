@@ -1,7 +1,6 @@
 Date: Fri, 13 Mar 2020 12:58:47 -0400
 Subject: openssl-1.0.2o support
 Source: GITHUB
-License: OpenSSL
 From: Ied9be16a201585dc2b941946a6d9f4c1dd108764 Fri Mar 13 00:00:00 2020
 Upstream-Status: Pending
 Signed-off-by: Anders Roxell <anders.roxell@enea.com>

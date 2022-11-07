@@ -12,7 +12,6 @@ Subject: [PATCH] RDKRIDP-1382 : Gstreamer version UPGRADE in Emulator images
 
 Source: OPENEMBEDDED
 
-License: LGPL-2.1-or-later
 
 Upstream-Status: [ Submitted https://github.com/openembedded/openembedded-core/blob/master/meta/recipes-multimedia/gstreamer/files/0001-introspection.m4-prefix-pkgconfig-paths-with-PKG_CON.patch ]
 

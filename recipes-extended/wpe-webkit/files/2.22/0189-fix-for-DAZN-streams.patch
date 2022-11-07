@@ -1,6 +1,5 @@
 From 846a0220e671aad94ca7d24433e63db9a5dad145 Mon Sep 17 00:00:00 2001
 From: Gurdal Oruklu <gurdal_oruklu@comcast.com>
-License: GPLV2
 Date: Tue, 9 Jun 2020 20:16:25 +0000
 Subject: [PATCH] fix for DAZN streams use initdata from playready stream
 Source: COMCAST

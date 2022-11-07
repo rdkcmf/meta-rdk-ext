@@ -9,7 +9,6 @@ Subject: [PATCH] XRE-13219, XRE-13227: Defer seek complition until it is actuall
 
 Source: COMCAST
 
-License: BSD-2-Clause
 
 Upstream-Status: Pending
 

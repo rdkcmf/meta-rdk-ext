@@ -4,7 +4,6 @@ Date: Sun, 26 Apr 2020 12:04:12 -0400
 Subject: [PATCH 81/93] Make an attempt to start decryption when attaching
  CDMInstance with valid key sessions
 Source: COMCAST
-License: GPLV2
 Upstream-Status: None
 Signed-off-by: Eugene Mutavchi <Ievgen_Mutavchi@comcast.com>
 

@@ -5,7 +5,6 @@ Subject: [PATCH] enable secure swap for yocto image
 	We need to patch util-linux package with patch from loop-aes to enable loop using in swapon utility
 
 Source: See comments within patch
-License: GPLv2+ & LGPLv2.1+ & BSD
 Upstream-Status: Pending
 Signed-off-by: See comments within patch[Jari Rassu]
 ---

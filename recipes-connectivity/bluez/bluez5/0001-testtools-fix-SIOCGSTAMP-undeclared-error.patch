@@ -13,7 +13,6 @@ Subject: [PATCH] testtools - fix: 'SIOCGSTAMP' undeclared error
 |                   ^~~~~~~~~~
 
 Source: RDK-Community
-License: GPLv2+ & LGPLv2.1+
 Upstream-Status: pending
 GitHub pull request: https://github.com/bluez/bluez/pull/50
 

@@ -5,7 +5,6 @@ Subject: [PATCH] PACEXI5-2637: Bluetooth device is disconnected after reboot
 
         Override libexecdir to libdir/bpn.
 Source: COMCAST
-License: GPL-2.0-or-later
 Upstream-Status: Pending
 Signed-off-by: mselva006c <mani_selvaraj@comcast.com>
 ---

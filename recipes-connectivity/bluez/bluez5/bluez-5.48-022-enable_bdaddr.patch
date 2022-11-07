@@ -6,7 +6,6 @@ Subject: [PATCH] This patch enables the building and installing of the bdaddr to
 The tool was previously in the no install section.
 
 Source: SKY
-License: GPLv2+ & LGPLv2.1+
 Upstream-Status: Pending
 Signed-off-by: Tijo Thomas John <tijo.thomas@sky.uk>
 ###################################################################################################

@@ -7,7 +7,6 @@ write commands (writes without response) in preference to ordinary writes
 which require an ACK.
 
 Source: SKY
-License: GPLv2+ & LGPLv2.1+
 Upstream-Status: Pending
 Signed-off-by: Tijo Thomas John <tijo.thomas@sky.uk>
 ###################################################################################################

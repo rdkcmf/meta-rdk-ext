@@ -36,7 +36,6 @@ Subject: [PATCH] DELIA-31039,XRE-13615 : Update to latest metro revision in 2017
 
 Source: GITHUB
 
-License: LGPL-2.1-or-later
 
 Upstream-Status: Submitted [ https://bugzilla.gnome.org/show_bug.cgi?id=765275 
                              https://gitlab.freedesktop.org/xclaesse/gst-plugins-good/commit/0432826950d4d80fe2b50ffd3757dc08155de9e3 ]

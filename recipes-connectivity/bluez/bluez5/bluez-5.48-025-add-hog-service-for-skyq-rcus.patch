@@ -14,7 +14,6 @@ This patch forces the HoG profile to be present on SkyQ RCU devices if
 it was not included in the 'Services' section of the info file.
 
 Source: SKY
-License: GPLv2+ & LGPLv2.1+
 Upstream-Status: Pending
 Signed-off-by: Tijo Thomas John <tijo.thomas@sky.uk>
 ###################################################################################################

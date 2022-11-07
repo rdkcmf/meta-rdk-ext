@@ -3,7 +3,6 @@ From: Siva Sankar Raja <sivasankar_raja@comcast.com>
 Date: Fri, 5 Jul 2019 22:25:34 +0000
 Subject: [PATCH] Fix linking error in wpe-2.22
 Source: COMCAST
-License: GPLV2
 Upstream-Status: None
 Signed-off-by: Siva Sankar Raja <sivasankar_raja@comcast.com>
 

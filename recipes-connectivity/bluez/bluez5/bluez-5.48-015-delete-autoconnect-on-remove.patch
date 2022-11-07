@@ -9,7 +9,6 @@ list and in the kernels whitelist.  Meaning it will automatically
 reconnect and we can never get rid of the device.
 
 Source: SKY
-License: GPLv2+ & LGPLv2.1+
 Upstream-Status: Pending
 Signed-off-by: Tijo Thomas John <tijo.thomas@sky.uk>
 ###################################################################################################

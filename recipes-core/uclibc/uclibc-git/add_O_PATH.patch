@@ -8,7 +8,6 @@ Subject: [PATCH] RDKB-3168: uclibc: Backport from latest OE master
 	
 Source: OPENEMBEDDED
 
-License: LGPL-2.1-or-later
 
 Upstream-Status: Downloaded  [https://www.openembedded.org/pipermail/openembedded-core/2015-August/227297.html] 
 

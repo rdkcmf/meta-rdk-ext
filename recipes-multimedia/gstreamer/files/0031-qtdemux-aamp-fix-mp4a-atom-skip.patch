@@ -7,7 +7,6 @@ Subject: [PATCH] DELIA-39611: fMP4 HLS streams using Widevine/PlayReady not
      fragments, AAMP push init header with pssh data first for initializing decryptor plugins.
      During this, mp4a atom is skipped because stream->protected is not reset in AAMP use-case
 Source: COMCAST
-License: LGPL-2.1-or-later
 Upstream-Status: Pending
 Signed-off-by: Vinish K B <Vinish_KorasseryBalakrishnan@comcast.com>
 Index: gst-plugins-good-1.10.4/gst/isomp4/qtdemux.c

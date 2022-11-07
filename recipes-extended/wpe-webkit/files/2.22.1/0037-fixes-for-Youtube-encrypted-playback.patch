@@ -1,7 +1,6 @@
 From 7850ea08beb8e0666742726eef49c0bc929282f7 Mon Sep 17 00:00:00 2001
 From: Gurdal Oruklu <gurdal_oruklu@comcast.com>
 Source: COMCAST
-License: LICENSE-LGPL-2.1
 Upstream-Status: Pending
 Date: Wed, 16 Dec 2020 20:11:04 +0000
 Subject: [PATCH] fixes for Youtube encrypted playback

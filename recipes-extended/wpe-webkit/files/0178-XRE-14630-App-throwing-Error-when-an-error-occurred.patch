@@ -1,7 +1,6 @@
 From e718c2c156e90390a45d7527419a4f1ea992b07b Mon Sep 17 00:00:00 2001
 From: amoham071 <ameerkhan_mohamedrafiq@comcast.com>
 Source: original
-License: LICENSE-LGPL-2.1
 Upstream-Status: Pending
 Date: Fri, 14 Feb 2020 07:11:13 +0000
 Subject: [PATCH] XRE-14630: App not throwing Error when an error occurs

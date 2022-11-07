@@ -9,7 +9,6 @@ received SEGMENT event. This was resulting in PTS error from brcmvideodecoder
 since AAMP sends a GST_EVENT_SEGMENT right after flushing gst pipeline for seek.
 
 Source: COMCAST
-License: LGPL-2.1-or-later
 Upstream-Status: Pending
 
 Signed-off-by: Vinish K B <Vinish_KB@comcast.com>

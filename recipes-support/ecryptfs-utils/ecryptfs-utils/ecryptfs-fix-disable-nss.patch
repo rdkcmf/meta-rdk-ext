@@ -8,7 +8,6 @@ Subject: [PATCH] RDK-17052 : ecryptfs fix disable nss
 
 Source: GITHUB 
 
-License: GPL-2.0-or-later
 
 Upstream-Status: Submitted [ https://github.com/MentorEmbedded/meta-ivi/commit/5620dac0da6c1eeb223c824724e2d8bb61a1ea21 ] 
 

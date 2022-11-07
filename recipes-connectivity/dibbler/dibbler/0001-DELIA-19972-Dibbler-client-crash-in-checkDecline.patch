@@ -8,7 +8,6 @@ Subject: [PATCH] DELIA-19972: Dibbler client crash in checkDecline
 
 Source: GITHUB
 
-License: GPL-2.0-or-later
 
 Upstream-Status: Submitted [ https://github.com/tomaszmrugalski/dibbler/commit/cda62b7c9a29524af2581b0a58c62b56b00afdf3 ]
 

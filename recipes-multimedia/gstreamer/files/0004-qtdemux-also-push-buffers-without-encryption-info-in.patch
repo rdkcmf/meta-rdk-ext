@@ -9,7 +9,6 @@ Subject: [PATCH] XRE-11686 : gstreamer error seen with super8 encrypted streams
 
 Source: GOOGLE
 
-License: LGPL-2.1-or-later
 
 Upstream-Status: Submitted [https://coral.googlesource.com/imx-gst-plugins-good/+/762e9c645ec13513c62eb5a3800d7406e01cdcb7 ]
 

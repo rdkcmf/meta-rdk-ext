@@ -2,7 +2,6 @@ From f45404de687757ace84a2d19c3e43cbb44320f7f Mon Sep 17 00:00:00 2001
 From: Gurdal Oruklu <gurdal_oruklu@comcast.com>
 Date: Thu, 10 Jun 2021 21:42:39 +0000
 Source: COMCAST
-License: LICENSE-LGPL-2.1
 Upstream-Status: None
 Subject: [PATCH] added SVP transform for clear and encrypted samples
 

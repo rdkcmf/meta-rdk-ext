@@ -3,7 +3,6 @@ From: 78c981fbb2ee05db95742ce81e093403175a09cb Nov 9, 2018 1:13 AM
 Subject: [PATCH] Fix touchstone in morty
 	The rdk.conf in morty prefers iksemel 1.5, which needs to be patched for touchstone and zilker to build correctly.
 Source: GITHUB
-License: Apache-2.0
 Upstream-Status: Downloaded [ https://github.com/rancher/buildroot/blob/master/package/mbedtls/0001-bn_mul.h-fix-x86-PIC-inline-ASM-compilation-with-GCC.patch ]
 Signed-off-by: Peter Korsgaard <peter@korsgaard.com>  
 ---

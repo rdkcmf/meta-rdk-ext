@@ -2,7 +2,6 @@ Date: Feb 21, 2020 11:10 AM
 From 88ef0d7a4e2a650ba868220a800466a1a321afbf Mon Sep 17 00:00:00 2001
 Subject: [PATCH] removed video/webm & audio/webm from mimeTypes
 Source: COMCAST
-License: GPLV2
 Upstream-Status: Pending
 Signed-off-by: Balaji Selvam <Balaji_Selvam@Comcast.Com>
 From: Balaji Selvam <balaji_selvam@comcast.com>

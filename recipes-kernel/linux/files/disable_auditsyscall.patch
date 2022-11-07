@@ -14,7 +14,6 @@ MAC dependencies intact without the performance overhead of AUDITSYSCALL
 See: https://patchwork.kernel.org/project/linux-audit/patch/20151208164237.15736.42955.stgit@localhost/
 See: http://lkml.iu.edu/hypermail/linux/kernel/1405.3/02685.html
 Source: COMCAST
-License: GPLV2
 Upstream-Status: Pending
 Signed-off-by: Bow Sineath <James_Sineath@comcast.com>
 

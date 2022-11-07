@@ -3,7 +3,6 @@ Date: Dec 19, 2019 1:41 AM
 From: Id03e48e3b8709f9ef6d361b4d922c75424463fd4 commit for version 5.7.2/5.7.3
 Subject: To support existing rdk_enhancement patch on netsnmp version 5.8
 Source: COMCAST
-License: "BSD & MIT"
 Upstream-Status: Pending
 Signed-off-by: Saranya Natarajan <Saranya_Natarajan@cable.comcast.com>
 ##########################################

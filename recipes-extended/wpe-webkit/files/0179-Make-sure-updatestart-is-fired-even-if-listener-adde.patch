@@ -3,7 +3,6 @@ From: Ievgen Mutavchi <Ievgen_Mutavchi@comcast.com>
 Date: Thu, 13 Feb 2020 11:03:08 -0500
 Subject: [PATCH 1/2] Make sure 'updatestart' is fired even if listener added after SourceBuffer.append()
 Source: COMCAST
-License: GPLV2
 Upstream-Status: None
 Signed-off-by: Eugene Mutavchi <Ievgen_Mutavchi@comcast.com>
 

@@ -2,7 +2,6 @@ Date: Mar 9, 2020 1:41 AM
 From: 651d4e761fdc92d0ca373eeef75a384730b42d88 Sep 17, 2001 11:56 PM
 Subject: [PATCH] Adding uuid tag
 Source: COMCAST
-License: GPLV2
 Upstream-Status: Pending
 Signed-off-by: nrajan002c <nambi_rajang@cable.comcast.com>
 ---

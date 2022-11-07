@@ -8,7 +8,6 @@ Subject: [PATCH] DELIA-28490 : Commenting out "No entries" logs from journalctl
 
 Source: COMCAST
 
-License: LGPL-2.1-or-later
 
 Upstream-Status: Pending
 

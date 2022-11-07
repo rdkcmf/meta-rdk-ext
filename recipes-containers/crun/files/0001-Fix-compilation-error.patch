@@ -4,7 +4,6 @@ Date: Tue, 8 Feb 2022 12:27:27 +0000
 Subject: [PATCH] Fix compilation error
 
 Source: COMCAST
-License: GPLv2
 Upstream-Status: Submitted https://github.com/containers/crun/pull/865
 Signed-off-by: Stephen Foulds <stephen.foulds@sky.uk>
 ---

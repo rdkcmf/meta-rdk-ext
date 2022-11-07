@@ -2,7 +2,6 @@ From: lchand953 <lokesh_chandrasekar3@comcast.com>
 Date: Thu, 25 Oct 2021 22:52:20 +0000
 Subject: [PATCH] Print the crashed process name
 Source: COMCAST
-License: COMCAST
 Upstream-Status: Inappropriate [Comcast specific]
 Signed-off-by: lchand953 <lokesh_chandrasekar3@comcast.com
 Index: trunk/src/client/linux/handler/minidump_descriptor.cc

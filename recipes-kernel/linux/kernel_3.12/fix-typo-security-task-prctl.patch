@@ -2,7 +2,6 @@ From: b7f76ea2ef6739ee484a165ffbac98deb855d3d3
 Date: 2015-09-20 17:00:26 -0700
 Subject: BACKPORT: security: fix typo in security_task_prctl
 Source: Open Source
-License: GPLv2
 Upstream-Status: backport
 Signed-off-by: Jann Horn <jann@thejh.net>
 Reviewed-by: Andy Lutomirski <luto@kernel.org>

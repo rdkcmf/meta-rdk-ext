@@ -8,7 +8,6 @@ When defined, this will use local time for crontab entries instead of UTC.
 
 Source: COMCAST
 
-License: Apache 2.0
 
 Upstream-Status: Pending
 

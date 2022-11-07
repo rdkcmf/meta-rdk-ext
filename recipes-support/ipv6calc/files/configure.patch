@@ -8,7 +8,6 @@ Subject: [PATCH] RDKSYSINTSW-2346 : Iintegrate ipv6calc in pace xi3 yocto builds
 
 Source: COMCAST
 
-License: LGPL-2.0-or-later
 
 Upstream-Status: Pending
 

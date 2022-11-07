@@ -9,7 +9,6 @@ Also none of the SkyQ RCU devices use privacy / random addresses.
 
 [SkyRef: NGDEV-133507]
 Source: SKY
-License: GPLv2+ & LGPLv2.1+
 Upstream-Status: Pending
 Signed-off-by: Tijo Thomas John <tijo.thomas@sky.uk>
 ###################################################################################################

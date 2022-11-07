@@ -4,7 +4,6 @@ Date: Fri, 8 May 2020 08:26:18 +0000
 Subject: [PATCH 07/11] 
  0149-connecting-webdriver-to-rdkbrower-for-application-test.patch
 Source: COMCAST
-License: LICENSE-LGPL-2.1
 Upstream-Status: Pending
 Signed-off-by: Balaji Selvam <balaji_selvam@comcast.com>
 

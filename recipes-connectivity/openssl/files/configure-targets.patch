@@ -10,7 +10,6 @@ Subject: [PATCH] Added new recipes for net-snmp, openssl-0.9, rmfgeneric, trm, r
 
 Source: OPENSOURCE
 
-License: Apache-2.0
 
 Upstream-Status: [ http://git.yoctoproject.org/cgit/cgit.cgi/meta-freescale/commit/recipes-connectivity/openssl/openssl-qoriq/debian/no-symbolic.patch?h=pyro&id=67df1cdca7fe5be0513d67e6abd45b973189ecfe ]
 

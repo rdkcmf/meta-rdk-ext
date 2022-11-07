@@ -44,7 +44,6 @@ We should remove from pending list service which was just processed,
 not the one that has just started being processed.
 
 Source: SKY
-License: GPLv2+ & LGPLv2.1+
 Upstream-Status: Pending
 Signed-off-by: Tijo Thomas John <tijo.thomas@sky.uk>
 ###################################################################################################

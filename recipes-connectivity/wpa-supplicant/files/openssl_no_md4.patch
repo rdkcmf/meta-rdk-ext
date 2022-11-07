@@ -8,7 +8,6 @@ Subject: [PATCH] RDKB-14763,DELIA-24496, DELIA-24645 : remove md4 from openssl a
 	
 Source: COMCAST
 
-License: BSD-2-Clause
 
 Upstream-Status: Pending
 

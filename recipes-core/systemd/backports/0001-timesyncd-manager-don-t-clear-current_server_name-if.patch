@@ -11,7 +11,6 @@ Subject: [PATCH] DELIA-13453 PACEXI5-646: systemd-timesyncd crash
 
 Source: CGIT
 
-License: LGPL-2.1-or-later
 
 Upstream-Status: Submitted [ https://cgit.freedesktop.org/systemd/systemd/commit/?id=20f8d3cf1b ]
 

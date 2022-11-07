@@ -8,7 +8,6 @@ Subject: [PATCH] [MSE] Move SourceBuffer's pending append data into the
 
 Source: WEBKIT
 
-License: BSD-2-Clause
 
 Upstream-Status: Submitted [ https://bugs.webkit.org/show_bug.cgi?id=178003 ]
 

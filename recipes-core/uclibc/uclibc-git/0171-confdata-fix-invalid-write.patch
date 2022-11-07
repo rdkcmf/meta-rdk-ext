@@ -12,7 +12,6 @@ Subject: [PATCH 171/195] confdata: fix invalid write
 
 Source: OPENEMBEDDED
 
-License: LGPL-2.1-or-later
 
 Upstream-Status: Submitted [ https://mailman.uclibc-ng.org/pipermail/devel/2015-October/000523.html ]
 

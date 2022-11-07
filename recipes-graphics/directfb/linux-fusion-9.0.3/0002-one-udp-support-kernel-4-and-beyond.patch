@@ -2,7 +2,6 @@ Date: Tue, 12 Jan 2016 14:01:42 +0100
 From be288b60278c78eccfd347aacf4d3dd8771215a9 Mon Sep 17 00:00:00 2001
 Subject: [PATCH] Port one/one_udp.c to Linux 4.1
 Source: linux-fusion
-License: GPL-2.0
 Upstream-Status: Cherry-picked
 Signed-off-by: Marc Gonzalez <marc_gonzalez@sigmadesigns.com>
 Signed-off-by: Matthew Shyu <matthew.shyu@amlogic.com>

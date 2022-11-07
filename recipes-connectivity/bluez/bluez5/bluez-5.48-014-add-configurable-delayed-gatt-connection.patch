@@ -10,7 +10,6 @@ to run without simultaneously retreiving the primary GATT services over
 the ATT / L2CAP connection.
 
 Source: SKY
-License: GPLv2+ & LGPLv2.1+
 Upstream-Status: Pending
 Signed-off-by: Tijo Thomas John <tijo.thomas@sky.uk>
 ###################################################################################################

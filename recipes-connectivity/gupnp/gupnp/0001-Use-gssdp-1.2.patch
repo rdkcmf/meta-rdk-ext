@@ -4,7 +4,6 @@ Date: Thu, 1 Apr 2021 03:22:56 +0000
 Subject: [PATCH] Use gssdp-1.2 for dunfell build with gupnp-0.20.10
 
 Source: COMCAST
-License: GPLV2
 Upstream-Status: Pending
 
 Signed-off-by: mselva006c <mani_selvaraj@comcast.com>

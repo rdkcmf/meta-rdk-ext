@@ -1,5 +1,4 @@
 From c3792cdc1daf0175b4a06d306c68a903c19063e2 Mon Sep 17 00:00:00 2001
-License: LICENSE-LGPL-2.1
 From: amoham071 <ameerkhan_mohamedrafiq@comcast.com>
 Date: Fri, 6 Dec 2019 09:33:57 +0000
 Subject: [PATCH] XRE-14411: RDK AT handles all types of headers for

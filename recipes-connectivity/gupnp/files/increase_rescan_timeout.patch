@@ -8,7 +8,6 @@ Subject: [PATCH] DELIA-31053 : Increase discovery timeout to mask network issues
 
 Source: COMCAST
 
-License: LGPL-2.0-or-later
 
 Upstream-Status: Pending
 

@@ -14,7 +14,6 @@ Subject: [PATCH] RDKB-15078: Merge XDNS patches + add patched from meta-rdk-mesh
 
 Source: COMCAST
 
-License: GPL-2.0-or-later
 
 Upstream-Status: Pending
 

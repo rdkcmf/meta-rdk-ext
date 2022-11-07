@@ -13,7 +13,6 @@ not cleared after the error is sent, meaning that the daemon will always think
 a request is still in progress, when in fact it failed.
 
 Source: SKY
-License: GPLv2+ & LGPLv2.1+
 Upstream-Status: Pending
 Signed-off-by: Tijo Thomas John <tijo.thomas@sky.uk>
 ###################################################################################################

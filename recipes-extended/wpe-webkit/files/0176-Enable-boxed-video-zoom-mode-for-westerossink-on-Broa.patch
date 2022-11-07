@@ -2,7 +2,6 @@ Date: Tue, 24 Dec 2019 11:18:19 -0500
 From: 0768d293ee091f0741053648003c611da5a40859 Mon Sep 17 00:00:00 2001
 Subject: Enable 'boxed' video zoom mode for westerossink on Broadcom
 Source: COMCAST
-License: GPLV2
 Upstream-Status: None
 Signed-off-by: Eugene Mutavchi <Ievgen_Mutavchi@comcast.com>
 

@@ -4,7 +4,6 @@ Source: COMCAST
 
 Subject: [PATCH] DELIA-41161 - Increase in xcal-device crash due to signal 11
 
-License: LGPL-2.0-or-later
 
 Upstream-Status: Pending
 

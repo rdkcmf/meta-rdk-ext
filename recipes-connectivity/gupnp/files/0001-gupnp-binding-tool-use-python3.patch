@@ -3,7 +3,6 @@ From: Jaga <jagadheesan_duraisamy@comcast.com>
 Date: Wed, 19 Feb 2020 09:05:29 +0000
 Subject: [PATCH] gupnp-binding-tool use python3
 Source: COMCAST
-License: LGPLv2+
 
 Reason for change: Use python3 since it is default for dunfell
 

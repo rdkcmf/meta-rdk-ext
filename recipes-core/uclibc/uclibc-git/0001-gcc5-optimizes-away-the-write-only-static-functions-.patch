@@ -15,7 +15,6 @@ Subject: [PATCH] gcc5 optimizes away the write only static functions and we end 
 
 Source: OPENEMBEDDED
 
-License: LGPL-2.1-or-later
 
 Upstream-Status: Submitted [ http://cgit.openembedded.org/openembedded-core/commit/id=458bfefecdd2b5e2efa743f29d3dc8b3471e6df1 ]
 

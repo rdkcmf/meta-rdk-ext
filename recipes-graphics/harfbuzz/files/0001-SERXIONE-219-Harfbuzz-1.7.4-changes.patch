@@ -3,7 +3,6 @@ Date: Dec 16, 2021 17:28 PM
 From: 86d59f250fb2668c5d7a356a271871de6f703da6 Dec 16, 2021 11:28 PM
 Subject: SERXIONE-219 [NTS][US][BCM] Automated - Fonts category failures - Use harfbuzz ver 1.7.4
 Source: COMCAST
-License: GPLV2
 Upstream-Status: Pending
 Signed-off-by: LeenaSunthari Dhanapalaju <ldhana149@cable.comcast.com>
 ##########################################

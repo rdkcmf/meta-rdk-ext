@@ -8,7 +8,6 @@ Subject: [PATCH] XRE-13706 unset BREAKPAD_GUID for WPE Network Process
 
 Source: COMCAST
 
-License: BSD-2-Clause
 
 Upstream-Status: Pending
 

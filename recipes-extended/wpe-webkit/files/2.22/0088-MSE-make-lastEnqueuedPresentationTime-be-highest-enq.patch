@@ -4,7 +4,6 @@ Date: Sun, 26 Apr 2020 11:53:59 -0400
 Subject: [PATCH 77/93] [MSE] make lastEnqueuedPresentationTime be highest
  enqueued PTS
 Source: COMCAST
-License: GPLV2
 Upstream-Status: None
 Signed-off-by: Eugene Mutavchi <Ievgen_Mutavchi@comcast.com>
 

@@ -3,7 +3,6 @@ From: Eugene Mutavchi <Ievgen_Mutavchi@comcast.com>
 Date: Wed, 29 May 2019 10:42:02 -0400
 Subject: [PATCH] Add API to explicitly request memory release
 Source: COMCAST
-License: BSD-2-Clause
 Upstream-Status: None
 Signed-off-by: Eugene Mutavchi <Ievgen_Mutavchi@comcast.com>
 ---

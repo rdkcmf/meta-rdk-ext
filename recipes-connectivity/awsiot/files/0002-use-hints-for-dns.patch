@@ -2,7 +2,6 @@ Date: Mar 18, 2020 11:43 AM
 From: 1ad675b8532f329bebaf40cda54192d0cb4feecb Feb 26, 2020 10:31 PM
 Subject: IPv6 is not working, so use IPv4
 Source: COMCAST
-License: MIT
 Upstream-Status: Pending
 Signed-off-by: Thomas Lea <thomas_lea@comcast.com>
 ---

@@ -10,7 +10,6 @@ Subject: [PATCH] XITHREE-7181: fix handling of initial segment
 
 Source: CGIT
 
-License: LGPL-2.1-or-later
 
 Upstream-Status: Submitted [ http://cgit.freedesktop.org/gstreamer/gst-plugins-good/commit/?id=142d8e2d23e5602e7382977af1043d621625f8c8 ]
 

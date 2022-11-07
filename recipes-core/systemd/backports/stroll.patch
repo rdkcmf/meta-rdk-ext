@@ -9,7 +9,6 @@ Subject: [PATCH] DELIA-9255: Converted to use strtoimax.
 
 Source: COMCAST
 
-License: LGPL-2.1-or-later
 
 Upstream-Status: Pending
 

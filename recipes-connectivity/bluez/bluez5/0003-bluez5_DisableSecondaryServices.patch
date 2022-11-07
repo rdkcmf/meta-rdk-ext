@@ -9,7 +9,6 @@ Subject: [PATCH] RDK-22703 RDK-27733 : Added support for AmazonRemote
         Will need to be enabled back later. - Scan and Pair/Connect to AmazonRemote.
 
 Source: COMCAST
-License: GPL-2.0-or-later
 Upstream-Status: Pending
 Signed-off-by: mselva006c <mani_selvaraj@comcast.com>
 ---

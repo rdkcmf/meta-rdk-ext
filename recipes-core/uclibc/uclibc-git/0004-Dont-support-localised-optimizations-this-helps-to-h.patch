@@ -9,7 +9,6 @@ Subject: [PATCH 4/7] Dont support localised optimizations this helps to have a
 
 Source: OPENEMBEDDED
 
-License: LGPL-2.1-or-later
 
 Upstream-Status: Submitted [ https://patchwork.openembedded.org/patch/109773/ ]
 

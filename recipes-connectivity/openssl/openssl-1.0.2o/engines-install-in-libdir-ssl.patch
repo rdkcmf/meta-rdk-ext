@@ -7,7 +7,6 @@ Subject: [PATCH] RDKSEC-135 : update openssl
         Update to openssl 1.0.2a
 
 Source: COMCAST
-License: Apache-2.0
 
 Upstream-Status: Pending
 

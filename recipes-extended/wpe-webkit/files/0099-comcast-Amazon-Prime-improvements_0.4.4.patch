@@ -2,7 +2,6 @@ From d8131bf51b96d7092d7ef482e644c85f3730b360 Mon Sep 17 00:00:00 2001
 From: Amadeusz Skrzypczak <amadeusz.skrzypczak@redembedded.com>
 Date: Thu, 25 Jun 2020 08:05:16 +0000
 Source: COMCAST
-License: GPLV2
 Upstream-Status: None
 Signed-off-by: Amadeusz Skrzypczak <amadeusz.skrzypczak@redembedded.com>
 Subject: [PATCH] XIONE-772 Fixed failed YT tests MSE (h264)

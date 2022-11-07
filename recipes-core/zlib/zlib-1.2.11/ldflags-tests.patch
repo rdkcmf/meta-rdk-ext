@@ -14,7 +14,6 @@ Subject: [PATCH] RDKALL-1627 : Security Vulnerability for glibc, zlib and libtas
 	
 Source: OPENEMBEDDED
 
-License: Zlib
 
 Upstream-Status: Submitted [ http://cgit.openembedded.org/openembedded-core/commit/meta/recipes-core/zlib/zlib/ldflags-tests.patch?id=344090a549284d0a1af065ff4cc3038bff8ecfea ] 
 

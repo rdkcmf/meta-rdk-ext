@@ -10,7 +10,6 @@ Subject: [PATCH] Add configurable characteristic write value options.
 	it allowed by the remote device.
 
 Source: SKY
-License: GPLv2+ & LGPLv2.1+
 Upstream-Status: Pending
 Signed-off-by: Tijo Thomas John <tijo.thomas@sky.uk>
 #############################################################################

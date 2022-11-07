@@ -3,7 +3,6 @@ From: krishnapriya kanagaraj <krishnapriya_kanagaraj@comcast.com>
 Date: Thu, 21 May 2020 16:17:31 +0000
 Subject: [PATCH] XRE-15546:[RDM RWI ] WI starts working only after restarting receiver
 Source: COMCAST
-License: GPLV2
 Upstream-Status: Pending
 Reason for change: Retry to load "libWPEWebInspectorResources.so" when getting failed at first time.
 Test Procedure: ensure RWI works at first time
