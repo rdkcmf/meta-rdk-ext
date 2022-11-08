@@ -61,6 +61,7 @@ SRC_URI += "file://2.28.1/comcast-RDKTV-19578-Disable-webaudio-source-provider.p
 SRC_URI += "file://2.28.1/comcast-LLAMA-8030-Fix-init-data-filtering.patch"
 SRC_URI += "file://2.28/comcast-LLAMA-8558-vttcue-middle-align-keyword-compa.patch"
 SRC_URI += "file://2.28/comcast-LLAMA-7963-disable-handling-of-http-protocol.patch"
+SRC_URI += "file://2.28/comcast-LLAMA-8378-Fix-video-resize-issue-with-multiple-vide.patch"
 
 PACKAGECONFIG[westeros]          = "-DUSE_WPEWEBKIT_PLATFORM_WESTEROS=ON -DUSE_GSTREAMER_HOLEPUNCH=ON -DUSE_EXTERNAL_HOLEPUNCH=ON -DUSE_WESTEROS_SINK=ON,,westeros westeros-sink"
 PACKAGECONFIG[encryptedmedia]    = "-DENABLE_ENCRYPTED_MEDIA=ON,-DENABLE_ENCRYPTED_MEDIA=OFF,"

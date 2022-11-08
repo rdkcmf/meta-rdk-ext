@@ -1,0 +1,86 @@
+From 1307c1f469b6fe25ed0b98f1e9ae57c1500d81dc Mon Sep 17 00:00:00 2001
+From: Filipe Norte <filipe.norte@sky.uk>
+Date: Tue, 8 Nov 2022 15:24:18 +0000
+Subject: [PATCH] LLAMA-8378: Fix video resize issue with multiple video
+ elements
+
+Reason for change: Video resize may not work when multiple
+video elements are being used simultaneously (depends on
+element size/position and visibility change sequence).
+Test Procedure: Verify video elements are correctly resized
+with single and multi-element use
+Risks: Low
+
+Signed-off-by: Filipe Norte <filipe.norte@sky.uk>
+---
+ .../gstreamer/MediaPlayerPrivateGStreamer.cpp | 46 +++++++++++++++++--
+ 1 file changed, 42 insertions(+), 4 deletions(-)
+
+diff --git a/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp b/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp
+index 59ed54d88d61..1ce0fd9ed93b 100644
+--- a/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp
++++ b/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp
+@@ -3566,18 +3566,56 @@ GstElement* MediaPlayerPrivateGStreamer::createVideoSinkGL()
+ #endif // USE(GSTREAMER_GL)
+ 
+ #if USE(GSTREAMER_HOLEPUNCH)
++static int OBJ_DATA_VIDEO_VISIBLE;
++static int OBJ_DATA_VIDEO_HIDDEN;
++
++#define VISIBILITY_DATA(visible)            ( (visible) ? &OBJ_DATA_VIDEO_VISIBLE : &OBJ_DATA_VIDEO_HIDDEN )
++#define VISIBILITY_DATA_IS_VISIBLE(data)    ( &OBJ_DATA_VIDEO_VISIBLE == (data) )
++#define VISIBILITY_DATA_IS_HIDDEN(data)     ( &OBJ_DATA_VIDEO_VISIBLE == (data) )
++#define VISIBILITY_DATA_IS_SET(data)        ( !!(data) )
++#define VISIBILITY_DATA_VALIDATE(data)      ASSERT( !(data) || VISIBILITY_DATA_IS_VISIBLE(data) || VISIBILITY_DATA_IS_HIDDEN(data) )
++
++
++static void getVideoVisibilityState(GstElement* videoSink, bool& visible)
++{
++    ASSERT(videoSink);
++
++    auto visibilityData = g_object_get_data(G_OBJECT(videoSink), "wpe-video-visibility");
++
++    VISIBILITY_DATA_VALIDATE(visibilityData);
++
++    if (VISIBILITY_DATA_IS_SET(visibilityData)) {
++        visible = VISIBILITY_DATA_IS_VISIBLE(visibilityData);
++    } else {
++        // First time this is called. Initialize visibility with default value
++        visible = true;
++    }
++}
++
++static void setVideoVisibilityState(GstElement* videoSink, bool visible)
++{
++    ASSERT(videoSink);
++
++    g_object_set_data(G_OBJECT(videoSink), "wpe-video-visibility", VISIBILITY_DATA(visible));
++}
++
+ static void setRectangleToVideoSink(GstElement* videoSink, const IntRect& rect, bool changeVisibleState = false, bool newVisibility = false)
+ {
+     static Lock mutex;
+-    static bool isVisible = true;
++    bool isVisible;
++
++    if (!videoSink)
++        return;
+ 
+     LockHolder holder(mutex);
++
++    getVideoVisibilityState(videoSink, isVisible);
++
+     isVisible = changeVisibleState ? newVisibility : isVisible;
+ 
+-    if (!isVisible && !changeVisibleState)
+-        return;
++    setVideoVisibilityState(videoSink, isVisible);
+ 
+-    if (!videoSink)
++    if (!isVisible && !changeVisibleState)
+         return;
+ 
+ #if USE(WESTEROS_SINK) || USE(WPEWEBKIT_PLATFORM_BCM_NEXUS)
+-- 
+2.37.3
+
