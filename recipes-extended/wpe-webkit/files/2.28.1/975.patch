@@ -1,0 +1,36 @@
+From 2929f336789eb273235cdc10878579b68dcd080d Mon Sep 17 00:00:00 2001
+From: Pawel Lampe <pawel.lampe@sky.uk>
+Date: Fri, 18 Nov 2022 10:31:52 +0000
+Subject: [PATCH] Fix readyState calculations
+
+---
+ .../graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp        | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp b/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp
+index e3900b122fbf..1906bb991ddf 100644
+--- a/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp
++++ b/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp
+@@ -1462,6 +1462,7 @@ GstElement* MediaPlayerPrivateGStreamer::createAudioSink()
+     GstElement* audioSinkBin = gst_bin_new("audio-sink");
+     ensureAudioSourceProvider();
+     m_audioSourceProvider->configureAudioBin(audioSinkBin, nullptr);
++    m_autoAudioSink = audioSinkBin;
+     return audioSinkBin;
+ #else
+     return m_autoAudioSink.get();
+@@ -2558,9 +2559,10 @@ void MediaPlayerPrivateGStreamer::updateStates()
+                 GRefPtr<GstQuery> query = adoptGRef(gst_query_new_buffering(GST_FORMAT_PERCENT));
+ 
+                 m_isBuffering = m_bufferingPercentage < 100;
+-                if (gst_element_query(m_pipeline.get(), query.get())) {
++                if ((m_autoAudioSink && gst_element_query(m_autoAudioSink.get(), query.get())) || (m_videoSink && gst_element_query(m_videoSink.get(), query.get()))) {
+                     gboolean isBuffering = m_isBuffering;
+                     gst_query_parse_buffering_percent(query.get(), &isBuffering, nullptr);
++                    GST_TRACE_OBJECT(pipeline(), "[Buffering] m_isBuffering forcefully updated from %d to %d", m_isBuffering, isBuffering);
+                     m_isBuffering = isBuffering;
+                 }
+ 
+-- 
+2.37.3
+
