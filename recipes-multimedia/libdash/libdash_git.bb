@@ -18,6 +18,9 @@ SRC_URI = "git://github.com/bitmovin/libdash;branch=stable_3_0;protocol=https \
            file://0006-RDK-32003-LLD-Support.patch \
 	   file://0007-DELIA-51645-Event-Stream-RawAttributes-Support.patch \
            file://0008-DELIA-53263-Use-Label-TAG.patch \
+	   file://0009-RDK-35134-Support-for-FailoverContent.patch \
+	   file://0010-RDKAAMP-121-Failover-Tag-on-SegmentTemplate.patch \
+	   file://0011-RDKAAMP-61-AAMP-low-latency-dash-stream-evaluation.patch \
           "
 
 S = "${WORKDIR}/git/libdash"

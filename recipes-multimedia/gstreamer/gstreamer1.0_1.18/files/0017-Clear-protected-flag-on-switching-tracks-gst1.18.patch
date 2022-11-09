@@ -1,0 +1,61 @@
+From 750f2e1d162dc9cb857a8fdee45a39557cc818c0 Mon Sep 17 00:00:00 2001
+From: Tony Paul <Tony_Paul@comcast.com>
+Date: Mon, 15 Nov 2021 11:06:48 +0000
+Subject: [PATCH 1/1] Clear protected flag on switching tracks
+
+Signed-off-by: Tony Paul <Tony_Paul@comcast.com>
+---
+ gst/isomp4/qtdemux.c | 8 +++++++-
+ gst/isomp4/qtdemux.h | 2 +-
+ 2 files changed, 8 insertions(+), 2 deletions(-)
+
+diff --git a/gst/isomp4/qtdemux.c b/gst/isomp4/qtdemux.c
+index 89219f4b3..2847fc37f 100644
+--- a/gst/isomp4/qtdemux.c
++++ b/gst/isomp4/qtdemux.c
+@@ -444,6 +444,7 @@ gst_qtdemux_init (GstQTDemux * qtdemux)
+   qtdemux->aamp_base_pts = GST_CLOCK_TIME_NONE;
+   qtdemux->aamp_base_pts_override = GST_CLOCK_TIME_NONE;
+   qtdemux->aamp_override_enabled = FALSE;
++  qtdemux->aamp_player_enabled = FALSE;
+   qtdemux->aamp_rate = 1.0;
+ 
+ }
+@@ -2367,7 +2368,9 @@ gst_qtdemux_handle_sink_event (GstPad * sinkpad, GstObject * parent,
+             demux->aamp_base_pts = GST_CLOCK_TIME_NONE;
+             demux->aamp_rate = g_value_get_float(gst_structure_get_value(structure, "rate"));
+             demux->aamp_override_enabled = g_value_get_boolean(gst_structure_get_value(structure, "enable"));
+-            g_print("%s:%d - aamp_override - enabled = %d, rate  %f \n", __FUNCTION__, __LINE__, demux->aamp_override_enabled, demux->aamp_rate);
++            demux->aamp_player_enabled = g_value_get_boolean(gst_structure_get_value(structure, "aampplayer"));
++            g_print("%s:%d - aamp_override - enabled = %d, player = %d, rate  %f \n", __FUNCTION__, __LINE__, demux->aamp_override_enabled,demux->aamp_player_enabled, demux->aamp_rate);
++
+             if (demux->aamp_override_enabled)
+             {
+               const GValue * basePTSVal = gst_structure_get_value(structure, "basePTS");
+@@ -2590,6 +2593,10 @@ gst_qtdemux_stream_clear (QtDemuxStream * stream)
+   gst_qtdemux_stream_flush_segments_data (stream);
+   gst_qtdemux_stream_flush_samples_data (stream);
+   gst_qtdemux_stream_flush_crypto_info (stream);
++  GstQTDemux *qtdemux = stream->demux;
++  if(!qtdemux->aamp_player_enabled)
++     stream->protected = FALSE;
++
+ }
+ 
+ static void
+diff --git a/gst/isomp4/qtdemux.h b/gst/isomp4/qtdemux.h
+index 41ce76322..e998f2b74 100644
+--- a/gst/isomp4/qtdemux.h
++++ b/gst/isomp4/qtdemux.h
+@@ -265,7 +265,7 @@ struct _GstQTDemux {
+   GstClockTime aamp_base_pts_override;
+   gdouble aamp_rate;
+   gboolean aamp_override_enabled;
+-
++  gboolean aamp_player_enabled;
+ };
+ 
+ struct _GstQTDemuxClass {
+-- 
+2.25.1
+

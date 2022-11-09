@@ -1,0 +1,31 @@
+From b5efd4f636709001c1f7ae591d65fe4ccd247703 Mon Sep 17 00:00:00 2001
+From: Andrzej Surdej <Andrzej_Surdej@comcast.com>
+Date: Fri, 23 Sep 2022 11:15:30 +0000
+Subject: [PATCH] comcast - RDKTV-19578 - Disable webaudio source provider
+
+Use default autoaudiosink instead.
+AudioSourceProviderGStreamer adds additional filters elements before autoaudio sink
+that requre audio data to be software decoded before reaching such element
+(effectively it adds sw audio decoder to the pipeline).
+Such flow is not possible for audio codecs that use HW decoders.
+---
+ .../graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp         | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp b/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp
+index 1a2f9e9de4bf..c9e7cc7199f1 100644
+--- a/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp
++++ b/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp
+@@ -1454,7 +1454,8 @@ GstElement* MediaPlayerPrivateGStreamer::createAudioSink()
+     return m_autoAudioSink.get();
+ #endif
+ 
+-#if ENABLE(WEB_AUDIO)
++/* "Disable webaudio source provider on all platforms as it requires SW audio decoder" */
++#if 0 // ENABLE(WEB_AUDIO)
+     GstElement* audioSinkBin = gst_bin_new("audio-sink");
+     ensureAudioSourceProvider();
+     m_audioSourceProvider->configureAudioBin(audioSinkBin, nullptr);
+-- 
+2.17.1
+

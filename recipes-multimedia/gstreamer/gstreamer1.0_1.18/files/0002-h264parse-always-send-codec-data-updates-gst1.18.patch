@@ -1,0 +1,45 @@
+From 7bdba277f30514e456aed26cec464afe37f2a5ac Mon Sep 17 00:00:00 2001
+From: Tony Paul <Tony_Paul@comcast.com>
+Date: Tue, 16 Nov 2021 08:49:19 +0000
+Subject: [PATCH] XRE-13219, XRE-13227: Defer seek complition until it is actually finished
+
+        And make sure h264parse always sends codec-data change
+
+Source: COMCAST
+
+License: LGPL-2.1-or-later
+
+Upstream-Status: Pending
+
+Signed-off-by: Eugene Mutavchi <Ievgen_Mutavchi@comcast.com>
+
+---
+ gst/videoparsers/gsth264parse.c | 5 ++++-
+ 1 file changed, 4 insertions(+), 1 deletion(-)
+
+diff --git a/gst/videoparsers/gsth264parse.c b/gst/videoparsers/gsth264parse.c
+index 6260a5f23..c965977e8 100644
+--- a/gst/videoparsers/gsth264parse.c
++++ b/gst/videoparsers/gsth264parse.c
+@@ -2319,6 +2319,7 @@ gst_h264_parse_update_src_caps (GstH264Parse * h264parse, GstCaps * caps)
+     src_caps = gst_pad_get_current_caps (GST_BASE_PARSE_SRC_PAD (h264parse));
+ 
+     if (src_caps) {
++#if 0
+       GstStructure *src_caps_str = gst_caps_get_structure (src_caps, 0);
+ 
+       /* use codec data from old caps for comparison if we have pushed frame for now.
+@@ -2359,7 +2360,9 @@ gst_h264_parse_update_src_caps (GstH264Parse * h264parse, GstCaps * caps)
+             gst_buffer_unmap (buf, &map);
+           }
+         }
+-      } else if (!buf) {
++      } else
++#endif
++      if (!buf) {
+         GstStructure *s;
+         /* remove any left-over codec-data hanging around */
+         s = gst_caps_get_structure (caps, 0);
+-- 
+2.25.1
+

@@ -6,8 +6,8 @@ LIC_FILES_CHKSUM = "file://LICENSES/Apache-2.0.txt;md5=c846ebb396f8b174b10ded477
 
 DEPENDS = "cjson msgpack-c rbus rbus-core wdmp-c cimplog"
 
-SRCREV = "003c6f5d3c90bac83ff30dd64a62914883dc73c6"
-SRC_URI = "git://github.com/xmidt-org/cpeabs.git" 
+SRCREV = "bf36ebea48dd241aa42c44fc18aa4d1e55cf8c30"
+SRC_URI = "git://github.com/xmidt-org/cpeabs.git"
 
 PV = "git+${SRCPV}"
 
@@ -20,6 +20,8 @@ inherit pkgconfig cmake
 EXTRA_OECMAKE = "-DBUILD_TESTING=OFF -DBUILD_YOCTO=true"
 
 LDFLAGS += "-lcjson -lmsgpackc -lwdmp-c -lcimplog -lrbus -lrbus-core -lrtMessage"
+
+CFLAGS_append = " ${@bb.utils.contains("DISTRO_FEATURES", "WanFailOverSupportEnable", " -DWAN_FAILOVER_SUPPORTED ", " ", d)} "
 
 CFLAGS_append = " \
         -DBUILD_YOCTO \

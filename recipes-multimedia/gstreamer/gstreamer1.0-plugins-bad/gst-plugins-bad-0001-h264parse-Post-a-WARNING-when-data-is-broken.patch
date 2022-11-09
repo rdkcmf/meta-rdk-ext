@@ -1,0 +1,13 @@
+Index: gst-plugins-bad-1.10.4/gst/videoparsers/gsth264parse.c
+===================================================================
+--- gst-plugins-bad-1.10.4.orig/gst/videoparsers/gsth264parse.c
++++ gst-plugins-bad-1.10.4/gst/videoparsers/gsth264parse.c
+@@ -1185,6 +1185,8 @@ gst_h264_parse_handle_frame (GstBasePars
+         /* broken nal at start -> arrange to skip it,
+          * otherwise have it terminate current au
+          * (and so it will be skipped on next frame round) */
++        GST_ELEMENT_WARNING (h264parse, STREAM, DECODE,
++            (NULL), ("Broken bit stream"));
+         if (current_off == 0) {
+           GST_DEBUG_OBJECT (h264parse, "skipping broken nal");
+           *skipsize = nalu.offset;

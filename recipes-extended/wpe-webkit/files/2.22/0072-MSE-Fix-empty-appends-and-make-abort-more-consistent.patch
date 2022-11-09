@@ -75,7 +75,7 @@ Index: git/Source/WebCore/platform/graphics/gstreamer/mse/AppendPipeline.cpp
 -    // Else, the automatic state transitions will take care when the ongoing append finishes.
 +    else {
 +        // Wait for append state change
-+        for (int i = 0; m_appendState == AppendState::Ongoing && i < 100; ++i) {
++        for (int i = 0; m_appendState != AppendState::NotStarted && i < 100; ++i) {
 +            drainBusIfNeeded();
 +            WTF::sleep(10_ms);
 +        }

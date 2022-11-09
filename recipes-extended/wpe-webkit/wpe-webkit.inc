@@ -10,14 +10,12 @@ DEPENDS += " \
      libwpe \
      bison-native ccache-native glib-2.0-native gperf-native libxml2-native ninja-native ruby-native chrpath-replacement-native \
      cairo freetype glib-2.0 gnutls harfbuzz icu jpeg pcre sqlite3 zlib \
-     libepoxy libpng libsoup-2.4 libwebp libxml2 libxslt \
+     libepoxy libpng libwebp libxml2 libxslt \
      virtual/egl virtual/libgles2 \
-     libinput westeros westeros-sink \
+     libinput \
 "
-DEPENDS_remove_morty = " libwpe "
-DEPENDS_remove_daisy = " libwpe "
 
-RDEPENDS_${PN} += "injectedbundle tts"
+RDEPENDS_${PN} += "injectedbundle"
 
 EXTRANATIVEPATH += " chrpath-native"
 
@@ -33,7 +31,7 @@ PROVISIONING_libc-musl = ""
 PROVISIONING_mipsel = ""
 PROVISIONING_x86 = ""
 
-PACKAGECONFIG ?= "2dcanvas cssshapes fetchapi full_logs mediasource encryptedmedia performance-timeline picturesize \
+PACKAGECONFIG ?= "usesoup2 2dcanvas cssshapes fetchapi full_logs mediasource encryptedmedia performance-timeline picturesize \
                   promise ${PROVISIONING} resourcetiming video ${WPE_BACKEND} mediastream native_audio sampling-profiler \
                   ${@bb.utils.contains('DISTRO_FEATURES', 'opencdm', 'wpeframework_opencdm', '', d)}"
 
@@ -56,7 +54,6 @@ PACKAGECONFIG[indexeddb] = "-DENABLE_DATABASE_PROCESS=ON -DENABLE_INDEXED_DATABA
 PACKAGECONFIG[inputspeech] = "-DENABLE_INPUT_SPEECH=ON,-DENABLE_INPUT_SPEECH=OFF,"
 PACKAGECONFIG[intl] = "-DENABLE_INTL=ON,-DENABLE_INTL=OFF,"
 PACKAGECONFIG[mediasource] = "-DENABLE_MEDIA_SOURCE=ON,-DENABLE_MEDIA_SOURCE=OFF,gstreamer1.0 gstreamer1.0-plugins-good,${RDEPS_MEDIASOURCE}"
-PACKAGECONFIG[mediastream] ?= "-DENABLE_MEDIA_STREAM=ON -DENABLE_WEB_RTC=ON,-DENABLE_MEDIA_STREAM=OFF -DENABLE_WEB_RTC=OFF,qtwebrtc,qtwebrtc"
 PACKAGECONFIG[notifications] = "-DENABLE_NOTIFICATIONS=ON,-DENABLE_NOTIFICATIONS=OFF,"
 PACKAGECONFIG[performance-timeline] = "-DENABLE_PERFORMANCE_TIMELINE=ON,-DENABLE_PERFORMANCE_TIMELINE=OFF,"
 PACKAGECONFIG[picturesize] = "-DENABLE_PICTURE_SIZES=ON,-DENABLE_PICTURE_SIZES=OFF,"
@@ -70,10 +67,11 @@ PACKAGECONFIG[subtlecrypto] = "-DENABLE_SUBTLE_CRYPTO=ON,-DENABLE_SUBTLE_CRYPTO=
 PACKAGECONFIG[video] = "-DENABLE_VIDEO=ON -DENABLE_VIDEO_TRACK=ON,-DENABLE_VIDEO=OFF -DENABLE_VIDEO_TRACK=OFF,gstreamer1.0 gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-plugins-bad,${RDEPS_VIDEO}"
 PACKAGECONFIG[webaudio] = "-DENABLE_WEB_AUDIO=ON,-DENABLE_WEB_AUDIO=OFF,gstreamer1.0 gstreamer1.0-plugins-base gstreamer1.0-plugins-good,${RDEPS_WEBAUDIO}"
 PACKAGECONFIG[native_audio] = "-DENABLE_NATIVE_AUDIO=ON, -DENABLE_NATIVE_AUDIO=OFF,"
+PACKAGECONFIG[usesoup2] = ",,libsoup-2.4"
 
 # DRM
 # new CDMI option which uses WPEFramework
-PACKAGECONFIG[wpeframework_opencdm] = "-DENABLE_OPENCDM=ON,-DENABLE_OPENCDM=OFF,wpeframework-clientlibraries,rdkservices"
+PACKAGECONFIG[wpeframework_opencdm] ?= "-DENABLE_OPENCDM=ON,-DENABLE_OPENCDM=OFF,wpeframework-clientlibraries,rdkservices"
 
 PACKAGECONFIG[provisioning] = "-DENABLE_PROVISIONING=ON,-DENABLE_PROVISIONING=OFF,libprovision,libprovision"
 
@@ -85,6 +83,7 @@ EXTRA_OECMAKE += " \
     -DCMAKE_BUILD_TYPE=Release \
     -DCMAKE_COLOR_MAKEFILE=OFF -DBUILD_SHARED_LIBS=ON -DPORT=WPE \
     -G Ninja \
+    -DENABLE_TOOLS=OFF \
 "
 
 EXTRA_OECMAKE_append = " -DUSE_LD_GOLD=OFF"
@@ -148,7 +147,6 @@ RDEPS_EXTRA = " \
     gstreamer1.0-plugins-bad-mpegtsdemux \
     gstreamer1.0-plugins-bad-smoothstreaming \
     gstreamer1.0-plugins-bad-videoparsersbad \
-    gstreamer1.0-plugins-bad-dataurisrc \
 "
 
 # The RDEPS_EXTRA plugins are all required for certain media playback use cases,

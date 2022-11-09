@@ -1,0 +1,75 @@
+From a5fbd9652c499cbd31c11163698c0e30f6dd63e3 Mon Sep 17 00:00:00 2001
+From: Tony Paul <Tony_Paul@comcast.com>
+Date: Wed, 17 Nov 2021 13:24:10 +0000
+Subject: [PATCH] Subject: [PATCH] XRE-12907: enable vp9 support
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+matroskademux: emit no-more-pads when the Tracks element is completely read
+
+  This is necessary for MSE, where a new MSE initialization segment may be
+  appended at any point. These MSE initialization segments consist of an
+  entire WebM file until the first Cluster element (not included). [1]
+
+  Note that track definitions are ignored on successive headers, they
+  must match, but this is not checked by matroskademux (look for
+          `(!demux->tracks_parsed)` in the code).
+
+  Source pads are not altered when the new headers are read.
+
+  This patch has been splitted from the original patch from eocanha in [2].
+
+Source: GITHUB
+License: LGPL-2.1-or-later
+Upstream-Status: Submitted [ https://www.w3.org/TR/mse-byte-stream-format-webm/
+                 https://bug334082.bugzilla-attachments.gnome.org/attachment.cgi?id=362212]
+
+Signed-off-by: Alicia Boya García <ntrrgc@gmail.com>
+---
+ gst/matroska/matroska-demux.c | 13 +++++++------
+ 1 file changed, 7 insertions(+), 6 deletions(-)
+
+diff --git a/gst/matroska/matroska-demux.c b/gst/matroska/matroska-demux.c
+index eeef78d69..777ce9152 100644
+--- a/gst/matroska/matroska-demux.c
++++ b/gst/matroska/matroska-demux.c
+@@ -3407,8 +3407,14 @@ gst_matroska_demux_parse_tracks (GstMatroskaDemux * demux, GstEbmlRead * ebml)
+   DEBUG_ELEMENT_STOP (demux, ebml, "Tracks", ret);
+ 
+   demux->tracks_parsed = TRUE;
++
++  demux->common.state = GST_MATROSKA_READ_STATE_DATA;
+   GST_DEBUG_OBJECT (demux, "signaling no more pads");
+   gst_element_no_more_pads (GST_ELEMENT (demux));
++  /* send initial segment - we wait till we know the first
++   * incoming timestamp, so we can properly set the start of
++   * the segment. */
++  demux->need_segment = TRUE;
+ 
+   return ret;
+ }
+@@ -5452,8 +5458,7 @@ gst_matroska_demux_parse_id (GstMatroskaDemux * demux, guint32 id,
+                 goto no_tracks;
+             }
+           }
+-          if (demux->common.state == GST_MATROSKA_READ_STATE_HEADER) {
+-            demux->common.state = GST_MATROSKA_READ_STATE_DATA;
++          if (demux->first_cluster_offset == 0){
+             demux->first_cluster_offset = demux->common.offset;
+ 
+             if (!demux->streaming &&
+@@ -5508,10 +5513,6 @@ gst_matroska_demux_parse_id (GstMatroskaDemux * demux, guint32 id,
+               gst_event_unref (seek_event);
+             }
+ 
+-            /* send initial segment - we wait till we know the first
+-               incoming timestamp, so we can properly set the start of
+-               the segment. */
+-            demux->need_segment = TRUE;
+           }
+           demux->cluster_time = GST_CLOCK_TIME_NONE;
+           demux->cluster_offset = demux->common.offset;
+-- 
+2.25.1
+

@@ -27,7 +27,7 @@ Index: glib-openssl-2.50.2/tls/openssl/gtlsconnection-openssl.c
 +     https://github.com/curl/curl/commit/8a7a277c086199b37c07a8e01165168037866f3e */
 +  if (direction == G_IO_IN && err_code == SSL_ERROR_SYSCALL && ret == 0 && err == 0 && !my_error)
 +  {
-+      g_warning("Ignoring zero return from SSL_read");
++      g_debug("Ignoring zero return from SSL_read");
 +      return G_TLS_CONNECTION_BASE_OK;
 +  }
 +

@@ -1,0 +1,250 @@
+From 05107a1abb91df54243c30e67ae021b650bc24dd Mon Sep 17 00:00:00 2001
+From: Andrzej Surdej <Andrzej_Surdej@comcast.com>
+Date: Wed, 30 Mar 2022 18:54:54 +0200
+Subject: [PATCH] comcast - XRE-16393 - DELIA-52142 - Accessibility
+
+This patch consist of following changes:
+1) XRE-16393: Collate all the accessibility related changes
+ * XRE-16380: Integrate RDKAT into WebKit
+ * WKIT-1148 : Restoring the accessibility enable settings when closing RWI
+ * WKIT-1079: Program audio and TTS audio coordination
+2) DELIA-52142: VG is not working in YouTube search results
+
+The following additional changes were introduced:
+1) Drop WebKit setting and preference for accessibility enable/disable.
+2) Drop env for accessibility enable/disable.
+3) Always initialize ARIA and RDKAT processing.
+4) Drop atk-bridge dependency
+5) Drop WKIT-1148 as ATK is always enabled now
+---
+ .../accessibility/AccessibilityNodeObject.cpp | 21 ++++++++++++---
+ Source/WebCore/html/HTMLMediaElement.cpp      |  7 ++++-
+ Source/WebCore/html/HTMLMediaElement.h        |  1 +
+ Source/WebKit/WebProcess/WebPage/WebPage.cpp  | 26 +++++++++++++++++++
+ .../WebProcess/WebPage/wpe/WebPageWPE.cpp     |  5 +++-
+ .../WebProcess/wpe/WebProcessMainWPE.cpp      |  3 ---
+ Source/cmake/OptionsWPE.cmake                 |  5 +---
+ Tools/wpe/backends/ViewBackend.cpp            |  3 ---
+ 8 files changed, 55 insertions(+), 16 deletions(-)
+
+diff --git a/Source/WebCore/accessibility/AccessibilityNodeObject.cpp b/Source/WebCore/accessibility/AccessibilityNodeObject.cpp
+index 209eb8e658e0..622866cfc512 100644
+--- a/Source/WebCore/accessibility/AccessibilityNodeObject.cpp
++++ b/Source/WebCore/accessibility/AccessibilityNodeObject.cpp
+@@ -2083,11 +2083,24 @@ String AccessibilityNodeObject::ariaDescribedByAttribute() const
+ 
+ void AccessibilityNodeObject::ariaLabeledByElements(Vector<Element*>& elements) const
+ {
+-    elementsFromAttribute(elements, aria_labelledbyAttr);
+-    if (!elements.size())
+-        elementsFromAttribute(elements, aria_labeledbyAttr);
+-}
++    Vector<Element*> lelements;
++    elementsFromAttribute(lelements, aria_labelledbyAttr);
++    if (!lelements.size())
++        elementsFromAttribute(lelements, aria_labeledbyAttr);
++
++    for (unsigned i = 0; i < lelements.size(); ++i) {
++        if(elements.contains(lelements[i]))
++            continue;
+ 
++        elements.append(lelements[i]);
++        AXObjectCache* cache = axObjectCache();
++        if (AccessibilityObject* axObject = (cache ? cache->getOrCreate(lelements[i]) : nullptr))
++            downcast<AccessibilityNodeObject>(*axObject).ariaLabeledByElements(elements);
++
++        if(!lelements.isEmpty() && node())
++            elements.removeAll(&downcast<Element>(*node()));
++    }
++}
+ 
+ String AccessibilityNodeObject::ariaLabeledByAttribute() const
+ {
+diff --git a/Source/WebCore/html/HTMLMediaElement.cpp b/Source/WebCore/html/HTMLMediaElement.cpp
+index bf26ed220faf..d22c53f5e2d0 100644
+--- a/Source/WebCore/html/HTMLMediaElement.cpp
++++ b/Source/WebCore/html/HTMLMediaElement.cpp
+@@ -3726,6 +3726,7 @@ ExceptionOr<void> HTMLMediaElement::setVolume(double volume)
+         removeBehaviorRestrictionsAfterFirstUserGesture(MediaElementSession::AllRestrictions & ~MediaElementSession::RequireUserGestureToControlControlsManager);
+ 
+     m_volume = volume;
++    m_referenceVolume = m_volume;
+     m_volumeInitialized = true;
+     updateVolume();
+     scheduleEvent(eventNames().volumechangeEvent);
+@@ -4941,6 +4942,9 @@ void HTMLMediaElement::mediaPlayerVolumeChanged()
+         double vol = m_player->volume();
+         if (vol != m_volume) {
+             m_volume = vol;
++            Page* page = document().page();
++            if(!page || page->mediaVolume() == 1)
++                m_referenceVolume = vol;
+             updateVolume();
+             scheduleEvent(eventNames().volumechangeEvent);
+         }
+@@ -5351,6 +5355,7 @@ void HTMLMediaElement::updateVolume()
+     float volume = m_player->volume();
+     if (m_volume != volume) {
+         m_volume = volume;
++        m_referenceVolume = volume;
+         scheduleEvent(eventNames().volumechangeEvent);
+     }
+ #else
+@@ -7893,7 +7898,7 @@ double HTMLMediaElement::effectiveVolume() const
+         volumeMultiplier *= 0.25;
+ #endif
+ 
+-    return m_volume * volumeMultiplier;
++    return m_referenceVolume * volumeMultiplier;
+ }
+ 
+ bool HTMLMediaElement::effectiveMuted() const
+diff --git a/Source/WebCore/html/HTMLMediaElement.h b/Source/WebCore/html/HTMLMediaElement.h
+index 884e04cd53b4..bfa9c7f3d7eb 100644
+--- a/Source/WebCore/html/HTMLMediaElement.h
++++ b/Source/WebCore/html/HTMLMediaElement.h
+@@ -1010,6 +1010,7 @@ private:
+     SeekType m_pendingSeekType { NoSeek };
+ 
+     double m_volume { 1 };
++    double m_referenceVolume { 1 };
+     bool m_volumeInitialized { false };
+     MediaTime m_lastSeekTime;
+     
+diff --git a/Source/WebKit/WebProcess/WebPage/WebPage.cpp b/Source/WebKit/WebProcess/WebPage/WebPage.cpp
+index b09b9d0ad4cd..264bc62a4d93 100644
+--- a/Source/WebKit/WebProcess/WebPage/WebPage.cpp
++++ b/Source/WebKit/WebProcess/WebPage/WebPage.cpp
+@@ -324,6 +324,10 @@
+ #include "RemoteMediaPlayerManager.h"
+ #endif
+ 
++#if ENABLE(ACCESSIBILITY)
++#include <rdkat.h>
++#endif
++
+ namespace WebKit {
+ using namespace JSC;
+ using namespace WebCore;
+@@ -335,6 +339,14 @@ static const Seconds maximumLayerVolatilityTimerInterval { 2_s };
+ #define RELEASE_LOG_IF_ALLOWED(channel, fmt, ...) RELEASE_LOG_IF(isAlwaysOnLoggingAllowed(), channel, "%p - [webPageID=%" PRIu64 "] WebPage::" fmt, this, m_identifier.toUInt64(), ##__VA_ARGS__)
+ #define RELEASE_LOG_ERROR_IF_ALLOWED(channel, fmt, ...) RELEASE_LOG_ERROR_IF(isAlwaysOnLoggingAllowed(), channel, "%p - [webPageID=%" PRIu64 "] WebPage::" fmt, this, m_identifier.toUInt64(), ##__VA_ARGS__)
+ 
++#if ENABLE(ACCESSIBILITY)
++WTF::WeakPtr<WebPage> g_pageHandle;
++static void SetMediaVolume(void *data, float volume) {
++    if(data && g_pageHandle && data == g_pageHandle.get())
++        g_pageHandle->setMediaVolume(volume);
++}
++#endif
++
+ class SendStopResponsivenessTimer {
+ public:
+     ~SendStopResponsivenessTimer()
+@@ -455,6 +467,10 @@ WebPage::WebPage(PageIdentifier pageID, WebPageCreationParameters&& parameters)
+ {
+     ASSERT(m_identifier);
+ 
++#if ENABLE(ACCESSIBILITY)
++    RDK_AT::Initialize();
++#endif
++
+     m_pageGroup = WebProcess::singleton().webPageGroup(parameters.pageGroupData);
+ 
+ #if PLATFORM(IOS_FAMILY)
+@@ -5816,6 +5832,18 @@ void WebPage::didCommitLoad(WebFrame* frame)
+     if (!frame->isMainFrame())
+         return;
+ 
++#if ENABLE(ACCESSIBILITY)
++    // Always enable ATK processing in WebKik to trigger ATK related events
++    WebCore::AXObjectCache::enableAccessibility();
++    // Enable RDKAT to process WebKit event into real speach (if TTS enabled)
++    WTFLogAlways("Enable RDKAT processing for WPE");
++    RDK_AT::EnableProcessing(true);
++    g_pageHandle = makeWeakPtr(*this);
++#if PLATFORM(BROADCOM)
++    RDK_AT::SetVolumeControlCallback(SetMediaVolume, this);
++#endif
++#endif
++
+     // If previous URL is invalid, then it's not a real page that's being navigated away from.
+     // Most likely, this is actually the first load to be committed in this page.
+     if (frame->coreFrame()->loader().previousURL().isValid())
+diff --git a/Source/WebKit/WebProcess/WebPage/wpe/WebPageWPE.cpp b/Source/WebKit/WebProcess/WebPage/wpe/WebPageWPE.cpp
+index f9fc41a1fb69..fd5980d5c209 100644
+--- a/Source/WebKit/WebProcess/WebPage/wpe/WebPageWPE.cpp
++++ b/Source/WebKit/WebProcess/WebPage/wpe/WebPageWPE.cpp
+@@ -43,7 +43,10 @@ void WebPage::platformInitialize()
+     // object there specifically placed for that purpose (the socket).
+     m_accessibilityObject = adoptGRef(webkitWebPageAccessibilityObjectNew(this));
+     GUniquePtr<gchar> plugID(atk_plug_get_id(ATK_PLUG(m_accessibilityObject.get())));
+-    send(Messages::WebPageProxy::BindAccessibilityTree(String::fromUTF8(plugID.get())));
++    // We enable accessibility explicitly for WebProcess so no need
++    // to connect UI process any more, as it requires IPC impl (at-spi3 bridge)
++    // that we don't use anyway.
++    // send(Messages::WebPageProxy::BindAccessibilityTree(String::fromUTF8(plugID.get())));
+ #endif
+ }
+ 
+diff --git a/Source/WebKit/WebProcess/wpe/WebProcessMainWPE.cpp b/Source/WebKit/WebProcess/wpe/WebProcessMainWPE.cpp
+index 6fb54a5a69f3..015709c5c3e0 100644
+--- a/Source/WebKit/WebProcess/wpe/WebProcessMainWPE.cpp
++++ b/Source/WebKit/WebProcess/wpe/WebProcessMainWPE.cpp
+@@ -32,7 +32,6 @@
+ #include <glib.h>
+ 
+ #if ENABLE(ACCESSIBILITY)
+-#include <atk-bridge.h>
+ #include <atk/atk.h>
+ #endif
+ 
+@@ -67,8 +66,6 @@ static void initializeAccessibility()
+     atkUtilClass->get_toolkit_version = []() -> const gchar* {
+         return "";
+     };
+-
+-    atk_bridge_adaptor_init(nullptr, nullptr);
+ }
+ #endif
+ 
+diff --git a/Source/cmake/OptionsWPE.cmake b/Source/cmake/OptionsWPE.cmake
+index e77b6eadc2dc..e4a9f6f6d154 100644
+--- a/Source/cmake/OptionsWPE.cmake
++++ b/Source/cmake/OptionsWPE.cmake
+@@ -130,10 +130,7 @@ if (ENABLE_ACCESSIBILITY)
+     if (NOT ATK_FOUND)
+         message(FATAL_ERROR "atk is needed for ENABLE_ACCESSIBILITY")
+     endif ()
+-    find_package(ATKBridge)
+-    if (NOT ATK_BRIDGE_FOUND)
+-        message(FATAL_ERROR "at-spi2-atk is needed for ENABLE_ACCESSIBILITY")
+-    endif ()
++    set(ATK_LIBRARIES ${ATK_LIBRARIES} rdkat)
+ endif ()
+ 
+ if (USE_OPENJPEG)
+diff --git a/Tools/wpe/backends/ViewBackend.cpp b/Tools/wpe/backends/ViewBackend.cpp
+index de4b6fd7b808..8c95d3b6ccd9 100644
+--- a/Tools/wpe/backends/ViewBackend.cpp
++++ b/Tools/wpe/backends/ViewBackend.cpp
+@@ -31,7 +31,6 @@
+ 
+ #if defined(HAVE_ACCESSIBILITY) && HAVE_ACCESSIBILITY
+ #include "WebKitAccessibleApplication.h"
+-#include <atk-bridge.h>
+ #include <atk/atk.h>
+ #endif
+ 
+@@ -237,8 +236,6 @@ void ViewBackend::initializeAccessibility()
+     atkUtilClass->get_toolkit_version = []() -> const gchar* {
+         return "";
+     };
+-
+-    atk_bridge_adaptor_init(nullptr, nullptr);
+ #endif
+ }
+ 
+-- 
+2.17.1
+

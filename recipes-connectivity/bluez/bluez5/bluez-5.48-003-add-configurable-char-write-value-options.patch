@@ -1,0 +1,145 @@
+#############################################################################
+Date: Fri, 7 Dec 2018 14:20:00 +0000
+From 5adb040ce80333aa4262eca88ab172b59e0e7b8b Mon Sep 17 00:00:00 2001
+From: Ben Gray <ben.gray@sky.uk>
+
+Subject: [PATCH] Add configurable characteristic write value options.
+
+	This adds a new optional parameter to the dbus characteristic
+	write method telling bluez the type of write it should perform
+	it allowed by the remote device.
+
+Source: SKY
+License: GPLv2+ & LGPLv2.1+
+Upstream-Status: Pending
+Signed-off-by: Tijo Thomas John <tijo.thomas@sky.uk>
+#############################################################################
+
+---
+ src/gatt-client.c | 45 +++++++++++++++++++++++++++++-------
+ 1 file changed, 37 insertions(+), 8 deletions(-)
+
+diff --git a/src/gatt-client.c b/src/gatt-client.c
+index 2f01867..3dda1ec 100644
+--- a/src/gatt-client.c
++++ b/src/gatt-client.c
+@@ -388,7 +388,7 @@ fail:
+ 	desc->read_op = NULL;
+ }
+ 
+-static int parse_options(DBusMessageIter *iter, uint16_t *offset)
++static int parse_options(DBusMessageIter *iter, uint16_t *offset, char **type)
+ {
+ 	DBusMessageIter dict;
+ 
+@@ -414,6 +414,12 @@ static int parse_options(DBusMessageIter *iter, uint16_t *offset)
+ 				return -EINVAL;
+ 			dbus_message_iter_get_basic(&value, offset);
+ 		}
++		else if (strcasecmp(key, "type") == 0) {
++			if (var != DBUS_TYPE_STRING)
++				return -EINVAL;
++			if (type)
++				dbus_message_iter_get_basic(&value, type);
++		}
+ 
+ 		dbus_message_iter_next(&dict);
+ 	}
+@@ -468,7 +474,7 @@ static DBusMessage *descriptor_read_value(DBusConnection *conn,
+ 
+ 	dbus_message_iter_init(msg, &iter);
+ 
+-	if (parse_options(&iter, &offset))
++	if (parse_options(&iter, &offset, NULL))
+ 		return btd_error_invalid_args(msg);
+ 
+ 	if (desc->read_op) {
+@@ -598,7 +604,7 @@ static DBusMessage *descriptor_write_value(DBusConnection *conn,
+ 
+ 	dbus_message_iter_next(&iter);
+ 
+-	if (parse_options(&iter, &offset))
++	if (parse_options(&iter, &offset, NULL))
+ 		return btd_error_invalid_args(msg);
+ 
+ 	/*
+@@ -932,7 +938,7 @@ static DBusMessage *characteristic_read_value(DBusConnection *conn,
+ 
+ 	dbus_message_iter_init(msg, &iter);
+ 
+-	if (parse_options(&iter, &offset))
++	if (parse_options(&iter, &offset, NULL))
+ 		return btd_error_invalid_args(msg);
+ 
+ 	if (chrc->read_op) {
+@@ -973,6 +979,9 @@ static DBusMessage *characteristic_write_value(DBusConnection *conn,
+ 	int value_len = 0;
+ 	bool supported = false;
+ 	uint16_t offset = 0;
++	uint8_t props;
++	uint16_t ext_props;
++	char *write_type = NULL;
+ 
+ 	if (!gatt)
+ 		return btd_error_failed(msg, "Not connected");
+@@ -990,9 +999,29 @@ static DBusMessage *characteristic_write_value(DBusConnection *conn,
+ 
+ 	dbus_message_iter_next(&iter);
+ 
+-	if (parse_options(&iter, &offset))
++	if (parse_options(&iter, &offset, &write_type))
+ 		return btd_error_invalid_args(msg);
+ 
++	/*
++	 * [Sky] Check if the caller requested a certain write type, we first
++	 * check if it is supported, if not the request is cancelled. If it
++	 * is supported we skip over all types to we find the one we want.
++	 */
++	props = chrc->props;
++	ext_props = chrc->ext_props;
++	if (write_type != NULL) {
++		if (strcasecmp(write_type, "reliable-write")  == 0) {
++			props = 0;
++			ext_props &= BT_GATT_CHRC_EXT_PROP_RELIABLE_WRITE;
++		} else if (strcasecmp(write_type, "write-without-response") == 0) {
++			props &= BT_GATT_CHRC_PROP_WRITE_WITHOUT_RESP;
++			ext_props = 0;
++		} else if (strcasecmp(write_type, "write") == 0) {
++			props &= BT_GATT_CHRC_PROP_WRITE;
++			ext_props = 0;
++		}
++	}
++
+ 	/*
+ 	 * Decide which write to use based on characteristic properties. For now
+ 	 * we don't perform signed writes since gatt-client doesn't support them
+@@ -1004,7 +1033,7 @@ static DBusMessage *characteristic_write_value(DBusConnection *conn,
+ 	 *     - If value is larger than MTU - 3: long-write
+ 	 *   * "write-without-response" property set -> write command.
+ 	 */
+-	if ((chrc->ext_props & BT_GATT_CHRC_EXT_PROP_RELIABLE_WRITE)) {
++	if ((ext_props & BT_GATT_CHRC_EXT_PROP_RELIABLE_WRITE)) {
+ 		supported = true;
+ 		chrc->write_op = start_long_write(msg, chrc->value_handle, gatt,
+ 						true, value, value_len, offset,
+@@ -1013,7 +1042,7 @@ static DBusMessage *characteristic_write_value(DBusConnection *conn,
+ 			return NULL;
+ 	}
+ 
+-	if (chrc->props & BT_GATT_CHRC_PROP_WRITE) {
++	if (props & BT_GATT_CHRC_PROP_WRITE) {
+ 		uint16_t mtu;
+ 
+ 		supported = true;
+@@ -1036,7 +1065,7 @@ static DBusMessage *characteristic_write_value(DBusConnection *conn,
+ 			return NULL;
+ 	}
+ 
+-	if (!(chrc->props & BT_GATT_CHRC_PROP_WRITE_WITHOUT_RESP))
++	if (!(props & BT_GATT_CHRC_PROP_WRITE_WITHOUT_RESP))
+ 		goto fail;
+ 
+ 	supported = true;
+-- 
+2.18.0
+

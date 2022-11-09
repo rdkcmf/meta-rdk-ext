@@ -1,0 +1,32 @@
+From c4ec0e5b2b8d7f63ba41a34288e3cc9f7aa63409 Mon Sep 17 00:00:00 2001
+From: Andrzej Surdej <Andrzej_Surdej@comcast.com>
+Date: Wed, 20 Jul 2022 13:15:30 +0200
+Subject: [PATCH] RDKTV-18489: Disable appsink "out of segment" samples drop
+
+API introduced in GST 1.12 so put it under GST_CHECK_VERSION macro
+
+This fixes YT MSE tests for GST 1.18.5 as it modifies segment
+boundaries with edit lists entries causing some samples to be dropped
+---
+ .../platform/graphics/gstreamer/mse/AppendPipeline.cpp       | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+diff --git a/Source/WebCore/platform/graphics/gstreamer/mse/AppendPipeline.cpp b/Source/WebCore/platform/graphics/gstreamer/mse/AppendPipeline.cpp
+index 42d7bb291a23..67769377257e 100644
+--- a/Source/WebCore/platform/graphics/gstreamer/mse/AppendPipeline.cpp
++++ b/Source/WebCore/platform/graphics/gstreamer/mse/AppendPipeline.cpp
+@@ -257,6 +257,11 @@ AppendPipeline::AppendPipeline(Ref<MediaSourceClientGStreamerMSE> mediaSourceCli
+ 
+     gst_app_sink_set_emit_signals(GST_APP_SINK(m_appsink.get()), TRUE);
+     gst_base_sink_set_sync(GST_BASE_SINK(m_appsink.get()), FALSE);
++#if GST_CHECK_VERSION(1, 18, 0)
++    // GST 1.18.5 comes with edit lists enabled causing out of segments samples drop (usually first sample with DTS=0 and PTS=0.0xx)
++    // and as it's a key frame we are losing whole segment
++    gst_base_sink_set_drop_out_of_segment(GST_BASE_SINK(m_appsink.get()), FALSE);
++#endif
+     gst_base_sink_set_last_sample_enabled(GST_BASE_SINK(m_appsink.get()), FALSE);
+ 
+     GRefPtr<GstPad> appsinkPad = adoptGRef(gst_element_get_static_pad(m_appsink.get(), "sink"));
+-- 
+2.25.1
+

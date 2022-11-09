@@ -1,0 +1,101 @@
+From 51f8426ef725720865597faa86805c4604f5c946 Mon Sep 17 00:00:00 2001
+From: Manoj Bhatta <manoj_bhatta@comcast.com>
+Date: Tue, 29 Mar 2022 09:47:28 +0000
+Subject: [PATCH] comcast - XRE-15382:XIONE-4595:RDKTV-17736 - HDR/DV config
+
+%% original patch: comcast-XRE-15382-XIONE-4595-RDKTV-17736-HDR-DV-conf.patch
+---
+ Source/WebCore/css/MediaQueryEvaluator.cpp    | 10 +++++++
+ .../gstreamer/GStreamerRegistryScanner.cpp    | 26 ++++++++++++++++++-
+ Source/cmake/OptionsWPE.cmake                 |  7 +++++
+ 3 files changed, 42 insertions(+), 1 deletion(-)
+
+diff --git a/Source/WebCore/css/MediaQueryEvaluator.cpp b/Source/WebCore/css/MediaQueryEvaluator.cpp
+index 2ac163067f2e..e9f7756e768c 100644
+--- a/Source/WebCore/css/MediaQueryEvaluator.cpp
++++ b/Source/WebCore/css/MediaQueryEvaluator.cpp
+@@ -451,6 +451,16 @@ static bool dynamicRangeEvaluate(CSSValue* value, const CSSToLengthConversionDat
+     if (!value)
+         return false;
+ 
++#if ENABLE(HDR)
++    switch (downcast<CSSPrimitiveValue>(*value).valueID()) {
++    case CSSValueHigh:
++    case CSSValueStandard:
++        return true;
++    default:
++        return false; // Any unknown value should not be considered a match.
++    }
++#endif
++
+     if (!frame.settings().hdrMediaCapabilitiesEnabled())
+         return false;
+ 
+diff --git a/Source/WebCore/platform/graphics/gstreamer/GStreamerRegistryScanner.cpp b/Source/WebCore/platform/graphics/gstreamer/GStreamerRegistryScanner.cpp
+index a633cf4a1e68..d9425bb3b869 100644
+--- a/Source/WebCore/platform/graphics/gstreamer/GStreamerRegistryScanner.cpp
++++ b/Source/WebCore/platform/graphics/gstreamer/GStreamerRegistryScanner.cpp
+@@ -234,6 +234,10 @@ void GStreamerRegistryScanner::initialize()
+         m_codecMap.add(AtomString("x-h265"), h265DecoderAvailable.isUsingHardware);
+         m_codecMap.add(AtomString("hvc1*"), h265DecoderAvailable.isUsingHardware);
+         m_codecMap.add(AtomString("hev1*"), h265DecoderAvailable.isUsingHardware);
++#if ENABLE(DV)
++        m_codecMap.add(AtomString("dvhe*"), h265DecoderAvailable.isUsingHardware);
++        m_codecMap.add(AtomString("dvh1*"), h265DecoderAvailable.isUsingHardware);
++#endif
+     }
+ 
+     if (shouldAddMP4Container) {
+@@ -407,6 +411,27 @@ MediaPlayerEnums::SupportsType GStreamerRegistryScanner::isContentTypeSupported(
+     if (codecs.isEmpty())
+         return SupportsType::MayBeSupported;
+ 
++    String eotf = contentType.parameter("eotf"_s);
++    if (!eotf.isEmpty()) {
++        // Electro-optic transfer function (EOTF) support, possible values:
++        //  bt709 (SDR)
++        //  smpte2084 HDR10
++        //  arib-std-b67 HLG
++#if ENABLE(HDR)
++        if (eotf == "bt709"_s || eotf == "smpte2084"_s || eotf == "arib-std-b67"_s) {
++            GST_DEBUG("eotf: %s", eotf.utf8().data());
++        } else {
++            GST_WARNING("unsupported eotf: %s", eotf.utf8().data());
++            return SupportsType::IsNotSupported;
++        }
++#else
++        if (eotf != "bt709") {
++            GST_WARNING("unsupported eotf: %s", eotf.utf8().data());
++            return SupportsType::IsNotSupported;
++        }
++#endif
++    }
++
+     for (const auto& codec : codecs) {
+         bool requiresHardwareSupport = contentTypesRequiringHardwareSupport
+             .findMatching([containerType, codec](auto& hardwareContentType) -> bool {
+@@ -536,6 +561,5 @@ GStreamerRegistryScanner::RegistryLookupResult GStreamerRegistryScanner::isDecod
+ 
+     return GStreamerRegistryScanner::RegistryLookupResult { isSupported, isUsingHardware };
+ }
+-
+ }
+ #endif
+diff --git a/Source/cmake/OptionsWPE.cmake b/Source/cmake/OptionsWPE.cmake
+index f93fffb25359..a65750a20f60 100644
+--- a/Source/cmake/OptionsWPE.cmake
++++ b/Source/cmake/OptionsWPE.cmake
+@@ -302,3 +302,10 @@ if (COMPILER_IS_GCC_OR_CLANG AND UNIX AND NOT APPLE)
+     set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE}${CMAKE_COMPILER_SIZE_OPT_FLAGS} -ffunction-sections -fdata-sections -fno-rtti")
+     set(CMAKE_SHARED_LINKER_FLAGS_RELEASE "${CMAKE_SHARED_LINKER_FLAGS_RELEASE} -Wl,--gc-sections")
+ endif ()
++
++if (ENABLE_DV)
++  add_definitions(-DENABLE_DV=1)
++endif()
++if (ENABLE_HDR)
++  add_definitions(-DENABLE_HDR=1)
++endif()
+-- 
+2.17.1
+

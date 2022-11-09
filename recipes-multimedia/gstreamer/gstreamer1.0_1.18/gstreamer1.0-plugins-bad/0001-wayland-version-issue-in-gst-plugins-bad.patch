@@ -1,0 +1,38 @@
+From 2484cebe9f7e81ec27c867f7ce162027604195d3 Mon Sep 17 00:00:00 2001
+From: Tony Paul <Tony_Paul@comcast.com>
+Date: Tue, 26 Oct 2021 15:04:24 +0000
+Subject: [PATCH 1/1] wayland version issue in gst plugins bad
+
+Signed-off-by: Tony Paul <Tony_Paul@comcast.com>
+---
+ ext/meson.build          | 2 +-
+ gst-libs/gst/meson.build | 2 +-
+ 2 files changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/ext/meson.build b/ext/meson.build
+index 2cbddbf82..bb223fdc7 100644
+--- a/ext/meson.build
++++ b/ext/meson.build
+@@ -58,7 +58,7 @@ subdir('ttml')
+ subdir('voaacenc')
+ subdir('voamrwbenc')
+ subdir('vulkan')
+-subdir('wayland')
++#subdir('wayland')
+ subdir('webrtc')
+ subdir('webrtcdsp')
+ subdir('webp')
+diff --git a/gst-libs/gst/meson.build b/gst-libs/gst/meson.build
+index 6cbed6c6c..579d61898 100644
+--- a/gst-libs/gst/meson.build
++++ b/gst-libs/gst/meson.build
+@@ -14,5 +14,5 @@ subdir('player')
+ subdir('sctp')
+ subdir('transcoder')
+ subdir('vulkan')
+-subdir('wayland')
++#subdir('wayland')
+ subdir('webrtc')
+-- 
+2.25.1
+

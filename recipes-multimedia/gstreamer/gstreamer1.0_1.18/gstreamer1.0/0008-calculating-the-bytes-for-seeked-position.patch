@@ -1,0 +1,30 @@
+From 6daee60dcdfd2dea873dd9a25bf878bc2bd7bba1 Mon Sep 17 00:00:00 2001
+From: kkanag314 <krishnapriya_kanagaraj@comcast.com>
+Date: Wed, 14 Sep 2022 06:51:38 +0000
+Subject: [PATCH] calculate the offset based on the seeked position
+
+---
+ libs/gst/base/gstbaseparse.c | 7 +++++++
+ 1 file changed, 7 insertions(+)
+
+diff --git a/libs/gst/base/gstbaseparse.c b/libs/gst/base/gstbaseparse.c
+index 816b7ab4bc..20bef19af1 100644
+--- a/libs/gst/base/gstbaseparse.c
++++ b/libs/gst/base/gstbaseparse.c
+@@ -4553,6 +4553,13 @@ gst_base_parse_handle_seek (GstBaseParse * parse, GstEvent * event)
+     seekpos = gst_base_parse_find_offset (parse, startpos, TRUE, &start_ts);
+     seekstop = gst_base_parse_find_offset (parse, seeksegment.stop, FALSE,
+         NULL);
++
++    if (seeksegment.position > start_ts + TARGET_DIFFERENCE) {
++      start_ts = seeksegment.position;
++      if (!gst_base_parse_convert (parse, format, start_ts,
++        GST_FORMAT_BYTES, &seekpos))
++          goto convert_failed;
++    }
+   } else {
+     if (rate >= 0)
+       start_ts = seeksegment.position;
+-- 
+2.17.1
+

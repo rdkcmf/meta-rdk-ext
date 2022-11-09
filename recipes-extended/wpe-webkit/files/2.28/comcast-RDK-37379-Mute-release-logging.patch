@@ -1,0 +1,48 @@
+From 43f44668c1c8d6b56ec5086bb260cf4c40ca8406 Mon Sep 17 00:00:00 2001
+From: Andrzej Surdej <Andrzej_Surdej@comcast.com>
+Date: Thu, 28 Jul 2022 08:47:19 +0000
+Subject: [PATCH] comcast - RDK-37379 - Mute release logging
+
+Hide release logging under WEBKIT_DEBUG env
+so it is muted by default.
+This significantly reduces default WebKit logging
+with "release logging" enabled
+---
+ Source/WTF/wtf/Logger.h | 16 ++++++++++++++++
+ 1 file changed, 16 insertions(+)
+
+diff --git a/Source/WTF/wtf/Logger.h b/Source/WTF/wtf/Logger.h
+index 28215f5e6b9e..2e7d7c1a94fa 100644
+--- a/Source/WTF/wtf/Logger.h
++++ b/Source/WTF/wtf/Logger.h
+@@ -231,11 +231,27 @@ public:
+         logVerbose(channel, WTFLogLevel::Debug, file, function, line, arguments...);
+     }
+ 
++    inline bool alwaysLogAllowed() const {
++        static const bool isAlwaysLogAllowed = []() {
++            // Put all "always/release logging" behind WEBKIT_DEBUG env.
++            // Muted by default.
++            const auto* webkit_debug_env = getenv("WEBKIT_DEBUG");
++            if (webkit_debug_env && strlen(webkit_debug_env))
++                return true;
++            return false;
++        }();
++
++        return isAlwaysLogAllowed;
++    }
++
+     inline bool willLog(const WTFLogChannel& channel, WTFLogLevel level) const
+     {
+         if (!m_enabled)
+             return false;
+ 
++        if (level <= WTFLogLevel::Always)
++            return alwaysLogAllowed();
++
+         if (level <= WTFLogLevel::Error)
+             return true;
+ 
+-- 
+2.17.1
+

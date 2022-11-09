@@ -1,0 +1,27 @@
+From c3e0b98a3de3ee317d2f897187bccb8fe7af542c Mon Sep 17 00:00:00 2001
+From: Eugene Mutavchi <Ievgen_Mutavchi@comcast.com>
+Date: Tue, 30 Aug 2022 19:18:15 +0000
+Subject: [PATCH] [Essos] refresh target size before trying to resize the page
+
+When running in Wayland mode, display resize event could be handled in
+EssContextStart() (that is calling EssContextRunEventLoopOnce
+internally). Which could lead to incorrect page resize reported to Webkit.
+---
+ src/essos/renderer-backend.cpp | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/src/essos/renderer-backend.cpp b/src/essos/renderer-backend.cpp
+index 68ea3e6..5eb681a 100644
+--- a/src/essos/renderer-backend.cpp
++++ b/src/essos/renderer-backend.cpp
+@@ -310,6 +310,10 @@ void EGLTarget::initialize(Backend& backend, uint32_t width, uint32_t height)
+         error = true;
+     }
+     else {
++        // Output geometry might have changed in EssContextStart, refresh target size.
++        if ( !EssContextGetUseDirect(essosCtx) )
++            EssContextGetDisplaySize(essosCtx, &targetWidth, &targetHeight );
++
+         // Request page resize if needed
+         if ( pageWidth != targetWidth && pageHeight != targetHeight )
+             onDisplaySize(targetWidth, targetHeight);

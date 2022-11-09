@@ -1,0 +1,29 @@
+From cbc37879e2c878c0b18e618c3c2b34f0978afc70 Mon Sep 17 00:00:00 2001
+From: Eugene Mutavchi <Ievgen_Mutavchi@comcast.com>
+Date: Wed, 6 Feb 2019 18:10:03 -0500
+Subject: [PATCH] comcast - XRE-13851 - Increase html parser time limit
+
+Some apps (YouTube) use in-document (hash) navigation before
+WebKit fires 'loaded' event which inturn defers the event. In this
+case launch metric will account for loading of additional resources and
+report higher load time.
+---
+ Source/WebCore/html/parser/HTMLParserScheduler.cpp | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/Source/WebCore/html/parser/HTMLParserScheduler.cpp b/Source/WebCore/html/parser/HTMLParserScheduler.cpp
+index f07f9330929e..3d899b1e815c 100644
+--- a/Source/WebCore/html/parser/HTMLParserScheduler.cpp
++++ b/Source/WebCore/html/parser/HTMLParserScheduler.cpp
+@@ -35,7 +35,7 @@
+ // defaultParserTimeLimit is the seconds the parser will run in one write() call
+ // before yielding. Inline <script> execution can cause it to exceed the limit.
+ // FIXME: We would like this value to be 0.2.
+-static const double defaultParserTimeLimit = 0.500;
++static const double defaultParserTimeLimit = 5.0;
+ 
+ namespace WebCore {
+ 
+-- 
+2.17.1
+

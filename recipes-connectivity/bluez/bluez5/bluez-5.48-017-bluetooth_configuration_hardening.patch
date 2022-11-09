@@ -1,0 +1,84 @@
+###################################################################################################
+Date: Mon, 17 Dec 2018 15:05:12 +0000
+From 65212b8ef554e9247917ed698349e8be55967dbf Mon Sep 17 00:00:00 2001
+From: Ben Gray <ben.gray@sky.uk>
+Subject: [PATCH] This enables the NDS_U2, NDS_U3 & RCU_USR users to communicate with the bluetoothd 
+daemon (nb: only root can own the 'org.bluez' service name)
+
+[SkyRef: NGDEV-133507]
+
+Source: SKY
+License: GPLv2+ & LGPLv2.1+
+Upstream-Status: Pending
+Signed-off-by: Tijo Thomas John <tijo.thomas@sky.uk>
+###################################################################################################
+
+---
+ src/bluetooth.conf | 40 +++++++++++++++++++++++++++++++++++
+ 1 file changed, 40 insertions(+)
+
+Index: bluez-5.48/src/bluetooth.conf
+===================================================================
+--- bluez-5.48.orig/src/bluetooth.conf
++++ bluez-5.48/src/bluetooth.conf
+@@ -12,6 +12,7 @@
+     <allow send_destination="org.bluez"/>
+     <allow send_interface="org.bluez.Agent1"/>
+     <allow send_interface="org.bluez.MediaEndpoint1"/>
++    <allow send_interface="org.bluez.MediaTransport1"/>
+     <allow send_interface="org.bluez.MediaPlayer1"/>
+     <allow send_interface="org.bluez.Profile1"/>
+     <allow send_interface="org.bluez.GattCharacteristic1"/>
+@@ -21,6 +22,49 @@
+     <allow send_interface="org.freedesktop.DBus.Properties"/>
+   </policy>
+ 
++  <policy user="NDS_U2">
++    <allow send_destination="org.bluez"/>
++    <allow send_interface="org.bluez.Agent1"/>
++    <allow send_interface="org.bluez.MediaEndpoint1"/>
++    <allow send_interface="org.bluez.MediaTransport1"/>
++    <allow send_interface="org.bluez.MediaPlayer1"/>
++    <allow send_interface="org.bluez.Profile1"/>
++    <allow send_interface="org.bluez.GattCharacteristic1"/>
++    <allow send_interface="org.bluez.GattDescriptor1"/>
++    <allow send_interface="org.bluez.LEAdvertisement1"/>
++    <allow send_interface="org.freedesktop.DBus.ObjectManager"/>
++    <allow send_interface="org.freedesktop.DBus.Properties"/>
++  </policy>
++
++  <policy user="NDS_U3">
++    <allow send_destination="org.bluez"/>
++    <allow send_interface="org.bluez.Agent1"/>
++    <allow send_interface="org.bluez.MediaEndpoint1"/>
++    <allow send_interface="org.bluez.MediaTransport1"/>
++    <allow send_interface="org.bluez.MediaPlayer1"/>
++    <allow send_interface="org.bluez.Profile1"/>
++    <allow send_interface="org.bluez.GattCharacteristic1"/>
++    <allow send_interface="org.bluez.GattDescriptor1"/>
++    <allow send_interface="org.bluez.LEAdvertisement1"/>
++    <allow send_interface="org.freedesktop.DBus.ObjectManager"/>
++    <allow send_interface="org.freedesktop.DBus.Properties"/>
++   </policy>
++
++  <policy user="RCU_USR">
++    <allow send_destination="org.bluez"/>
++    <allow send_interface="org.bluez.Agent1"/>
++    <allow send_interface="org.bluez.MediaEndpoint1"/>
++    <allow send_interface="org.bluez.MediaTransport1"/>
++    <allow send_interface="org.bluez.MediaPlayer1"/>
++    <allow send_interface="org.bluez.Profile1"/>
++    <allow send_interface="org.bluez.GattCharacteristic1"/>
++    <allow send_interface="org.bluez.GattDescriptor1"/>
++    <allow send_interface="org.bluez.LEAdvertisement1"/>
++    <allow send_interface="org.freedesktop.DBus.ObjectManager"/>
++    <allow send_interface="org.freedesktop.DBus.Properties"/>
++  </policy>
++
++
+   <policy at_console="true">
+     <allow send_destination="org.bluez"/>
+   </policy>
+-- 
+2.18.0
+

@@ -1,0 +1,39 @@
+From 850b3114c3b3029038aa30e27f22edca7c4e6b1d Mon Sep 17 00:00:00 2001
+From: Andrzej Surdej <Andrzej_Surdej@comcast.com>
+Date: Wed, 14 Sep 2022 12:45:19 +0200
+Subject: [PATCH] Never destroy RemoteInspectorHTTPServer singleton
+
+Destroying RemoteInspectorHTTPServer with on different thread that
+it was created on causes RELEASE_ASSERT to be triggered
+(via ~RemoteInspectorClient -> ~TimerBase).
+
+Such case happens when main UIProcess loop doesn't run in the main thread
+(like WPE WebKitBrowser plugin scenario)
+---
+ .../UIProcess/Inspector/glib/RemoteInspectorHTTPServer.cpp     | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/Source/WebKit/UIProcess/Inspector/glib/RemoteInspectorHTTPServer.cpp b/Source/WebKit/UIProcess/Inspector/glib/RemoteInspectorHTTPServer.cpp
+index 81a5ddef0aff..9d8b511a3ce2 100644
+--- a/Source/WebKit/UIProcess/Inspector/glib/RemoteInspectorHTTPServer.cpp
++++ b/Source/WebKit/UIProcess/Inspector/glib/RemoteInspectorHTTPServer.cpp
+@@ -31,6 +31,7 @@
+ #include "RemoteInspectorClient.h"
+ #include <WebCore/SoupVersioning.h>
+ #include <wtf/FileSystem.h>
++#include <wtf/NeverDestroyed.h>
+ #include <wtf/URL.h>
+ #include <wtf/glib/GUniquePtr.h>
+ 
+@@ -38,7 +39,7 @@ namespace WebKit {
+ 
+ RemoteInspectorHTTPServer& RemoteInspectorHTTPServer::singleton()
+ {
+-    static RemoteInspectorHTTPServer server;
++    static NeverDestroyed<RemoteInspectorHTTPServer> server;
+     return server;
+ }
+ 
+-- 
+2.25.1
+

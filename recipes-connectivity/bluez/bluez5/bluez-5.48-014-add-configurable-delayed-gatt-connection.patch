@@ -1,0 +1,126 @@
+###################################################################################################
+Date: Fri, 7 Dec 2018 15:38:27 +0000
+From a98b2e28aed51ad416ed6c4db5bf871f1786e456 Mon Sep 17 00:00:00 2001
+From: Ben Gray <ben.gray@sky.uk>
+
+Subject: [PATCH] Add option to delay GATT client connection till after bonding completes.
+
+This tidies up the bonding process as it allows the SMP / bonding process
+to run without simultaneously retreiving the primary GATT services over
+the ATT / L2CAP connection.
+
+Source: SKY
+License: GPLv2+ & LGPLv2.1+
+Upstream-Status: Pending
+Signed-off-by: Tijo Thomas John <tijo.thomas@sky.uk>
+###################################################################################################
+
+---
+ src/device.c  | 16 +++++++++++++++-
+ src/hcid.h    |  1 +
+ src/main.c    | 11 +++++++++++
+ src/main.conf |  9 +++++++++
+ 4 files changed, 36 insertions(+), 1 deletion(-)
+
+diff --git a/src/device.c b/src/device.c
+index cc77929..89f4bc5 100644
+--- a/src/device.c
++++ b/src/device.c
+@@ -4918,7 +4918,13 @@ bool device_attach_att(struct btd_device *dev, GIOChannel *io)
+ 	if (gatt_db_isempty(dev->db))
+ 		load_gatt_db(dev, srcaddr, dstaddr);
+ 
+-	gatt_client_init(dev);
++	if (!main_opts.delay_gatt_until_bonded ||
++			!dev->bonding ||
++			dev->le_state.paired || dev->le_state.bonded)
++		gatt_client_init(dev);
++	else
++		DBG("[Sky] delaying gatt client init until bonding complete");
++
+ 	gatt_server_init(dev, btd_gatt_database_get_db(database));
+ 
+ 	/*
+@@ -5509,6 +5515,14 @@ void device_bonding_complete(struct btd_device *device, uint8_t bdaddr_type,
+ 	if (state->paired)
+ 		return;
+ 
++	/* [Sky] Connect the GATT client now that we've bonded to the
++	 * remote device.
++	 */
++	if (!device->client) {
++		DBG("[Sky] Creating GATT client interface now bonded");
++		gatt_client_init(device);
++	}
++
+ 	device_set_paired(device, bdaddr_type);
+ 
+ 	/* If services are already resolved just reply to the pairing
+diff --git a/src/hcid.h b/src/hcid.h
+index a0c21a2..333573f 100644
+--- a/src/hcid.h
++++ b/src/hcid.h
+@@ -59,6 +59,7 @@ struct main_opts {
+ 	gboolean	secure_conn;
+ 	gboolean	startup_power_off;
+ 	uint16_t	att_le_mtu;
++	gboolean	delay_gatt_until_bonded;
+ };
+ 
+ extern struct main_opts main_opts;
+diff --git a/src/main.c b/src/main.c
+index f4657fc..04fd019 100644
+--- a/src/main.c
++++ b/src/main.c
+@@ -115,6 +115,7 @@ static const char *sky_options[] = {
+ 	"SecureConnections",
+ 	"StartupPowerOff",
+ 	"DefaultAttLeMtu",
++	"DelayGATTUntilBonded",
+ 	NULL
+ };
+ 
+@@ -342,6 +343,15 @@ static void parse_sky_config(GKeyFile *config)
+ 		DBG("att_le_mtu=%d", val);
+ 		main_opts.att_le_mtu = val;
+ 	}
++
++	boolean = g_key_file_get_boolean(config, "sky",
++						"DelayGATTUntilBonded", &err);
++	if (err) {
++		g_clear_error(&err);
++	} else {
++		DBG("DelayGATTUntilBonded=%s", boolean ? "true" : "false");
++		main_opts.delay_gatt_until_bonded = boolean;
++	}
+ }
+ 
+ static void parse_config(GKeyFile *config)
+@@ -521,6 +531,7 @@ static void init_defaults(void)
+ 	main_opts.secure_conn = TRUE;
+ 	main_opts.startup_power_off = FALSE;
+ 	main_opts.att_le_mtu = BT_ATT_MAX_LE_MTU;
++	main_opts.delay_gatt_until_bonded = FALSE;
+ }
+ 
+ static void log_handler(const gchar *log_domain, GLogLevelFlags log_level,
+diff --git a/src/main.conf b/src/main.conf
+index 047ab6c..f4b800d 100644
+--- a/src/main.conf
++++ b/src/main.conf
+@@ -124,3 +124,12 @@
+ # Defaults to 517 (which means MTU negotiation will be performed)
+ # DefaultAttLeMtu = 517
+ 
++# If true then the GATT client interface is not attached until after the bonding
++# process has completed (successfully).  This doesn't affect non-paired
++# connections, it only takes affect if the remote device connects as pair of
++# bonding / pairing process, in which case the GATT client will only be setup
++# once bonding is complete.  If false then the GATT primary service discovery
++# and MTU negotiation run in parallel to the bonding / SMP handshake.
++# Defaults to 'false'
++# DelayGATTUntilBonded = false
++
+-- 
+2.18.0
+

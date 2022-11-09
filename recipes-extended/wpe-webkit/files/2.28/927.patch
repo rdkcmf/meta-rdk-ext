@@ -1,0 +1,25 @@
+From 8aaddccf41c95c6102be064fa181fa7e02bb6b5d Mon Sep 17 00:00:00 2001
+From: filipe-norte-red <89521141+filipe-norte-red@users.noreply.github.com>
+Date: Wed, 25 Aug 2021 13:36:37 +0100
+Subject: [PATCH] Adjust buffering rate monitor to react faster (#727)
+
+As data is comming in (in bursts), the buffering rate monitoring algorithm calculates an average rate that will be used to determine if we can play through the content without interruption (assuming relatively constant rate). To filter out variations in rate, the algorithm reacts more slowly (by design) and may take more time to reach the required rate threshold to unblock playback, even though the incoming rate is sufficient to sustain playback. If it takes too long, then a client using MSE may take corrective actions wich may disturb or even abort the playback.
+
+By adjusting the 'ExponentialMovingAverageCoefficient' we can make the algorithm react faster to presence of data and unblock playback. Side effect is that it reacts also faster to absence of data, but that should not affect playback as data has been buffered already allowing playback to be sustained.
+---
+ Source/WebCore/Modules/mediasource/SourceBuffer.cpp | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/Source/WebCore/Modules/mediasource/SourceBuffer.cpp b/Source/WebCore/Modules/mediasource/SourceBuffer.cpp
+index e546d81180ca3..9e48871d1a52d 100644
+--- a/Source/WebCore/Modules/mediasource/SourceBuffer.cpp
++++ b/Source/WebCore/Modules/mediasource/SourceBuffer.cpp
+@@ -76,7 +76,7 @@ static inline MediaTime roundTowardsTimeScaleWithRoundingMargin(const MediaTime&
+     }
+ };
+ 
+-static const double ExponentialMovingAverageCoefficient = 0.1;
++static const double ExponentialMovingAverageCoefficient = 0.2;
+ 
+ // Do not enqueue samples spanning a significant unbuffered gap.
+ // NOTE: one second is somewhat arbitrary. MediaSource::monitorSourceBuffers() is run

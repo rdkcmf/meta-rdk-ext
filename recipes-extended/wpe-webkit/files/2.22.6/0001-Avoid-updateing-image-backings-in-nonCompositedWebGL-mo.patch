@@ -1,0 +1,35 @@
+From d48a13c1d9a939e118c79d8a06be906828a0775b Mon Sep 17 00:00:00 2001
+From: kkanag314 <krishnapriya_kanagaraj@comcast.com>
+Date: Wed, 18 May 2022 09:03:38 +0000
+Subject: [PATCH] Don't update image backings in nonCompositedWebGL mode
+
+---
+ .../graphics/texmap/coordinated/CoordinatedGraphicsLayer.cpp  | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/Source/WebCore/platform/graphics/texmap/coordinated/CoordinatedGraphicsLayer.cpp b/Source/WebCore/platform/graphics/texmap/coordinated/CoordinatedGraphicsLayer.cpp
+index ec800f69db3c..3730422f39d7 100644
+--- a/Source/WebCore/platform/graphics/texmap/coordinated/CoordinatedGraphicsLayer.cpp
++++ b/Source/WebCore/platform/graphics/texmap/coordinated/CoordinatedGraphicsLayer.cpp
+@@ -674,7 +674,7 @@ void CoordinatedGraphicsLayer::syncFilters()
+ 
+ void CoordinatedGraphicsLayer::syncImageBacking()
+ {
+-    if (m_coordinator->nonCompositedWebGLEnabled())
++    if (m_coordinator && m_coordinator->nonCompositedWebGLEnabled())
+         return;
+ 
+     if (!m_shouldSyncImageBacking)
+@@ -1058,7 +1058,7 @@ void CoordinatedGraphicsLayer::updateContentBuffersIncludingSubLayers()
+ 
+ void CoordinatedGraphicsLayer::updateContentBuffers()
+ {
+-    if (m_coordinator->nonCompositedWebGLEnabled())
++    if (m_coordinator && m_coordinator->nonCompositedWebGLEnabled())
+         return;
+ 
+     if (!shouldHaveBackingStore()) {
+-- 
+2.17.1
+
+

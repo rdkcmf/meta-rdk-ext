@@ -10,7 +10,7 @@ DEPENDS_append = "${@bb.utils.contains("DISTRO_FEATURES", "webconfig_bin", " rbu
 LICENSE = "Apache-2.0"
 LIC_FILES_CHKSUM = "file://LICENSE;md5=e3fc50a88d0a364313df4b21ef20c29e"
 
-SRCREV="0fd3b76f271b533d24c2f7ff2d5cdbe91bfd2f86"
+SRCREV= "df67b952449842d6f403b98cc155b41bd5dc5ee4"
 SRC_URI = "git://github.com/xmidt-org/parodus.git"
 
 RDEPENDS_${PN} += "util-linux-uuidgen"
@@ -46,6 +46,7 @@ inherit pkgconfig cmake
 EXTRA_OECMAKE = "-DBUILD_TESTING=OFF -DBUILD_YOCTO=true -DFEATURE_DNS_QUERY=true"
 EXTRA_OECMAKE_append = "${@bb.utils.contains("DISTRO_FEATURES", "seshat", " -DENABLE_SESHAT=true", " ", d)}"
 EXTRA_OECMAKE_append = "${@bb.utils.contains("DISTRO_FEATURES", "webconfig_bin", " -DENABLE_WEBCFGBIN=true", " ", d)}"
+EXTRA_OECMAKE_append = "${@bb.utils.contains("DISTRO_FEATURES", "WanFailOverSupportEnable", " -DWAN_FAILOVER_SUPPORTED=true", " ", d)}"
 
 do_compile_prepend_dunfell() {
 	sed -i 's/-Werror -Wall/-Wno-error=all/g' ${S}/CMakeLists.txt

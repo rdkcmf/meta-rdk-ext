@@ -1,0 +1,82 @@
+From 0d923121786267189f2eda4e24ef5c39f806248b Mon Sep 17 00:00:00 2001
+From: Tony Paul <Tony_Paul@comcast.com>
+Date: Wed, 17 Nov 2021 16:08:23 +0000
+Subject: [PATCH] qtdemux: add context for a preferred protection
+
+qtdemux selected the first system corresponding to a working GStreamer
+decryptor. With this change, before selecting that decryptor, qtdemux
+will check if it has context (a preferred decryptor id) and if not, it
+will request it.
+The request includes track-id, available key system ids for the
+available decryptors and event the events so that the init data is
+accessible.
+
+Source: GITHUB
+License: LGPL-2.1-or-later
+Upstream-Status: Submitted [ https://gitlab.freedesktop.org/gstreamer/gst-plugins-good/commit/0ba62ba4805e2cdbed17fa9934762d685be42fd4?view=parallel&w=1 ]
+Signed-off-by: Xabier Rodriguez Calvar <calvaris@igalia.com>
+---
+ gst/isomp4/qtdemux.c | 28 +++++++++++++++++-----------
+ 1 file changed, 17 insertions(+), 11 deletions(-)
+
+diff --git a/gst/isomp4/qtdemux.c b/gst/isomp4/qtdemux.c
+index d7bb93956..d5c275415 100644
+--- a/gst/isomp4/qtdemux.c
++++ b/gst/isomp4/qtdemux.c
+@@ -8469,7 +8469,7 @@ gst_qtdemux_run_query (GstElement * element, GstQuery * query,
+ }
+ 
+ static void
+-gst_qtdemux_request_protection_context (GstQTDemux * qtdemux,
++gst_qtdemux_request_protection_context_if_needed (GstQTDemux * qtdemux,
+     QtDemuxStream * stream)
+ {
+   GstQuery *query;
+@@ -8498,6 +8498,13 @@ gst_qtdemux_request_protection_context (GstQTDemux * qtdemux,
+       qtdemux->protection_system_ids->len,
+       filtered_sys_ids ? g_strv_length (filtered_sys_ids) : 0);
+ 
++  if (filtered_sys_ids == NULL || filtered_sys_ids[0] == NULL) {
++      GST_LOG_OBJECT (qtdemux, "no suitable decryptors found, not issuing the "
++              "context request");
++      g_strfreev (filtered_sys_ids);
++      return;
++  }
++  GST_TRACE_OBJECT (qtdemux, "found suitable decryptors, running the context ""request");
+ 
+   if (stream->protection_scheme_event_queue.length) {
+     GST_TRACE_OBJECT (qtdemux, "using stream event queue, length %u",
+@@ -8595,21 +8602,20 @@ gst_qtdemux_configure_protected_caps (GstQTDemux * qtdemux,
+     return TRUE;
+   }
+ 
+-  gst_qtdemux_request_protection_context (qtdemux, stream);
++  gst_qtdemux_request_protection_context_if_needed (qtdemux, stream);
+   if (qtdemux->preferred_protection_system_id != NULL) {
++      guint i;
++      for (i = 0; i < qtdemux->protection_system_ids->len; i++) {
++          if (g_strcmp0 (g_ptr_array_index (qtdemux->protection_system_ids, i),
++                      qtdemux->preferred_protection_system_id) == 0) {
++
+     const gchar *preferred_system_array[] =
+         { qtdemux->preferred_protection_system_id, NULL };
+ 
+     selected_system = gst_protection_select_system (preferred_system_array);
+-
+-    if (selected_system) {
+-      GST_TRACE_OBJECT (qtdemux, "selected preferred system %s",
+-          qtdemux->preferred_protection_system_id);
+-    } else {
+-      GST_WARNING_OBJECT (qtdemux, "could not select preferred system %s "
+-          "because there is no available decryptor",
+-          qtdemux->preferred_protection_system_id);
+-    }
++    break;
++          }
++          }
+   }
+ 
+   if (!selected_system) {
+-- 
+2.25.1
+

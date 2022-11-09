@@ -36,4 +36,6 @@ SRC_URI += "\
     file://force_tls1_2.patch \
     file://0001-XRE-14265-request-client-cert-support.patch \
     file://fix_dates_check.patch \
+    file://Enable-OCSP-by-default.patch \
 "
+SRC_URI_append_morty =" file://0001-DELIA-57258-Morty-devices-self-discovery-fails.patch"

@@ -1,0 +1,47 @@
+From d521d13fe5e9d7669eef7c6a87f81213a33e100b Mon Sep 17 00:00:00 2001
+From: smathe135 <Simi_Mathew@comcast.com>
+Date: Mon, 4 Jul 2022 13:00:45 +0000
+Subject: [PATCH] RDKTV-16244: audio/video freeze due to xrun timer
+
+Reason for change: When the audio data reaches the amlhalasink later
+than 0.7s a xrun timer is triggered and it is moved to the paused state also
+causing avideo freeze. Disable the xrun timer. Fix part of wpe-2.28
+https://github.com/WebPlatformForEmbedded/WPEWebKit/pull/835
+Test Procedure: Basic sanity on webapps.
+Risks: NA
+
+Change-Id: If64a8b3b31cb8c26111a19ab39a97bf23a979de1
+Signed-off-by: smathe135 <Simi_Mathew@comcast.com>
+---
+ .../gstreamer/MediaPlayerPrivateGStreamer.cpp       | 11 ++++++++++---
+ 1 file changed, 8 insertions(+), 3 deletions(-)
+
+diff --git a/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp b/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp
+index 3ba1134a9ed6..56c4404b705b 100644
+--- a/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp
++++ b/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp
+@@ -3184,6 +3184,14 @@ bool MediaPlayerPrivateGStreamer::canSaveMediaData() const
+ void MediaPlayerPrivateGStreamer::elementSetupCallback(MediaPlayerPrivateGStreamer* player, GstElement* element, GstElement* /*pipeline*/)
+ {
+     GST_DEBUG("Element set-up for %s", GST_ELEMENT_NAME(element));
++    if(!g_strcmp0(G_OBJECT_TYPE_NAME(G_OBJECT(element)), "GstAmlHalAsink"))
++    {
++        GST_INFO("Set property disable-xrun to TRUE");
++        g_object_set(element, "disable-xrun", TRUE, nullptr);
++        if (player->hasVideo())
++            g_object_set(G_OBJECT(element), "wait-video", TRUE, nullptr);
++    }
++
+ #if PLATFORM(BROADCOM)
+     if (g_str_has_prefix(GST_ELEMENT_NAME(element), "brcmaudiosink")) {
+         g_object_set(G_OBJECT(element), "async", TRUE, nullptr);
+@@ -3197,9 +3207,6 @@ void MediaPlayerPrivateGStreamer::elementSetupCallback(MediaPlayerPrivateGStream
+     if (g_strcmp0(G_OBJECT_TYPE_NAME(G_OBJECT(element)), "GstQueue2") == 0)
+         g_object_set(G_OBJECT(element), "high-watermark", 0.10, nullptr);
+ 
+-    if (g_str_has_prefix(GST_ELEMENT_NAME(element), "amlhalasink") && player->hasVideo())
+-        g_object_set(G_OBJECT(element), "wait-video", TRUE, nullptr);
+-
+ #if USE(WESTEROS_SINK)
+     static GstCaps *westerosSinkCaps = nullptr;
+     static GType westerosSinkType = G_TYPE_INVALID;

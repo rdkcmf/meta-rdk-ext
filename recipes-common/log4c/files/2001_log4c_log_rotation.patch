@@ -1,0 +1,172 @@
+diff --git a/src/log4c/appender_type_rollingfile.c b/src/log4c/appender_type_rollingfile.c
+index 6d45769..f88c0c5 100644
+--- a/src/log4c/appender_type_rollingfile.c
++++ b/src/log4c/appender_type_rollingfile.c
+@@ -110,6 +110,19 @@ static int rollingfile_open(log4c_appender_t* this)
+                                 rc = 1; /* rollover error */
+    } else {
+     rfup->rfu_current_file_size = 0;
++    //If the .0 file size don't exceed maximum size, it would also return successul.
++    //So always update the latest file size.
++    if(rfup->rfu_current_fp!=NULL)
++    {
++        int fileSize=0;
++        fseek(rfup->rfu_current_fp, 0, SEEK_END);
++        fileSize = ftell(rfup->rfu_current_fp);
++        if(fileSize  > 0)
++        {
++           rfup->rfu_current_file_size=fileSize;
++        }
++    }
++
+    }
+  } else {
+    /* No policy defined, open it ourselves */
+@@ -148,10 +161,40 @@ static int rollingfile_append(log4c_appender_t* this,
+       sd_debug("non-buffered rotate event len=%ld, currfs=%ld",
+          strlen(a_event->evt_rendered_msg), rfup->rfu_current_file_size);
+ #endif
++      //As when lgi reset the log in up-layer application, it dont' update rfu_current_file_size
++      //So it may not reach max size yet after reset log operation, we need to update latest
++      // rfu_current_file_size, then check again whether need rollover
++      int need_rollover=1;
++      if(rfup->rfu_current_fp!=NULL)
++      {
++         int fileSize=0;
++         fseek(rfup->rfu_current_fp, 0, SEEK_END);
++         fileSize = ftell(rfup->rfu_current_fp);
++         if(fileSize  > 0)
++         {
++            rfup->rfu_current_file_size=fileSize;
++            need_rollover=log4c_rollingpolicy_is_triggering_event(
++                                         rfup->rfu_conf.rfc_policy,
++                                         a_event,
++                                         rfup->rfu_current_file_size);
++         }
++      }
+      
+-      if ( (rc = log4c_rollingpolicy_rollover(rfup->rfu_conf.rfc_policy,
++      if ( need_rollover==1 && (rc = log4c_rollingpolicy_rollover(rfup->rfu_conf.rfc_policy,
+ 			    &rfup->rfu_current_fp)) <= ROLLINGPOLICY_ROLLOVER_ERR_CAN_LOG){
+         rfup->rfu_current_file_size = 0;
++        //If the .0 file size don't exceed maximum size, it would also return successul.
++        //So always update the latest file size.
++        if(rfup->rfu_current_fp!=NULL)
++        {
++           int fileSize=0;
++           fseek(rfup->rfu_current_fp, 0, SEEK_END);
++           fileSize = ftell(rfup->rfu_current_fp);
++           if(fileSize  > 0)
++           {
++             rfup->rfu_current_file_size=fileSize;
++           }
++        }
+       }
+     } else {
+       /* no need to rotate up--stick with the current fp */
+diff --git a/src/log4c/rollingpolicy_type_sizewin.c b/src/log4c/rollingpolicy_type_sizewin.c
+index cec35bd..6a0fb8f 100644
+--- a/src/log4c/rollingpolicy_type_sizewin.c
++++ b/src/log4c/rollingpolicy_type_sizewin.c
+@@ -62,7 +62,7 @@ static char **sizewin_make_filename_array(rollingpolicy_sizewin_udata_t *swup);
+ static int sizewin_get_last_index(rollingpolicy_sizewin_udata_t * swup);
+ static char* sizewin_get_filename_by_index(rollingpolicy_sizewin_udata_t * swup,
+ 					   long i);
+-static int sizewin_open_zero_file(char *filename, FILE **fpp );
++static int sizewin_open_zero_file(char *filename, FILE **fpp, int flag );
+ 
+ /*******************************************************************************
+               Policy interface: init, is_triggering_event, rollover
+@@ -97,6 +97,20 @@ static int sizewin_is_triggering_event(
+   return(decision);
+ }
+ 
++static int get_file_size(const char *filename)
++{
++  FILE*fp;
++  int len;
++  if((fp=fopen(filename,"rb"))==NULL)
++  {
++    return -1;
++  }
++  fseek(fp, 0, SEEK_END);
++  len = ftell(fp);
++  fseek(fp, 0, SEEK_SET);
++  fclose(fp);
++  return len;
++}
+ /*******************************************************************************/
+ 
+ static int sizewin_rollover(log4c_rollingpolicy_t *this, FILE ** current_fpp ){
+@@ -117,11 +131,13 @@ static int sizewin_rollover(log4c_rollingpolicy_t *this, FILE ** current_fpp ){
+       log4c_rollingpolicy_get_name(this));
+   } else {
+   
++   swup->sw_last_index = sizewin_get_last_index(swup);
++
+    k = swup->sw_last_index;
+ 
+    if ( k < 0 ) {
+      sd_debug("creating first file");
+-     if (sizewin_open_zero_file(swup->sw_filenames[0], current_fpp)){
++     if (sizewin_open_zero_file(swup->sw_filenames[0], current_fpp, 1)){
+        swup->sw_flags |= SW_LAST_FOPEN_FAILED;
+        sd_error("open zero file failed");
+      } else{
+@@ -131,6 +147,11 @@ static int sizewin_rollover(log4c_rollingpolicy_t *this, FILE ** current_fpp ){
+    } else {
+      sd_debug("rolling up existing files");
+ 
++     int len= get_file_size(swup->sw_filenames[0]);
++     int max_len=swup->sw_conf.swc_file_maxsize;
++     int new_file_flag=1;
++     if(len>max_len ||len==-1)
++     {
+      if ( k == swup->sw_conf.swc_file_max_num_files-1) {    
+        if(unlink(swup->sw_filenames[k])){
+           sd_error("unlink failed"); 
+@@ -180,9 +201,20 @@ static int sizewin_rollover(log4c_rollingpolicy_t *this, FILE ** current_fpp ){
+      } else {
+        sd_debug("not rotating up--some file access error");
+      }
+-         
++     }
++     else
++     {
++       new_file_flag=0;
++        /* If there's a current open fp, close it.*/
++        if ( !(swup->sw_flags & SW_LAST_FOPEN_FAILED) && *current_fpp) {
++           if(fclose(*current_fpp)){
++               sd_error("failed to close current log file");
++               rc = 1;
++            }
++        }
++     }
+      /* Now open up the 0'th file for writing */
+-     if (sizewin_open_zero_file(swup->sw_filenames[0], current_fpp)){
++     if (sizewin_open_zero_file(swup->sw_filenames[0], current_fpp, new_file_flag)){
+        swup->sw_flags |= SW_LAST_FOPEN_FAILED;
+        sd_error("open zero file failed");
+        rc = 1;
+@@ -386,11 +418,19 @@ static int sizewin_get_last_index(rollingpolicy_sizewin_udata_t *swup){
+ 
+ /*******************************************************************************/
+ 
+-static int sizewin_open_zero_file(char *filename, FILE **fpp ){
++static int sizewin_open_zero_file(char *filename, FILE **fpp, int flag ){
+   int rc = 0;
+   sd_debug("sizewin_open_zero_file['%s'", filename);
+ 
+-  if ( (*fpp = fopen(filename, "w+")) == NULL){
++  if(flag)
++  {
++    *fpp = fopen(filename, "w+");
++  }
++  else
++  {
++    *fpp = fopen(filename, "a+");
++  }
++  if ( (*fpp) == NULL){
+    sd_error("failed to open zero file '%s'--defaulting to stderr--error='%s'",
+      filename, strerror(errno));    
+    *fpp = stderr;

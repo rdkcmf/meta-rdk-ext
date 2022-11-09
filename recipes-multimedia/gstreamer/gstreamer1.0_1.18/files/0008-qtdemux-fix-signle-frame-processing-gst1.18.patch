@@ -1,0 +1,40 @@
+From 230e445053ded6baaf9162f8a2bc424f2d3456d2 Mon Sep 17 00:00:00 2001
+From: Tony Paul <Tony_Paul@comcast.com>
+Date: Mon, 15 Nov 2021 09:45:09 +0000
+Subject: [PATCH 1/1] qtdemux fix signle frame processing
+
+Subject: [PATCH] XRE-12263: initial support for playback at different rates
+
+        MSE player should support playback at different speeds
+
+Source: COMCAST
+
+License: LGPL-2.1-or-later
+
+Upstream-Status: Pending
+
+Signed-off-by: Eugene Mutavchi <Ievgen_Mutavchi@comcast.com>
+
+---
+ gst/isomp4/qtdemux.c | 5 ++++-
+ 1 file changed, 4 insertions(+), 1 deletion(-)
+
+diff --git a/gst/isomp4/qtdemux.c b/gst/isomp4/qtdemux.c
+index 705d9adfb..fe11237e7 100644
+--- a/gst/isomp4/qtdemux.c
++++ b/gst/isomp4/qtdemux.c
+@@ -8499,7 +8499,10 @@ gst_qtdemux_guess_framerate (GstQTDemux * qtdemux, QtDemuxStream * stream)
+ 
+       /* Calculate a framerate, ignoring the first sample which is sometimes truncated */
+       /* stream->duration is guint64, timescale, n_samples are guint32 */
+-      avg_duration =
++      if (n_samples == 1)
++         avg_duration = gst_util_uint64_scale_round (duration, GST_SECOND, stream->timescale);
++      else
++ 	 avg_duration =
+           gst_util_uint64_scale_round (duration -
+           first_duration, GST_SECOND,
+           (guint64) (stream->timescale) * (n_samples - 1));
+-- 
+2.25.1
+

@@ -1,0 +1,92 @@
+###################################################################################################
+Date: Mon, 17 Dec 2018 15:23:36 +0000
+From 06882765a9d556ef683026a84f96d45ac42b5d98 Mon Sep 17 00:00:00 2001
+From: Ben Gray <ben.gray@sky.uk>
+Subject: [PATCH] Update configuration options for SkyQ boxes.
+Source: SKY
+License: GPLv2+ & LGPLv2.1+
+Upstream-Status: Pending
+Signed-off-by: Tijo Thomas John <tijo.thomas@sky.uk>
+###################################################################################################
+
+---
+ src/main.conf | 20 ++++++++++----------
+ 1 file changed, 10 insertions(+), 10 deletions(-)
+
+Index: bluez-5.48/src/main.conf
+===================================================================
+--- bluez-5.48.orig/src/main.conf
++++ bluez-5.48/src/main.conf
+@@ -2,21 +2,21 @@
+ 
+ # Default adapter name
+ # Defaults to 'BlueZ X.YZ'
+-#Name = BlueZ
++Name = Sky
+ 
+ # Default device class. Only the major and minor device class bits are
+ # considered. Defaults to '0x000000'.
+-#Class = 0x000100
++Class = 0x040414
+ 
+ # How long to stay in discoverable mode before going back to non-discoverable
+ # The value is in seconds. Default is 180, i.e. 3 minutes.
+ # 0 = disable timer, i.e. stay discoverable forever
+-#DiscoverableTimeout = 0
++DiscoverableTimeout = 180
+ 
+ # How long to stay in pairable mode before going back to non-discoverable
+ # The value is in seconds. Default is 0.
+ # 0 = disable timer, i.e. stay pairable forever
+-#PairableTimeout = 0
++PairableTimeout = 180
+ 
+ # Use vendor id source (assigner), vendor, product and version information for
+ # DID profile support. The values are separated by ":" and assigner, VID, PID
+@@ -28,7 +28,7 @@
+ # us. This option is really only needed for qualification since the BITE tester
+ # doesn't like us doing reverse SDP for some test cases (though there could in
+ # theory be other useful purposes for this too). Defaults to 'true'.
+-#ReverseServiceDiscovery = true
++ReverseServiceDiscovery = true
+ 
+ # Enable name resolving after inquiry. Set it to 'false' if you don't need
+ # remote devices name and want shorter discovery cycle. Defaults to 'true'.
+@@ -37,7 +37,7 @@
+ # Enable runtime persistency of debug link keys. Default is false which
+ # makes debug link keys valid only for the duration of the connection
+ # that they were created for.
+-#DebugKeys = false
++DebugKeys = false
+ 
+ # Restricts all controllers to the specified transport. Default value
+ # is "dual", i.e. both BR/EDR and LE enabled (when supported by the HW).
+@@ -111,18 +111,18 @@
+ # Enables or disables bluetooth LE "Secure Connections".  This is a BT 4.1
+ # feature used at pairing time, ideally it should be enabled but can cause
+ # interopt issues with some BLE devices. Defaults to 'true'.
+-# SecureConnections = true
++SecureConnections = false
+ 
+ # Sets whether the adapter should be powered off at start-up if already powered
+ # on.  This is useful to reset the adapter and therefore have the kernel and
+ # userspace in sync. Defaults to 'false'
+-# StartupPowerOff = false
++StartupPowerOff = true
+ 
+ # Sets the adapter MTU size for ATT LE connections.  If not set it defaults
+ # to the maximum value which triggers an MTU negotiation when first connected
+ # to a client.
+ # Defaults to 517 (which means MTU negotiation will be performed)
+-# DefaultAttLeMtu = 517
++DefaultAttLeMtu = 23
+ 
+ # If true then the GATT client interface is not attached until after the bonding
+ # process has completed (successfully).  This doesn't affect non-paired
+@@ -131,5 +131,5 @@
+ # once bonding is complete.  If false then the GATT primary service discovery
+ # and MTU negotiation run in parallel to the bonding / SMP handshake.
+ # Defaults to 'false'
+-# DelayGATTUntilBonded = false
++DelayGATTUntilBonded = true
+ 

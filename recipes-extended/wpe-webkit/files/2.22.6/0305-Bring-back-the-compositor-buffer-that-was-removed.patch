@@ -1,0 +1,120 @@
+From eab417920d2ed277d57d699da25d0ecda3516de3 Mon Sep 17 00:00:00 2001
+From: nganes961 <nambirajan_ganesan@comcast.com>
+Date: Tue, 21 Jun 2022 11:54:51 +0000
+Subject: [PATCH] Bring-back-the-compositor-buffer-that-was-removed
+
+Signed-off-by: nganes961 <nambirajan_ganesan@comcast.com>
+---
+ .../graphics/cairo/ImageBufferCairo.cpp       | 55 +++++++++++++++++--
+ .../graphics/cairo/ImageBufferDataCairo.h     |  6 ++
+ 2 files changed, 56 insertions(+), 5 deletions(-)
+
+diff --git a/Source/WebCore/platform/graphics/cairo/ImageBufferCairo.cpp b/Source/WebCore/platform/graphics/cairo/ImageBufferCairo.cpp
+index d15af37ee3a1..bd48c52cd35a 100644
+--- a/Source/WebCore/platform/graphics/cairo/ImageBufferCairo.cpp
++++ b/Source/WebCore/platform/graphics/cairo/ImageBufferCairo.cpp
+@@ -92,6 +92,9 @@ ImageBufferData::ImageBufferData(const IntSize& size, RenderingMode renderingMod
+     , m_size(size)
+     , m_renderingMode(renderingMode)
+ #if ENABLE(ACCELERATED_2D_CANVAS)
++#if USE(COORDINATED_GRAPHICS_THREADED)
++    , m_compositorTexture(0)
++#endif
+     , m_texture(0)
+ #endif
+ {
+@@ -122,6 +125,11 @@ ImageBufferData::~ImageBufferData()
+     if (m_texture)
+         glDeleteTextures(1, &m_texture);
+ 
++#if USE(COORDINATED_GRAPHICS_THREADED)
++    if (m_compositorTexture)
++        glDeleteTextures(1, &m_compositorTexture);
++#endif
++
+     if (previousActiveContext)
+         previousActiveContext->makeContextCurrent();
+ #endif
+@@ -129,6 +137,24 @@ ImageBufferData::~ImageBufferData()
+ 
+ #if ENABLE(ACCELERATED_2D_CANVAS)
+ #if USE(COORDINATED_GRAPHICS_THREADED)
++void ImageBufferData::createCompositorBuffer()
++{
++    auto* context = PlatformDisplay::sharedDisplayForCompositing().sharingGLContext();
++    context->makeContextCurrent();
++
++    glGenTextures(1, &m_compositorTexture);
++    glBindTexture(GL_TEXTURE_2D, m_compositorTexture);
++    glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
++    glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
++    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
++    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
++    glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
++    glTexImage2D(GL_TEXTURE_2D, 0 , GL_RGBA, m_size.width(), m_size.height(), 0, GL_RGBA, GL_UNSIGNED_BYTE, 0);
++
++    m_compositorSurface = adoptRef(cairo_gl_surface_create_for_texture(context->cairoDevice(), CAIRO_CONTENT_COLOR_ALPHA, m_compositorTexture, m_size.width(), m_size.height()));
++    m_compositorCr = adoptRef(cairo_create(m_compositorSurface.get()));
++    cairo_set_antialias(m_compositorCr.get(), CAIRO_ANTIALIAS_NONE);
++}
+ 
+ #if !USE(NICOSIA)
+ RefPtr<TextureMapperPlatformLayerProxy> ImageBufferData::proxy() const
+@@ -142,13 +168,32 @@ void ImageBufferData::swapBuffersIfNeeded()
+     ASSERT(m_renderingMode == RenderingMode::Accelerated);
+ 
+     GLContext* previousActiveContext = GLContext::current();
+-    cairo_surface_flush(m_surface.get());
+-    glFlush();
++
++    if (!m_compositorTexture) {
++        createCompositorBuffer();
++
++        auto proxyOperation =
++            [this](TextureMapperPlatformLayerProxy& proxy)
++            {
++                LockHolder holder(proxy.lock());
++                proxy.pushNextBuffer(std::make_unique<TextureMapperPlatformLayerBuffer>(m_compositorTexture, m_size, TextureMapperGL::ShouldBlend, GL_RGBA));
++            };
++#if USE(NICOSIA)
++        proxyOperation(downcast<Nicosia::ContentLayerTextureMapperImpl>(m_nicosiaLayer->impl()).proxy());
++#else
++        proxyOperation(*m_platformLayerProxy);
++#endif
++    }
++
++    // It would be great if we could just swap the buffers here as we do with webgl, but that breaks the cases
++    // where one frame uses the content already rendered in the previous frame. So we just copy the content
++    // into the compositor buffer.
++    cairo_set_source_surface(m_compositorCr.get(), m_surface.get(), 0, 0);
++    cairo_set_operator(m_compositorCr.get(), CAIRO_OPERATOR_SOURCE);
++    cairo_paint(m_compositorCr.get());
++
+     if (previousActiveContext)
+         previousActiveContext->makeContextCurrent();
+-
+-    LockHolder locker(m_platformLayerProxy->lock());
+-    m_platformLayerProxy->pushNextBuffer(std::make_unique<TextureMapperPlatformLayerBuffer>(m_texture, m_size, TextureMapperGL::ShouldBlend, GraphicsContext3D::RGBA));
+ }
+ #endif
+ 
+diff --git a/Source/WebCore/platform/graphics/cairo/ImageBufferDataCairo.h b/Source/WebCore/platform/graphics/cairo/ImageBufferDataCairo.h
+index 5398f303c8f4..86cb72a563fe 100644
+--- a/Source/WebCore/platform/graphics/cairo/ImageBufferDataCairo.h
++++ b/Source/WebCore/platform/graphics/cairo/ImageBufferDataCairo.h
+@@ -79,6 +79,12 @@ public:
+     void swapBuffersIfNeeded() override;
+ #endif
+ 
++    void createCompositorBuffer();
++
++    RefPtr<cairo_surface_t> m_compositorSurface;
++    uint32_t m_compositorTexture;
++    RefPtr<cairo_t> m_compositorCr;
++
+ #if USE(NICOSIA)
+     RefPtr<Nicosia::ContentLayer> m_nicosiaLayer;
+ #else
+-- 
+2.17.1
+

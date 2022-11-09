@@ -1,0 +1,464 @@
+From beb62b16de05e4f8a7f10f5f7300c0a17bb411a1 Mon Sep 17 00:00:00 2001
+From: ralaga484 <ramesh_alagarsamy@comcast.com>
+Date: Wed, 8 Sep 2021 14:42:12 +0000
+Subject: [PATCH] wpe_backend_libwpe_1.4.0.1_Gamepad-API
+
+Signed-off-by: ralaga484 <ramesh_alagarsamy@comcast.com>
+---
+ CMakeLists.txt        |   2 +
+ include/wpe/gamepad.h | 180 ++++++++++++++++++++++++++++++++++++++++++
+ include/wpe/wpe.h     |   1 +
+ src/gamepad-private.h |  47 +++++++++++
+ src/gamepad.c         | 167 +++++++++++++++++++++++++++++++++++++++
+ 5 files changed, 397 insertions(+)
+ create mode 100644 include/wpe/gamepad.h
+ create mode 100644 src/gamepad-private.h
+ create mode 100644 src/gamepad.c
+
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 1db4033..bce8ac1 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -79,6 +79,7 @@ set(WPE_SOURCES
+     src/renderer-host.c
+     src/version.c
+     src/view-backend.c
++    src/gamepad.c
+ )
+ 
+ set(WPE_PUBLIC_HEADERS
+@@ -94,6 +95,7 @@ set(WPE_PUBLIC_HEADERS
+   include/wpe/view-backend.h
+   include/wpe/wpe-egl.h
+   include/wpe/wpe.h
++  include/wpe/gamepad.h
+ )
+ 
+ add_library(wpe SHARED ${WPE_SOURCES})
+diff --git a/include/wpe/gamepad.h b/include/wpe/gamepad.h
+new file mode 100644
+index 0000000..6d44929
+--- /dev/null
++++ b/include/wpe/gamepad.h
+@@ -0,0 +1,180 @@
++/*
++ * If not stated otherwise in this file or this component's Licenses.txt file the
++ * following copyright and licenses apply:
++ *
++ * Copyright 2020 RDK Management
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ * http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++
++#if !defined(__WPE_H_INSIDE__) && !defined(WPE_COMPILATION)
++#error "Only <wpe/wpe.h> can be included directly."
++#endif
++
++#ifndef wpe_gamepad_h
++#define wpe_gamepad_h
++
++#if defined(WPE_COMPILATION)
++#include <wpe/wpe.h>
++#endif
++
++#include <stdint.h>
++
++/*
++ * https://www.w3.org/TR/gamepad/#remapping
++ *
++ * buttons[0] Bottom button in right cluster
++ * buttons[1] Right button in right cluster
++ * buttons[2] Left button in right cluster
++ * buttons[3] Top button in right cluster
++ * buttons[4] Top left front button
++ * buttons[5] Top right front button
++ * buttons[6] Bottom left front button
++ * buttons[7] Bottom right front button
++ * buttons[8] Left button in center cluster
++ * buttons[9] Right button in center cluster
++ * buttons[10] Left stick pressed button
++ * buttons[11] Right stick pressed button
++ * buttons[12] Top button in left cluster
++ * buttons[13] Bottom button in left cluster
++ * buttons[14] Right button in left cluster
++ * buttons[15] Left button in left cluster
++ *
++ * axes[0] Horizontal axis for left stick (negative left/positive right)
++ * axes[1] Vertical axis for left stick (negative up/positive down)
++ * axes[2] Horizontal axis for right stick (negative left/positive right)
++ * axes[3] Vertical axis for right stick (negative up/positive down)
++ */
++
++#ifdef __cplusplus
++extern "C" {
++#endif
++
++struct wpe_view_backend;
++
++struct wpe_gamepad;
++struct wpe_gamepad_client;
++
++struct wpe_gamepad_provider;
++struct wpe_gamepad_provider_client;
++
++struct wpe_gamepad_provider_interface {
++    void* (*create)(struct wpe_gamepad_provider*);
++    void  (*destroy)(void*);
++    void  (*start)(void*);
++    void  (*stop)(void*);
++    struct wpe_view_backend* (*get_view_for_gamepad_input)(void*, void*);
++};
++
++struct wpe_gamepad_interface {
++    void* (*create)(void*, struct wpe_gamepad*, uint32_t);
++    void  (*destroy)(void*);
++    uint32_t (*get_id)(void*);
++    const char* (*get_device_name)(void*);
++    uint32_t (*get_button_count)(void*);
++    uint32_t (*copy_button_values)(void*, double*, uint32_t);
++    uint32_t (*get_axis_count)(void*);
++    uint32_t (*copy_axis_values)(void*, double*, uint32_t);
++};
++
++WPE_EXPORT
++struct wpe_gamepad_provider*
++wpe_gamepad_provider_create();
++
++WPE_EXPORT
++void
++wpe_gamepad_provider_destroy(struct wpe_gamepad_provider*);
++
++WPE_EXPORT
++void
++wpe_gamepad_provider_set_client(struct wpe_gamepad_provider*, struct wpe_gamepad_provider_client*, void*);
++
++WPE_EXPORT
++void
++wpe_gamepad_provider_start(struct wpe_gamepad_provider*);
++
++WPE_EXPORT
++void
++wpe_gamepad_provider_stop(struct wpe_gamepad_provider*);
++
++WPE_EXPORT
++struct wpe_view_backend*
++wpe_gamepad_provider_get_view_for_gamepad_input(struct wpe_gamepad_provider*, struct wpe_gamepad*);
++
++WPE_EXPORT
++void
++wpe_gamepad_provider_dispatch_gamepad_connected(struct wpe_gamepad_provider*, uint32_t gamepad_id);
++
++WPE_EXPORT
++void
++wpe_gamepad_provider_dispatch_gamepad_disconnected(struct wpe_gamepad_provider*, uint32_t gamepad_id);
++
++WPE_EXPORT
++struct wpe_gamepad*
++wpe_gamepad_create(struct wpe_gamepad_provider* provider, uint32_t gamepad_id);
++
++WPE_EXPORT
++void
++wpe_gamepad_destroy(struct wpe_gamepad*);
++
++WPE_EXPORT
++void
++wpe_gamepad_set_client(struct wpe_gamepad*, struct wpe_gamepad_client*, void*);
++
++WPE_EXPORT
++uint32_t
++wpe_gamepad_get_id(struct wpe_gamepad*);
++
++WPE_EXPORT
++const char*
++wpe_gamepad_get_device_name(struct wpe_gamepad*);
++
++WPE_EXPORT
++uint32_t
++wpe_gamepad_get_button_count(struct wpe_gamepad*);
++
++WPE_EXPORT
++uint32_t
++wpe_gamepad_copy_button_values(struct wpe_gamepad*, double*, uint32_t);
++
++WPE_EXPORT
++uint32_t
++wpe_gamepad_get_axis_count(struct wpe_gamepad*);
++
++WPE_EXPORT
++uint32_t
++wpe_gamepad_copy_axis_values(struct wpe_gamepad*, double*, uint32_t);
++
++WPE_EXPORT
++void
++wpe_gamepad_dispatch_button_values_changed(struct wpe_gamepad*);
++
++WPE_EXPORT
++void
++wpe_gamepad_dispatch_axis_values_changed(struct wpe_gamepad*);
++
++struct wpe_gamepad_provider_client {
++    void (*gamepad_connected)(void*, uint32_t gamepad_id);
++    void (*gamepad_disconnected)(void*, uint32_t gamepad_id);
++};
++
++struct wpe_gamepad_client {
++    void (*button_values_changed)(struct wpe_gamepad*, void*);
++    void (*axis_values_changed)(struct wpe_gamepad*, void*);
++};
++
++#ifdef __cplusplus
++}
++#endif
++
++#endif /* wpe_gamepad_h */
+diff --git a/include/wpe/wpe.h b/include/wpe/wpe.h
+index c87da3e..d123711 100644
+--- a/include/wpe/wpe.h
++++ b/include/wpe/wpe.h
+@@ -43,6 +43,7 @@
+ #include "version.h"
+ #include "version-deprecated.h"
+ #include "view-backend.h"
++#include "gamepad.h"
+ 
+ #undef __WPE_H_INSIDE__
+ 
+diff --git a/src/gamepad-private.h b/src/gamepad-private.h
+new file mode 100644
+index 0000000..68ce2df
+--- /dev/null
++++ b/src/gamepad-private.h
+@@ -0,0 +1,47 @@
++/*
++ * If not stated otherwise in this file or this component's Licenses.txt file the
++ * following copyright and licenses apply:
++ *
++ * Copyright 2020 RDK Management
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ * http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++#ifndef wpe_gamepad_private_h
++#define wpe_gamepad_private_h
++
++#include <wpe/wpe.h>
++
++#ifdef __cplusplus
++extern "C" {
++#endif
++
++struct wpe_gamepad_provider {
++    struct wpe_gamepad_provider_interface* interface;
++    void* interface_data;
++    const struct wpe_gamepad_provider_client* provider_client;
++    void* provider_client_data;
++};
++
++struct wpe_gamepad {
++    struct wpe_gamepad_interface* interface;
++    void* interface_data;
++    const struct wpe_gamepad_client* gamepad_client;
++    void* gamepad_client_data;
++    uint32_t gamepad_id;
++};
++
++#ifdef __cplusplus
++}
++#endif
++
++#endif /* wpe_gamepad_private_h */
+diff --git a/src/gamepad.c b/src/gamepad.c
+new file mode 100644
+index 0000000..9f4d3b4
+--- /dev/null
++++ b/src/gamepad.c
+@@ -0,0 +1,167 @@
++/*
++ * If not stated otherwise in this file or this component's Licenses.txt file the
++ * following copyright and licenses apply:
++ *
++ * Copyright 2020 RDK Management
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ * http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++
++#include "gamepad-private.h"
++
++#include "loader-private.h"
++#include <stdlib.h>
++
++struct wpe_gamepad_provider*
++wpe_gamepad_provider_create()
++{
++    struct wpe_gamepad_provider_interface* provider_interface = wpe_load_object("_wpe_gamepad_provider_interface");
++    if (!provider_interface)
++        return 0;
++
++    struct wpe_gamepad_provider* provider = calloc(1, sizeof(struct wpe_gamepad_provider));
++    if (!provider)
++        return 0;
++
++    provider->interface = provider_interface;
++    provider->interface_data = provider->interface->create(provider);
++    return provider;
++}
++
++void
++wpe_gamepad_provider_destroy(struct wpe_gamepad_provider* provider)
++{
++    provider->interface->destroy(provider->interface_data);
++    provider->interface_data = 0;
++    free(provider);
++}
++
++void
++wpe_gamepad_provider_set_client(struct wpe_gamepad_provider* provider, struct wpe_gamepad_provider_client* client, void* client_data)
++{
++    provider->provider_client = client;
++    provider->provider_client_data = client_data;
++}
++
++void
++wpe_gamepad_provider_start(struct wpe_gamepad_provider* provider)
++{
++    provider->interface->start(provider->interface_data);
++}
++
++void
++wpe_gamepad_provider_stop(struct wpe_gamepad_provider* provider)
++{
++    provider->interface->stop(provider->interface_data);
++}
++
++struct wpe_view_backend*
++wpe_gamepad_provider_get_view_for_gamepad_input(struct wpe_gamepad_provider* provider, struct wpe_gamepad* gamepad)
++{
++    return provider->interface->get_view_for_gamepad_input(provider->interface_data, gamepad ? gamepad->interface_data : 0);
++}
++
++void
++wpe_gamepad_provider_dispatch_gamepad_connected(struct wpe_gamepad_provider* provider, uint32_t gamepad_id)
++{
++    if (provider->provider_client)
++        provider->provider_client->gamepad_connected(provider->provider_client_data, gamepad_id);
++}
++
++void
++wpe_gamepad_provider_dispatch_gamepad_disconnected(struct wpe_gamepad_provider* provider, uint32_t gamepad_id)
++{
++    if (provider->provider_client)
++        provider->provider_client->gamepad_disconnected(provider->provider_client_data, gamepad_id);
++}
++
++struct wpe_gamepad*
++wpe_gamepad_create(struct wpe_gamepad_provider* provider, uint32_t gamepad_id)
++{
++    struct wpe_gamepad_interface* gamepad_interface = wpe_load_object("_wpe_gamepad_interface");
++    if (!gamepad_interface)
++        return 0;
++
++    struct wpe_gamepad* gamepad = calloc(1, sizeof(struct wpe_gamepad));
++    if (!gamepad)
++        return 0;
++
++    gamepad->gamepad_id = gamepad_id;
++    gamepad->interface = gamepad_interface;
++    gamepad->interface_data = gamepad->interface->create(provider->interface_data, gamepad, gamepad_id);
++    return gamepad;
++}
++
++void
++wpe_gamepad_destroy(struct wpe_gamepad* gamepad)
++{
++    gamepad->interface->destroy(gamepad->interface_data);
++    gamepad->interface_data = 0;
++    free(gamepad);
++}
++
++void
++wpe_gamepad_set_client(struct wpe_gamepad* gamepad, struct wpe_gamepad_client* client, void* client_data)
++{
++    gamepad->gamepad_client = client;
++    gamepad->gamepad_client_data = client_data;
++}
++uint32_t
++wpe_gamepad_get_id(struct wpe_gamepad* gamepad)
++{
++    return gamepad->interface->get_id(gamepad->interface_data);
++}
++
++const char*
++wpe_gamepad_get_device_name(struct wpe_gamepad* gamepad)
++{
++    return gamepad->interface->get_device_name(gamepad->interface_data);
++}
++
++uint32_t
++wpe_gamepad_get_button_count(struct wpe_gamepad* gamepad)
++{
++    return gamepad->interface->get_button_count(gamepad->interface_data);
++}
++
++uint32_t
++wpe_gamepad_copy_button_values(struct wpe_gamepad* gamepad, double* button_array, uint32_t button_array_length)
++{
++    return gamepad->interface->copy_button_values(gamepad->interface_data, button_array, button_array_length);
++}
++
++uint32_t
++wpe_gamepad_get_axis_count(struct wpe_gamepad* gamepad)
++{
++    return gamepad->interface->get_axis_count(gamepad->interface_data);
++}
++
++uint32_t
++wpe_gamepad_copy_axis_values(struct wpe_gamepad* gamepad, double* axis_array, uint32_t axis_array_length)
++{
++    return gamepad->interface->copy_axis_values(gamepad->interface_data, axis_array, axis_array_length);
++}
++
++void
++wpe_gamepad_dispatch_button_values_changed(struct wpe_gamepad* gamepad)
++{
++    if (gamepad->gamepad_client)
++        gamepad->gamepad_client->button_values_changed(gamepad, gamepad->gamepad_client_data);
++}
++
++void
++wpe_gamepad_dispatch_axis_values_changed(struct wpe_gamepad* gamepad)
++{
++    if (gamepad->gamepad_client)
++        gamepad->gamepad_client->axis_values_changed(gamepad, gamepad->gamepad_client_data);
++}
+-- 
+2.17.1
+

@@ -20,24 +20,25 @@ MOCA_INTERFACE=${MOCA_INTERFACE:=eth1}
 LAN_INTERFACE=${LAN_INTERFACE:=eth2}
 
 if [ "$interface" = ${MOCA_INTERFACE} ] || [ "$interface" = ${MOCA_INTERFACE}:0 ]; then
+   DUMMY_IP=192.0.2.10
    [ -f /tmp/ani_wifi ] && METRIC_STRING="metric 2000"
 fi
 
 if [ "$interface" = ${WIFI_INTERFACE} ] || [ "$interface" = ${WIFI_INTERFACE}:0 ]; then
+   DUMMY_IP=192.0.2.11
    [ ! -f /tmp/ani_wifi ] && METRIC_STRING="metric 2000"
 fi
 
-echo "`date +"%b %d %T.%6N"` : udhcpc : $1,$interface,$ip,$subnet,$broadcast,$message" >> /opt/logs/netsrvmgr.log
+echo "`date +"%b %d %T.%6N"` : udhcpc : $1,$interface,$ip,$subnet,$broadcast,DNS=$dns,$message" >> /opt/logs/netsrvmgr.log
 
 case "$1" in
         deconfig)
+                echo "in defconfig"
                 if [[ "$interface" = *:* ]]; then
                         # aliases (e.g. eth0:0) don't like to be called 0.0.0.0
-#                       /sbin/ifconfig $interface 127.0.0.2
-                        echo "in defconfig"
+                        [ ! -z "$DUMMY_IP" ] && /sbin/ifconfig "$interface" "$DUMMY_IP"
                 else
-#                       /sbin/ifconfig $interface 0.0.0.0
-                        echo "in defconfig"
+                        /sbin/ifconfig $interface 0.0.0.0
                 fi
                 ;;
 
@@ -50,6 +51,10 @@ case "$1" in
                         while route del default gw 0.0.0.0 dev $interface 2> /dev/null; do
                                 :
                         done
+                fi
+                if [ -n "$serverid" ] ; then
+                        echo  $serverid > /tmp/tmp.dhcp.server.ip
+                        mv /tmp/tmp.dhcp.server.ip /tmp/netsrvmgr.dhcp.server.ip
                 fi
                 /sbin/ifconfig $interface $ip $BROADCAST $NETMASK
                 if [ -n "$router" ] ; then
@@ -66,7 +71,9 @@ case "$1" in
 	           echo nameserver $i >> $TMP_RESOLV_CONF
 	        done
 
+            if [ "x$dns" != "x" ];then
                 cp $TMP_RESOLV_CONF $UDHCPC_RESOLV_CONF
+            fi
 
         	HOSTNAME=`hostname`
 	        echo "127.0.0.1 $HOSTNAME" >> /etc/hosts

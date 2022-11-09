@@ -1,0 +1,3 @@
+#! /bin/sh
+
+run-parts ../../../libexec/installed-tests/glib  | sed -r -e 's/^ok/PASS:/g'

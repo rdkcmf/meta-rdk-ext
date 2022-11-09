@@ -1,0 +1,26 @@
+From a6b6703a0dc08c1ee5b03c12223bd35f72ab707a Mon Sep 17 00:00:00 2001
+From: Tony Paul <Tony_Paul@comcast.com>
+Date: Wed, 17 Nov 2021 11:11:44 +0000
+Subject: [PATCH 1/1] gst1.18 XRE-12082: Reset eos on appsrc on send flush
+ event
+
+Signed-off-by: Tony Paul <Tony_Paul@comcast.com>
+---
+ gst-libs/gst/app/gstappsrc.c | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/gst-libs/gst/app/gstappsrc.c b/gst-libs/gst/app/gstappsrc.c
+index c2267a045..a7ab3c8a0 100644
+--- a/gst-libs/gst/app/gstappsrc.c
++++ b/gst-libs/gst/app/gstappsrc.c
+@@ -874,6 +874,7 @@ gst_app_src_send_event (GstElement * element, GstEvent * event)
+     case GST_EVENT_FLUSH_STOP:
+       g_mutex_lock (&priv->mutex);
+       gst_app_src_flush_queued (appsrc, TRUE);
++      priv->is_eos = FALSE;
+       g_mutex_unlock (&priv->mutex);
+       break;
+     default:
+-- 
+2.25.1
+

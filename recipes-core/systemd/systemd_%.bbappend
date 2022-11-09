@@ -1,7 +1,9 @@
+include ${@bb.utils.contains('DISTRO_FEATURES', 'systemd-profile', 'profiles/rdk-${BPN}-profile.inc', 'profiles/generic-profile.inc', d)}
+
 FILESEXTRAPATHS_prepend := "${THISDIR}/files:${THISDIR}/backports:"
 
 PACKAGECONFIG_remove = "vconsole ldconfig"
-PACKAGECONFIG_remove_dunfell = "networkd"
+PACKAGECONFIG_remove_dunfell = "${@bb.utils.contains('DISTRO_FEATURES', 'networkd-support', '', 'networkd', d)}"
 PACKAGECONFIG_remove_dunfell = "resolved"
 PACKAGECONFIG_remove_dunfell = "nss-resolve"
 
@@ -18,6 +20,7 @@ SRC_URI += " \
 	    file://50-netfilter.conf \
            file://50-portreserv.conf \
            file://traffic-filter.conf \
+           file://protected_regular.conf \
            "
 SRC_URI_append = " \
             file://usb-mount@.service \
@@ -31,7 +34,7 @@ RRECOMMENDS_${PN} += " \
         util-linux-libmount util-linux-umount \
 "
 
-PACKAGES += "${PN}-usb-support"
+PACKAGES =+ "${PN}-usb-support"
 
 FILES_${PN}-usb-support = " \
         /usb \
@@ -53,6 +56,7 @@ do_install_append() {
 	install -m 644 ${WORKDIR}/50-panic.conf ${D}${sysconfdir}/sysctl.d
 	install -m 644 ${WORKDIR}/50-netfilter.conf ${D}${sysconfdir}/sysctl.d
 	install -m 644 ${WORKDIR}/traffic-filter.conf ${D}${sysconfdir}/sysctl.d
+        install -m 644 ${WORKDIR}/protected_regular.conf ${D}${sysconfdir}/sysctl.d
         mkdir -pv ${D}/usb
         mkdir -pv ${D}/usb0
         mkdir -pv ${D}/usb1
@@ -108,7 +112,7 @@ do_install_append_client() {
         rm -rf ${D}${rootlibexecdir}/systemd/system/systemd-update-done.service
         rm -rf ${D}${rootlibexecdir}/systemd/system/sysinit.target.wants/systemd-update-done.service
         sed -i -e 's/systemd-update-done.service//g' ${D}${systemd_unitdir}/system/systemd-journal-catalog-update.service
-        sed -i -e 's/systemd-update-done.service//g' ${D}${systemd_unitdir}/system/systemd-sysusers.service
+        sed -i -e 's/systemd-update-done.service//g' ${D}${systemd_unitdir}/system/systemd-sysusers.service || true
 }
 
 do_install_append_hybrid() {
@@ -120,7 +124,7 @@ do_install_append_hybrid() {
         rm -rf ${D}${rootlibexecdir}/systemd/system/systemd-update-done.service
         rm -rf ${D}${rootlibexecdir}/systemd/system/sysinit.target.wants/systemd-update-done.service
         sed -i -e 's/systemd-update-done.service//g' ${D}${systemd_unitdir}/system/systemd-journal-catalog-update.service
-        sed -i -e 's/systemd-update-done.service//g' ${D}${systemd_unitdir}/system/systemd-sysusers.service
+        sed -i -e 's/systemd-update-done.service//g' ${D}${systemd_unitdir}/system/systemd-sysusers.service || true
 }
 
 SYSTEMD_SERVICE_systemd-binfmt_remove = " systemd-binfmt.service"
@@ -132,7 +136,7 @@ FILES_${PN} += "${sysconfdir}/sysctl.d/50-coredump.conf \
 
 FILES_${PN} += "${sysconfdir}/sysctl.d/50-netfilter.conf \
                "
-FILES_${PN}_remove = "${bindir}/busctl ${datadir}/bash-completion/completions/busctl ${libdir}/libnss_mymachines.so.2 ${rootlibexecdir}/systemd/systemd-bus-proxyd ${rootlibexecdir}/systemd/systemd-socket-proxyd ${rootlibexecdir}/systemd/systemd-ac-power ${rootlibexecdir}/systemd/systemd-fsck ${rootlibexecdir}/systemd/systemd-sleep ${rootlibexecdir}/systemd/system/systemd-fsck*.service ${rootlibexecdir}/systemd/systemd-reply-password ${rootlibexecdir}/systemd/systemd-activate"
+FILES_${PN}_remove = "${bindir}/busctl ${datadir}/bash-completion/completions/busctl ${libdir}/libnss_mymachines.so.2 ${rootlibexecdir}/systemd/systemd-bus-proxyd ${rootlibexecdir}/systemd/systemd-ac-power ${rootlibexecdir}/systemd/systemd-fsck ${rootlibexecdir}/systemd/systemd-sleep ${rootlibexecdir}/systemd/system/systemd-fsck*.service ${rootlibexecdir}/systemd/systemd-reply-password ${rootlibexecdir}/systemd/systemd-activate"
 
 FILES_${PN}_append_client = " /media/apps"
 FILES_${PN}_append_hybrid = " /media/apps"

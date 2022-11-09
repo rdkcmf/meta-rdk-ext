@@ -1,0 +1,54 @@
+From cc40070950cc01d5bf322395ff97903792d3a9db Mon Sep 17 00:00:00 2001
+From: Eugene Mutavchi <Ievgen_Mutavchi@comcast.com>
+Date: Tue, 27 Jul 2021 19:21:36 +0000
+Subject: [PATCH] comcast - DELIA-48342 - additional logs in SlotVisitor
+
+---
+ Source/JavaScriptCore/heap/SlotVisitor.cpp | 17 ++++++++++++++++-
+ 1 file changed, 16 insertions(+), 1 deletion(-)
+
+diff --git a/Source/JavaScriptCore/heap/SlotVisitor.cpp b/Source/JavaScriptCore/heap/SlotVisitor.cpp
+index f316fded0a23..ea628eda3769 100644
+--- a/Source/JavaScriptCore/heap/SlotVisitor.cpp
++++ b/Source/JavaScriptCore/heap/SlotVisitor.cpp
+@@ -64,7 +64,7 @@ static void validate(JSCell* cell)
+     // Both the cell's structure, and the cell's structure's structure should be the Structure Structure.
+     // I hate this sentence.
+     VM& vm = cell->vm();
+-    if (cell->structure()->structure()->JSCell::classInfo(vm) != cell->structure()->JSCell::classInfo(vm)) {
++    if (!cell->structure()->structure() || cell->structure()->structure()->JSCell::classInfo(vm) != cell->structure()->JSCell::classInfo(vm)) {
+         const char* parentClassName = 0;
+         const char* ourClassName = 0;
+         if (cell->structure()->structure() && cell->structure()->structure()->JSCell::classInfo(vm))
+@@ -79,6 +79,15 @@ static void validate(JSCell* cell)
+     // Make sure we can walk the ClassInfo chain
+     const ClassInfo* info = cell->classInfo(vm);
+     do { } while ((info = info->parentClass));
++
++    if (!cell->structure(vm)) {
++        dataLogF("validate(): Cell %p has null structure, type %d. \n", cell, cell->type());
++        CRASH();
++    }
++    if (!cell->methodTable(vm)) {
++        dataLogF("validate(): Cell %p has null methodTable, type %d. \n", cell, cell->type());
++        CRASH();
++    }
+ }
+ #endif
+ 
+@@ -394,6 +403,12 @@ ALWAYS_INLINE void SlotVisitor::visitChildren(const JSCell* cell)
+         break;
+         
+     default:
++        if (!cell->structure(vm())) {
++            dataLogF("SlotVisitor::visitChildren(): Cell %p has null structure, type %d. \n", cell, cell->type());
++        }
++        if (!cell->methodTable(vm())) {
++            dataLogF("SlotVisitor::visitChildren(): Cell %p has null methodTable, type %d. \n", cell, cell->type());
++        }
+         // FIXME: This could be so much better.
+         // https://bugs.webkit.org/show_bug.cgi?id=162462
+ #if CPU(X86_64)
+-- 
+2.25.1
+

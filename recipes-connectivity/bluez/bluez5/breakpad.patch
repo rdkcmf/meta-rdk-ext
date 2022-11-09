@@ -1,0 +1,82 @@
+Date: May 1, 2019 12:30 AM
+
+From: 2b0f3106e5b61b61db8a3180a846f40b0997c4c7 Jun 3, 2019 10:32 PM
+
+Subject: [PATCH] RDK-22498 : Add support for minidumps in Bluetooth
+
+	Add support for minidumps in Bluetooth module.
+	
+Source: COMCAST
+License: LGPL-2.0-or-later
+
+Upstream-Status: Pending
+
+Signed-off-by: Thomson Naveen Silvera <thomson_silvera@comcast.com>
+---
+
+diff -rupN bluez-5.45.org/configure.ac bluez-5.45/configure.ac
+--- bluez-5.45.org/configure.ac	2017-05-04 21:06:44.000000000 +0000
++++ bluez-5.45/configure.ac	2019-05-13 19:11:23.467082945 +0000
+@@ -132,6 +132,24 @@ if (test "${enable_backtrace}" = "yes");
+ 	AC_SUBST(BACKTRACE_LIBS)
+ fi
+ 
++# Check for breakpad
++BREAKPAD_CFLAGS=" "
++BREAKPAD_LFLAGS=" "
++AC_ARG_ENABLE([breakpad],
++        AS_HELP_STRING([--enable-breakpad],[enable breakpad support (default is no)]),
++        [
++            case "${enableval}" in
++             yes) BREAKPAD_CFLAGS="-DINCLUDE_BREAKPAD"
++                    BREAKPAD_LFLAGS="-lbreakpadwrapper";;
++             no) AC_MSG_ERROR([breakpad is disabled]) ;;
++             *) AC_MSG_ERROR([bad value ${enableval} for --enable-breakpad]) ;;
++             esac
++             ],
++            [echo "breakpad is disabled"])
++
++AC_SUBST(BREAKPAD_CFLAGS)
++AC_SUBST(BREAKPAD_LFLAGS)
++
+ AC_ARG_ENABLE(library, AC_HELP_STRING([--enable-library],
+ 		[install Bluetooth library]), [enable_library=${enableval}])
+ AM_CONDITIONAL(LIBRARY, test "${enable_library}" = "yes")
+diff -rupN bluez-5.45.org/Makefile.am bluez-5.45/Makefile.am
+--- bluez-5.45.org/Makefile.am	2019-05-13 19:06:19.342216877 +0000
++++ bluez-5.45/Makefile.am	2019-05-13 19:16:18.380044593 +0000
+@@ -27,8 +27,8 @@ includedir = @includedir@/bluetooth
+ 
+ include_HEADERS =
+ 
+-AM_CFLAGS = $(WARNING_CFLAGS) $(MISC_CFLAGS)
+-AM_LDFLAGS = $(MISC_LDFLAGS)
++AM_CFLAGS = $(WARNING_CFLAGS) $(MISC_CFLAGS) $(BREAKPAD_CFLAGS)
++AM_LDFLAGS = $(MISC_LDFLAGS) $(BREAKPAD_LFLAGS)
+ 
+ if DATAFILES
+ dbusdir = @DBUS_CONFDIR@/dbus-1/system.d
+diff -rupN bluez-5.45.org/src/main.c bluez-5.45/src/main.c
+--- bluez-5.45.org/src/main.c	2016-10-28 12:57:27.000000000 +0000
++++ bluez-5.45/src/main.c	2019-05-13 19:18:14.042846385 +0000
+@@ -59,6 +59,9 @@
+ #include "agent.h"
+ #include "profile.h"
+ #include "systemd.h"
++#ifdef INCLUDE_BREAKPAD
++#include "breakpad_wrapper.h"
++#endif
+ 
+ #define BLUEZ_NAME "org.bluez"
+ 
+@@ -624,6 +627,10 @@ int main(int argc, char *argv[])
+ 
+ 	btd_backtrace_init();
+ 
++#ifdef INCLUDE_BREAKPAD
++    breakpad_ExceptionHandler();
++#endif
++
+ 	event_loop = g_main_loop_new(NULL, FALSE);
+ 
+ 	signal = setup_signalfd();

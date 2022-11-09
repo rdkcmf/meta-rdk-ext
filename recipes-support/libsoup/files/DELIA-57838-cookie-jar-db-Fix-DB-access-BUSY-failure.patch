@@ -1,0 +1,40 @@
+From 06c8796508945f4126b6279c38e73a5f1e26f732 Mon Sep 17 00:00:00 2001
+From: Andrzej Surdej <Andrzej_Surdej@comcast.com>
+Date: Wed, 31 Aug 2022 15:47:53 +0200
+Subject: [PATCH] DELIA-57838: cookie-jar-db - Fix DB access BUSY failure
+
+Running an SQL command on a database that is currently locked
+by another process may result with BUSY failure
+(depending on locking type required). As a result the command
+may no be executed.
+This usually happens when two or more processes are performing
+cookie write operations (INSERT) on database. One of them will
+fail with BUSY error code so the cookie wont be saved.
+
+Add default handler for such case with max 250ms timeout
+(should be sufficient for most cases and still allowing to catch
+any performance degradation (blocking))
+---
+ libsoup/soup-cookie-jar-db.c | 6 ++++++
+ 1 file changed, 6 insertions(+)
+
+diff --git a/libsoup/soup-cookie-jar-db.c b/libsoup/soup-cookie-jar-db.c
+index 271201f..94205a0 100644
+--- a/libsoup/soup-cookie-jar-db.c
++++ b/libsoup/soup-cookie-jar-db.c
+@@ -238,6 +238,12 @@ open_db (SoupCookieJar *jar)
+ 		return TRUE;
+ 	}
+ 
++	/* Set default "BUSY" handler with maximum timeout of 250ms.
++	 * When database is locked by other process it will keep retrying
++	 * with increasing timeout until 250ms is reached.
++	 */
++	sqlite3_busy_timeout(priv->db, 250);
++
+ 	if (sqlite3_exec (priv->db, "PRAGMA synchronous = OFF; PRAGMA secure_delete = 1;", NULL, NULL, &error)) {
+ 		g_warning ("Failed to execute query: %s", error);
+ 		sqlite3_free (error);
+-- 
+2.25.1
+

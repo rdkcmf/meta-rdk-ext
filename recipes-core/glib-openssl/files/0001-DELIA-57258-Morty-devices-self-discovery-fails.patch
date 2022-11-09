@@ -1,0 +1,57 @@
+From 4e2a424a117e6d3553558968ef8780bd977e4a26 Mon Aug 21 00:00:00 2022
+From: Prakash KS <prakash_kappesannanagappa@Comcast.com>
+Date: Fri, 26 Aug 2022 06:20:42 +0000
+Subject: [PATCH] DELIA-57258: Morty devices self discovery fails when xpki is
+enabled.
+#################################################
+diff --git a/tls/openssl/gtlsclientconnection-openssl.c b/tls/openssl/gtlsclientconnection-openssl.c
+index 03ae476..709b29b 100644
+--- a/tls/openssl/gtlsclientconnection-openssl.c
++++ b/tls/openssl/gtlsclientconnection-openssl.c
+@@ -434,7 +434,7 @@ g_tls_client_connection_openssl_initable_init (GInitable       *initable,
+
+   priv->session = SSL_SESSION_new ();
+
+-  priv->ssl_ctx = SSL_CTX_new (SSLv23_client_method ());
++  priv->ssl_ctx = SSL_CTX_new (TLSv1_2_client_method ());
+   if (priv->ssl_ctx == NULL)
+     {
+       g_set_error (error, G_TLS_ERROR, G_TLS_ERROR_MISC,
+@@ -458,6 +458,7 @@ g_tls_client_connection_openssl_initable_init (GInitable       *initable,
+     }
+
+   SSL_CTX_set_options (priv->ssl_ctx, options);
++  SSL_CTX_set_ecdh_auto(priv->ssl_ctx, 1);
+
+ #if OPENSSL_VERSION_NUMBER >= 0x10200000L && !defined (LIBRESSL_VERSION_NUMBER)
+   if (hostname)
+diff --git a/tls/openssl/gtlsserverconnection-openssl.c b/tls/openssl/gtlsserverconnection-openssl.c
+index e9add65..860cba1 100644
+--- a/tls/openssl/gtlsserverconnection-openssl.c
++++ b/tls/openssl/gtlsserverconnection-openssl.c
+@@ -150,7 +150,7 @@ g_tls_server_connection_openssl_handshake (GTlsConnectionBase  *tls,
+
+   SSL_set_verify (priv->ssl, req_mode, verify_callback);
+   /* FIXME: is this ok? */
+-  SSL_set_verify_depth (priv->ssl, 0);
++  SSL_set_verify_depth (priv->ssl, 2);
+
+   return G_TLS_CONNECTION_BASE_CLASS (g_tls_server_connection_openssl_parent_class)->
+     handshake (tls, cancellable, error);
+@@ -221,7 +221,7 @@ g_tls_server_connection_openssl_initable_init (GInitable       *initable,
+
+   priv->session = SSL_SESSION_new ();
+
+-  priv->ssl_ctx = SSL_CTX_new (SSLv23_server_method ());
++  priv->ssl_ctx = SSL_CTX_new (TLSv1_2_server_method ());
+   if (priv->ssl_ctx == NULL)
+     {
+       g_set_error (error, G_TLS_ERROR, G_TLS_ERROR_MISC,
+@@ -234,6 +234,7 @@ g_tls_server_connection_openssl_initable_init (GInitable       *initable,
+
+   /* Only TLS 1.2 or higher */
+   SSL_CTX_set_options (priv->ssl_ctx, options);
++  SSL_CTX_set_ecdh_auto(priv->ssl_ctx, 1);
+
+   cert = g_tls_connection_get_certificate (G_TLS_CONNECTION (initable));
+   if (cert != NULL)

@@ -1,0 +1,87 @@
+From 244d18f6b90135b3bf4ad9c65d4d483714ba42e2 Mon Sep 17 00:00:00 2001
+From: Gurdal Oruklu <gurdal_oruklu@comcast.com>
+Date: Fri, 15 Apr 2022 18:38:05 +0000
+Subject: [PATCH] Revert "[EME][Thunder] Fix race condition in updateLicense
+ calls"
+
+Signed-off-by: nganes961 <nambirajan_ganesan@comcast.com>
+
+This reverts commit 989962cd62b695a212ad3ec87249a1952245f64b.
+---
+ .../graphics/gstreamer/eme/CDMOpenCDM.cpp       | 17 ++---------------
+ .../graphics/gstreamer/eme/CDMOpenCDM.h         |  3 ---
+ 2 files changed, 2 insertions(+), 18 deletions(-)
+
+diff --git a/Source/WebCore/platform/graphics/gstreamer/eme/CDMOpenCDM.cpp b/Source/WebCore/platform/graphics/gstreamer/eme/CDMOpenCDM.cpp
+index 560f3a97af44..7fe89e14b440 100644
+--- a/Source/WebCore/platform/graphics/gstreamer/eme/CDMOpenCDM.cpp
++++ b/Source/WebCore/platform/graphics/gstreamer/eme/CDMOpenCDM.cpp
+@@ -409,8 +409,6 @@ void CDMInstanceOpenCDM::Session::errorCallback(RefPtr<SharedBuffer>&& message)
+     for (auto& sessionChangedCallback : m_sessionChangedCallbacks)
+         sessionChangedCallback(this, false, WTFMove(message), m_keyStatuses);
+     m_sessionChangedCallbacks.clear();
+-
+-    m_parent->m_sessionMapCondition.notifyAll();
+ }
+ 
+ void CDMInstanceOpenCDM::Session::generateChallenge(ChallengeGeneratedCallback&& callback)
+@@ -520,10 +518,8 @@ void CDMInstanceOpenCDM::updateLicense(const String& sessionId, LicenseType, con
+         return;
+     }
+ 
+-    m_numberOfCurrentUpdates++;
+-    session->update(reinterpret_cast<const uint8_t*>(response.data()), response.size(), [this, callback = WTFMove(callback)](Session*, bool success, RefPtr<SharedBuffer>&& buffer, KeyStatusVector& keyStatuses) {
+-        LockHolder locker(m_sessionMapMutex);
+-        ASSERT(m_numberOfCurrentUpdates);
++    session->update(reinterpret_cast<const uint8_t*>(response.data()), response.size(), [callback = WTFMove(callback)](Session* session, bool success, RefPtr<SharedBuffer>&& buffer, KeyStatusVector& keyStatuses) {
++        UNUSED_PARAM(session);
+         if (success) {
+             if (!buffer) {
+                 ASSERT(!keyStatuses.isEmpty());
+@@ -546,8 +542,6 @@ void CDMInstanceOpenCDM::updateLicense(const String& sessionId, LicenseType, con
+             GST_ERROR("update license reported error state");
+             callback(false, std::nullopt, std::nullopt, std::nullopt, SuccessValue::Failed);
+         }
+-        m_numberOfCurrentUpdates--;
+-        m_sessionMapCondition.notifyAll();
+     });
+ }
+ 
+@@ -645,13 +639,6 @@ void CDMInstanceOpenCDM::closeSession(const String& sessionId, CloseSessionCallb
+ String CDMInstanceOpenCDM::sessionIdByKeyId(const SharedBuffer& keyId) const
+ {
+     LockHolder locker(m_sessionMapMutex);
+-    if (!m_sessionMapCondition.waitFor(m_sessionMapMutex, WEBCORE_GSTREAMER_EME_LICENSE_KEY_RESPONSE_TIMEOUT, [this] {
+-        return !m_numberOfCurrentUpdates;
+-    })) {
+-        GST_ERROR("session not found because timeout is gone");
+-        ASSERT_NOT_REACHED();
+-        return { };
+-    }
+ 
+     GST_MEMDUMP("kid", reinterpret_cast<const uint8_t*>(keyId.data()), keyId.size());
+     if (!m_sessionsMap.size() || !keyId.data()) {
+diff --git a/Source/WebCore/platform/graphics/gstreamer/eme/CDMOpenCDM.h b/Source/WebCore/platform/graphics/gstreamer/eme/CDMOpenCDM.h
+index 6ef86c8b82cb..d1d29fefc7c8 100644
+--- a/Source/WebCore/platform/graphics/gstreamer/eme/CDMOpenCDM.h
++++ b/Source/WebCore/platform/graphics/gstreamer/eme/CDMOpenCDM.h
+@@ -30,7 +30,6 @@
+ #include "GStreamerEMEUtilities.h"
+ #include "MediaKeyStatus.h"
+ #include <open_cdm.h>
+-#include <wtf/Condition.h>
+ #include <wtf/HashMap.h>
+ #include <wtf/text/StringHash.h>
+ 
+@@ -119,8 +118,6 @@ private:
+     // the GStreamer decryptor elements running in the streaming threads have a need to
+     // lookup values in this map.
+     mutable Lock m_sessionMapMutex;
+-    mutable Condition m_sessionMapCondition;
+-    unsigned m_numberOfCurrentUpdates { 0 };
+     HashMap<String, RefPtr<Session>> m_sessionsMap;
+     CDMInstanceClient* m_client { nullptr };
+     KeyStatusVector m_keyStatuses;
+-- 
+2.17.1
+

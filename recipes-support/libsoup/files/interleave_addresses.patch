@@ -16,11 +16,11 @@ Upstream-Status: Pending
 Signed-off-by: Eugene Mutavchi <Ievgen_Mutavchi@comcast.com>
 ---
 
-Index: libsoup-2.58.1/libsoup/soup-address.c
+Index: libsoup-2.68.4/libsoup/soup-address.c
 ===================================================================
---- libsoup-2.58.1.orig/libsoup/soup-address.c
-+++ libsoup-2.58.1/libsoup/soup-address.c
-@@ -627,6 +627,75 @@ maybe_resolve_ip (SoupAddress *addr)
+--- libsoup-2.68.4.orig/libsoup/soup-address.c
++++ libsoup-2.68.4/libsoup/soup-address.c
+@@ -633,6 +633,75 @@ maybe_resolve_ip (SoupAddress *addr)
  	g_object_unref (gaddr);
  }
  
@@ -96,7 +96,7 @@ Index: libsoup-2.58.1/libsoup/soup-address.c
  
  static guint
  update_addrs (SoupAddress *addr, GList *addrs, GError *error)
-@@ -634,6 +703,7 @@ update_addrs (SoupAddress *addr, GList *
+@@ -640,6 +709,7 @@ update_addrs (SoupAddress *addr, GList *
  	SoupAddressPrivate *priv = soup_address_get_instance_private (addr);
  	GInetAddress *gia;
  	GSocketAddress *gsa;
@@ -104,18 +104,18 @@ Index: libsoup-2.58.1/libsoup/soup-address.c
  	int i;
  
  	if (error) {
-@@ -647,6 +717,10 @@ update_addrs (SoupAddress *addr, GList *
+@@ -653,6 +723,10 @@ update_addrs (SoupAddress *addr, GList *
  	else if (priv->sockaddr)
  		return SOUP_STATUS_OK;
  
-+//	dump_addresses("before: ", addrs);
++	/* dump_addresses("before: ", addrs); */
 +	addrs = tmpaddrs = list_copy_interleaved(addrs);
-+//	dump_addresses("after: ", addrs);
++	/* dump_addresses("after: ", addrs); */
 +
  	priv->n_addrs = g_list_length (addrs);
  	priv->sockaddr = g_new (struct sockaddr_storage, priv->n_addrs);
  	for (i = 0; addrs; addrs = addrs->next, i++) {
-@@ -664,6 +738,9 @@ update_addrs (SoupAddress *addr, GList *
+@@ -670,6 +744,9 @@ update_addrs (SoupAddress *addr, GList *
  		g_object_unref (gsa);
  	}
  

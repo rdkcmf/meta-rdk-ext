@@ -1,0 +1,41 @@
+From e2ff547da64408ffc96ef52c9d30e1beeeecb339 Mon Sep 17 00:00:00 2001
+From: "Vivek.A" <Vivek_Arumugam@comcast.com>
+Date: Wed, 15 Jun 2022 13:01:04 +0000
+Subject: [PATCH] Fix seeking on DAZN & AppleTV+ apps
+
+Change-Id: Ieac3cf24e5d3790dddd2a503838d0143bbc1593f
+---
+ .../gstreamer/mse/MediaPlayerPrivateGStreamerMSE.cpp        | 6 ++++--
+ 1 file changed, 4 insertions(+), 2 deletions(-)
+
+diff --git a/Source/WebCore/platform/graphics/gstreamer/mse/MediaPlayerPrivateGStreamerMSE.cpp b/Source/WebCore/platform/graphics/gstreamer/mse/MediaPlayerPrivateGStreamerMSE.cpp
+index 846a8ff2761e..9b41e49d1b15 100644
+--- a/Source/WebCore/platform/graphics/gstreamer/mse/MediaPlayerPrivateGStreamerMSE.cpp
++++ b/Source/WebCore/platform/graphics/gstreamer/mse/MediaPlayerPrivateGStreamerMSE.cpp
+@@ -256,8 +256,6 @@ static bool checkShouldDelaySeek(GstStateChangeReturn getStateResult, GstState c
+         return false;
+     if (GST_STATE_TRANSITION(currentState, newState) == GST_STATE_CHANGE_PLAYING_TO_PAUSED)
+         return false;
+-    if (currentState == GST_STATE_READY && newState >= GST_STATE_PAUSED)
+-        return false;
+     if (GST_STATE_TRANSITION(currentState, newState) == GST_STATE_CHANGE_PAUSED_TO_PAUSED)
+         return false;
+     return true;
+@@ -298,6 +296,7 @@ bool MediaPlayerPrivateGStreamerMSE::doSeek(const MediaTime& position, float rat
+ 
+         GST_DEBUG_OBJECT(pipeline(), "[Seek] Delaying the seek: %s", reason.data());
+ 
++        bool prevSeekPending = m_isSeekPending;
+         m_isSeekPending = true;
+ 
+         if (m_isEndReached) {
+@@ -308,6 +307,9 @@ bool MediaPlayerPrivateGStreamerMSE::doSeek(const MediaTime& position, float rat
+                 loadingFailed(MediaPlayer::NetworkState::Empty);
+             else
+                 m_isSeeking = true;
++        } else if(state < GST_STATE_PAUSED && !prevSeekPending) {
++            m_mediaSource->seekToTime(seekTime);
++            m_mseSeekCompleted = true;
+         }
+ 
+         return m_isSeeking;

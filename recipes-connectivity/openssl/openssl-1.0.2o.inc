@@ -224,14 +224,6 @@ do_install () {
         install -d ${D}${includedir}/openssl-1.0.2o
 
         oe_runmake INSTALL_PREFIX="${D}" install_sw
-        # On x86_64, move lib/* to lib64
-        if [ "${libdir}" != "${prefix}/lib" ]
-        then
-                install -d ${D}${libdir} ${D}${libdir}/pkgconfig
-                mv ${D}${prefix}/lib/lib* ${D}${libdir}
-                mv ${D}${prefix}/lib/pkgconfig/*.pc ${D}${libdir}/pkgconfig
-        fi
-
         oe_libinstall -so libcrypto ${D}${libdir}
         oe_libinstall -so libssl ${D}${libdir}
         install -m 0664 ${S}/e_os.h ${D}${includedir}/openssl

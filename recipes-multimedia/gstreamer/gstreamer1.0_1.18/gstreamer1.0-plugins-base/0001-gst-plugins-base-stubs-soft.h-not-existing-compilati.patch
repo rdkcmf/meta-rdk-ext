@@ -1,0 +1,35 @@
+From 6af349727d89c8878605ce2284d2008d67150ad6 Mon Sep 17 00:00:00 2001
+From: Tony Paul <Tony_Paul@comcast.com>
+Date: Tue, 26 Oct 2021 14:31:17 +0000
+Subject: [PATCH 1/1] gst plugins base stubs-soft.h not existing compilation
+ error
+
+Signed-off-by: Tony Paul <Tony_Paul@comcast.com>
+---
+ tests/check/meson.build | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/tests/check/meson.build b/tests/check/meson.build
+index c2702f355..b8a70d6cb 100644
+--- a/tests/check/meson.build
++++ b/tests/check/meson.build
+@@ -109,6 +109,7 @@ endif
+ 
+ # Make sure our headers are C++ clean
+ if have_cxx
++  extra_args = ['-mfloat-abi=hard']
+   base_tests += [
+     [ 'libs/gstlibscpp.cc', false, [  ] ],
+   ]
+@@ -150,7 +151,7 @@ foreach t : base_tests
+     exe = executable(test_name, fname,
+       include_directories : [configinc],
+       c_args : ['-DHAVE_CONFIG_H=1' ] + test_defines,
+-      cpp_args : gst_plugins_base_args,
++      cpp_args : gst_plugins_base_args + extra_args,
+       dependencies : [libm] + test_deps + extra_deps,
+     )
+ 
+-- 
+2.25.1
+

@@ -1,0 +1,173 @@
+From 4a48398708ef437ca2e5babb99856bcd7709dc1c Mon Sep 17 00:00:00 2001
+From: Andrzej Surdej <Andrzej_Surdej@comcast.com>
+Date: Wed, 17 Aug 2022 17:01:04 +0200
+Subject: [PATCH] [EME] Keep MediaKeySystemAccess alive in createMediaKeys()
+ async task
+
+Put MediaKeySystemAccess under ActiveDOMObject interface
+and make sure that GC won't destroy an object before
+it executes its async task and createMediaKeys() func is completed.
+
+Sometimes it happens that GC destroys MediaKeySystemAccess object
+in the middle of createMediaKeys() func, before promise is completed
+and JS MediaKeys are never created.
+
+This fixes YT Cert Test: EME, WidevineH264MultiMediaKeySessions
+---
+ .../encryptedmedia/MediaKeySystemAccess.cpp   | 20 +++++++++++++++----
+ .../encryptedmedia/MediaKeySystemAccess.h     | 11 +++++++---
+ .../encryptedmedia/MediaKeySystemAccess.idl   |  2 +-
+ .../Modules/encryptedmedia/NavigatorEME.cpp   | 12 +++++------
+ 4 files changed, 31 insertions(+), 14 deletions(-)
+
+diff --git a/Source/WebCore/Modules/encryptedmedia/MediaKeySystemAccess.cpp b/Source/WebCore/Modules/encryptedmedia/MediaKeySystemAccess.cpp
+index 7eb7b20235e1..dca258f68d29 100644
+--- a/Source/WebCore/Modules/encryptedmedia/MediaKeySystemAccess.cpp
++++ b/Source/WebCore/Modules/encryptedmedia/MediaKeySystemAccess.cpp
+@@ -40,13 +40,14 @@
+ 
+ namespace WebCore {
+ 
+-Ref<MediaKeySystemAccess> MediaKeySystemAccess::create(const String& keySystem, MediaKeySystemConfiguration&& configuration, Ref<CDM>&& implementation)
++Ref<MediaKeySystemAccess> MediaKeySystemAccess::create(Document& document, const String& keySystem, MediaKeySystemConfiguration&& configuration, Ref<CDM>&& implementation)
+ {
+-    return adoptRef(*new MediaKeySystemAccess(keySystem, WTFMove(configuration), WTFMove(implementation)));
++    return adoptRef(*new MediaKeySystemAccess(document, keySystem, WTFMove(configuration), WTFMove(implementation)));
+ }
+ 
+-MediaKeySystemAccess::MediaKeySystemAccess(const String& keySystem, MediaKeySystemConfiguration&& configuration, Ref<CDM>&& implementation)
+-    : m_keySystem(keySystem)
++MediaKeySystemAccess::MediaKeySystemAccess(Document& document, const String& keySystem, MediaKeySystemConfiguration&& configuration, Ref<CDM>&& implementation)
++    : ActiveDOMObject(document)
++    , m_keySystem(keySystem)
+     , m_configuration(new MediaKeySystemConfiguration(WTFMove(configuration)))
+     , m_implementation(WTFMove(implementation))
+ {
+@@ -109,6 +110,17 @@ void MediaKeySystemAccess::createMediaKeys(Ref<DeferredPromise>&& promise)
+     // 3. Return promise.
+ }
+ 
++bool MediaKeySystemAccess::virtualHasPendingActivity() const
++{
++    // Don't destroy this object if it has unresolved createMediaKeys() promisses
++    return m_taskQueue.hasPendingTasks();
++}
++
++const char* MediaKeySystemAccess::activeDOMObjectName() const
++{
++    return "MediaKeySystemAccess";
++}
++
+ } // namespace WebCore
+ 
+ #endif // ENABLE(ENCRYPTED_MEDIA)
+diff --git a/Source/WebCore/Modules/encryptedmedia/MediaKeySystemAccess.h b/Source/WebCore/Modules/encryptedmedia/MediaKeySystemAccess.h
+index 4f5a155c680d..39c1d27f94dd 100644
+--- a/Source/WebCore/Modules/encryptedmedia/MediaKeySystemAccess.h
++++ b/Source/WebCore/Modules/encryptedmedia/MediaKeySystemAccess.h
+@@ -30,6 +30,7 @@
+ 
+ #if ENABLE(ENCRYPTED_MEDIA)
+ 
++#include "ActiveDOMObject.h"
+ #include "GenericTaskQueue.h"
+ #include "MediaKeySystemConfiguration.h"
+ #include <wtf/RefCounted.h>
+@@ -41,9 +42,9 @@ class CDM;
+ class DeferredPromise;
+ class MediaKeys;
+ 
+-class MediaKeySystemAccess : public RefCounted<MediaKeySystemAccess> {
++class MediaKeySystemAccess : public RefCounted<MediaKeySystemAccess>, public ActiveDOMObject {
+ public:
+-    static Ref<MediaKeySystemAccess> create(const String& keySystem, MediaKeySystemConfiguration&&, Ref<CDM>&&);
++    static Ref<MediaKeySystemAccess> create(Document& document, const String& keySystem, MediaKeySystemConfiguration&&, Ref<CDM>&&);
+     ~MediaKeySystemAccess();
+ 
+     const String& keySystem() const { return m_keySystem; }
+@@ -51,7 +52,11 @@ public:
+     void createMediaKeys(Ref<DeferredPromise>&&);
+ 
+ private:
+-    MediaKeySystemAccess(const String& keySystem, MediaKeySystemConfiguration&&, Ref<CDM>&&);
++    MediaKeySystemAccess(Document& document, const String& keySystem, MediaKeySystemConfiguration&&, Ref<CDM>&&);
++
++    // ActiveDOMObject
++    const char* activeDOMObjectName() const final;
++    bool virtualHasPendingActivity() const final;
+ 
+     String m_keySystem;
+     std::unique_ptr<MediaKeySystemConfiguration> m_configuration;
+diff --git a/Source/WebCore/Modules/encryptedmedia/MediaKeySystemAccess.idl b/Source/WebCore/Modules/encryptedmedia/MediaKeySystemAccess.idl
+index 1bc1d274cdd5..6ffb97c2dbc1 100644
+--- a/Source/WebCore/Modules/encryptedmedia/MediaKeySystemAccess.idl
++++ b/Source/WebCore/Modules/encryptedmedia/MediaKeySystemAccess.idl
+@@ -27,10 +27,10 @@
+  */
+ 
+ [
++    ActiveDOMObject,
+     Conditional=ENCRYPTED_MEDIA,
+     EnabledAtRuntime=EncryptedMediaAPI,
+     DisabledByQuirk=hasBrokenEncryptedMediaAPISupport,
+-    ImplementationLacksVTable,
+ ] interface MediaKeySystemAccess {
+     readonly attribute DOMString keySystem;
+     MediaKeySystemConfiguration getConfiguration();
+diff --git a/Source/WebCore/Modules/encryptedmedia/NavigatorEME.cpp b/Source/WebCore/Modules/encryptedmedia/NavigatorEME.cpp
+index 694564af3e59..fdc27e21ccff 100644
+--- a/Source/WebCore/Modules/encryptedmedia/NavigatorEME.cpp
++++ b/Source/WebCore/Modules/encryptedmedia/NavigatorEME.cpp
+@@ -79,7 +79,7 @@ inline void infoLog(Logger& logger, const Arguments&... arguments)
+ #endif
+ }
+ 
+-static void tryNextSupportedConfiguration(RefPtr<CDM>&& implementation, Vector<MediaKeySystemConfiguration>&& supportedConfigurations, RefPtr<DeferredPromise>&&, Ref<Logger>&&, WTF::Logger::LogSiteIdentifier&&);
++static void tryNextSupportedConfiguration(Document& docuemnt, RefPtr<CDM>&& implementation, Vector<MediaKeySystemConfiguration>&& supportedConfigurations, RefPtr<DeferredPromise>&&, Ref<Logger>&&, WTF::Logger::LogSiteIdentifier&&);
+ 
+ void NavigatorEME::requestMediaKeySystemAccess(Navigator& navigator, Document& document, const String& keySystem, Vector<MediaKeySystemConfiguration>&& supportedConfigurations, Ref<DeferredPromise>&& promise)
+ {
+@@ -114,11 +114,11 @@ void NavigatorEME::requestMediaKeySystemAccess(Navigator& navigator, Document& d
+ 
+         // 6.2. Let implementation be the implementation of keySystem.
+         auto implementation = CDM::create(document, keySystem);
+-        tryNextSupportedConfiguration(WTFMove(implementation), WTFMove(supportedConfigurations), WTFMove(promise), WTFMove(logger), WTFMove(identifier));
++        tryNextSupportedConfiguration(document, WTFMove(implementation), WTFMove(supportedConfigurations), WTFMove(promise), WTFMove(logger), WTFMove(identifier));
+     });
+ }
+ 
+-static void tryNextSupportedConfiguration(RefPtr<CDM>&& implementation, Vector<MediaKeySystemConfiguration>&& supportedConfigurations, RefPtr<DeferredPromise>&& promise, Ref<Logger>&& logger, WTF::Logger::LogSiteIdentifier&& identifier)
++static void tryNextSupportedConfiguration(Document& document, RefPtr<CDM>&& implementation, Vector<MediaKeySystemConfiguration>&& supportedConfigurations, RefPtr<DeferredPromise>&& promise, Ref<Logger>&& logger, WTF::Logger::LogSiteIdentifier&& identifier)
+ {
+     // 6.3. For each value in supportedConfigurations:
+     if (!supportedConfigurations.isEmpty()) {
+@@ -128,7 +128,7 @@ static void tryNextSupportedConfiguration(RefPtr<CDM>&& implementation, Vector<M
+         MediaKeySystemConfiguration candidateConfiguration = WTFMove(supportedConfigurations.first());
+         supportedConfigurations.remove(0);
+ 
+-        CDM::SupportedConfigurationCallback callback = [implementation = implementation, supportedConfigurations = WTFMove(supportedConfigurations), promise, logger = WTFMove(logger), identifier = WTFMove(identifier)] (Optional<MediaKeySystemConfiguration> supportedConfiguration) mutable {
++        CDM::SupportedConfigurationCallback callback = [&document, implementation = implementation, supportedConfigurations = WTFMove(supportedConfigurations), promise, logger = WTFMove(logger), identifier = WTFMove(identifier)] (Optional<MediaKeySystemConfiguration> supportedConfiguration) mutable {
+             // 6.3.3. If supported configuration is not NotSupported, run the following steps:
+             if (supportedConfiguration) {
+                 // 6.3.3.1. Let access be a new MediaKeySystemAccess object, and initialize it as follows:
+@@ -138,7 +138,7 @@ static void tryNextSupportedConfiguration(RefPtr<CDM>&& implementation, Vector<M
+ 
+                 // Obtain reference to the key system string before the `implementation` RefPtr<> is cleared out.
+                 const String& keySystem = implementation->keySystem();
+-                auto access = MediaKeySystemAccess::create(keySystem, WTFMove(supportedConfiguration.value()), implementation.releaseNonNull());
++                auto access = MediaKeySystemAccess::create(document, keySystem, WTFMove(supportedConfiguration.value()), implementation.releaseNonNull());
+ 
+                 // 6.3.3.2. Resolve promise with access and abort the parallel steps of this algorithm.
+                 infoLog(logger, identifier, "Resolved: keySystem(", keySystem, "), supportedConfiguration(", supportedConfiguration, ")");
+@@ -146,7 +146,7 @@ static void tryNextSupportedConfiguration(RefPtr<CDM>&& implementation, Vector<M
+                 return;
+             }
+ 
+-            tryNextSupportedConfiguration(WTFMove(implementation), WTFMove(supportedConfigurations), WTFMove(promise), WTFMove(logger), WTFMove(identifier));
++            tryNextSupportedConfiguration(document, WTFMove(implementation), WTFMove(supportedConfigurations), WTFMove(promise), WTFMove(logger), WTFMove(identifier));
+         };
+         implementation->getSupportedConfiguration(WTFMove(candidateConfiguration), WTFMove(callback));
+         return;
+-- 
+2.25.1
+

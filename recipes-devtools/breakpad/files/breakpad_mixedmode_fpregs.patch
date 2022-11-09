@@ -1,0 +1,25 @@
+diff --git a/src/client/linux/minidump_writer/linux_ptrace_dumper.cc b/src/client/linux/minidump_writer/linux_ptrace_dumper.cc
+index 7a2cfb9..71f611b 100644
+--- a/src/client/linux/minidump_writer/linux_ptrace_dumper.cc
++++ b/src/client/linux/minidump_writer/linux_ptrace_dumper.cc
+@@ -196,11 +196,20 @@ bool LinuxPtraceDumper::GetThreadInfoByIndex(size_t index, ThreadInfo* info) {
+     return false;
+   }
+ 
++#if 0
++  // With mixed mode, we are running 32 bit user space and 64 bit kernel space.
++  // Commented out to avoid crash while reading the fp registers.
++
++  // When running an arm build on an arm64 device, attempting to get the
++  // floating point registers fails. On Android, the floating point registers
++  // aren't written to the cpu context anyway, so just don't get them here.
++  // See http://crbug.com/508324
+   io.iov_base = &info->fpregs;
+   io.iov_len = sizeof(info->fpregs);
+   if (sys_ptrace(PTRACE_GETREGSET, tid, (void*)NT_FPREGSET, (void*)&io) == -1) {
+     return false;
+   }
++#endif
+ #else
+   if (sys_ptrace(PTRACE_GETREGS, tid, NULL, &info->regs) == -1) {
+     return false;

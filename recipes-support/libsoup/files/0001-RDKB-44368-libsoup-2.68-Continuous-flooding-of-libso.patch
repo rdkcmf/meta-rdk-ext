@@ -1,0 +1,47 @@
+From 9b37caf33dc9a332b76448a6bd94e8da2317537b Mon Sep 17 00:00:00 2001
+From: Manish Lepuru <manish_lepuru@Comcast.com>
+Date: Mon, 19 Sep 2022 05:03:46 +0000
+Subject: [PATCH] RDKB-44368:[libsoup-2.68]Continuous flooding of libsoup: tls
+ error: could not connect to 169.254.100.1 [GTlsCertificateFlags enum value:
+ 2] in journal log
+
+Test Procedure: Check journalctl logs of xupnp after enabling refactor and xupnp RFC
+Risks: High
+Priority: P1
+Signed-off-by:manish_lepuru@comcast.com
+
+Change-Id: I689b5fc4c8044f887deddcd19cf4de0add7497da
+---
+ libsoup/soup-socket.c | 5 +++--
+ 1 file changed, 3 insertions(+), 2 deletions(-)
+
+diff --git a/libsoup/soup-socket.c b/libsoup/soup-socket.c
+index ca7111f..ee4a969 100644
+--- a/libsoup/soup-socket.c
++++ b/libsoup/soup-socket.c
+@@ -1349,6 +1349,8 @@ soup_socket_listen_full (SoupSocket *sock,
+ 	return FALSE;
+ }
+ 
++static volatile GTlsCertificateFlags cFlags=G_TLS_CERTIFICATE_VALIDATE_ALL;
++
+ static void
+ soup_socket_peer_certificate_changed (GObject *conn, GParamSpec *pspec,
+ 				      gpointer sock)
+@@ -1357,7 +1359,7 @@ soup_socket_peer_certificate_changed (GObject *conn, GParamSpec *pspec,
+ 
+ 	priv->tls_errors = g_tls_connection_get_peer_certificate_errors (G_TLS_CONNECTION (priv->conn));
+ 
+-	if (priv->tls_errors) {
++	if (priv->tls_errors & cFlags) {
+ 		GSocketAddress *address = g_socket_get_remote_address(priv->gsock, NULL);
+ 		if (G_IS_INET_SOCKET_ADDRESS (address)) {
+ 			char *tmp_name = NULL;
+@@ -1380,7 +1382,6 @@ soup_socket_accept_certificate (GTlsConnection *conn, GTlsCertificate *cert,
+ 	return TRUE;
+ }
+ 
+-static volatile GTlsCertificateFlags cFlags=G_TLS_CERTIFICATE_VALIDATE_ALL;
+ 
+ void
+ soup_socket_set_certificate_flags(unsigned int flags)

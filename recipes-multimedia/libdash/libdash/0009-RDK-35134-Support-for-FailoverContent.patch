@@ -1,0 +1,429 @@
+From 64ef0fa21234c171162c0a89aa7ec27ff897e9b0 Mon Sep 17 00:00:00 2001
+From: bmaria645 <Bhuvaneswari_Mariappan@comcast.com>
+Date: Thu, 21 Apr 2022 10:19:14 +0000
+Subject: [PATCH] Failover2
+
+---
+ libdash/include/IFCS.h                | 34 ++++++++++++++
+ libdash/include/IFailoverContent.h    | 32 ++++++++++++++
+ libdash/include/ISegmentBase.h        |  8 ++++
+ libdash/source/mpd/FCS.cpp            | 29 ++++++++++++
+ libdash/source/mpd/FCS.h              | 31 +++++++++++++
+ .../libdash/source/mpd/FailoverContent.cpp    | 33 ++++++++++++++
+ libdash/source/mpd/FailoverContent.h  | 32 ++++++++++++++
+ libdash/source/mpd/SegmentBase.cpp    |  9 ++++
+ libdash/source/mpd/SegmentBase.h      |  4 ++
+ libdash/source/xml/Node.cpp           | 44 +++++++++++++++++++
+ libdash/source/xml/Node.h             |  4 ++
+ 11 files changed, 260 insertions(+)
+ create mode 100644 libdash/libdash/include/IFCS.h
+ create mode 100644 libdash/libdash/include/IFailoverContent.h
+ create mode 100644 libdash/libdash/source/mpd/FCS.cpp
+ create mode 100644 libdash/libdash/source/mpd/FCS.h
+ create mode 100644 libdash/libdash/source/mpd/FailoverContent.cpp
+ create mode 100644 libdash/libdash/source/mpd/FailoverContent.h
+
+diff --git a/libdash/include/IFCS.h b/libdash/include/IFCS.h
+new file mode 100644
+index 0000000..4a0369a
+--- /dev/null
++++ b/libdash/include/IFCS.h
+@@ -0,0 +1,34 @@
++#ifndef IFCS_H_
++#define IFCS_H_
++
++#include "config.h"
++#include "IMPDElement.h"
++
++namespace dash
++{
++    namespace mpd
++    {
++        class IFCS : public virtual IMPDElement
++        {
++            public:
++                virtual ~IFCS(){}
++
++                /**
++                 *  Returns an unsigned integer that specifies the value of the StartTime which corresponds to the \c @t attribute. 
++                 *  The value of this attribute minus the value of the @presentationTimeOffset specifies the MPD 
++		 *   start time, in @timescale units, of the first sample in the alternative content section
++		 *  The value of this attribute must be equal to or greater than the sum of the previous FCS element earliest presentat			ion time and the sum of the contiguous section duration.
++                 */
++                virtual uint64_t    GetStartTime    ()  const = 0;
++
++                /**
++                 *  Returns an integer that specifies the alternative content section duration in units of the value of the @timescale.
++		 *If it is not present, the alternative content section lasts until the start of the next FCS element, or until the end 		of the Period or until the end of MPD duration, whichever occurs first in the timeline. \n\n
++                 *  Duration corresponds to the \c \@d attribute.
++                 */
++                virtual uint64_t    GetDuration            ()  const = 0;
++        };
++    }
++}
++
++#endif /* IFCS_H_ */
+diff --git a/libdash/include/IFailoverContent.h b/libdash/include/IFailoverContent.h
+new file mode 100644
+index 0000000..e82b5f4
+--- /dev/null
++++ b/libdash/include/IFailoverContent.h
+@@ -0,0 +1,32 @@
++#ifndef IFAILOVERCONTENT_H_
++#define IFAILOVERCONTENT_H_
++
++#include "config.h"
++#include "IMPDElement.h"
++#include "IFCS.h"
++
++namespace dash
++{
++    namespace mpd
++    {
++        class IFailoverContent : public virtual IMPDElement
++        {
++            public:
++                virtual ~IFailoverContent(){}
++
++                /**
++                 *  Returns a pointer to a vector of dash::mpd::FCS objects, which contains the failover content.
++                 *  @return     a pointer to a vector of dash::mpd::FCS objects
++                 */
++                virtual std::vector<IFCS *>&          GetFCS           ()  const = 0;
++                
++                /**
++                 *  Returns a boolean that indicates whether the corresponding data results is a valid or not
++                 *  @return     a bool value
++                 */
++                virtual bool                          IsValid          ()  const = 0;
++        };
++    }
++}
++
++#endif /* IFAILOVERCONTENT_H_ */
+diff --git a/libdash/include/ISegmentBase.h b/libdash/include/ISegmentBase.h
+index 0330dd3..9504720 100644
+--- a/libdash/include/ISegmentBase.h
++++ b/libdash/include/ISegmentBase.h
+@@ -27,6 +27,7 @@
+ 
+ #include "IMPDElement.h"
+ #include "IURLType.h"
++#include "IFailoverContent.h"
+ 
+ namespace dash
+ {
+@@ -49,6 +50,13 @@ namespace dash
+                  */
+                 virtual const IURLType*     GetRepresentationIndex      ()  const = 0;
+ 
++
++		/**
++                 *  Returns a pointer to a dash::mpd::IFailoverContent object that contain failover content.
++                 *  @return     a pointer to dash::mpd::IFailoverContent object
++                 */
++                virtual const IFailoverContent*     GetFailoverContent      ()  const = 0;
++
+                 /**
+                  *  Returns an integer representing a timescale that specifies the timescale in units per seconds 
+                  *  to be used for the derivation of different real-time duration values in the Segment Information.\n
+diff --git a/libdash/source/mpd/FCS.cpp b/libdash/source/mpd/FCS.cpp
+new file mode 100644
+index 0000000..e0e4ca0
+--- /dev/null
++++ b/libdash/source/mpd/FCS.cpp
+@@ -0,0 +1,29 @@
++#include "FCS.h"
++
++using namespace dash::mpd;
++
++FCS::FCS    ()  :
++    startTime(0),
++    duration(0)
++{
++}
++FCS::~FCS   ()
++{
++}
++
++uint64_t    FCS::GetStartTime     ()  const
++{
++    return this->startTime;
++}
++void        FCS::SetStartTime     (uint64_t startTime) 
++{
++    this->startTime = startTime;
++}
++uint64_t    FCS::GetDuration             ()  const
++{
++    return this->duration;
++}
++void        FCS::SetDuration             (uint64_t duration) 
++{
++    this->duration = duration;
++}
+diff --git a/libdash/source/mpd/FCS.h b/libdash/source/mpd/FCS.h
+new file mode 100644
+index 0000000..58efe73
+--- /dev/null
++++ b/libdash/source/mpd/FCS.h
+@@ -0,0 +1,31 @@
++#ifndef FCS_H_
++#define FCS_H_
++
++#include "config.h"
++#include "IFCS.h"
++#include "AbstractMPDElement.h"
++
++namespace dash
++{
++    namespace mpd
++    {
++        class FCS : public IFCS, public AbstractMPDElement
++        {
++            public:
++                FCS             ();
++                virtual ~FCS    ();
++
++                uint64_t    GetStartTime    ()  const;
++                uint64_t    GetDuration     ()  const;
++
++                void    SetStartTime    (uint64_t startTime);
++                void    SetDuration     (uint64_t duration);
++
++            private:
++                uint64_t    startTime;
++                uint64_t    duration;
++        };
++    }
++}
++
++#endif /*IFCS_H_*/
+diff --git a/libdash/source/mpd/FailoverContent.cpp b/libdash/source/mpd/FailoverContent.cpp
+new file mode 100644
+index 0000000..8c6f337
+--- /dev/null
++++ b/libdash/source/mpd/FailoverContent.cpp
+@@ -0,0 +1,33 @@
++#include "FailoverContent.h"
++
++using namespace dash::mpd;
++
++FailoverContent::FailoverContent()  :
++                 valid(true)
++{
++}
++FailoverContent::~FailoverContent()
++{
++    for (size_t i=0; i < this->fcs.size(); i++)
++        delete(this->fcs.at(i));
++}
++
++std::vector<IFCS *>&   FailoverContent::GetFCS()  const
++{
++    return (std::vector<IFCS*> &) this->fcs;
++}
++
++void  FailoverContent::SetFCS(FCS *fcs_el)
++{
++    this->fcs.push_back(fcs_el);
++}
++
++bool FailoverContent::IsValid()const
++{
++    return this->valid;
++}
++
++void FailoverContent::SetValid(bool valid)
++{
++    this->valid = valid;
++}
+diff --git a/libdash/source/mpd/FailoverContent.h b/libdash/source/mpd/FailoverContent.h
+new file mode 100644
+index 0000000..413ae6e
+--- /dev/null
++++ b/libdash/source/mpd/FailoverContent.h
+@@ -0,0 +1,32 @@
++#ifndef FAILOVERCONTENT_H_
++#define FAILOVERCONTENT_H_
++
++#include "config.h"
++#include "IFailoverContent.h"
++#include "AbstractMPDElement.h"
++#include "FCS.h"
++
++namespace dash
++{
++    namespace mpd
++    {
++        class FailoverContent : public IFailoverContent, public AbstractMPDElement
++        {
++            public:
++                FailoverContent();
++                virtual ~FailoverContent();
++
++                std::vector<IFCS *>&  GetFCS()  const;
++                bool IsValid()  const;
++
++                void    SetFCS   (FCS *fcs_el);
++                void    SetValid (bool valid);
++
++            protected:
++                std::vector<IFCS *> fcs;
++                bool valid;
++        };
++    }
++}
++
++#endif /* FAILOVERCONTENT_H_ */
+diff --git a/libdash/source/mpd/SegmentBase.cpp b/libdash/source/mpd/SegmentBase.cpp
+index e370f12..71686e2 100644
+--- a/libdash/source/mpd/SegmentBase.cpp
++++ b/libdash/source/mpd/SegmentBase.cpp
+@@ -16,6 +16,7 @@ using namespace dash::mpd;
+ SegmentBase::SegmentBase    ()  :
+                 initialization(NULL),
+                 representationIndex(NULL),
++		failoverContent(NULL),
+                 timescale(1),
+                 presentationTimeOffset(0),
+                 indexRange(""),
+@@ -44,6 +45,14 @@ void                SegmentBase::SetRepresentationIndex     (URLType *representa
+ {
+     this->representationIndex = representationIndex;
+ }
++const IFailoverContent*     SegmentBase::GetFailoverContent     ()  const
++{
++    return this->failoverContent;
++}
++void                        SegmentBase::SetFailoverContent     (FailoverContent *failoverContent)
++{
++    this->failoverContent = failoverContent;
++}
+ uint32_t            SegmentBase::GetTimescale               ()  const
+ {
+     return this->timescale;
+diff --git a/libdash/source/mpd/SegmentBase.h b/libdash/source/mpd/SegmentBase.h
+index 94c9090..5c8577e 100644
+--- a/libdash/source/mpd/SegmentBase.h
++++ b/libdash/source/mpd/SegmentBase.h
+@@ -16,6 +16,7 @@
+ 
+ #include "ISegmentBase.h"
+ #include "URLType.h"
++#include "FailoverContent.h"
+ #include "AbstractMPDElement.h"
+ 
+ namespace dash
+@@ -30,6 +31,7 @@ namespace dash
+ 
+                 const IURLType*     GetInitialization           ()  const;
+                 const IURLType*     GetRepresentationIndex      ()  const;
++		const IFailoverContent* GetFailoverContent      ()  const;
+                 uint32_t            GetTimescale                ()  const;
+                 uint64_t            GetPresentationTimeOffset   ()  const;
+                 const std::string&  GetIndexRange               ()  const;
+@@ -37,6 +39,7 @@ namespace dash
+ 
+                 void    SetInitialization           (URLType *initialization);
+                 void    SetRepresentationIndex      (URLType *representationIndex);
++		void    SetFailoverContent          (FailoverContent *failoverContent);
+                 void    SetTimescale                (uint32_t timescale);
+                 void    SetPresentationTimeOffset   (uint64_t presentationTimeOffset);
+                 void    SetIndexRange               (const std::string& indexRange);
+@@ -45,6 +48,7 @@ namespace dash
+             protected:
+                 URLType     *initialization;
+                 URLType     *representationIndex;
++		FailoverContent *failoverContent;
+                 uint32_t    timescale;
+                 uint64_t    presentationTimeOffset;
+                 std::string indexRange;
+diff --git a/libdash/source/xml/Node.cpp b/libdash/source/xml/Node.cpp
+index 2d88e4c..9ada9c3 100644
+--- a/libdash/source/xml/Node.cpp
++++ b/libdash/source/xml/Node.cpp
+@@ -289,6 +289,45 @@ dash::mpd::URLType*                         Node::ToURLType             (HTTPTra
+     urlType->AddRawAttributes(this->attributes);
+     return urlType;
+ }
++dash::mpd::FCS*                        Node::ToFCS            ()  const
++{
++    dash::mpd::FCS* fcs = new dash::mpd::FCS();
++
++    if (this->HasAttribute("t"))
++    {
++        fcs->SetStartTime(strtoul(this->GetAttributeValue("t").c_str(), NULL, 10));
++    }
++    if (this->HasAttribute("d"))
++    {
++        fcs->SetDuration(strtoul(this->GetAttributeValue("d").c_str(), NULL, 10));
++    }
++
++    fcs->AddRawAttributes(this->attributes);
++    return fcs;
++}
++dash::mpd::FailoverContent*                 Node::ToFailoverContent     ()  const
++{
++    dash::mpd::FailoverContent* failoverContent = new dash::mpd::FailoverContent();
++
++	if (this->HasAttribute("valid"))
++    {
++        failoverContent->SetValid(dash::helpers::String::ToBool(this->GetAttributeValue("valid")));
++    }
++
++    std::vector<Node *> subNodes = this->GetSubNodes();
++    for(size_t i = 0; i < subNodes.size(); i++)
++    {
++        if (subNodes.at(i)->GetName() == "FCS")
++        {
++            failoverContent->SetFCS(subNodes.at(i)->ToFCS());
++            continue;
++        }
++        failoverContent->AddAdditionalSubNode((xml::INode *) new Node(*(subNodes.at(i))));
++    }
++
++    failoverContent->AddRawAttributes(this->attributes);
++    return failoverContent;
++}
+ dash::mpd::SegmentBase*                     Node::ToSegmentBase         ()  const
+ {
+     dash::mpd::SegmentBase* segmentBase = new dash::mpd::SegmentBase();
+@@ -298,6 +337,11 @@ dash::mpd::SegmentBase*                     Node::ToSegmentBase         ()  cons
+ 
+     for(size_t i = 0; i < subNodes.size(); i++)
+     {
++		if (subNodes.at(i)->GetName() == "FailoverContent")
++        {
++            segmentBase->SetFailoverContent(subNodes.at(i)->ToFailoverContent());
++            continue;
++        }
+         if (subNodes.at(i)->GetName() != "Initialization" && subNodes.at(i)->GetName() != "RepresentationIndex")
+             segmentBase->AddAdditionalSubNode((xml::INode *) new Node(*(subNodes.at(i))));
+     }
+diff --git a/libdash/source/xml/Node.h b/libdash/source/xml/Node.h
+index 28fc4da..ee24ad8 100644
+--- a/libdash/source/xml/Node.h
++++ b/libdash/source/xml/Node.h
+@@ -22,6 +22,8 @@
+ #include "../mpd/UTCTiming.h"
+ #include "../mpd/ContentComponent.h"
+ #include "../mpd/Descriptor.h"
++#include "../mpd/FailoverContent.h"
++#include "../mpd/FCS.h"
+ #include "../mpd/Metrics.h"
+ #include "../mpd/MPD.h"
+ #include "../mpd/MultipleSegmentBase.h"
+@@ -85,6 +87,8 @@ namespace dash
+                 dash::mpd::UTCTiming*                       ToUTCTiming             ()  const;
+                 dash::mpd::ContentComponent*                ToContentComponent      ()  const;
+                 dash::mpd::Descriptor*                      ToDescriptor            ()  const;
++		dash::mpd::FailoverContent*                 ToFailoverContent       ()  const;
++		dash::mpd::FCS*                             ToFCS                   ()  const;
+                 dash::mpd::Metrics*                         ToMetrics               ()  const;
+                 dash::mpd::Period*                          ToPeriod                ()  const;
+                 dash::mpd::ProgramInformation*              ToProgramInformation    ()  const;
+-- 
+2.17.1
+
+

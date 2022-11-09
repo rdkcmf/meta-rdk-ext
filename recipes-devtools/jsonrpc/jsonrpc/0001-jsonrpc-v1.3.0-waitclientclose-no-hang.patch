@@ -1,0 +1,13 @@
+diff --git a/src/jsonrpccpp/server/connectors/linuxtcpsocketserver.cpp b/src/jsonrpccpp/server/connectors/linuxtcpsocketserver.cpp
+index 3ce1f13..1ec66f2 100644
+--- a/src/jsonrpccpp/server/connectors/linuxtcpsocketserver.cpp
++++ b/src/jsonrpccpp/server/connectors/linuxtcpsocketserver.cpp
+@@ -115,7 +115,7 @@ void LinuxTcpSocketServer::HandleConnection(int connection) {
+ bool LinuxTcpSocketServer::WaitClientClose(const int &fd, const int &timeout) {
+   bool ret = false;
+   int i = 0;
+-  while ((recv(fd, NULL, 0, 0) != 0) && i < timeout) {
++  while ((recv(fd, NULL, 0, MSG_PEEK | MSG_DONTWAIT) != 0) && i < timeout) { //MSG_PEEK | MSG_DONTWAIT flags will ensure recv() is non-blocking
+     usleep(1);
+     ++i;
+     ret = true;
