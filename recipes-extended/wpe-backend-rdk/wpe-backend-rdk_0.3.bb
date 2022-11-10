@@ -23,7 +23,7 @@ inherit cmake pkgconfig
 WPE_BACKEND ?= "essos"
 
 PACKAGECONFIG ?= "${WPE_BACKEND}"
-PACKAGECONFIG_append += "${@bb.utils.contains('DISTRO_FEATURES', 'gaming-support', 'gamepad', '', d)}"
+PACKAGECONFIG_append += " gamepad"
 
 PACKAGECONFIG[westeros] = "-DUSE_BACKEND_WESTEROS=ON -DUSE_KEY_INPUT_HANDLING_LINUX_INPUT=OFF,,wayland westeros libxkbcommon"
 PACKAGECONFIG[essos] = "-DUSE_BACKEND_ESSOS=ON -DUSE_INPUT_LIBINPUT=OFF,-DUSE_BACKEND_ESSOS=OFF,essos libxkbcommon"

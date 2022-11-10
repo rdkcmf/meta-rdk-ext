@@ -35,7 +35,7 @@ PACKAGECONFIG ?= "usesoup2 2dcanvas cssshapes fetchapi full_logs mediasource enc
                   promise ${PROVISIONING} resourcetiming video ${WPE_BACKEND} mediastream native_audio sampling-profiler \
                   ${@bb.utils.contains('DISTRO_FEATURES', 'opencdm', 'wpeframework_opencdm', '', d)}"
 
-PACKAGECONFIG_append += "${@bb.utils.contains('DISTRO_FEATURES', 'gaming-support', 'indexeddb subtlecrypto webaudio gamepad', '', d)}"
+PACKAGECONFIG_append += " gamepad"
 
 PACKAGECONFIG_remove_libc-musl = "sampling-profiler"
 
