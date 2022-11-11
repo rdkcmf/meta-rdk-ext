@@ -7,7 +7,7 @@ Upstream-Status: Pending
 
 Signed-off-by: corey.hsu <corey.hsu@realtek.com>
 ---
- .../graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp   | 9 +++++++++
+ .../graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp   | 8 ++++++++
  Source/cmake/OptionsWPE.cmake                            | 1 +
  2 files changed, 10 insertions(+)
 
@@ -15,17 +15,16 @@ diff --git a/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStrea
 index cee9a5d9789a..88c384a87a61 100644
 --- a/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp
 +++ b/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp
-@@ -3218,6 +3218,15 @@ void MediaPlayerPrivateGStreamer::elementSetupCallback(MediaPlayerPrivateGStream
+@@ -3218,6 +3218,14 @@ void MediaPlayerPrivateGStreamer::elementSetupCallback(MediaPlayerPrivateGStream
          }
  #endif
      }
 +#if ENABLE(MEDIA_STREAM) && PLATFORM(REALTEK)
-+    if (g_object_class_find_property (G_OBJECT_GET_CLASS (element),"media-tunnel")) {
-+        if (player->m_streamPrivate != nullptr) {
-+            GST_INFO("Enable 'immediate-output' in rtkaudiosink");
-+            g_object_set (G_OBJECT(element), "media-tunnel", FALSE, nullptr);
-+            g_object_set (G_OBJECT(element), "audio-service", TRUE, nullptr);
-+        }
++    if (player->m_streamPrivate != nullptr && g_object_class_find_property (G_OBJECT_GET_CLASS (element),"media-tunnel")) {
++        GST_INFO("Enable 'immediate-output' in rtkaudiosink");
++        g_object_set (G_OBJECT(element), "media-tunnel", FALSE, nullptr);
++        g_object_set (G_OBJECT(element), "audio-service", TRUE, nullptr);
++        g_object_set (G_OBJECT(element), "lowdelay-sync-mode", TRUE, nullptr);
 +    }
 +#endif
      // FIXME: Following is a hack needed to get westeros-sink autoplug correctly with playbin3.

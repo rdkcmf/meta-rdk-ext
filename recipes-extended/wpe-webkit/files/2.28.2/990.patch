@@ -1,7 +1,7 @@
 From 47af9633083c563d6d4ba0dd6f28178df57c711e Mon Sep 17 00:00:00 2001
 From: Eugene Mutavchi <Ievgen_Mutavchi@comcast.com>
 Date: Fri, 2 Dec 2022 16:46:53 +0000
-Subject: [PATCH 1/5] Enable WebRTC release log
+Subject: [PATCH 1/6] Enable WebRTC release log
 
 ---
  .../platform/mediastream/libwebrtc/LibWebRTCProvider.cpp        | 2 +-
@@ -24,7 +24,7 @@ index 6bb0188ad2388..debfc4aab7a73 100644
 From 2d08cd578f003748aca24a7d2253535853793a98 Mon Sep 17 00:00:00 2001
 From: Eugene Mutavchi <Ievgen_Mutavchi@comcast.com>
 Date: Fri, 2 Dec 2022 16:52:11 +0000
-Subject: [PATCH 2/5] Report HW decoding capability for Realtek OMX and
+Subject: [PATCH 2/6] Report HW decoding capability for Realtek OMX and
  WesterosSink decoders
 
 ---
@@ -56,7 +56,7 @@ index 738a44f8ddd61..56e618f1c75af 100644
 From 71f73fb5dad572b202b83a038ef837cbfbc47d97 Mon Sep 17 00:00:00 2001
 From: Eugene Mutavchi <Ievgen_Mutavchi@comcast.com>
 Date: Fri, 2 Dec 2022 16:54:17 +0000
-Subject: [PATCH 3/5] Exclude HW elements from media stream decoding pipeline
+Subject: [PATCH 3/6] Exclude HW elements from media stream decoding pipeline
 
 ---
  .../libwebrtc/GStreamerVideoDecoderFactory.cpp      | 13 ++++++++++---
@@ -111,7 +111,7 @@ index 5ad84409af40c..30215e58f58f1 100644
 From 6bc3f494c150ab53924f4bd6600db492579378bd Mon Sep 17 00:00:00 2001
 From: Eugene Mutavchi <Ievgen_Mutavchi@comcast.com>
 Date: Fri, 2 Dec 2022 18:42:36 +0000
-Subject: [PATCH 4/5] Keep PTS estimation on Realtek and Broadcom platforms
+Subject: [PATCH 4/6] Keep PTS estimation on Realtek and Broadcom platforms
 
 ---
  Source/ThirdParty/libwebrtc/CMakeLists.txt            | 11 +++++++++++
@@ -155,7 +155,7 @@ index c62c848c09a90..d2d7b42692788 100644
 From f43b0037633fea33963edaf93654c3677a822aac Mon Sep 17 00:00:00 2001
 From: Eugene Mutavchi <Ievgen_Mutavchi@comcast.com>
 Date: Fri, 2 Dec 2022 20:15:40 +0000
-Subject: [PATCH 5/5] configure 'immediate-output' for realtek audio sink
+Subject: [PATCH 5/6] configure 'immediate-output' for realtek audio sink
 
 ---
  .../graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp    | 8 ++++++++
@@ -180,3 +180,25 @@ index 314ef94b4f306..00aae74293d00 100644
  }
  
  void MediaPlayerPrivateGStreamer::checkPlayingConsitency()
+
+From 120a343354ca96d1a1942348a6b451381206c5c8 Mon Sep 17 00:00:00 2001
+From: Gurdal Oruklu <gurdaloruklu@gmail.com>
+Date: Thu, 8 Dec 2022 11:25:28 -0800
+Subject: [PATCH 6/6] added lowdelay-sync-mode=true for Realtek immediate-mode
+
+---
+ .../platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp  | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp b/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp
+index 00aae74293d00..25350ef16057c 100644
+--- a/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp
++++ b/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp
+@@ -3940,6 +3940,7 @@ void MediaPlayerPrivateGStreamer::configureElement(GstElement* element)
+         GST_INFO("Enable 'immediate-output' in rtkaudiosink");
+         g_object_set (G_OBJECT(element), "media-tunnel", FALSE, nullptr);
+         g_object_set (G_OBJECT(element), "audio-service", TRUE, nullptr);
++        g_object_set (G_OBJECT(element), "lowdelay-sync-mode", TRUE, nullptr);
+     }
+ #endif
+ }
