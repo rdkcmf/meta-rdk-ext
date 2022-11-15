@@ -1,0 +1,38 @@
+From 4766a138dbf9006cffd13dc2ed0e30c43e49650b Mon Sep 17 00:00:00 2001
+From: Alexandr Gavriliuc <Alexandr_Gavriliuc@comcast.com>
+Date: Fri, 16 Sep 2022 06:44:07 +0200
+Subject: [PATCH] bring commit a3c865b42cfb8ecc193342d421bd7acfa005de5f
+
+Change-Id: I6bda35f800e7203b0ae424f5e5b57bc5a7afc20b
+---
+ Source/JavaScriptCore/runtime/JSLock.cpp | 5 ++---
+ 1 file changed, 2 insertions(+), 3 deletions(-)
+
+diff --git a/Source/JavaScriptCore/runtime/JSLock.cpp b/Source/JavaScriptCore/runtime/JSLock.cpp
+index 16aa369f4850..cae898484c9d 100644
+--- a/Source/JavaScriptCore/runtime/JSLock.cpp
++++ b/Source/JavaScriptCore/runtime/JSLock.cpp
+@@ -201,10 +201,9 @@ void JSLock::unlock(intptr_t unlockCount)
+ }
+ 
+ void JSLock::willReleaseLock()
+-{   
++{
+     RefPtr<VM> vm = m_vm;
+     if (vm) {
+-        RELEASE_ASSERT_WITH_MESSAGE(!vm->hasCheckpointOSRSideState(), "Releasing JSLock but pending checkpoint side state still available");
+         vm->drainMicrotasks();
+ 
+         if (!vm->topCallFrame)
+@@ -212,7 +211,7 @@ void JSLock::willReleaseLock()
+ 
+         vm->heap.releaseDelayedReleasedObjects();
+         vm->setStackPointerAtVMEntry(nullptr);
+-        
++
+         if (m_shouldReleaseHeapAccess)
+             vm->heap.releaseAccess();
+     }
+-- 
+2.25.1
+
