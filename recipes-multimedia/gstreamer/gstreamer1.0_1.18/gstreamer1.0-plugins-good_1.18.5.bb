@@ -31,6 +31,7 @@ SRC_URI = "https://gstreamer.freedesktop.org/src/gst-plugins-good/gst-plugins-go
 	   file://0035-qtdemux-check-ss_info-gst1.18.patch \
 	   file://0037-qtdemux-aamp-avoid-unwanted-header-logging-gst1.18.patch \
            file://0038-fix-for-switching-from-clear-to-encrypted-and-vice-v.patch \
+           file://0039-LLAMA-8596-Fix-for-demux-end-of-segment-detection.patch \
            "
 
 SRC_URI[sha256sum] = "3aaeeea7765fbf8801acce4a503a9b05f73f04e8a35352e9d00232cfd555796b"

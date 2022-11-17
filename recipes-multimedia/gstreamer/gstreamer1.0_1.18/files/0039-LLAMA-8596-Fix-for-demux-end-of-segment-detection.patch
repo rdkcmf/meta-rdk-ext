@@ -1,0 +1,24 @@
+From 21e4ee67d7fe67f6afc992196fa93855df5125a9 Mon Sep 17 00:00:00 2001
+From: Jack Howgate <jack.howgate@sky.uk>
+Date: Thu, 17 Nov 2022 17:46:10 +0000
+Subject: [PATCH] Convert dts and segment.stop values to the same timescale for
+ end of segment check in order to prevent unintended early EOS
+
+---
+ gst/isomp4/qtdemux.c | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+Index: gst-plugins-good-1.18.5/gst/isomp4/qtdemux.c
+===================================================================
+--- gst-plugins-good-1.18.5.orig/gst/isomp4/qtdemux.c
++++ gst-plugins-good-1.18.5/gst/isomp4/qtdemux.c
+@@ -7714,7 +7714,8 @@ gst_qtdemux_process_adapter (GstQTDemux
+           /* check for segment end */
+           if (G_UNLIKELY (demux->segment.stop != -1
+                   && demux->segment.stop <= dts && stream->on_keyframe)
+-              && !(demux->upstream_format_is_time && demux->segment.rate < 0)) {
++              && !(demux->upstream_format_is_time && demux->segment.rate < 0)
++              && GSTTIME_TO_QTTIME(demux, demux->segment.stop) < GSTTIME_TO_QTTIME(demux, dts)) {
+             GST_DEBUG_OBJECT (demux, "we reached the end of our segment.");
+             stream->time_position = GST_CLOCK_TIME_NONE;        /* this means EOS */
+ 
