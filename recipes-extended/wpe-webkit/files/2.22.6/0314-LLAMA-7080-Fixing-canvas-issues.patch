@@ -1,0 +1,70 @@
+From 664718a21f4c974738325be3a0c87e7eb82f18e1 Mon Sep 17 00:00:00 2001
+From: Syed Karimullah <Syed_Karimullah@comcast.com>
+Date: Fri, 11 Nov 2022 12:04:52 +0000
+Subject: [PATCH] LLAMA-7080: Fixing canvas issues
+
+
+diff --git a/Source/WebCore/platform/graphics/cairo/ImageBufferCairo.cpp b/Source/WebCore/platform/graphics/cairo/ImageBufferCairo.cpp
+index 508d0a48e9d8..0eb76a163642 100644
+--- a/Source/WebCore/platform/graphics/cairo/ImageBufferCairo.cpp
++++ b/Source/WebCore/platform/graphics/cairo/ImageBufferCairo.cpp
+@@ -169,21 +169,23 @@ void ImageBufferData::swapBuffersIfNeeded()
+ 
+     GLContext* previousActiveContext = GLContext::current();
+ 
+-    if (!m_compositorTexture) {
++    if (!m_compositorTexture)
+         createCompositorBuffer();
+ 
+-        auto proxyOperation =
+-            [this](TextureMapperPlatformLayerProxy& proxy)
+-            {
+-                LockHolder holder(proxy.lock());
+-                proxy.pushNextBuffer(std::make_unique<TextureMapperPlatformLayerBuffer>(m_compositorTexture, m_size, TextureMapperGL::ShouldBlend, GL_RGBA));
+-            };
++    auto proxyOperation =
++     [this](TextureMapperPlatformLayerProxy& proxy)
++     {
++        if (proxy.isEmpty()) {
++            LockHolder holder(proxy.lock());
++            proxy.pushNextBuffer(std::make_unique<TextureMapperPlatformLayerBuffer>(m_compositorTexture, m_size, TextureMapperGL::ShouldBlend, GL_RGBA));
++        }
++     };
+ #if USE(NICOSIA)
+         proxyOperation(downcast<Nicosia::ContentLayerTextureMapperImpl>(m_nicosiaLayer->impl()).proxy());
+ #else
+         proxyOperation(*m_platformLayerProxy);
+ #endif
+-    }
++
+ 
+     // It would be great if we could just swap the buffers here as we do with webgl, but that breaks the cases
+     // where one frame uses the content already rendered in the previous frame. So we just copy the content
+@@ -298,12 +300,6 @@ ImageBuffer::ImageBuffer(const FloatSize& size, float resolutionScale, ColorSpac
+         m_data.createCairoGLSurface();
+         if (!m_data.m_surface || cairo_surface_status(m_data.m_surface.get()) != CAIRO_STATUS_SUCCESS)
+             m_data.m_renderingMode = Unaccelerated; // If allocation fails, fall back to non-accelerated path.
+-#if USE(COORDINATED_GRAPHICS_THREADED)
+-        else {
+-            LockHolder locker(m_data.m_platformLayerProxy->lock());
+-            m_data.m_platformLayerProxy->pushNextBuffer(std::make_unique<TextureMapperPlatformLayerBuffer>(m_data.m_texture, m_size, TextureMapperGL::ShouldBlend, GraphicsContext3D::RGBA));
+-        }
+-#endif
+     }
+     if (m_data.m_renderingMode == Unaccelerated)
+ #else
+diff --git a/Source/WebCore/platform/graphics/texmap/TextureMapperPlatformLayerProxy.h b/Source/WebCore/platform/graphics/texmap/TextureMapperPlatformLayerProxy.h
+index 0507f4241e46..3d8d04051bbe 100644
+--- a/Source/WebCore/platform/graphics/texmap/TextureMapperPlatformLayerProxy.h
++++ b/Source/WebCore/platform/graphics/texmap/TextureMapperPlatformLayerProxy.h
+@@ -64,6 +64,7 @@ public:
+     std::unique_ptr<TextureMapperPlatformLayerBuffer> getAvailableBuffer(const IntSize&, GLint internalFormat);
+     void pushNextBuffer(std::unique_ptr<TextureMapperPlatformLayerBuffer>);
+     bool isActive();
++    bool isEmpty() { return !m_currentBuffer; }
+ 
+     WEBCORE_EXPORT void activateOnCompositingThread(Compositor*, TextureMapperLayer*);
+     WEBCORE_EXPORT void invalidate(bool layerOnly = false);
+-- 
+2.17.1
+

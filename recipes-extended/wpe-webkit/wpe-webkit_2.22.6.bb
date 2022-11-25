@@ -194,6 +194,7 @@ SRC_URI += "file://2.22.6/0002-Patch-Realtek-audio-lowlatency-flow.patch"
 SRC_URI += "file://2.22.6/0312-iheart-spinning-wheel.patch"
 SRC_URI += "file://2.22.6/0307-Flush-the-pipeline-based-on-m_gstSeekCompleted.patch"
 SRC_URI += "file://2.22.6/0001-DELIA-58210-Flush-pending-canvas-drawing.patch"
+SRC_URI += "file://2.22.6/0314-LLAMA-7080-Fixing-canvas-issues.patch"
 
 # device specific configs
 PACKAGECONFIG[westeros] = "-DUSE_WPEWEBKIT_BACKEND_WESTEROS=ON -DUSE_WPEWEBKIT_PLATFORM_WESTEROS=ON -DUSE_KEY_INPUT_HANDLING_LINUX_INPUT=OFF -DUSE_GSTREAMER_HOLEPUNCH=ON -DUSE_EXTERNAL_HOLEPUNCH=ON -DUSE_WESTEROS_SINK=ON,,westeros westeros-sink"
