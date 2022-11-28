@@ -1,0 +1,85 @@
+From 432d510d776732683dadfd0231ab9c9cb239cf67 Mon Sep 17 00:00:00 2001
+From: Filipe Norte <filipe.norte@sky.uk>
+Date: Mon, 28 Nov 2022 18:12:51 +0000
+Subject: [PATCH] LLAMA-8893 - Fix audio mute when using asplayer
+
+Reason for change: When an app that uses asplayer is started
+on a tuned channel, audio goes mute, because essos resource
+manager gets invoked on the audio sink, stealing the audio
+from running asplayer
+Test Procedure: See ticket. Test several apps audio for
+potential regressions
+Risks: Medium
+
+Signed-off-by: Filipe Norte <filipe.norte@sky.uk>
+---
+ .../gstreamer/MediaPlayerPrivateGStreamer.cpp | 46 +++++++------------
+ 1 file changed, 17 insertions(+), 29 deletions(-)
+
+diff --git a/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp b/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp
+index 132f536873af..ba486dd3337c 100644
+--- a/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp
++++ b/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp
+@@ -1450,35 +1450,10 @@ void MediaPlayerPrivateGStreamer::loadingFailed(MediaPlayer::NetworkState networ
+ 
+ GstElement* MediaPlayerPrivateGStreamer::createAudioSink()
+ {
+-#if PLATFORM(BCM_NEXUS)
+-    m_autoAudioSink = gst_element_factory_make( "brcmaudiosink", nullptr);
+-    if (!m_autoAudioSink)
+-        GST_ERROR_OBJECT(m_pipeline.get(), "GStreamer's brcmaudiosink not found. Please check your gst-bcm installation");
+-    RELEASE_ASSERT(m_autoAudioSink);
+-#else
+-    m_autoAudioSink = gst_element_factory_make("autoaudiosink", nullptr);
+-    if (!m_autoAudioSink) {
+-        GST_WARNING("GStreamer's autoaudiosink not found. Please check your gst-plugins-good installation");
+-        return nullptr;
+-    }
+-
+-    g_signal_connect_swapped(m_autoAudioSink.get(), "child-added", G_CALLBACK(setAudioStreamPropertiesCallback), this);
+-#endif
+-
+-#if PLATFORM(BCM_NEXUS) || PLATFORM(INTEL_CE)
+-    return m_autoAudioSink.get();
+-#endif
+-
+-/* "Disable webaudio source provider on all platforms as it requires SW audio decoder" */
+-#if 0 // ENABLE(WEB_AUDIO)
+-    GstElement* audioSinkBin = gst_bin_new("audio-sink");
+-    ensureAudioSourceProvider();
+-    m_audioSourceProvider->configureAudioBin(audioSinkBin, nullptr);
+-    m_autoAudioSink = audioSinkBin;
+-    return audioSinkBin;
+-#else
+-    return m_autoAudioSink.get();
+-#endif
++    // If audio is being controlled by an external pipeline, creating sink here may interfere with
++    // audio playback (LLAMA-8893). Instead, check if an audio sink was setup in handleMessage
++    // and use it
++    return nullptr;
+ }
+ 
+ GstElement* MediaPlayerPrivateGStreamer::audioSink() const
+@@ -2062,6 +2037,19 @@ void MediaPlayerPrivateGStreamer::handleMessage(GstMessage* message)
+             }
+         }
+ #endif
++        if (currentState == GST_STATE_NULL && newState == GST_STATE_READY) {
++            // If we didn't create an audio sink, store a reference to the created one.
++            if (!m_autoAudioSink) {
++                // Detect a audio sink element
++                GstElement* element = GST_ELEMENT(GST_MESSAGE_SRC(message));
++                if (GST_IS_BASE_SINK(element)) {
++                    const gchar* klass_str = gst_element_get_metadata(element, "klass");
++                    if (strstr(klass_str, "Sink") && strstr(klass_str, "Audio")) {
++                        m_autoAudioSink = element;
++                    }
++                 }
++            }
++        }
+ 
+         if (!messageSourceIsPlaybin || m_isDelayingLoad)
+             break;
+-- 
+2.37.3
+
