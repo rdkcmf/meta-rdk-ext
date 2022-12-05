@@ -1,0 +1,49 @@
+From 226eacc17a2fc19ed0368d9351b1395b6d38ab77 Mon Sep 17 00:00:00 2001
+From: Andrzej Surdej <Andrzej_Surdej@comcast.com>
+Date: Thu, 15 Dec 2022 15:54:25 +0000
+Subject: [PATCH] comcast - DELIA-59087 - Disable pausing playback for
+ buffering
+
+1) Disable buffering for progressive playback
+2) Set fixed playbin buffer-size so it won't try to estimate
+   based on platform dependent bitrate reports
+---
+ .../gstreamer/MediaPlayerPrivateGStreamer.cpp     | 15 +++++++++++++--
+ 1 file changed, 13 insertions(+), 2 deletions(-)
+
+diff --git a/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp b/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp
+index 6151d98c1d16..371c9f9b552e 100644
+--- a/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp
++++ b/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp
+@@ -2281,6 +2281,9 @@ void MediaPlayerPrivateGStreamer::updateBufferingStatus(GstBufferingMode mode, d
+     else
+         m_fillTimer.stop();
+ 
++    // Force buffering flag to be always false so we don't enter buffering state at all
++    m_isBuffering = false;
++
+     m_bufferingPercentage = percentage;
+     switch (mode) {
+     case GST_BUFFERING_STREAM: {
+@@ -2978,8 +2981,16 @@ void MediaPlayerPrivateGStreamer::createGSTPlayBin(const URL& url, const String&
+     m_isLegacyPlaybin = !g_strcmp0(playbinName, "playbin");
+ 
+     static Atomic<uint32_t> pipelineId;
+-    setPipeline(gst_element_factory_make(playbinName,
+-        (pipelineName.isEmpty() ? makeString("media-player-", pipelineId.exchangeAdd(1)) : pipelineName).utf8().data()));
++    GstElement* playbin = gst_element_factory_make(playbinName,
++        (pipelineName.isEmpty() ? makeString("media-player-", pipelineId.exchangeAdd(1)) : pipelineName).utf8().data());
++    if (!isMediaSource() && !url.protocolIs("mediastream")) { // for progressive playback only
++        // set fixed playbin buffer-size to disable uridecodebin estimations
++        // that could be platform dependent. Use default queue2 elem max size value
++        static constexpr gint kDefaultQueue2BufferSize = 2 * 1024 * 1024;   // Default queue2 size - 2 MB
++        g_object_set(G_OBJECT(playbin), "buffer-size", kDefaultQueue2BufferSize, nullptr);
++    }
++    setPipeline(playbin);
++
+     setStreamVolumeElement(GST_STREAM_VOLUME(m_pipeline.get()));
+ 
+     GST_INFO_OBJECT(pipeline(), "Using legacy playbin element: %s", boolForPrinting(m_isLegacyPlaybin));
+-- 
+2.17.1
+

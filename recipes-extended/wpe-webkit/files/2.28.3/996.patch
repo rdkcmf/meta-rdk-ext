@@ -1,0 +1,33 @@
+From c693e219f7627db37cc154cc7aeddacae3361822 Mon Sep 17 00:00:00 2001
+From: Andrzej Surdej <Andrzej_Surdej@comcast.com>
+Date: Mon, 12 Dec 2022 12:54:54 +0100
+Subject: [PATCH] [BCM] Limit brcmaudiodecoder buffering to 1sec for live
+ streams
+
+Default limit is 3 sec that with additional queue2 2sec limit
+and rounding errors gives 5-7sec for audio playback to be ready.
+
+Limit to 1sec so audio can start within 3-4 sec.
+---
+ .../graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp       | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+diff --git a/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp b/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp
+index 314ef94b4f30..34ffedf5eaff 100644
+--- a/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp
++++ b/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp
+@@ -3890,6 +3890,11 @@ void MediaPlayerPrivateGStreamer::configureElement(GstElement* element)
+ #if PLATFORM(BROADCOM)
+     if (g_str_has_prefix(GST_ELEMENT_NAME(element), "brcmaudiosink")) {
+         g_object_set(G_OBJECT(element), "async", TRUE, nullptr);
++    } else if (g_str_has_prefix(GST_ELEMENT_NAME(element), "brcmaudiodecoder")) {
++        if (m_isLiveStream.value_or(false)) {
++            // Limit BCM audio decoder buffering to 1sec so live progressive playback can start faster
++            g_object_set(G_OBJECT(element), "limit_buffering_ms", 1000, nullptr);
++        }
+     }
+ #endif
+ 
+-- 
+2.25.1
+

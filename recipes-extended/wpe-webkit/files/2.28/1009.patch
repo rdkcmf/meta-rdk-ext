@@ -1,0 +1,25 @@
+From 6f1be0f6b9afc57b84fc843d7e0e3298ffdc5cec Mon Sep 17 00:00:00 2001
+From: Jack Howgate <jack.howgate@sky.uk>
+Date: Mon, 16 Jan 2023 14:49:17 +0000
+Subject: [PATCH] Convert to lowercase before checking supported features
+
+---
+ .../platform/graphics/gstreamer/GStreamerRegistryScanner.cpp    | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/Source/WebCore/platform/graphics/gstreamer/GStreamerRegistryScanner.cpp b/Source/WebCore/platform/graphics/gstreamer/GStreamerRegistryScanner.cpp
+index be1f2d14ebba..cc6016b9d6db 100644
+--- a/Source/WebCore/platform/graphics/gstreamer/GStreamerRegistryScanner.cpp
++++ b/Source/WebCore/platform/graphics/gstreamer/GStreamerRegistryScanner.cpp
+@@ -386,7 +386,7 @@ bool GStreamerRegistryScanner::supportsFeatures(const String& features) const
+ {
+     // Apple TV requires this one for DD+.
+     constexpr auto dolbyDigitalPlusJOC = "joc";
+-    if (features == dolbyDigitalPlusJOC)
++    if (features.convertToASCIILowercase() == dolbyDigitalPlusJOC)
+         return true;
+ 
+     return false;
+-- 
+2.25.1
+
