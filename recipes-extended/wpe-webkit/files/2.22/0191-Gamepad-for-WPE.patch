@@ -1,12 +1,10 @@
-From b6beb7cb8770089054d5473e1f1ab80dae4e0898 Mon Sep 17 00:00:00 2001
-From: Ievgen Mutavchi <Ievgen_Mutavchi@comcast.com>
-Date: Wed, 17 Jun 2020 21:18:42 -0400
-Subject: [PATCH] Gamepad for WPE
-Source: COMCAST
-Upstream-Status: None
-Signed-off-by: Eugene Mutavchi <Ievgen_Mutavchi@comcast.com>
+From f899e5f5fe8600e7de7d299777811270778033ec Mon Sep 17 00:00:00 2001
+From: Manoj Bhatta <manoj_bhatta@comcast.com>
+Date: Sat, 10 Dec 2022 02:16:17 +0000
+Subject: [PATCH] - Gamepad for WPE
 
-
+This patch has additional fixes for 
+1) DELIA-59361: make gamepad visible on axes movement, if not
 ---
  Source/WebCore/PlatformWPE.cmake              |  10 ++
  .../platform/gamepad/wpe/WPEGamepad.cpp       |  77 ++++++++
@@ -26,12 +24,12 @@ Signed-off-by: Eugene Mutavchi <Ievgen_Mutavchi@comcast.com>
  create mode 100644 Source/WebKit/UIProcess/Gamepad/wpe/UIGamepadProviderWPE.cpp
 
 diff --git a/Source/WebCore/PlatformWPE.cmake b/Source/WebCore/PlatformWPE.cmake
-index fc52baaa116..1a5653926b6 100644
+index 2ad8e39428b4..c893c1d7f2cc 100644
 --- a/Source/WebCore/PlatformWPE.cmake
 +++ b/Source/WebCore/PlatformWPE.cmake
-@@ -75,3 +75,13 @@ list(APPEND WebCore_SYSTEM_INCLUDE_DIRECTORIES
-     ${UPOWERGLIB_INCLUDE_DIRS}
+@@ -77,3 +77,13 @@ list(APPEND WebCore_SYSTEM_INCLUDE_DIRECTORIES
      ${WPE_INCLUDE_DIRS}
+     ${ATK_INCLUDE_DIRS}
  )
 +
 +if (ENABLE_GAMEPAD)
@@ -45,7 +43,7 @@ index fc52baaa116..1a5653926b6 100644
 +endif ()
 diff --git a/Source/WebCore/platform/gamepad/wpe/WPEGamepad.cpp b/Source/WebCore/platform/gamepad/wpe/WPEGamepad.cpp
 new file mode 100644
-index 00000000000..923417c4541
+index 000000000000..4f8763fecd6b
 --- /dev/null
 +++ b/Source/WebCore/platform/gamepad/wpe/WPEGamepad.cpp
 @@ -0,0 +1,77 @@
@@ -119,7 +117,7 @@ index 00000000000..923417c4541
 +    wpe_gamepad_copy_axis_values(gamepad, m_axisValues.data(), m_axisValues.size());
 +    m_lastUpdateTime = MonotonicTime::now();
 +
-+    WPEGamepadProvider::singleton().scheduleInputNotification(gamepad);
++    WPEGamepadProvider::singleton().scheduleInputNotification(gamepad, true);
 +}
 +
 +
@@ -128,7 +126,7 @@ index 00000000000..923417c4541
 +#endif // ENABLE(GAMEPAD)
 diff --git a/Source/WebCore/platform/gamepad/wpe/WPEGamepad.h b/Source/WebCore/platform/gamepad/wpe/WPEGamepad.h
 new file mode 100644
-index 00000000000..0d04d8e0642
+index 000000000000..0d04d8e06425
 --- /dev/null
 +++ b/Source/WebCore/platform/gamepad/wpe/WPEGamepad.h
 @@ -0,0 +1,32 @@
@@ -166,7 +164,7 @@ index 00000000000..0d04d8e0642
 +#endif // ENABLE(GAMEPAD)
 diff --git a/Source/WebCore/platform/gamepad/wpe/WPEGamepadProvider.cpp b/Source/WebCore/platform/gamepad/wpe/WPEGamepadProvider.cpp
 new file mode 100644
-index 00000000000..bc40cd6d093
+index 000000000000..4481c17f2861
 --- /dev/null
 +++ b/Source/WebCore/platform/gamepad/wpe/WPEGamepadProvider.cpp
 @@ -0,0 +1,169 @@
@@ -341,7 +339,7 @@ index 00000000000..bc40cd6d093
 +#endif // ENABLE(GAMEPAD)
 diff --git a/Source/WebCore/platform/gamepad/wpe/WPEGamepadProvider.h b/Source/WebCore/platform/gamepad/wpe/WPEGamepadProvider.h
 new file mode 100644
-index 00000000000..d0470618bc0
+index 000000000000..d0470618bc0d
 --- /dev/null
 +++ b/Source/WebCore/platform/gamepad/wpe/WPEGamepadProvider.h
 @@ -0,0 +1,52 @@
@@ -398,7 +396,7 @@ index 00000000000..d0470618bc0
 +
 +#endif // ENABLE(GAMEPAD)
 diff --git a/Source/WebKit/SourcesWPE.txt b/Source/WebKit/SourcesWPE.txt
-index 1d8233d87f3..ad2275a9dbc 100644
+index c3188854619c..9055afe05d66 100644
 --- a/Source/WebKit/SourcesWPE.txt
 +++ b/Source/WebKit/SourcesWPE.txt
 @@ -97,6 +97,7 @@ Shared/wpe/WebEventFactory.cpp
@@ -410,7 +408,7 @@ index 1d8233d87f3..ad2275a9dbc 100644
  UIProcess/BackingStore.cpp
  UIProcess/DefaultUndoController.cpp
 diff --git a/Source/WebKit/UIProcess/API/wpe/WPEView.cpp b/Source/WebKit/UIProcess/API/wpe/WPEView.cpp
-index d6fc200d454..bc4418ad813 100644
+index cf14c83fd25b..21b48882bee3 100644
 --- a/Source/WebKit/UIProcess/API/wpe/WPEView.cpp
 +++ b/Source/WebKit/UIProcess/API/wpe/WPEView.cpp
 @@ -37,12 +37,22 @@
@@ -448,9 +446,9 @@ index d6fc200d454..bc4418ad813 100644
  {
 +    viewsVector().removeAll(this);
      m_compositingManagerProxy.finalize();
+     wpe_view_backend_destroy(m_backend);
  }
- 
-@@ -188,6 +201,13 @@ void View::setViewState(OptionSet<WebCore::ActivityState::Flag> flags)
+@@ -198,6 +211,13 @@ void View::setViewState(OptionSet<WebCore::ActivityState::Flag> flags)
  
      if (changedFlags)
          m_pageProxy->activityStateDidChange(changedFlags);
@@ -463,8 +461,8 @@ index d6fc200d454..bc4418ad813 100644
 +    }
  }
  
- void View::close()
-@@ -195,4 +215,37 @@ void View::close()
+ void View::setIgnoreResize(bool ignoreResize)
+@@ -211,4 +231,37 @@ void View::close()
      m_pageProxy->close();
  }
  
@@ -503,10 +501,10 @@ index d6fc200d454..bc4418ad813 100644
 +
  } // namespace WKWPE
 diff --git a/Source/WebKit/UIProcess/API/wpe/WPEView.h b/Source/WebKit/UIProcess/API/wpe/WPEView.h
-index 2ab48530ea1..a1418cd3c7f 100644
+index 7e658451d275..b17d85a5621c 100644
 --- a/Source/WebKit/UIProcess/API/wpe/WPEView.h
 +++ b/Source/WebKit/UIProcess/API/wpe/WPEView.h
-@@ -78,6 +78,10 @@ public:
+@@ -81,6 +81,10 @@ public:
      void setFullScreen(bool fullScreenState) { m_fullScreenModeActive = fullScreenState; };
  #endif
  
@@ -518,7 +516,7 @@ index 2ab48530ea1..a1418cd3c7f 100644
      View(struct wpe_view_backend*, const API::PageConfiguration&);
  
 diff --git a/Source/WebKit/UIProcess/Gamepad/UIGamepadProvider.cpp b/Source/WebKit/UIProcess/Gamepad/UIGamepadProvider.cpp
-index ecaac301b4b..2b1d9e074ee 100644
+index ecaac301b4bd..2b1d9e074ee2 100644
 --- a/Source/WebKit/UIProcess/Gamepad/UIGamepadProvider.cpp
 +++ b/Source/WebKit/UIProcess/Gamepad/UIGamepadProvider.cpp
 @@ -223,7 +223,7 @@ Vector<GamepadData> UIGamepadProvider::snapshotGamepads()
@@ -532,7 +530,7 @@ index ecaac301b4b..2b1d9e074ee 100644
  {
 diff --git a/Source/WebKit/UIProcess/Gamepad/wpe/UIGamepadProviderWPE.cpp b/Source/WebKit/UIProcess/Gamepad/wpe/UIGamepadProviderWPE.cpp
 new file mode 100644
-index 00000000000..14f06583716
+index 000000000000..14f06583716f
 --- /dev/null
 +++ b/Source/WebKit/UIProcess/Gamepad/wpe/UIGamepadProviderWPE.cpp
 @@ -0,0 +1,36 @@
@@ -572,6 +570,3 @@ index 00000000000..14f06583716
 +}
 +
 +#endif // ENABLE(GAMEPAD)
--- 
-2.20.1
-

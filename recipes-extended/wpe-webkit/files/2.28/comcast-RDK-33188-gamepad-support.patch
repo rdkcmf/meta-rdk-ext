@@ -1,9 +1,10 @@
-From 30113d558473e38d69513a35c738e99fab97eeda Mon Sep 17 00:00:00 2001
-From: nganes961 <nambirajan_ganesan@comcast.com>
-Date: Tue, 8 Feb 2022 13:26:21 +0000
+From aeba8e096aad5d38b8664ceebe3abfbfff6d99ac Mon Sep 17 00:00:00 2001
+From: Manoj Bhatta <manoj_bhatta@comcast.com>
+Date: Mon, 12 Dec 2022 16:01:26 +0000
 Subject: [PATCH] comcast - RDK-33188 - Gamepad changes
 
-Signed-off-by: nganes961 <nambirajan_ganesan@comcast.com>
+This patch has additional fixes for 
+1) DELIA-59361: make gamepad visible on axes movement, if not
 ---
  Source/WebCore/Headers.cmake                  |   1 +
  Source/WebCore/PlatformWPE.cmake              |  10 ++
@@ -24,10 +25,10 @@ Signed-off-by: nganes961 <nambirajan_ganesan@comcast.com>
  create mode 100644 Source/WebKit/UIProcess/Gamepad/wpe/UIGamepadProviderWPE.cpp
 
 diff --git a/Source/WebCore/Headers.cmake b/Source/WebCore/Headers.cmake
-index 03b2dcfe2c1c..196b6d1463ec 100644
+index 39a8e56ade42..ad64b6e34cd5 100644
 --- a/Source/WebCore/Headers.cmake
 +++ b/Source/WebCore/Headers.cmake
-@@ -1054,6 +1054,7 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
+@@ -1066,6 +1066,7 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
      platform/gamepad/GamepadProvider.h
      platform/gamepad/GamepadProviderClient.h
      platform/gamepad/PlatformGamepad.h
@@ -36,10 +37,10 @@ index 03b2dcfe2c1c..196b6d1463ec 100644
      platform/graphics/AlphaPremultiplication.h
      platform/graphics/ANGLEWebKitBridge.h
 diff --git a/Source/WebCore/PlatformWPE.cmake b/Source/WebCore/PlatformWPE.cmake
-index 36e70c162c8b..0081aba70f3a 100644
+index 1f3f287994f7..1924b70461ae 100644
 --- a/Source/WebCore/PlatformWPE.cmake
 +++ b/Source/WebCore/PlatformWPE.cmake
-@@ -69,3 +69,13 @@ list(APPEND WebCore_SYSTEM_INCLUDE_DIRECTORIES
+@@ -70,3 +70,13 @@ list(APPEND WebCore_SYSTEM_INCLUDE_DIRECTORIES
      ${WPE_INCLUDE_DIRS}
      ${WPEBACKEND_FDO_INCLUDE_DIRS}
  )
@@ -55,7 +56,7 @@ index 36e70c162c8b..0081aba70f3a 100644
 +endif ()
 diff --git a/Source/WebCore/platform/gamepad/wpe/WPEGamepad.cpp b/Source/WebCore/platform/gamepad/wpe/WPEGamepad.cpp
 new file mode 100644
-index 000000000000..923417c4541e
+index 000000000000..4f8763fecd6b
 --- /dev/null
 +++ b/Source/WebCore/platform/gamepad/wpe/WPEGamepad.cpp
 @@ -0,0 +1,77 @@
@@ -129,7 +130,7 @@ index 000000000000..923417c4541e
 +    wpe_gamepad_copy_axis_values(gamepad, m_axisValues.data(), m_axisValues.size());
 +    m_lastUpdateTime = MonotonicTime::now();
 +
-+    WPEGamepadProvider::singleton().scheduleInputNotification(gamepad);
++    WPEGamepadProvider::singleton().scheduleInputNotification(gamepad, true);
 +}
 +
 +
@@ -176,7 +177,7 @@ index 000000000000..bdfc12af186f
 +#endif // ENABLE(GAMEPAD)
 diff --git a/Source/WebCore/platform/gamepad/wpe/WPEGamepadProvider.cpp b/Source/WebCore/platform/gamepad/wpe/WPEGamepadProvider.cpp
 new file mode 100644
-index 000000000000..800d98180d9f
+index 000000000000..4481c17f2861
 --- /dev/null
 +++ b/Source/WebCore/platform/gamepad/wpe/WPEGamepadProvider.cpp
 @@ -0,0 +1,169 @@
@@ -408,10 +409,10 @@ index 000000000000..eca84ebccb28
 +
 +#endif // ENABLE(GAMEPAD)
 diff --git a/Source/WebKit/SourcesWPE.txt b/Source/WebKit/SourcesWPE.txt
-index 69a52e17a4a8..b0ecc9500f42 100644
+index 19e8a1471949..7924d5040188 100644
 --- a/Source/WebKit/SourcesWPE.txt
 +++ b/Source/WebKit/SourcesWPE.txt
-@@ -104,6 +104,7 @@ UIProcess/LegacySessionStateCodingNone.cpp
+@@ -105,6 +105,7 @@ UIProcess/LegacySessionStateCodingNone.cpp
  UIProcess/WebGrammarDetail.cpp
  UIProcess/WebMemoryPressureHandler.cpp @no-unify
  UIProcess/WebViewportAttributes.cpp
@@ -579,6 +580,3 @@ index 000000000000..14f06583716f
 +}
 +
 +#endif // ENABLE(GAMEPAD)
--- 
-2.17.1
-
