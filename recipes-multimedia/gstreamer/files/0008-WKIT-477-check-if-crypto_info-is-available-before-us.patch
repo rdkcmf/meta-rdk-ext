@@ -8,7 +8,6 @@ Subject: [PATCH] WKIT-477: check if 'crypto_info' is available before using it
 
 Source: COMCAST
 
-License: LGPL-2.1-or-later
 
 Upstream-Status: Pending
 

@@ -5,7 +5,6 @@ Subject: gst-plugins-base: Fix for >=make-4.3
 Account for make 4.3 backward incompatible change https://git.savannah.gnu.org/cgit/make.git/tree/NEWS#n27
 
 Source: https://bugs.gentoo.org/705974
-License: LGPL-2.1
 Upstream-Status: Backport [https://bugs.gentoo.org/705974]
 Signed-off-by: Khem Raj <khem_raj@comcast.com>
 

@@ -3,7 +3,6 @@ From: Goutam Damodaran <Goutam_Damodaran@Comcast.com>
 Date: Fri, 6 Mar 2020 07:32:10 +0000
 Subject: [PATCH] fingerprint dhcp lease file
 Source: COMCAST
-License: GPLV2
 Upstream-Status: Pending
 Signed-off-by: Goutam Damodaran <Goutam_Damodaran@Comcast.com>
 ---

@@ -3,7 +3,6 @@ From: Goutam Damodaran <Goutam_Damodaran@Comcast.com>
 Date: Fri, 6 Mar 2020 09:51:30 +0000
 Subject: [PATCH] client notify new
 Source: COMCAST
-License: GPLV2
 Upstream-Status: Pending
 Signed-off-by: Goutam Damodaran <Goutam_Damodaran@Comcast.com>
 ---

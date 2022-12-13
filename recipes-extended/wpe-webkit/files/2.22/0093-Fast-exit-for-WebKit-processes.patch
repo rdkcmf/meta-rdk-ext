@@ -3,7 +3,6 @@ From: Ievgen Mutavchi <Ievgen_Mutavchi@comcast.com>
 Date: Sun, 26 Apr 2020 12:05:18 -0400
 Subject: [PATCH 82/93] Fast exit for WebKit processes
 Source: COMCAST
-License: GPLV2
 Upstream-Status: None
 Signed-off-by: Eugene Mutavchi <Ievgen_Mutavchi@comcast.com>
 

@@ -9,7 +9,6 @@ Subject: [PATCH] [webrtc] improvements for xcloudgames
  - [WebRTC] don't push samples through main thread
  - [WebRTC] configure immediate-output for mediastream
 Source: COMCAST
-License: LGPL-2.1-or-later
 Upstream-Status: None
 Signed-off-by: Ievgen Mutavchi <Ievgen_Mutavchi@comcast.com>
 ---

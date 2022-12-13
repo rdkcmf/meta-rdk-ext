@@ -3,7 +3,6 @@ From: Oscar Lin <yu_hong@realtek.com>
 Date: Fri, 27 Aug 2021 11:19:54 +0800
 Subject: [PATCH 1/1] Fix performance and memory consumption issue
 Source: Realtek
-License: LGPL-2.1-or-later
 Upstream-Status: Pending
 
 Signed-off-by: Oscar Lin <yu_hong@realtek.com>

@@ -12,7 +12,6 @@ available decryptors and event the events so that the init data is
 accessible.
 
 Source: GITHUB
-License: LGPL-2.1-or-later
 Upstream-Status: Submitted [ https://gitlab.freedesktop.org/gstreamer/gst-plugins-good/commit/0ba62ba4805e2cdbed17fa9934762d685be42fd4?view=parallel&w=1 ]
 Signed-off-by: Xabier Rodriguez Calvar <calvaris@igalia.com>
 ---

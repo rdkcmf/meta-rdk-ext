@@ -9,7 +9,6 @@ Subject: [PATCH] qtdemux: support for cenc auxiliary info parsing outside of moo
 
 Source: COMCAST
 
-License: LGPL-2.1-or-later
 
 Upstream-Status: Submitted [ https://bugzilla.gnome.org/show_bug.cgi?id=755614 ]
 

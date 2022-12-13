@@ -8,7 +8,6 @@ Subject: [PATCH] RDKSEC-135 : update openssl
 
 Source: OPENSOURCE
 
-License: Apache-2.0
 
 Upstream-Status: Submitted [ http://git.yoctoproject.org/cgit/cgit.cgi/meta-freescale/commit/recipes-connectivity/openssl/openssl-qoriq/debian/man-dir.patch?h=pyro&id=67df1cdca7fe5be0513d67e6abd45b973189ecfe ]
 

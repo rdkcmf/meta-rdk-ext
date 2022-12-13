@@ -8,7 +8,6 @@ Subject: [PATCH] XRE-13219, XRE-13227: Defer seek complition until it is actuall
 
 Source: COMCAST
 
-License: LGPL-2.1-or-later
 
 Upstream-Status: Pending
 

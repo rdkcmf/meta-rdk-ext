@@ -8,7 +8,6 @@ Subject: [PATCH] Access ScalableImageDecoder with mutex
 
 Source: COMCAST
 
-License: BSD-2-Clause
 
 Upstream-Status: Pending
 

@@ -9,7 +9,6 @@ Subject: [PATCH] RDK-17052: set library installation directory from libdir env v
 
 Source: GITHUB
 
-License: LGPL-2.1-or-later
 
 Upstream-Status: Submitted [ http://git.yoctoproject.org/cgit/cgit.cgi/meta-ivi/commit/meta-ivi/recipes-support-ivi/keyutils/keyutils/0001-keyutils-Use-libdir-from-the-Yocto-environment.patch?id=31f05de9c4cd04b3ff9bb6b3030d24be3be837d4 ]
 

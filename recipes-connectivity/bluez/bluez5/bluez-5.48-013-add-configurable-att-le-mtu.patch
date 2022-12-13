@@ -9,7 +9,6 @@ support BT 4.0 and therefore MTU size of 23 for ATT / L2CAP
 connections on BLE.
 
 Source: SKY
-License: GPLv2+ & LGPLv2.1+
 Upstream-Status: Pending
 Signed-off-by: Tijo Thomas John <tijo.thomas@sky.uk>
 ###################################################################################################

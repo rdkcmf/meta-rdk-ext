@@ -2,7 +2,6 @@ Date: Feb 21, 2020 11:10 AM
 From: 9da22be85fb50a1c49d61f17dea4d27fee1721da Feb 21, 2020 11:10 AM
 Subject: [PATCH] XRE-14631: Fixes for RWI stops working randomly
 Source: COMCAST
-License: GPLV2
 Upstream-Status: Pending
 Signed-off-by: Balaji Selvam <Balaji_Selvam@Comcast.Com>
 

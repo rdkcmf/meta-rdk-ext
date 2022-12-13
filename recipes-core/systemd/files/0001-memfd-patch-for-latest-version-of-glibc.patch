@@ -7,7 +7,6 @@ Subject: [PATCH] memfd patch for latest version of glibc
          glibc version 2.31
 
 Source: https://patchwork.openembedded.org/patch/149455/
-License: LGPL-2.1-or-later
 Upstream-Status: Backport
 Signed-off-by: mselva006c <mani_selvaraj@comcast.com>
 ---

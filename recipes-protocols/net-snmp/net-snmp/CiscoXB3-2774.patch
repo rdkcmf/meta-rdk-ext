@@ -8,7 +8,6 @@ Subject: [PATCH] CISCOXB3-2774: netsnmp leaking memory test
 
 Source: COMCAST
 
-License: BSD-2-Clause
 
 Upstream-Status: Pending
 

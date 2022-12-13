@@ -13,7 +13,6 @@ Subject: [PATCH] XRE-9097 : EOS Netflix fixes (appsrc patch)
 
 Source: GITHUB
 
-License: LGPL-2.1-or-later
 
 Upstream-Status: Submitted [ https://gitlab.freedesktop.org/gstreamer/gst-plugins-base/commit/d43f1b2a5a4361f156ab1281f7e4442a899d4de7 ]
 

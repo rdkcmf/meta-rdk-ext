@@ -4,7 +4,6 @@ Date: Sun, 26 Apr 2020 14:40:43 -0400
 Subject: [PATCH 93/93] comcast Add an option to stop start memory pressure
  handler
 Source: COMCAST
-License: GPLV2
 Upstream-Status: None
 Signed-off-by: Eugene Mutavchi <Ievgen_Mutavchi@comcast.com>
 

@@ -2,7 +2,6 @@ From bb8404a0b7bf76371813f2e648feb9c6e165bf2c Mon Sep 17 00:00:00 2001
 From: Gurdal Oruklu <gurdal_oruklu@comcast.com>
 Subject: [PATCH] Comcast YouTube improvements
 Source: COMCAST
-License: GPLV2
 Upstream-Status: None
 Date: Thu, 14 Jan 2021 19:08:58 +0000
 Subject: [PATCH] youtube patch

@@ -4,7 +4,6 @@ Date: Thu, 21 Jul 2022 13:08:11 +0000
 Subject: [PATCH] Fix race issue with tools directory
 
 Source: http://cgit.openembedded.org/openembedded-core/tree/meta/recipes-connectivity/bluez5/bluez5/0001-Makefile.am-Fix-a-race-issue-for-tools.patch?h=warrior
-License: "GPLv2+ & LGPLv2.1+"
 Upstream-Status: NA
 
 Signed-off-by: ramkumar_digumarthi <ramkumar_digumarthi@comcast.com>

@@ -10,7 +10,6 @@ This is a workaround until busybox is fixed for
 
 https://bugs.busybox.net/show_bug.cgi?id=13036
 Source: COMCAST
-License: GPLV2+
 Upstream-Status: Inappropriate
 
 Signed-off-by: mselva006c <mani_selvaraj@comcast.com>

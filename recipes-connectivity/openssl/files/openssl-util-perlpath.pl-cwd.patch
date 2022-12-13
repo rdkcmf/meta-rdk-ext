@@ -2,7 +2,6 @@ Date: Mon, 19 Sep 2016 22:06:28 -0700
 From: e427748f3bb5d37e78dc8d70a558c373aa8ababb Mon Sep 17 00:00:00 2001
 Subject: [PATCH] util/perlpath.pl: make it work when cwd is not in @INC
 Source: COMCAST
-License: GPLV2
 Upstream-Status: Inappropriate [OE-Specific]
 Signed-off-by: Robert Yang <liezhi.yang@windriver.com>
 

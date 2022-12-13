@@ -2,7 +2,6 @@ From d0752a501df0bc8c0c707788f6a4841971c1e81a Mon Sep 17 00:00:00 2001
 From: Eugene Mutavchi <Ievgen_Mutavchi@comcast.com>
 Date: Fri, 18 Sep 2020 02:35:47 +0000
 Source: COMCAST
-License: LGPL-2.1-or-later
 Upstream-Status: None
 Subject: [PATCH] Fix crash on dynamic change of non composited webgl mode
 Signed-off-by: Eugene Mutavchi <Ievgen_Mutavchi@comcast.com>

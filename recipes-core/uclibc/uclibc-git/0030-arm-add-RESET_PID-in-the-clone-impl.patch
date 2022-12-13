@@ -10,7 +10,6 @@ Subject: [PATCH 030/195] arm: add RESET_PID in the clone impl
 
 Source: OPENEMBEDDED
 
-License: LGPL-2.1-or-later
 
 Upstream-Status: Submitted [ https://patchwork.ozlabs.org/patch/386166/ ]
 

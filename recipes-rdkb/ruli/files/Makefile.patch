@@ -8,7 +8,6 @@ Subject: [PATCH] CBNXB6-609: Integrate ruli Open source in yocto
 
 Source: OPENEMBEDDED
 
-License: GPL-2.0-or-later
 
 Upstream-Status: Submitted [ http://cgit.openembedded.org/meta-openembedded/commit/meta-networking/recipes-support/ruli/files/Makefile.patch?h=pyro&id=489fce65e0b419b446a7ae9f6b4ef76d8986bdb8 ]
 

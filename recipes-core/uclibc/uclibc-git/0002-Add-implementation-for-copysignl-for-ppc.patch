@@ -8,7 +8,6 @@ Subject: [PATCH 2/7] Add implementation for copysignl for ppc
 
 Source: OPENEMBEDDED
 
-License: LGPL-2.1-or-later
 
 Upstream-Status: Submitted [ https://patchwork.ozlabs.org/patch/538676/ ]
 

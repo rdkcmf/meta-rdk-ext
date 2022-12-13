@@ -14,7 +14,6 @@ Subject: [PATCH] DELIA-6118,CISCOXID-1384: xupnp memory leak
 	
 Source: COMCAST
 
-License: LGPL-2.0-or-later
 
 Upstream-Status: Pending
 

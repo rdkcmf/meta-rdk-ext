@@ -2,7 +2,6 @@ Date: Apr 23 21:39:30 2020
 From: f27d97f53bdfe5ad3566ef8880c22ee7a7c378bb 
 Subject: DELIA-42416 : RDKV UPnP - Vulnerable to UPnP CallStranger (CVSS 7.3) check the validity of the callback ip addr send as part of subscription request
 Source: COMCAST
-License: LGPL-2.0-or-later
 Upstream-Status: Pending
 
 Signed-off-by: Thomson Silvera <thomson_silvera@comcast.com>

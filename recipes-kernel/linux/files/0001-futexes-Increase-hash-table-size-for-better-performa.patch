@@ -53,7 +53,6 @@ Subject: [PATCH] RDKB-9028 : kernel patches for futex
 
 Source: LINUX
 
-License: GPL-2.0-or-later
 
 Upstream-Status: [ http://lkml.iu.edu/hypermail/linux/kernel/1401.1/02942.html
                    http://lkml.kernel.org/r/1389569486-25487-3-git-send-email-davidlohr@hp.com ]

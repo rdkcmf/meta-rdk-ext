@@ -13,7 +13,6 @@ This patch also requires a change in the kernel to generate name change event.
 
 
 Source: SKY
-License: GPLv2+ & LGPLv2.1+
 Upstream-Status: Pending
 Signed-off-by: Tijo Thomas John <tijo.thomas@sky.uk>
 ###################################################################################################

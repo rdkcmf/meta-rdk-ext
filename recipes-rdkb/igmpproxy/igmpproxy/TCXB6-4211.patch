@@ -9,7 +9,6 @@ Subject: [PATCH] TCXB6-4211: If timestamp diff is very large, don't sleep
 
 Source: COMCAST
 
-License: GPL-2.0-or-later
 
 Upstream-Status: Pending
 

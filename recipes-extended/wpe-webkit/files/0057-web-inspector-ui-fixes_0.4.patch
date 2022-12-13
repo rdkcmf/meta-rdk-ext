@@ -5,7 +5,6 @@ Subject: [PATCH] make web inspector usable again
 	Debug web apps
 
 Source: COMCAST
-License: BSD-2-Clause & BSD-3-Clause & LGPL-2.0 & LGPL-2.1
 Upstream-Status: Pending
 Signed-off-by: Eugene Mutavchi <Ievgen_Mutavchi@comcast.com> 
 ---

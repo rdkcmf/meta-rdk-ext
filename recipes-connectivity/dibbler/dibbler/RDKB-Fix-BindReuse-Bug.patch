@@ -16,7 +16,6 @@ Subject: [PATCH] RDKB-21133: Add RDKB-Fix-BindReuse-Bug.patch on top of dibbler 
 
 Source: GITHUB
 
-License: GPL-2.0-or-later
 
 Upstream-Status: Submitted [ https://github.com/tomaszmrugalski/dibbler/pull/36 ]
 

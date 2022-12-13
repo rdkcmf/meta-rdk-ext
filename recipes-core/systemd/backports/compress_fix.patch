@@ -12,7 +12,6 @@ Subject: [PATCH] DELIA-12902: modified compress_blob to return 0 on failures.
 
 Source: GITHUB
 
-License: LGPL-2.1-or-later
 
 Upstream-Status: Submitted [ https://github.com/coreos/bugs/issues/322 ]
 

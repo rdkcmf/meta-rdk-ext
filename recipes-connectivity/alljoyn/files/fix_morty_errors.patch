@@ -5,7 +5,6 @@ Subject: [PATCH] Fix alljoyn compile issue
 Fix morty specific issues
 
 Source: COMCAST
-License: ISC
 Upstream-Status: Pending
 Signed-off-by: Deva <Deva_Thiyagarajan2@comcast.com>
 ---

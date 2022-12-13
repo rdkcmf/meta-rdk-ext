@@ -5,7 +5,6 @@ Subject: [PATCH] member name update to sin6_port in sockaddr_in6
 
 Reason for Change: Updated sin_port to sin6_port in struct sockaddr_in6
 Source: COMCAST
-License: BSD
 Upstream-Status: Pending
 
 Signed-off-by: Jaga <jagadheesan_duraisamy@comcast.com>

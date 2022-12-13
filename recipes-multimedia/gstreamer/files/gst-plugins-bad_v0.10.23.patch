@@ -8,7 +8,6 @@ Subject: [PATCH] gstreamer: Enable and fix support for fbdev
 
 Source: COMCAST
 
-License: LGPL-2.1-or-later
 
 Upstream-Status: Pending
 

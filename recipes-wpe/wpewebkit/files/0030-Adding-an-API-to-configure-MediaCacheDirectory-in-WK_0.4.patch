@@ -3,7 +3,6 @@ From: mgopalakirshnan <manigandan.gopalakrishnan@lnttechservices.com>
 Date: Fri, 5 Jan 2018 12:12:58 +0000
 Subject: [PATCH] 0030-Adding-an-API-to-configure-MediaCacheDirectory-in-WK
 Source: COMCAST
-License: BSD-2-Clause
 Upstream-Status: None
 Signed-off-by: mgopalakirshnan <manigandan.gopalakrishnan@lnttechservices.com>
 

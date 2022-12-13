@@ -28,7 +28,6 @@ Subject: [PATCH] WKIT-379: backported stability changes from upstream
 
 Source: BUGZILLA
 
-License: LGPL-2.1-or-later
 
 Upstream-Status: Submitted [ https://bugzilla.gnome.org/show_bug.cgi?id=757257
                              https://bugzilla.gnome.org/show_bug.cgi?id=756611

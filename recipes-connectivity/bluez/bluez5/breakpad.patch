@@ -7,7 +7,6 @@ Subject: [PATCH] RDK-22498 : Add support for minidumps in Bluetooth
 	Add support for minidumps in Bluetooth module.
 	
 Source: COMCAST
-License: LGPL-2.0-or-later
 
 Upstream-Status: Pending
 

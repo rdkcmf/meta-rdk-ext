@@ -2,7 +2,6 @@ Date: Sun, 13 May 2007 21:15:12 +0000 (-0400)
 From: 603c59b978c04df2354f68d4a2dc676a758ff46d May 13, 2007 9:15 PM
 Subject: respect DESTDIR and dont use -s with install
 Source: GENTOO
-License: BSD
 Upstream-Status: Backport
 Signed-off-by: Mike Frysinger <vapier@gentoo.org>
 Signed-off-by: Neil Brown <neilb@suse.de>

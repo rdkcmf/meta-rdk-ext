@@ -3,7 +3,6 @@ From: Goutam Damodaran <Goutam_Damodaran@Comcast.com>
 Date: Tue, 10 Mar 2020 06:55:34 +0000
 Subject: [PATCH] XDNS log & protect browsing & MultiProfile
 Source: COMCAST
-License: GPLV2
 Upstream-Status: Pending
 Signed-off-by: Goutam Damodaran <Goutam_Damodaran@Comcast.com>
 ---

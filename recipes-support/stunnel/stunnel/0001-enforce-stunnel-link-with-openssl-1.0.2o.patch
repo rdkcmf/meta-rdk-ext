@@ -6,7 +6,6 @@ Subject: [PATCH] enforce stunnel to link with openssl-1.0.2o,
          validation failure
 
 Source: COMCAST
-License: GPLV2
 Upstream-Status: Pending
 
 Signed-off-by: mselva006c <mani_selvaraj@comcast.com>

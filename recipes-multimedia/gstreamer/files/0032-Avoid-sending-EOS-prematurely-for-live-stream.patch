@@ -2,7 +2,6 @@ Date: Mar 9, 2020 1:41 AM
 From: cbbe384395b52a5c993ddb8d3be0fcf6c06cd9d3 Oct 31, 2018 11:56 PM
 Subject: [PATCH] Avoid sending EOS prematurely for live stream
 Source: COMCAST
-License: GPLV2
 Upstream-Status: Pending
 Signed-off-by: nrajan002c <nambi_rajang@cable.comcast.com>
 ---

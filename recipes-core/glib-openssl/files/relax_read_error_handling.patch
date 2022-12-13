@@ -8,7 +8,6 @@ Subject: [PATCH] XRE-11331: handle ssl read errors similar to libcurl
 
 Source: COMCAST
 
-License: LGPL-2.1-or-later
 
 Upstream-Status: Pending
 

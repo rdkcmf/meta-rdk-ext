@@ -3,7 +3,6 @@ From: Ievgen Mutavchi <Ievgen_Mutavchi@comcast.com>
 Date: Tue, 2 Jun 2020 18:00:33 -0400
 Subject: [PATCH] Introduce WKNavigationResponseCopyURLResponse
 Source: COMCAST
-License: LGPL-2.1-or-later
 Upstream-Status: None
 Signed-off-by: Eugene Mutavchi <Ievgen_Mutavchi@comcast.com>
 

@@ -1,7 +1,6 @@
 From 25a29c672e32646633c7944b2ab0aa84e31c33db Mon Sep 17 00:00:00 2001
 From: Gurdal Oruklu <gurdaloruklu@gmail.com>
 Source: COMCAST
-License: BSD-2-Clause & BSD-3-Clause & LGPL 2.0
 Upstream-Status: None
 Date: Tue, 10 Sep 2019 17:33:50 +0000
 Subject: [PATCH] add accessibility support

@@ -2,7 +2,6 @@ From: 58319057b7847667f0c9585b9de0e8932b0fdb08
 Date: 2015-09-04 16:54:41 -0700
 Subject: BACKPORT: Support Ambient capabilities in Kernel 3.12
 Source: Open Source
-License: GPLv2
 Upstream-Status: backport
 Signed-off-by: Christoph Lameter <cl@linux.com> # Original author
 Signed-off-by: Andy Lutomirski <luto@kernel.org>

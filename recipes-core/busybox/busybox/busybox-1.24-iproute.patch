@@ -32,7 +32,6 @@ Subject: [PATCH] networking: add 'ip neigh' command
 
 Source: BUSYBOX
 
-License: GPL-2-or-later
 
 Upstream-Status: Submitted [ http://lists.busybox.net/pipermail/busybox-cvs/2015-October/035321.html ]
 

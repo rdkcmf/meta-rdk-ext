@@ -2,7 +2,6 @@ Date: Thu, 20 Oct 2022 18:33:57 +0000
 From e34e3222395abec0d8ca7746a1bf5b7da2337321 Mon Sep 17 00:00:00 2001
 Subject: Naive-gamepad-support.patch
 Source: COMCAST
-License: Apache-2.0
 Upstream-Status: None
 
 Signed-off-by:  Manoj Bhatta <manoj_bhatta@comcast.com>

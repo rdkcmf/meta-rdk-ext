@@ -2,7 +2,6 @@ Date: Jun 26, 2021 9:41 AM
 From: 5c87316977e223ef462f53761444ad777f5e1e17 Wed Apr 28, 2021 8:49 PM
 Subject: RDK-32004: Added Low Latency Dash Element Processing
 Source: COMCAST
-License: LGPL-2.1-or-later
 Upstream-Status: Pending
 Signed-off-by: Lalit Arora <lalit_arora@comcast.com>
 diff --git a/libdash/include/IAdaptationSet.h b/libdash/include/IAdaptationSet.h

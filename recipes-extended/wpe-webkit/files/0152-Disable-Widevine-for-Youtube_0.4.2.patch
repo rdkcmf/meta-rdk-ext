@@ -9,7 +9,6 @@ Subject: [PATCH] XRE-14261: disable Widevine for YouTube (wpe 0.4.2)
 
 Source: COMCAST
 
-License: BSD-2-Clause
 
 Upstream-Status: Pending
 

@@ -5,7 +5,6 @@ Subject: [PATCH] DELIA-44564 : fix journal log format to match daisy/morty
     Added Year field to log format
 
 Source: COMCAST
-License: LGPL-2.1-or-later
 Upstream-Status: Pending
 
 

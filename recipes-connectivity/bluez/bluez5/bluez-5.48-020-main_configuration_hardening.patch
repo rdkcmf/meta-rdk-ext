@@ -4,7 +4,6 @@ From 06882765a9d556ef683026a84f96d45ac42b5d98 Mon Sep 17 00:00:00 2001
 From: Ben Gray <ben.gray@sky.uk>
 Subject: [PATCH] Update configuration options for SkyQ boxes.
 Source: SKY
-License: GPLv2+ & LGPLv2.1+
 Upstream-Status: Pending
 Signed-off-by: Tijo Thomas John <tijo.thomas@sky.uk>
 ###################################################################################################

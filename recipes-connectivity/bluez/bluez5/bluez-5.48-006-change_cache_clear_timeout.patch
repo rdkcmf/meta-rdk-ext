@@ -6,7 +6,6 @@ Subject: [PATCH] Adjusts the time to wait before cleaning up any devices that
 	may have been created during discovery.
 
 Source: SKY
-License: GPLv2+ & LGPLv2.1+
 Upstream-Status: Pending
 Signed-off-by: Tijo Thomas John <tijo.thomas@sky.uk>
 ###################################################################################################

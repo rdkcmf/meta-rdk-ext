@@ -3,7 +3,6 @@ From: Eugene Mutavchi <Ievgen_Mutavchi@comcast.com>
 Date: Sat, 9 May 2020 16:46:21 +0000
 Subject: [PATCH] Fix build of wpe test bundle
 Source: COMCAST
-License: GPLV2
 Upstream-Status: None
 Signed-off-by: Eugene Mutavchi <Ievgen_Mutavchi@comcast.com>
 

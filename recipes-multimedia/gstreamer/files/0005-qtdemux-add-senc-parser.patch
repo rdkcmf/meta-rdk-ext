@@ -14,7 +14,6 @@ Subject: [PATCH] XRE-11686 : gstreamer error seen with super8 encrypted streams
 
 Source: GITLAB
 
-License: LGPL-2.1-or-later
 
 Upstream-Status: Submitted [ https://bugzilla.gnome.org/show_bug.cgi?id=782328
                              https://gitlab.freedesktop.org/gstreamer/gst-plugins-good/issues/371 ]

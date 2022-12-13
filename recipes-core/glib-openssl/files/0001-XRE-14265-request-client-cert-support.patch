@@ -1,7 +1,6 @@
 From a3ea102dd91b98cda8790a5adc5301be6dbf92b8 Mon Sep 17 00:00:00 2001
 From: Ievgen Mutavchi <Ievgen_Mutavchi@comcast.com>
 Subject: [PATCH] XRE-14265: request client cert support
-License: GPLV2
 Date: Nov 6, 2018 1:41 AM
 From: ebecd56aaa2727b6305d39c69951fbdc8740f800 Oct 31, 2018 11:56 PM
 Subject: request client cert support

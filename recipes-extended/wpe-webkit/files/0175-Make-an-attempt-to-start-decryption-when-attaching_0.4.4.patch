@@ -3,7 +3,6 @@ From: Ievgen Mutavchi <Ievgen_Mutavchi@comcast.com>
 Date: Fri, 13 Dec 2019 09:13:17 -0500
 Subject: Add the subject related to the ticket
 Source: COMCAST
-License: GPLV2
 Upstream-Status: none
 Signed-off-by: Eugene Mutavchi <Ievgen_Mutavchi@comcast.com>
 Subject: [PATCH] Make an attempt to start decryption when attaching

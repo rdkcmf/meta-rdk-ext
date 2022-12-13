@@ -16,7 +16,6 @@ Subject: [PATCH] Add argument to set the storage directory.
 	maintaining the patch might be difficult.
 
 Source: SKY
-License: GPLv2+ & LGPLv2.1+
 Upstream-Status: Pending
 Signed-off-by: Tijo Thomas John <tijo.thomas@sky.uk>
 ###################################################################################################

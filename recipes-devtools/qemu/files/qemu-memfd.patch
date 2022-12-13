@@ -3,7 +3,6 @@ From: 75e5b70e6b5dcc4f2219992d7cffa462aa406af0 Mon Sep 17 00:00:00 2001
 From: Paolo Bonzini <pbonzini@redhat.com>
 Subject: [PATCH] memfd: fix configure test 
 Source: COMCAST
-License: GPLV2
 Upstream-Status: Backport
 Signed-off-by: Matta Nancharayya <Nancharayya_Matta@comcast.com>
 Index: qemu-2.7.0/configure

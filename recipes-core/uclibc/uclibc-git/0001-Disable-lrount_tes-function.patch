@@ -8,7 +8,6 @@ Subject: [PATCH 1/7] Disable lrount_tes() function
 
 Source: OPENEMBEDDED
 
-License: LGPL-2.1-or-later
 
 Upstream-Status: Submitted [ https://patchwork.ozlabs.org/patch/538675/ ]
 

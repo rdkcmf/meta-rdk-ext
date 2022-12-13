@@ -3,7 +3,6 @@ From: Moorthy Baskar <moorthy.baskaravenkatraman-sambamoorthy@linaro.org>
 Date: Mon, 9 Mar 2020 08:30:50 +0100
 Subject: [PATCH] [dom]: fix: build issue from gcc 9.2
 Source: COMCAST
-License: LGPL 2.0
 Upstream-Status: None
 
  error: expected ';' before 'if'

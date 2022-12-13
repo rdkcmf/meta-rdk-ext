@@ -4,7 +4,6 @@ From: Rakhil P E <Rakhil_PuthiyaveettilEdachena@comcast.com>
 Subject: RDK-28677 - Build error with meta-openembedded rdk/dunfell branch
 while building from rdk/dunfell branch libwebsocket is using 4.0.1 version and lws_extension_callback_pm_deflate was not exposed through libwebsockets.so
 Source: COMCAST
-License: BSD-3-Clause
 Upstream-Status: None
 Signed-off-by: Rakhil P E <Rakhil_PuthiyaveettilEdachena@comcast.com>
 

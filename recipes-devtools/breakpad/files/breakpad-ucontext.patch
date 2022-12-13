@@ -3,7 +3,6 @@ From: bddcc58860f522a0d4cbaa7e9d04058caee0db9d Mon Sep 17 00:00:00 2001
 Subject: [PATCH] Replace remaining references to 'struct ucontext' with
  'ucontext_t'
 Source: CHROMIUM
-License: GPLV2
 Upstream-Status: Backport
 Signed-off-by: Mark Mentovai <mark@chromium.org>
 Index: trunk/src/client/linux/dump_writer_common/ucontext_reader.cc

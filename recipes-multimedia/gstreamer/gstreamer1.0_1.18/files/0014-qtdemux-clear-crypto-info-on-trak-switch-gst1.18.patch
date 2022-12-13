@@ -7,7 +7,6 @@ Subject: [PATCH] Subject: [PATCH] DELIA-27559 - [AAMP] Crash on switching from
 Flush crypto_info stored previous trak's senc on trak change
 
 Source: COMCAST
-License: LGPL-2.1-or-later
 Upstream-Status: Pending
 
 Signed-off-by: Christo Joseph <Christo_Joseph@comcast.com>

@@ -8,7 +8,6 @@ even after multiple retries. So patched glibc in morty to ignore
 truncated bit similar to what has been done in eglibc in daisy.
 
 Source: COMCAST
-License: GPLv2 & LGPLv2.1
 Upstream-Status: Pending
 Signed-off-by: Deva <Deva_Thiyagarajan2@comcast.com>
 ---

@@ -1,7 +1,6 @@
 From 5425890aaa84b2a11b8929c4d30c1d83221e52ce Mon Sep 17 00:00:00 2001
 From: wouterlucas <wouter@wouterlucas.com>
 Source: Metrological
-License: LICENSE-LGPL-2.1
 Upstream-Status: Pending
 Date: Sat, 24 Nov 2018 20:03:05 -0800
 Subject: [PATCH] Make graphic libs configurable

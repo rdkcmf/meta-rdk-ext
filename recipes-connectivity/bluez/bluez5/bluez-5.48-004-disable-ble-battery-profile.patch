@@ -9,7 +9,6 @@ Subject: [PATCH] Disable the BLE battery profile.
 	to using the bluez one in the future, but for now we disable it.
 
 Source: SKY
-License: GPLv2+ & LGPLv2.1+
 Upstream-Status: Pending
 Signed-off-by: Tijo Thomas John <tijo.thomas@sky.uk>
 #############################################################################

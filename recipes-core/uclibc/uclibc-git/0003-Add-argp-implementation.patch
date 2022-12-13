@@ -19,7 +19,6 @@ Subject: [PATCH 3/7] Add argp implementation
 
 Source: OPENEMBEDDED
 
-License: LGPL-2.1-or-later
 
 Upstream-Status: Submitted [ https://patchwork.ozlabs.org/patch/584219/ ]
 

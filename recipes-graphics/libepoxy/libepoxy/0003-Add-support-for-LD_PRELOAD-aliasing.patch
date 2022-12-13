@@ -1,7 +1,6 @@
 From 78f53a8f0b968c814b96a6f69d1d000c5d29d5cf Mon Sep 17 00:00:00 2001
 From: Damian Wrobel <dwrobel@ertelnet.rybnik.pl>
 Source: LGI
-License: LICENSE-LGPL-2.1
 Upstream-Status: Pending
 Date: Mon, 8 Jul 2019 10:56:35 +0200
 Subject: [PATCH] Add support for LD_PRELOAD/aliasing.

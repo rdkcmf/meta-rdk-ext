@@ -2,7 +2,6 @@ Date: Fri, 29 Dec 2017 10:19:51 -0800
 From: ad8078ca2ef35c91bedad61c9e2a6c01bf13a605 Mon Sep 17 00:00:00 2001
 Subject: [PATCH] misc: rename copy_file_range to copy_file_chunk
 Source: OPENEMBEDDED
-License: GPLV2
 Upstream-Status: Backport
 Signed-off-by: Palmer Dabbelt <palmer@dabbelt.com>
 Signed-off-by: Theodore Ts'o <tytso@mit.edu>

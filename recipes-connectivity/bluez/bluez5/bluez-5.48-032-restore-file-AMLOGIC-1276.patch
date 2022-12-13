@@ -8,7 +8,6 @@ this is used to restore the current setup.
 
 Upstream-Status: N/A
 Source: SKY
-License: CLOSED
 Signed-off-by: James Dowdells <james.dowdells@sky.uk>
 
 diff -Naur a/src/adapter.c b/src/adapter.c

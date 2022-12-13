@@ -7,7 +7,6 @@ Subject: [PATCH] Added a config option to enable / disable LE secure connections
 Useful for sky as some of our RCUs don't support SC and incorrectly report that they do support SC
 
 Source: SKY
-License: GPLv2+ & LGPLv2.1+
 Upstream-Status: Pending
 Signed-off-by: Tijo Thomas John <tijo.thomas@sky.uk>
 ###################################################################################################

@@ -8,7 +8,6 @@ Subject: [PATCH] RDKSYSINTSW-1315: Use common distro for both RDK and RDK-B
 	
 Source: GITHUB 
 
-License: GPL-2.0-or-later
 
 Upstream-Status: Submitted [ http://cgit.openembedded.org/meta-openembedded/commit/meta-networking/recipes-connectivity/ez-ipupdate/files/cache_file.c.patch?h=sumo&id=cf51ee759339dba2364aa570665d725f11d0b8a7 ] 
 

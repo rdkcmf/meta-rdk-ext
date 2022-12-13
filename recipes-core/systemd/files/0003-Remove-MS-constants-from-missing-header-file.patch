@@ -7,7 +7,6 @@ Subject: [PATCH] Remove MS constants from missing header file
          variables are already defined in linux/fs.h
 
 Source: COMCAST
-License: LGPL-2.1-or-later
 Upstream-Status: Inappropriate 
 Signed-off-by: mselva006c <mani_selvaraj@comcast.com>
 ---

@@ -3,7 +3,6 @@ From: Tony Paul <Tony_Paul@comcast.com>
 Date: Mon, 15 Nov 2021 11:22:21 +0000
 Subject: [PATCH] Avoid sending EOS prematurely for live stream
 Source: COMCAST
-License: GPLV2
 Upstream-Status: Pending
 Signed-off-by: nrajan002c <nambi_rajang@cable.comcast.com>
 

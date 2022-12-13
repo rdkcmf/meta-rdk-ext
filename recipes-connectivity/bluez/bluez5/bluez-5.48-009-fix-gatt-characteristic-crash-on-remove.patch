@@ -17,7 +17,6 @@ pipe_io_destroy calls notify_io_destroy which still references
 the  chrc->notify_clients queue.
 
 Source: SKY Comcast
-License: GPLv2+ & LGPLv2.1+
 Upstream-Status: Pending
 Signed-off-by: Tijo Thomas John <tijo.thomas@sky.uk>
 ###################################################################################################

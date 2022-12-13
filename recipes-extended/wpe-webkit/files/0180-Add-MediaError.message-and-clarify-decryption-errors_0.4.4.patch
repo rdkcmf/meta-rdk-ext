@@ -3,7 +3,6 @@ From: Ievgen Mutavchi <Ievgen_Mutavchi@comcast.com>
 Date: Thu, 13 Feb 2020 11:05:44 -0500
 Subject: [PATCH 2/2] Add MediaError.message and clarify decryption errors
 Source: COMCAST
-License: GPLV2
 Upstream-Status: None
 Signed-off-by: Eugene Mutavchi <Ievgen_Mutavchi@comcast.com>
 

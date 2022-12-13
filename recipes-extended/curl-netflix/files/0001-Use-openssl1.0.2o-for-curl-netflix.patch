@@ -3,7 +3,6 @@ From: mselva006c <mani_selvaraj@comcast.com>
 Date: Fri, 10 Jul 2020 02:54:37 +0000
 Subject: [PATCH] Use openssl1.0.2o for curl-netflix
 Source: COMCAST
-License: MIT
 Upstream-Status: Pending
 Signed-off-by: mselva006c <mani_selvaraj@comcast.com>
 ---

@@ -3,7 +3,6 @@ From: 6e12cb73e23e8e9488c6db1c4710bb4b3d2b48c3 Mon Sep 17 00:00:00 2001
 From: Adam Jiang <jiang.adam@gmail.com>
 Subject: [PATCH] Fix errors in type conversion
 Source: COMCAST
-License: GPLV2
 Upstream-Status: Backport
 Signed-off-by: Matta Nancharayya <Nancharayya_Matta@comcast.com>
 Basically, converting to 'void*' is not a good idea. However, if that

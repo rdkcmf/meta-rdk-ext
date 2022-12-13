@@ -16,7 +16,6 @@ Subject: [PATCH] NGDEV-100839 - Lost RCU (1.0) paring to the STB while performin
 
 
 Source: SKY
-License: GPLv2+ & LGPLv2.1+
 Upstream-Status: Pending
 Signed-off-by: Tijo Thomas John <tijo.thomas@sky.uk>
 ###################################################################################################

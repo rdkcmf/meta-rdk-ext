@@ -6,7 +6,6 @@ Subject: [PATCH] Black screen shown with webapps when it uses westeros wpe backe
 	so, we can either patch libgcrypt to enable admin caps, or disable privilege drop altogether. 
 
 Source: COMCAST
-License: BSD-2-Clause & BSD-3-Clause & LGPL-2.0 & LGPL-2.1
 Upstream-Status: Pending
 Signed-off-by: nrajan002c <nambi_rajang@cable.comcast.com>
 ---

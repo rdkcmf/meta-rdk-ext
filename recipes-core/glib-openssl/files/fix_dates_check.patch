@@ -2,7 +2,6 @@ From: Eugene Mutavchi <Ievgen_Mutavchi@comcast.com>
 Date: Thu May 28 12:36:47 EDT 2020
 Subject: [PATCH] Fix dates check
 Source: COMCAST
-License: GPLV2
 Upstream-Status: None
 Signed-off-by: Eugene Mutavchi <Ievgen_Mutavchi@comcast.com>
 

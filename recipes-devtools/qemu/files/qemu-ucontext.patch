@@ -3,7 +3,6 @@ From: e1b93fb47ae9c950977a2f80fb699c608505346a
 From: Khem Raj
 Subject: [PATCH] replace struct ucontext with ucontext_t type. 
 Source: COMCAST
-License: GPLV2
 Upstream-Status: Backport
 Signed-off-by: Matta Nancharayya <Nancharayya_Matta@comcast.com>
 The ucontext_t type had a tag struct ucontext until now

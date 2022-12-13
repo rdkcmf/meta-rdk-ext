@@ -2,7 +2,6 @@ Date: Mon May 11 06:06:59 2020 +0000
 From: Ie54e9e25014bd1640f66162a9f8ef2e16075aee3
 Subject: RDKB-28788: UPnP - Vulnerable to UPnP CallStranger (CVSS 7.3)
 Source: COMCAST
-License: BSD 2-Clause
 Upstream-Status: N/A
 
 Signed-off-by: Boris Itkis <boris_itkis@comcast.com>

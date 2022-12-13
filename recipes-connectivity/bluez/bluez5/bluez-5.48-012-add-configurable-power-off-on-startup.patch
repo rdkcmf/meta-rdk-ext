@@ -8,7 +8,6 @@ This is useful in crash / restart situations as it allows the bluetoothd and ker
 their states.
 
 Source: SKY
-License: GPLv2+ & LGPLv2.1+
 Upstream-Status: Pending
 Signed-off-by: Tijo Thomas John <tijo.thomas@sky.uk>
 ###################################################################################################

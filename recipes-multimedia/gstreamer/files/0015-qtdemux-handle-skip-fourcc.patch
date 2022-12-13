@@ -8,7 +8,6 @@ Subject: [PATCH] DELIA-20477: Unknown fourcc while parsing header : skip
 
 Source: COMCAST
 
-License: LGPL-2.1-or-later
 
 Upstream-Status: Pending
 

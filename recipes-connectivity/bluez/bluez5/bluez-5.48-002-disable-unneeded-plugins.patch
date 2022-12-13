@@ -6,7 +6,6 @@ Subject: [PATCH] Disable the network and HID profiles / plugins by default.
 	On the Sky IP100 platform we don't use and don't want these plugins enabled
 	(the bluetooth RCUs use the HOG profile, not HID).
 Source: SKY
-License: GPLv2+ & LGPLv2.1+
 Upstream-Status: Pending
 Signed-off-by: Tijo Thomas John <tijo.thomas@sky.uk>
 #############################################################################

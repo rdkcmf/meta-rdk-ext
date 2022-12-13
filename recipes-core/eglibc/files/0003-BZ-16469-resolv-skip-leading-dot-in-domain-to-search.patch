@@ -17,7 +17,6 @@ Subject: [PATCH 3/3] BZ#16469: resolv: skip leading dot in domain to search
 
 Source: GIT
 
-License: LGPL-2.1-or-later
 
 Upstream-Status: Submitted [ https://git.powerel.org/powerel7/base/raw/commit/b59d114bd1e0571fba85b3cbcc61d4f4b42f5d1b ]
 

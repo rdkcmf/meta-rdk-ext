@@ -5,7 +5,6 @@ Subject: [PATCH] Added secure location for WPENW/WebProcess
 Changing minidump descriptor to encrypted folder
 
 Source: COMCAST
-License: BSD-2-Clause & BSD-3-Clause & LGPL-2.0 & LGPL-2.1 
 Upstream-Status: Pending
 Signed-off-by: Matta Nancharayya <Nancharayya_Matta@comcast.com>
 ---

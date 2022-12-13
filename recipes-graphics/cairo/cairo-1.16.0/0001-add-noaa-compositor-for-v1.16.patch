@@ -2,7 +2,6 @@ From 4d6d40e297aaa8bb80e1c3a9ef145297ede33d5f Mon Sep 17 00:00:00 2001
 Date: Sun, 17 Feb 2019 05:22:41 -0800
 Subject: [PATCH] add noaa compositor for v1.16
 Source: OPENSOURCE
-License: "(MPL-1.1 | LGPLv2.1) & GPLv3+"
 Upstream-Status: Backport
 Signed-off-by: mselva006c <mani_selvaraj@comcast.com>
 ---

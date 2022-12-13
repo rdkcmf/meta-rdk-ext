@@ -2,7 +2,6 @@ From 6685a0621c0d1136690826f6366c96b3d28c9587 Mon Sep 17 00:00:00 2001
 From: Balaji Selvam <balaji_selvam@comcast.com>
 Date: Wed, 12 Aug 2020 11:00:43 +0000
 Source: Metrological
-License: LICENSE-LGPL-2.1
 Upstream-Status: Pending https://github.com/anholt/libepoxy/pull/144
 Date: Sat, 24 Nov 2018 20:03:05 -0800
 Subject: [PATCH] Make graphic libs configurable

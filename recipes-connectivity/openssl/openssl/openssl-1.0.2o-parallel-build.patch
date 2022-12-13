@@ -8,7 +8,6 @@ Subject: [PATCH] RDK-21907: Upgrate the openssl version to 1.0.2o Arris XG1V3
 
 Source: COMCAST
 
-License: Apache-2.0
 
 Upstream-Status: Pending
 

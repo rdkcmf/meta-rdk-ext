@@ -15,7 +15,6 @@ generate a SIGPIPE signal and terminate.  By disabling the signal it just means
 the write to the pipe will fail with an error which will be logged by bluez.
 
 Source: SKY
-License: GPLv2+ & LGPLv2.1+
 Upstream-Status: Pending
 Signed-off-by: Tijo Thomas John <tijo.thomas@sky.uk>
 ###################################################################################################

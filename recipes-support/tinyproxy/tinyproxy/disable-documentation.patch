@@ -13,7 +13,6 @@ Subject: [PATCH] SKYH4-1479: Yocto recipe for tinyproxy
 
 Source: OPENEMBEDDED
 
-License: LGPL-2.1-or-later
 
 Upstream-Status: Submitted [ http://layers.openembedded.org/layerindex/recipe/63463/ ]
 

@@ -4,7 +4,6 @@ Date: Sun, 26 Apr 2020 11:37:37 -0400
 Subject: [MSE] SourceBuffer append - start parsing as soon as
  possible
 Source: COMCAST
-License: GPLV2
 Upstream-Status: None
 Signed-off-by: Eugene Mutavchi <Ievgen_Mutavchi@comcast.com>
 

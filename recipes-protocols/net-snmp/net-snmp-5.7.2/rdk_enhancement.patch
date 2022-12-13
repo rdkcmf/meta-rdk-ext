@@ -8,7 +8,6 @@ Subject: [PATCH] RDKCOM-337: apply rdkb_snmp.patch only on daisy
 
 Source: COMCAST
 
-License: BSD-2-Clause
 
 Upstream-Status: Pending
 

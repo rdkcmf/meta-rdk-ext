@@ -9,7 +9,6 @@ Subject: [PATCH] RDK-18470,RDK-19106 : yocto 2.2: xfsprogs recipe is blacklisted
 
 Source: OPENEMBEDDED
 
-License: LGPL-2.1-or-later
 
 Upstream-Status: Submitted [ https://patches.linaro.org/patch/84111/ ] 
 

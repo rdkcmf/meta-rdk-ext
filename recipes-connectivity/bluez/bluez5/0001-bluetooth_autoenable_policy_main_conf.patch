@@ -10,7 +10,6 @@ Subject: [PATCH] RDK-22546 : add main.conf to set AutoEnable=true
 	So, Implemented main.conf with 'AutoEnable=true' to let the BlueZ to take control over the adapter and turn on when it finds it..
 
 Source: COMCAST
-License: GPL-2.0-or-later
 Upstream-Status: Pending
 Signed-off-by: Karunakaran A <Karunakaran_Amirthalingam@cable.comcast.com>
 ---

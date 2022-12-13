@@ -8,7 +8,6 @@ Subject: [PATCH] XRE-12149: upgrade glib-openssl and fix certificate leak
 
 Source: COMCAST
 
-License: LGPL-2.1-or-later
 
 Upstream-Status: Pending
 

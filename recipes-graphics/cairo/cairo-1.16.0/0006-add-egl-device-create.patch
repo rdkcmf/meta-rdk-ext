@@ -3,7 +3,6 @@ From: Zan Dobersek <zdobersek@igalia.com>
 Date: Mon, 17 Nov 2014 01:23:15 -0800
 Subject: [PATCH] Add cairo_egl_device_create_for_egl_surface().
 Source: OPENSOURCE
-License: "(MPL-1.1 | LGPLv2.1) & GPLv3+"
 Upstream-Status: Backport
 Signed-off-by: mselva006c <mani_selvaraj@comcast.com>
 ---

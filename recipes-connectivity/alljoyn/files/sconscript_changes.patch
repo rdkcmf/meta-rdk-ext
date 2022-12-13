@@ -8,7 +8,6 @@ Subject: [PATCH] RDKSYSINTSW-1520: Update the Alljoyn recipe to use the 14.12 re
 	
 Source: COMCAST 
 
-License: Apache-2.0
 
 Upstream-Status: Pending
 

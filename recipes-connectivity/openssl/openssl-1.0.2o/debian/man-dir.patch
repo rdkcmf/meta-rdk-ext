@@ -4,7 +4,6 @@ Subject: [PATCH] RDKSEC-135 : update openssl
 
         Update to openssl 1.0.2a
 Source: OPENSOURCE
-License: Apache-2.0
 Upstream-Status: Submitted [ http://git.yoctoproject.org/cgit/cgit.cgi/meta-freescale/commit/recipes-connectivity/openssl/openssl-qoriq/debian/man-dir.patch?h=pyro&id=67df1cdca7fe5be0513d67e6abd45b973189ecfe ]
 Signed-off-by: Zhenhua Luo <zhenhua.luo@freescale.com>
 ---

@@ -6,7 +6,6 @@ Subject: [PATCH] Remove include of xlocale header
          Remove include of xlocale.h as it it not provided by glibc 2.31         
 
 Source: COMCAST
-License: LGPL-2.1-or-later
 Upstream-Status: Inappropriate
 
 Signed-off-by: mselva006c <mani_selvaraj@comcast.com>

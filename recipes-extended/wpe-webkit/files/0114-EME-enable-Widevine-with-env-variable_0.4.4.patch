@@ -3,7 +3,6 @@ From: Gurdal Oruklu <gurdal_oruklu@comcast.com>
 Date: Fri, 26 Apr 2019 21:56:54 +0000
 Subject: [PATCH] EME enabled Widevine keysystem with environment variable
 Source: COMCAST
-License: GPLV2
 Upstream-Status: None
 
 Signed-off-by: Gurdal Oruklu <gurdal_oruklu@comcast.com>

@@ -3,7 +3,6 @@ From: Ievgen Mutavchi <Ievgen_Mutavchi@comcast.com>
 Date: Wed, 17 Jun 2020 21:18:42 -0400
 Subject: [PATCH] Gamepad for WPE
 Source: COMCAST
-License: LGPL-2.1-or-later
 Upstream-Status: None
 Signed-off-by: Eugene Mutavchi <Ievgen_Mutavchi@comcast.com>
 

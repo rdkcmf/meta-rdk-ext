@@ -2,7 +2,6 @@ From: ComCast
 Upstream-Status: N/A
 Date: Nov 18, 2019
 Source: ComCast
-License: curl
 Subject: RDK-25249, RDK-25248: Implement curl to send ocsp request directly to CA
 Signed-off-by: Prakash_KAPPESANNANAGAPPA@comcast.com
 

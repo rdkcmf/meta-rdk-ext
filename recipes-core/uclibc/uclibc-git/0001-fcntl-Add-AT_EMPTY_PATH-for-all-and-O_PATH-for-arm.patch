@@ -8,7 +8,6 @@ Subject: [PATCH] fcntl: Add AT_EMPTY_PATH for all and O_PATH for arm
 
 Source: OPENEMBEDDED
 
-License: LGPL-2.1-or-later
 
 Upstream-Status: Submitted [ https://patchwork.ozlabs.org/patch/538682/ ]
 

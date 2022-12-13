@@ -8,7 +8,6 @@ Added this patch as we may want to revert the kernel connection management which
 the bluez implementation consistent across new and old kernels.
 
 Source: SKY
-License: GPLv2+ & LGPLv2.1+
 Upstream-Status: Pending
 Signed-off-by: Tijo Thomas John <tijo.thomas@sky.uk>
 ###################################################################################################

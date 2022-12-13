@@ -12,7 +12,6 @@ Subject: [PATCH] RDKRIDP-1002: Emulator not Picking EXTRA_QMAKEVARS_PRE for gstr
 
 Source: GOOGLE
 
-License: LGPL-2.1-or-later
 
 Upstream-Status: Submitted [ https://bugzilla.gnome.org/show_bug.cgi?id=753614 
                              https://lists.freedesktop.org/archives/gstreamer-bugs/2016-February/167363.html ]

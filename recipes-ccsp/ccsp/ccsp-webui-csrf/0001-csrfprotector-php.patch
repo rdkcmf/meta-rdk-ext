@@ -3,7 +3,6 @@ From: 683a0789d615413a1c2754321fef35690a39566b Mar 12, 2019 5:53 AM
 Subject: [PATCH] RDKB-20255: CSRF changes for session destroy
      Apply CSRF changes over the files pulled from OSS repo.
 Source: COMCAST
-License: RDK Management
 Upstream-Status: Pending
 Signed-off-by: gpsahu <GaneshPrasad_Sahu@comcast.com>
 ---

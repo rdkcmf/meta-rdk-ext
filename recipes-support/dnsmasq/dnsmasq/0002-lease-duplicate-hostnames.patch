@@ -3,7 +3,6 @@ From: Goutam Damodaran <Goutam_Damodaran@Comcast.com>
 Date: Fri, 6 Mar 2020 07:56:07 +0000
 Subject: [PATCH] lease duplicate hostnames
 Source: COMCAST
-License: GPLV2
 Upstream-Status: Pending
 Signed-off-by: Goutam Damodaran <Goutam_Damodaran@Comcast.com>
 ---

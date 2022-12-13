@@ -3,7 +3,6 @@ From: Gurdal Oruklu <gurdal_oruklu@comcast.com>
 Date: Wed, 16 Oct 2019 18:35:24 +0000
 Subject: [PATCH] fixes for Youtube encrypted playback
 Source: COMCAST
-License: GPLV2
 Upstream-Status: none
 
 Signed-off-by: Gurdal Oruklu <gurdal_oruklu@comcast.com>

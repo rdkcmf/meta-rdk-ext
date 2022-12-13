@@ -2,7 +2,6 @@ Date: Jan 03, 2020 04:34 PM
 From: 58319057b7847667f0c9585b9de0e8932b0fdb08
 Subject: BACKPORT Support Ambient capabilities in Kernel 4.1
 Source: Open Source
-License: GPLv2
 Upstream-Status: Pending
 Signed-off-by: Christoph Lameter <cl@linux.com> # Original author
 Signed-off-by: Andy Lutomirski <luto@kernel.org>

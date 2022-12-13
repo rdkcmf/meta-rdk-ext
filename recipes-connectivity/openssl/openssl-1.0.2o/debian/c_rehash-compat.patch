@@ -1,7 +1,6 @@
 Date: Wed, 21 Apr 2010 15:52:10 +0200
 Subject: [PATCH] also create old hash for compatibility
 Source: DEBIAN
-License: OPENSSL
 From: 83f318d68bbdab1ca898c94576a838cc97df4700 Mon Sep 17 00:00:00 2001
 Upstream-Status: Backport [debian]
 Signed-off-by: Ludwig Nussel <ludwig.nussel@suse.de>
