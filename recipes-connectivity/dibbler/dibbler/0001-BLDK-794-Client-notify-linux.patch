@@ -27,7 +27,7 @@ index 917dcf5a..b782958d 100755
 +fi
 +
 +RESOLV_CONF='/etc/resolv.dnsmasq'
-+TEMP_RESOLV_CONF='/tmp/resolv.dnsmasq.bkp'
++TEMP_RESOLV_CONF='/tmp/resolv.dnsmasq.dibbler'
  
 -# uncomment this to get full list of available variables
 -#set >> $LOGFILE
