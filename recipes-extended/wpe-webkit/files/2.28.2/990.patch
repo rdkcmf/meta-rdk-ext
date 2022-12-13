@@ -1,0 +1,182 @@
+From 47af9633083c563d6d4ba0dd6f28178df57c711e Mon Sep 17 00:00:00 2001
+From: Eugene Mutavchi <Ievgen_Mutavchi@comcast.com>
+Date: Fri, 2 Dec 2022 16:46:53 +0000
+Subject: [PATCH 1/5] Enable WebRTC release log
+
+---
+ .../platform/mediastream/libwebrtc/LibWebRTCProvider.cpp        | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/Source/WebCore/platform/mediastream/libwebrtc/LibWebRTCProvider.cpp b/Source/WebCore/platform/mediastream/libwebrtc/LibWebRTCProvider.cpp
+index 6bb0188ad2388..debfc4aab7a73 100644
+--- a/Source/WebCore/platform/mediastream/libwebrtc/LibWebRTCProvider.cpp
++++ b/Source/WebCore/platform/mediastream/libwebrtc/LibWebRTCProvider.cpp
+@@ -141,7 +141,7 @@ static void setLogging(rtc::LoggingSeverity level)
+ 
+ static rtc::LoggingSeverity computeLogLevel()
+ {
+-#if defined(NDEBUG)
++#if defined(NDEBUG) || !RELEASE_LOG_DISABLED
+ #if !LOG_DISABLED || !RELEASE_LOG_DISABLED
+     if (LogWebRTC.state != WTFLogChannelState::On)
+         return rtc::LS_ERROR;
+
+From 2d08cd578f003748aca24a7d2253535853793a98 Mon Sep 17 00:00:00 2001
+From: Eugene Mutavchi <Ievgen_Mutavchi@comcast.com>
+Date: Fri, 2 Dec 2022 16:52:11 +0000
+Subject: [PATCH 2/5] Report HW decoding capability for Realtek OMX and
+ WesterosSink decoders
+
+---
+ .../graphics/gstreamer/GStreamerRegistryScanner.cpp    | 10 ++++++++++
+ 1 file changed, 10 insertions(+)
+
+diff --git a/Source/WebCore/platform/graphics/gstreamer/GStreamerRegistryScanner.cpp b/Source/WebCore/platform/graphics/gstreamer/GStreamerRegistryScanner.cpp
+index 738a44f8ddd61..56e618f1c75af 100644
+--- a/Source/WebCore/platform/graphics/gstreamer/GStreamerRegistryScanner.cpp
++++ b/Source/WebCore/platform/graphics/gstreamer/GStreamerRegistryScanner.cpp
+@@ -112,6 +112,16 @@ GStreamerRegistryScanner::RegistryLookupResult GStreamerRegistryScanner::hasElem
+                 isUsingHardware = true;
+                 break;
+             }
++#elif PLATFORM(REALTEK)
++            if (g_str_has_prefix(GST_OBJECT_NAME(factory), "omx")) {
++                isUsingHardware = true;
++                break;
++            }
++#elif USE(WESTEROS_SINK)
++            if (g_str_has_prefix(GST_OBJECT_NAME(factory), "westeros")) {
++                isUsingHardware = true;
++                break;
++            }
+ #endif
+             String metadata = gst_element_factory_get_metadata(factory, GST_ELEMENT_METADATA_KLASS);
+             auto components = metadata.split('/');
+
+From 71f73fb5dad572b202b83a038ef837cbfbc47d97 Mon Sep 17 00:00:00 2001
+From: Eugene Mutavchi <Ievgen_Mutavchi@comcast.com>
+Date: Fri, 2 Dec 2022 16:54:17 +0000
+Subject: [PATCH 3/5] Exclude HW elements from media stream decoding pipeline
+
+---
+ .../libwebrtc/GStreamerVideoDecoderFactory.cpp      | 13 ++++++++++---
+ 1 file changed, 10 insertions(+), 3 deletions(-)
+
+diff --git a/Source/WebCore/platform/mediastream/libwebrtc/GStreamerVideoDecoderFactory.cpp b/Source/WebCore/platform/mediastream/libwebrtc/GStreamerVideoDecoderFactory.cpp
+index 5ad84409af40c..30215e58f58f1 100644
+--- a/Source/WebCore/platform/mediastream/libwebrtc/GStreamerVideoDecoderFactory.cpp
++++ b/Source/WebCore/platform/mediastream/libwebrtc/GStreamerVideoDecoderFactory.cpp
+@@ -74,7 +74,7 @@ class GStreamerVideoDecoder : public webrtc::VideoDecoder {
+         if (gst_pad_link(srcpad, sinkpad) != GST_PAD_LINK_OK)
+             ASSERT_NOT_REACHED();
+     }
+-#if PLATFORM(BROADCOM)
++#if PLATFORM(BROADCOM) || PLATFORM(REALTEK)
+     static unsigned getGstAutoplugSelectResult(const char* nick)
+     {
+         static GEnumClass* enumClass = static_cast<GEnumClass*>(g_type_class_ref(g_type_from_name("GstAutoplugSelectResult")));
+@@ -89,6 +89,9 @@ class GStreamerVideoDecoder : public webrtc::VideoDecoder {
+         if (g_str_has_prefix(gst_plugin_feature_get_plugin_name(GST_PLUGIN_FEATURE_CAST(factory)), "brcm")) {
+             return getGstAutoplugSelectResult("skip");
+         }
++        if (g_str_has_prefix(gst_plugin_feature_get_plugin_name(GST_PLUGIN_FEATURE_CAST(factory)), "omx")) {
++            return getGstAutoplugSelectResult("skip");
++        }
+         return getGstAutoplugSelectResult("try");
+     }
+ #endif
+@@ -124,7 +127,7 @@ class GStreamerVideoDecoder : public webrtc::VideoDecoder {
+ 
+         auto sinkpad = adoptGRef(gst_element_get_static_pad(capsfilter, "sink"));
+         g_signal_connect(decoder, "pad-added", G_CALLBACK(decodebinPadAddedCb), sinkpad.get());
+-#if PLATFORM(BROADCOM)
++#if PLATFORM(BROADCOM) || PLATFORM(REALTEK)
+         g_signal_connect(decoder, "autoplug-select", G_CALLBACK(decodebinAutoplugSelect), nullptr);
+ #endif
+         // Make the decoder output "parsed" frames only and let the main decodebin
+@@ -371,7 +374,11 @@ class GStreamerVideoDecoder : public webrtc::VideoDecoder {
+ 
+ class H264Decoder : public GStreamerVideoDecoder {
+ public:
+-    H264Decoder() { m_requireParse = true; }
++    H264Decoder() {
++#if !PLATFORM(REALTEK) && !PLATFORM(BROADCOM)
++        m_requireParse = true;
++#endif
++    }
+ 
+     int32_t InitDecode(const webrtc::VideoCodec* codecInfo, int32_t nCores) final
+     {
+
+From 6bc3f494c150ab53924f4bd6600db492579378bd Mon Sep 17 00:00:00 2001
+From: Eugene Mutavchi <Ievgen_Mutavchi@comcast.com>
+Date: Fri, 2 Dec 2022 18:42:36 +0000
+Subject: [PATCH 4/5] Keep PTS estimation on Realtek and Broadcom platforms
+
+---
+ Source/ThirdParty/libwebrtc/CMakeLists.txt            | 11 +++++++++++
+ .../Source/webrtc/modules/video_coding/timing.cc      |  2 ++
+ 2 files changed, 13 insertions(+)
+
+diff --git a/Source/ThirdParty/libwebrtc/CMakeLists.txt b/Source/ThirdParty/libwebrtc/CMakeLists.txt
+index f83c86fc987c3..88e5924858379 100644
+--- a/Source/ThirdParty/libwebrtc/CMakeLists.txt
++++ b/Source/ThirdParty/libwebrtc/CMakeLists.txt
+@@ -1638,3 +1638,14 @@ target_include_directories(libsrtp PRIVATE
+     Source/third_party/libsrtp/crypto/include
+     Source/third_party/libsrtp/include
+ )
++
++if (USE_WPEWEBKIT_PLATFORM_BROADCOM)
++    target_compile_definitions(webrtc PRIVATE
++        WTF_PLATFORM_BROADCOM=1
++    )
++endif()
++if (USE_WPEWEBKIT_PLATFORM_REALTEK)
++    target_compile_definitions(webrtc PRIVATE
++        WTF_PLATFORM_REALTEK=1
++    )
++endif()
+diff --git a/Source/ThirdParty/libwebrtc/Source/webrtc/modules/video_coding/timing.cc b/Source/ThirdParty/libwebrtc/Source/webrtc/modules/video_coding/timing.cc
+index c62c848c09a90..d2d7b42692788 100644
+--- a/Source/ThirdParty/libwebrtc/Source/webrtc/modules/video_coding/timing.cc
++++ b/Source/ThirdParty/libwebrtc/Source/webrtc/modules/video_coding/timing.cc
+@@ -179,7 +179,9 @@ int64_t VCMTiming::RenderTimeMsInternal(uint32_t frame_timestamp,
+                                         int64_t now_ms) const {
+   if (min_playout_delay_ms_ == 0 && max_playout_delay_ms_ == 0) {
+     // Render as soon as possible.
++#if !(defined WTF_PLATFORM_REALTEK && WTF_PLATFORM_REALTEK) && !(defined WTF_PLATFORM_BROADCOM && WTF_PLATFORM_BROADCOM)
+     return 0;
++#endif
+   }
+   int64_t estimated_complete_time_ms =
+       ts_extrapolator_->ExtrapolateLocalTime(frame_timestamp);
+
+From f43b0037633fea33963edaf93654c3677a822aac Mon Sep 17 00:00:00 2001
+From: Eugene Mutavchi <Ievgen_Mutavchi@comcast.com>
+Date: Fri, 2 Dec 2022 20:15:40 +0000
+Subject: [PATCH 5/5] configure 'immediate-output' for realtek audio sink
+
+---
+ .../graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp    | 8 ++++++++
+ 1 file changed, 8 insertions(+)
+
+diff --git a/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp b/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp
+index 314ef94b4f306..00aae74293d00 100644
+--- a/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp
++++ b/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp
+@@ -3934,6 +3934,14 @@ void MediaPlayerPrivateGStreamer::configureElement(GstElement* element)
+ 
+     if (!g_strcmp0(G_OBJECT_TYPE_NAME(G_OBJECT(element)), "GstQueue2"))
+         g_object_set(G_OBJECT(element), "high-watermark", 0.10, nullptr);
++
++#if ENABLE(MEDIA_STREAM) && PLATFORM(REALTEK)
++    if (m_streamPrivate != nullptr && g_object_class_find_property (G_OBJECT_GET_CLASS (element), "media-tunnel")) {
++        GST_INFO("Enable 'immediate-output' in rtkaudiosink");
++        g_object_set (G_OBJECT(element), "media-tunnel", FALSE, nullptr);
++        g_object_set (G_OBJECT(element), "audio-service", TRUE, nullptr);
++    }
++#endif
+ }
+ 
+ void MediaPlayerPrivateGStreamer::checkPlayingConsitency()
