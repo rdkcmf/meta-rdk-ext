@@ -1,0 +1,33 @@
+From 1dcbeb8e2f36ce668ab259c26fe8b120ee5336b3 Mon Sep 17 00:00:00 2001
+From: Jack Howgate <jack.howgate@sky.uk>
+Date: Wed, 30 Nov 2022 18:33:33 +0000
+Subject: [PATCH] Added a check to ensure that maxTimeLoaded is a non-zero
+ value when fully buffered.
+
+---
+ .../graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp    | 8 +++++++-
+ 1 file changed, 7 insertions(+), 1 deletion(-)
+
+diff --git a/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp b/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp
+index f1db91730227..7ebc87740b02 100644
+--- a/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp
++++ b/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp
+@@ -754,8 +754,14 @@ std::unique_ptr<PlatformTimeRanges> MediaPlayerPrivateGStreamer::buffered() cons
+     // Fallback to the more general maxTimeLoaded() if no range has been found.
+     if (!timeRanges->length()) {
+         MediaTime loaded = maxTimeLoaded();
+-        if (loaded.isValid() && loaded)
++        // Checking maxTimeLoaded is a non-zero value and re-calculating if it is
++        // (This can occur when buffering completes before the duration is known).
++        if (loaded == MediaTime::zeroTime()) {
++            loaded = MediaTime(m_bufferingPercentage * static_cast<double>(toGstUnsigned64Time(mediaDuration)) / 100, GST_SECOND);
++        }
++        if (loaded.isValid() && loaded) {
+             timeRanges->add(MediaTime::zeroTime(), loaded);
++        }
+     }
+ 
+     return timeRanges;
+-- 
+2.25.1
+
