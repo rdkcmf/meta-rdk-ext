@@ -1,0 +1,26 @@
+From 090758c41dc5a9f051af1e2e632b33fc374a2ef3 Mon Sep 17 00:00:00 2001
+From: Pawel Lampe <pawel.lampe@gmail.com>
+Date: Wed, 18 Jan 2023 13:02:49 +0100
+Subject: [PATCH] Add missing 'Coded Frame Removal' algorithm step in
+ SourceBuffer
+
+See: https://www.w3.org/TR/media-source/#sourcebuffer-coded-frame-removal
+---
+ Source/WebCore/Modules/mediasource/SourceBuffer.cpp | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/Source/WebCore/Modules/mediasource/SourceBuffer.cpp b/Source/WebCore/Modules/mediasource/SourceBuffer.cpp
+index 8fc92d3c7f4fa..cf115afa7d99b 100644
+--- a/Source/WebCore/Modules/mediasource/SourceBuffer.cpp
++++ b/Source/WebCore/Modules/mediasource/SourceBuffer.cpp
+@@ -918,7 +918,9 @@ void SourceBuffer::removeCodedFrames(const MediaTime& start, const MediaTime& en
+     updateBufferedFromTrackBuffers();
+ 
+     // 4. If buffer full flag equals true and this object is ready to accept more bytes, then set the buffer full flag to false.
+-    // No-op
++    if (m_bufferFull && extraMemoryCost() < maximumBufferSize()) {
++        m_bufferFull = false;
++    }
+ 
+     LOG(Media, "SourceBuffer::removeCodedFrames(%p) - buffered = %s", this, toString(m_buffered->ranges()).utf8().data());
+ 
